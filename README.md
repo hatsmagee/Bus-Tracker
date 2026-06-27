@@ -64,40 +64,14 @@ Set environment variables before starting the server:
 
 ## Deploying to Render.com
 
-The server is Render-ready as-is. Two paths:
-
-### Option A — Blueprint (one click, recommended)
-
-The repo includes `render.yaml` which provisions **both** the web
-service and a cron job that keeps it warm.
+The repo includes `render.yaml` (Blueprint). To deploy:
 
 1. Render dashboard → **New** → **Blueprint**
 2. Connect this repo (`hatsmagee/Bus-Tracker`)
-3. Render reads `render.yaml` and creates:
-   - **heleon-bus-tracker** — Node.js web service on the free plan
-   - **heleon-keepalive** — cron job that pings `/healthz` every 10 min
-4. Click **Apply**. Done.
-
-The cron job runs `keepalive.js` against the web service's URL every
-10 minutes, so the free tier never spins down. Visitors get instant
-loads instead of a 30 s cold-start wait.
-
-### Option B — Manual web service
-
-If you'd rather just create the web service by hand:
-
-1. Render dashboard → **New** → **Web Service**
-2. Connect this repo
-3. **Build Command**: `npm install`
-4. **Start Command**: `npm start`
-5. **Health Check Path**: `/healthz`
-6. **Instance Type**: Free
-
-Then to keep it warm, either:
-- Add the cron job separately (copy the `heleon-keepalive` block from
-  `render.yaml`), OR
-- Use [UptimeRobot](https://uptimerobot.com) on the free plan to ping
-  `/healthz` every 5 minutes.
+3. Render reads `render.yaml` and creates the web service.
+4. Wait for the first deploy to finish (~2-3 min).
+5. Copy the live URL Render gives you (e.g.
+   `https://heleon-bus-tracker.onrender.com`).
 
 Render automatically sets `PORT=10000` and `RENDER=1`. The server reads
 those, binds to `0.0.0.0:10000`, and writes its SQLite DB + GTFS zip to
@@ -106,9 +80,8 @@ those, binds to `0.0.0.0:10000`, and writes its SQLite DB + GTFS zip to
 **Caveats:**
 - DB and GTFS feed are reset on every redeploy (ephemeral disk).
   Fine for a demo; for persistent history add a Render Disk (paid).
-- The cron job itself runs on the free tier and may sleep too if
-  Render decides to suspend it during low load — in practice cron
-  jobs on the free tier run reliably every 10 min.
+- Free tier spins down after 15 min of no traffic. Set up the local
+  keep-alive timer below to prevent that.
 
 ## Running locally (systemd)
 
@@ -120,14 +93,51 @@ systemctl --user enable --now heleon-tracker.service
 systemctl --user status heleon-tracker.service
 ```
 
+## Local keep-alive timer (keeps Render free tier awake)
+
+The free tier on Render spins down after 15 min of no traffic. To
+prevent that — even when your laptop is closed or you're logged out —
+this repo ships a user-level systemd timer that pings the deployed
+`/healthz` endpoint every 10 minutes.
+
+```bash
+# Install the timer
+cp systemd/heleon-keepalive.service systemd/heleon-keepalive.timer \
+   ~/.config/systemd/user/
+cp scripts/keepalive.sh ~/.local/bin/heleon-keepalive.sh
+
+systemctl --user daemon-reload
+systemctl --user enable --now heleon-keepalive.timer
+
+# Verify
+systemctl --user list-timers | grep heleon
+journalctl --user -u heleon-keepalive.service -f
+```
+
+**Will this run when I'm logged out?**
+
+Yes — as long as your account has `Linger=yes` enabled
+(`loginctl show-user $USER | grep Linger` should print
+`Linger=yes`). When linger is on, systemd user services keep running
+after logout and survive reboots.
+
+**Setting the URL**
+
+The default URL is `https://heleon-bus-tracker.onrender.com/healthz`.
+If Render assigned a different hostname, edit
+`~/.config/systemd/user/heleon-keepalive.service` and update the
+`Environment=HELEON_RENDER_URL=...` line, then
+`systemctl --user daemon-reload && systemctl --user restart heleon-keepalive.timer`.
+
 ## Files
 
 - `heleon-server.js` — main backend (polling, DB, GTFS, transformer)
 - `heleon-tracker.html` — single-file dashboard (~2,300 lines)
 - `heleon-proxy.js` — simple static + CORS proxy (alternative entry)
-- `keepalive.js` — Render cron job script (pings `/healthz`)
-- `render.yaml` — Render Blueprint (web service + keepalive cron)
-- `systemd/heleon-tracker.service` — systemd user unit
+- `scripts/keepalive.sh` — bash script that pings the Render URL
+- `render.yaml` — Render Blueprint (web service only)
+- `systemd/heleon-tracker.service` — local tracker systemd unit
+- `systemd/heleon-keepalive.{service,timer}` — local keep-alive timer
 - `public/favicon.svg` — favicon
 
 ## Tech stack

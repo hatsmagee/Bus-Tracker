@@ -1,0 +1,13 @@
+[Unit]
+Description=Ping Hele-On Tracker every 10 minutes so Render free tier stays warm
+Requires=heleon-keepalive.service
+
+[Timer]
+# Boot + every 10 min thereafter. 10 < 15 so we always beat the sleep threshold.
+OnBootSec=2min
+OnUnitActiveSec=10min
+AccuracySec=10s
+Unit=heleon-keepalive.service
+
+[Install]
+WantedBy=timers.target

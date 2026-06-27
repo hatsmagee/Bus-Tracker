@@ -1,0 +1,14 @@
+[Unit]
+Description=Hele-On Tracker keep-alive ping (Render free tier)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=HELEON_RENDER_URL=https://heleon-bus-tracker.onrender.com/healthz
+ExecStart=/home/patrick.parks/code/scripts/keepalive.sh
+StandardOutput=journal
+StandardError=journal
+
+# Hard timeout — Render cold start can take ~30 s, give it room.
+TimeoutStartSec=40
