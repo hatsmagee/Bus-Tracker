@@ -1,17 +1,22 @@
 {
+  "name": "heleon-bus-tracker",
+  "version": "1.0.0",
+  "description": "Live bus tracking dashboard for Hele-On Bus (County of Hawai'i) with GTFS schedules and an on-device transformer ETA model.",
+  "main": "heleon-server.js",
+  "scripts": {
+    "start": "node heleon-server.js",
+    "dev": "node heleon-server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@sqlite.org/sqlite-wasm": "^3.53.0-build1",
     "sql.js": "^1.14.1",
     "sqlite3": "^6.0.1"
   },
-  "name": "code",
-  "version": "1.0.0",
-  "description": "",
-  "main": "heleon-proxy.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
+  "keywords": ["bus", "tracker", "gtfs", "heleon", "hawaii"],
   "author": "",
   "license": "ISC"
 }

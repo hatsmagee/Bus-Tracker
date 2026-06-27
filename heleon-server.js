@@ -16,9 +16,14 @@ const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
 
-const PORT = 8765;
-const DB_PATH = path.join(__dirname, 'heleon.db');
-const GTFS_ZIP_PATH = path.join(__dirname, 'heleon-gtfs.zip');
+// Render.com sets PORT=10000 and RENDER=1; on Render the filesystem is
+// ephemeral so we keep SQLite + GTFS zip under /tmp. Locally we keep them
+// next to the source tree.
+const PORT = parseInt(process.env.PORT, 10) || 8765;
+const IS_RENDER = !!process.env.RENDER;
+const DATA_DIR = IS_RENDER ? '/tmp' : __dirname;
+const DB_PATH = path.join(DATA_DIR, IS_RENDER ? 'heleon.db' : 'heleon.db');
+const GTFS_ZIP_PATH = path.join(DATA_DIR, 'heleon-gtfs.zip');
 const HTML_PATH = path.join(__dirname, 'heleon-tracker.html');
 const POLL_INTERVAL = 10000;
 const DB_SAVE_INTERVAL = 30000;
@@ -195,7 +200,7 @@ function parseCsv(text) {
   });
 }
 
-const GTFS_META_PATH = path.join(__dirname, 'heleon-gtfs-meta.json');
+const GTFS_META_PATH = path.join(DATA_DIR, 'heleon-gtfs-meta.json');
 
 function gtfsMeta() {
   try { return JSON.parse(fs.readFileSync(GTFS_META_PATH, 'utf8')); } catch { return {}; }
@@ -1358,8 +1363,13 @@ const server = http.createServer((req, res) => {
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚌 Hele-On Bus Tracker running`);
-    console.log(`   Local:   http://localhost:${PORT}`);
-    console.log(`   Network: http://${localIP}:${PORT}`);
+    if (IS_RENDER) {
+      console.log(`   Render:  ${process.env.RENDER_EXTERNAL_URL || `(port ${PORT})`}`);
+      console.log(`   Mode:    Render.com (ephemeral disk → ${DATA_DIR})`);
+    } else {
+      console.log(`   Local:   http://localhost:${PORT}`);
+      console.log(`   Network: http://${localIP}:${PORT}`);
+    }
     console.log(`   DB:      ${DB_PATH}`);
     console.log(`   Polling every ${POLL_INTERVAL/1000}s (background)\n`);
   });

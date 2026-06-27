@@ -41,28 +41,14 @@ entirely on your own machine — no cloud dependency, no API hammering.
 ```bash
 # Install dependencies (one-time)
 cd /path/to/code
-npm install sql.js
+npm install
 
 # Run the server
-node heleon-server.js
+npm start
+# (or: node heleon-server.js)
 
 # Open the dashboard
 open http://localhost:8765/
-```
-
-## Installation as a systemd service
-
-```bash
-# Copy the service file
-mkdir -p ~/.config/systemd/user
-cp systemd/heleon-tracker.service ~/.config/systemd/user/
-
-# Enable and start
-systemctl --user daemon-reload
-systemctl --user enable --now heleon-tracker.service
-
-# Check status
-systemctl --user status heleon-tracker.service
 ```
 
 ## Configuration
@@ -71,9 +57,45 @@ Set environment variables before starting the server:
 
 | Variable       | Default       | Description                          |
 |----------------|---------------|--------------------------------------|
-| `PORT`         | 8765          | HTTP port                            |
+| `PORT`         | 8765 (local) / 10000 (Render) | HTTP port                            |
+| `RENDER`       | unset         | When set by Render, the server stores SQLite + GTFS zip under `/tmp` (ephemeral disk) |
 | `POLL_INTERVAL`| 10000 (ms)    | How often to poll each route         |
 | `MAPTILER_KEY` | (built-in)    | MapTiler API key for basemap tiles   |
+
+## Deploying to Render.com
+
+The server is Render-ready as-is. From the Render dashboard:
+
+1. **New → Web Service**, connect this repo (`hatsmagee/Bus-Tracker`).
+2. **Environment**: `Node`
+3. **Branch**: `main`
+4. **Region**: any
+5. **Build Command**: `npm install`
+6. **Start Command**: `npm start`
+7. **Instance Type**: Free is fine for testing (will sleep after 15 min idle)
+8. Click **Deploy**.
+
+Render automatically sets `PORT=10000` and `RENDER=1`. The server reads
+those, binds to `0.0.0.0:10000`, and writes its SQLite DB + GTFS zip to
+`/tmp` (the only writable spot on Render's ephemeral filesystem).
+
+**Caveats:**
+- Render's free tier spins down after inactivity. First request after a
+  cold start takes ~30 s.
+- DB and GTFS feed are reset on every redeploy. Fine for a demo; for
+  persistent history wire up a Render Disk (paid) or an external DB.
+- The default free instance sleeps after 15 min of no traffic. Keep it
+  warm with [UptimeRobot](https://uptimerobot.com) or similar.
+
+## Running locally (systemd)
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp systemd/heleon-tracker.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now heleon-tracker.service
+systemctl --user status heleon-tracker.service
+```
 
 ## Files
 
