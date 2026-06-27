@@ -1321,6 +1321,18 @@ function handleStatic(url, res) {
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin':'*' }); res.end(); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
+  // Render health check — 200 OK with current status
+  if (url.pathname === '/healthz') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      ok: true,
+      ts: Date.now(),
+      uptime_s: Math.round(process.uptime()),
+      last_poll_ts: lastPollStats?.ts || null,
+      vehicles: latestVehicles?.length || 0,
+    }));
+    return;
+  }
   if (url.pathname.startsWith('/api/') || url.pathname === '/proxy') {
     handleApi(url, res).catch(e => { res.writeHead(500); res.end(JSON.stringify({ error: e.message })); });
   } else {
