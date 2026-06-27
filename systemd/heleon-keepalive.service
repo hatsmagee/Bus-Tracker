@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-Environment=HELEON_RENDER_URL=https://heleon-bus-tracker.onrender.com/healthz
+Environment=Environment=HELEON_RENDER_URL=https://bus-tracker-a36o.onrender.com/healthz
 ExecStart=/home/patrick.parks/code/scripts/keepalive.sh
 StandardOutput=journal
 StandardError=journal
