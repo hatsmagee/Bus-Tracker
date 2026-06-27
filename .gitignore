@@ -1,0 +1,17 @@
+# OS / editor
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# Runtime data — server state
+heleon.db
+heleon.db-journal
+heleon-gtfs-meta.json
+heleon-gtfs.zip
+node_modules/
+public/
+
+# Logs
+*.log

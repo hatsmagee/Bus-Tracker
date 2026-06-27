@@ -1,0 +1,2332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hele-On Bus Live Tracker</title>
+<link rel="icon" type="image/svg+xml" href="/public/favicon.svg">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2128; --border: #30363d;
+    --accent: #1f6feb; --green: #3fb950; --yellow: #d29922; --red: #f85149;
+    --text: #e6edf3; --muted: #8b949e; --header-h: 52px;
+  }
+  body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; font-size:13px; overflow:hidden; height:100vh; display:flex; flex-direction:column; }
+
+  header { height:var(--header-h); background:var(--panel); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; padding:0 16px; flex-shrink:0; z-index:10; }
+  header img { height:32px; }
+  header h1 { font-size:15px; font-weight:600; }
+  .header-badges { display:flex; gap:8px; margin-left:auto; align-items:center; flex-wrap:wrap; }
+  .badge { padding:3px 9px; border-radius:12px; font-size:11px; font-weight:600; display:flex; align-items:center; gap:5px; }
+  .badge-green { background:rgba(63,185,80,.15); color:var(--green); border:1px solid rgba(63,185,80,.3); }
+  .badge-yellow { background:rgba(210,153,34,.15); color:var(--yellow); border:1px solid rgba(210,153,34,.3); }
+  .badge-red { background:rgba(248,81,73,.15); color:var(--red); border:1px solid rgba(248,81,73,.3); }
+  .badge-blue { background:rgba(31,111,235,.15); color:#58a6ff; border:1px solid rgba(31,111,235,.3); }
+  .pulse { width:7px; height:7px; border-radius:50%; }
+  .pulse-green { background:var(--green); animation:pulse 1.5s ease-in-out infinite; }
+  .pulse-yellow { background:var(--yellow); }
+  .pulse-red { background:var(--red); animation:pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+
+  .main { display:flex; flex:1; overflow:hidden; }
+  #map { flex:1; }
+
+  .sidebar { width:340px; min-width:260px; max-width:700px; background:var(--panel); border-left:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; position:relative; }
+  .sidebar-resizer { position:absolute; left:0; top:0; bottom:0; width:5px; cursor:ew-resize; z-index:20; background:transparent; transition:background .15s; }
+  .sidebar-resizer:hover, .sidebar-resizer.dragging { background:var(--accent); }
+  .tabs { display:flex; border-bottom:1px solid var(--border); flex-shrink:0; }
+  .tab { flex:1; padding:10px 4px; text-align:center; font-size:11px; font-weight:500; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; transition:all .15s; }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .tab-content { display:none; flex:1; overflow-y:auto; }
+  .tab-content.active { display:flex; flex-direction:column; }
+  ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+  .status-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:12px; }
+  .stat-card { background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+  .stat-label { color:var(--muted); font-size:10px; margin-bottom:4px; text-transform:uppercase; letter-spacing:.04em; }
+  .stat-value { font-size:22px; font-weight:700; }
+  .stat-value.green{color:var(--green)} .stat-value.yellow{color:var(--yellow)} .stat-value.red{color:var(--red)}
+  .stat-sub { color:var(--muted); font-size:10px; margin-top:2px; }
+  .section-header { padding:10px 12px 6px; font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; border-bottom:1px solid var(--border); flex-shrink:0; }
+
+  .vehicle-card { border-bottom:1px solid var(--border); padding:10px 12px; transition:background .1s; }
+  .vehicle-card:hover { background:var(--panel2); }
+  .vehicle-card.selected { background:rgba(31,111,235,.08); border-left:3px solid var(--accent); }
+  .vc-header { display:flex; align-items:center; gap:8px; margin-bottom:6px; cursor:pointer; }
+  .vc-badge { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:11px; color:#fff; flex-shrink:0; }
+  .vc-info { flex:1; min-width:0; }
+  .vc-name { font-weight:600; font-size:13px; }
+  .vc-route { color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .vc-freshness { font-size:10px; flex-shrink:0; }
+  .vc-ontime { font-size:10px; font-weight:700; padding:2px 5px; border-radius:4px; flex-shrink:0; }
+  .vc-ontime.early { background:rgba(63,185,80,.15); color:#3fb950; }
+  .vc-ontime.late  { background:rgba(248,81,73,.15);  color:#f85149; }
+  .vc-ontime.ontime{ background:rgba(63,185,80,.1);  color:#3fb950; }
+  .vc-expand-btn { font-size:10px; color:var(--muted); cursor:pointer; padding:0 2px; flex-shrink:0; transition:transform .2s; }
+  .vc-expand-btn.open { transform:rotate(180deg); }
+  .fresh{color:var(--green)} .stale{color:var(--yellow)} .very-stale{color:var(--red)}
+  .vc-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; }
+  .vc-stat { background:var(--bg); border-radius:5px; padding:5px 6px; text-align:center; }
+  .vc-stat-label { color:var(--muted); font-size:9px; text-transform:uppercase; }
+  .vc-stat-val { font-size:13px; font-weight:600; margin-top:1px; }
+  .vc-coords { margin-top:5px; color:var(--muted); font-size:10px; font-family:monospace; }
+  .vc-load-bar { margin-top:6px; height:4px; background:var(--border); border-radius:2px; overflow:hidden; }
+  .vc-load-fill { height:100%; border-radius:2px; transition:width .3s; }
+  .vc-body { display:none; }
+  .vc-body.open { display:block; }
+  @keyframes freshFlash { 0%{background:rgba(63,185,80,.25)} 100%{background:transparent} }
+  .vehicle-card.just-fresh { animation: freshFlash 2s ease-out forwards; }
+
+  .route-row { display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--border); cursor:pointer; }
+  .route-row:hover { background:var(--panel2); }
+  .route-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+  .route-name { flex:1; font-size:12px; }
+  .route-count { font-size:11px; color:var(--muted); }
+  .route-toggle { width:28px; height:16px; border-radius:8px; background:var(--border); position:relative; cursor:pointer; transition:background .2s; flex-shrink:0; }
+  .route-toggle.on { background:var(--accent); }
+  .route-toggle::after { content:''; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:#fff; transition:left .2s; }
+  .route-toggle.on::after { left:14px; }
+
+  .api-section { padding:12px; display:flex; flex-direction:column; gap:8px; }
+  .api-row { background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+
+  /* ─── Learn tab ─────────────────────────────────────────────────── */
+  .learn-header { padding:10px 12px 6px; border-bottom:1px solid var(--border); }
+  .learn-title { font-size:14px; font-weight:700; color:#e6edf3; margin-bottom:4px; }
+  .learn-sub { font-size:10px; color:#8b949e; line-height:1.4; }
+  .arch-canvas { background:linear-gradient(180deg, #0d1117 0%, #161b22 100%); border-bottom:1px solid var(--border); padding:8px; }
+  .arch-canvas svg { display:block; }
+  .arch-node { transition: opacity .3s; }
+  .arch-edge { stroke:#30363d; stroke-width:0.5; opacity:.4; transition: stroke .2s, opacity .2s; }
+  .arch-edge.hot { stroke:#58a6ff; opacity:.9; }
+  .learn-pulse { padding:10px 12px; border-bottom:1px solid var(--border); }
+  .pulse-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:4px; }
+  .pulse-bar { height:6px; background:var(--panel2); border-radius:3px; overflow:hidden; position:relative; }
+  .pulse-fill { height:100%; background:linear-gradient(90deg, #58a6ff 0%, #a371f7 50%, #3fb950 100%); width:0%; transition:width .3s; box-shadow:0 0 8px rgba(88,166,255,.6); }
+  .pulse-info { font-size:10px; color:#8b949e; margin-top:4px; }
+  .pulse-info #pulseStop { color:#e6edf3; font-weight:600; }
+  .pulse-info #pulsePred { color:#3fb950; font-variant-numeric:tabular-nums; }
+  .learn-stats { padding:8px 12px; display:grid; grid-template-columns:1fr 1fr; gap:6px; border-bottom:1px solid var(--border); }
+  .loss-chart-wrap { padding:6px 12px; border-bottom:1px solid var(--border); background:#0d1117; }
+  #lossCanvas { width:100%; height:60px; display:block; }
+  .hidden-bars { padding:8px 12px; display:flex; flex-wrap:wrap; gap:3px; border-bottom:1px solid var(--border); }
+  .hidden-bar { width:14px; height:24px; background:var(--panel2); border-radius:2px; position:relative; overflow:hidden; }
+  .hidden-bar-fill { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(0deg, #1f6feb 0%, #58a6ff 100%); transition:height .3s, background .3s; }
+  .hidden-bar.negative .hidden-bar-fill { background:linear-gradient(0deg, #6e7681 0%, #8b949e 100%); }
+  .route-residuals { padding:6px 12px 12px; display:flex; flex-direction:column; gap:3px; }
+  .api-row-header { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+  .api-status-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .api-endpoint { font-family:monospace; font-size:10px; color:var(--muted); word-break:break-all; }
+  .api-meta { display:flex; gap:10px; margin-top:6px; font-size:10px; color:var(--muted); flex-wrap:wrap; }
+  .api-code { padding:1px 6px; background:var(--bg); border-radius:3px; font-family:monospace; }
+
+  .refresh-bar { padding:8px 12px; border-top:1px solid var(--border); display:flex; align-items:center; gap:8px; flex-shrink:0; background:var(--panel); }
+  .refresh-label { color:var(--muted); font-size:11px; white-space:nowrap; }
+  .refresh-progress { flex:1; height:3px; background:var(--border); border-radius:2px; overflow:hidden; }
+  .refresh-fill { height:100%; background:var(--accent); border-radius:2px; transition:width 1s linear; }
+  .refresh-btn { padding:4px 10px; background:var(--panel2); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:11px; cursor:pointer; }
+  .refresh-btn:hover { border-color:var(--accent); }
+
+  /* Trail controls */
+  .trail-controls { padding:8px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; flex-shrink:0; }
+  .trail-controls label { font-size:11px; color:var(--muted); }
+  .trail-controls select { background:var(--panel2); border:1px solid var(--border); color:var(--text); border-radius:5px; padding:3px 6px; font-size:11px; }
+
+  /* ── Route progress bar ── */
+  .stopline-wrap { margin-top:8px; overflow-x:auto; padding-bottom:4px; cursor:grab; user-select:none; }
+  .stopline-wrap:active { cursor:grabbing; }
+  .stopline-wrap::-webkit-scrollbar { height:3px; }
+  .stopline-wrap::-webkit-scrollbar-track { background:transparent; }
+  .stopline-wrap::-webkit-scrollbar-thumb { background:#30363d; border-radius:2px; }
+  .stopline { position:relative; min-width:max-content; padding:0 16px; }
+  .stopline-track { position:absolute; top:21px; left:0; right:0; height:3px; background:var(--border); z-index:0; }
+  .stopline-done  { position:absolute; top:21px; left:0; height:3px; background:var(--accent); z-index:1; transition:width .4s; }
+  .stop-node { display:flex; flex-direction:column; align-items:center; position:relative; z-index:2; cursor:pointer; }
+  .stop-node .dot { width:10px; height:10px; border-radius:50%; border:2px solid; background:#0d1117; flex-shrink:0; transition:transform .15s; }
+  .stop-node:hover .dot { transform:scale(1.5); }
+  .stop-node .lbl { font-size:10px; font-weight:600; color:#c9d1d9; margin-top:5px; white-space:nowrap; max-width:60px; overflow:hidden; text-overflow:ellipsis; text-align:center; letter-spacing:.2px; }
+  .stop-node.next .lbl { color:var(--accent); font-weight:700; }
+  .stop-node.passed .lbl { color:#6e7681; font-weight:400; }
+  .stop-node.next .dot { background:var(--accent); border-color:var(--accent); box-shadow:0 0 0 3px rgba(31,111,235,.3); }
+  .stop-node.passed .dot { background:var(--panel2); }
+  .bus-pos-marker { position:absolute; z-index:3; pointer-events:none; }
+  .stopline-tooltip { position:fixed; z-index:9999; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px 12px; font-size:11px; color:#e6edf3; pointer-events:none; display:none; min-width:190px; box-shadow:0 6px 20px rgba(0,0,0,.6); }
+
+  /* ── Stop list (expanded view) ── */
+  .stop-list { display:none; margin-top:6px; border-top:1px solid var(--border); }
+  .stop-list.open { display:block; }
+  .stop-row { display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid #21262d; }
+  .stop-row:last-child { border-bottom:none; }
+  .stop-row-dot { width:10px; height:10px; border-radius:50%; border:2px solid; flex-shrink:0; }
+  .stop-row-dot.passed { opacity:0.35; }
+  .stop-row-dot.next { box-shadow:0 0 0 3px rgba(31,111,235,.35); }
+  .stop-row-info { flex:1; min-width:0; }
+  .stop-row-name { font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .stop-row-name.passed { color:var(--muted); }
+  .stop-row-name.next { color:var(--accent); font-weight:600; }
+  .stop-row-code { font-size:9px; color:var(--muted); }
+  .stop-row-eta { text-align:right; flex-shrink:0; }
+  .stop-row-eta-val { font-size:12px; font-weight:700; }
+  .stop-row-eta-hist { font-size:9px; color:var(--muted); }
+  .stop-row-bus { font-size:9px; color:var(--accent); font-weight:700; }
+
+  .maplibregl-popup-content { background:var(--panel)!important; border:1px solid var(--border)!important; border-radius:10px!important; padding:0!important; color:var(--text)!important; min-width:200px; box-shadow:0 8px 24px rgba(0,0,0,.5)!important; }
+  .maplibregl-popup-tip { border-top-color:var(--panel)!important; }
+  .maplibregl-popup-close-button { color:var(--muted)!important; font-size:16px!important; padding:4px 8px!important; }
+  .popup-inner { padding:12px; }
+  .popup-title { font-weight:700; font-size:14px; margin-bottom:8px; }
+  .popup-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .popup-field { background:var(--panel2); border-radius:5px; padding:6px 8px; }
+  .popup-field-label { font-size:10px; color:var(--muted); text-transform:uppercase; }
+  .popup-field-val { font-size:13px; font-weight:600; margin-top:1px; }
+  .popup-coords { margin-top:8px; font-family:monospace; font-size:10px; color:var(--muted); }
+  .empty { padding:32px 16px; text-align:center; color:var(--muted); }
+  .empty-icon { font-size:32px; margin-bottom:8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="https://s3.us-west-2.amazonaws.com/static.syncromatics.com/portal/158/logo.png" alt="Hele-On" onerror="this.style.display='none'">
+  <h1>Hele-On Bus — Live Tracker</h1>
+  <div class="header-badges">
+    <div class="badge badge-blue" id="vehicleCountBadge"><div class="pulse pulse-green"></div><span id="vehicleCountText">— buses</span></div>
+    <div class="badge" id="apiBadge"><div class="pulse" id="apiPulseDot"></div><span id="apiStatusText">Connecting…</span></div>
+    <div class="badge badge-yellow" id="staleBadge" onclick="toggleStale()" style="cursor:pointer;user-select:none;" title="Click to show/hide stale signals">
+      <span id="staleIcon">👻</span><span id="staleText">Stale hidden</span>
+    </div>
+    <span style="font-size:10px;color:var(--muted)" id="lastUpdate"></span>
+  </div>
+</header>
+
+<div id="stopTooltip" class="stopline-tooltip"></div>
+<div class="main">
+  <div id="map"></div>
+  <div class="sidebar" id="sidebar">
+    <div class="tabs">
+      <div class="tab active" data-tab="vehicles">Vehicles</div>
+      <div class="tab" data-tab="routes">Routes</div>
+      <div class="tab" data-tab="learn">🧠 Learn</div>
+      <div class="tab" data-tab="status">Status</div>
+      <div class="tab" data-tab="api">API Log</div>
+    </div>
+
+    <div class="tab-content active" id="tab-vehicles">
+      <div id="vehicleList"><div class="empty"><div class="empty-icon">🚌</div>Loading…</div></div>
+      <div id="etaSection" style="border-top:2px solid var(--border);flex-shrink:0;display:none;">
+        <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>Next Stops — ETA</span>
+          <span style="font-size:10px;cursor:pointer;color:var(--muted);" onclick="document.getElementById('etaSection').style.display='none'">✕</span>
+        </div>
+        <div id="etaPanel" style="padding:8px 12px;max-height:220px;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-routes">
+      <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
+        <label>Trail history:</label>
+        <select id="trailMinutes" onchange="onTrailMinutesChange()">
+          <option value="30">30 min</option>
+          <option value="60" selected>1 hour</option>
+          <option value="120">2 hours</option>
+          <option value="240">4 hours</option>
+          <option value="480">8 hours</option>
+          <option value="1440">24 hours</option>
+        </select>
+        <label><input type="checkbox" id="showTrails" onchange="toggleTrails()" checked> Trails</label>
+        <label><input type="checkbox" id="showRoutes" onchange="toggleRouteShapes()" checked> Route lines</label>
+      </div>
+      <div id="routeList"><div class="empty"><div class="empty-icon">🗺️</div>Loading…</div></div>
+    </div>
+
+    <div class="tab-content" id="tab-status">
+      <div class="status-grid">
+        <div class="stat-card"><div class="stat-label">Active Buses</div><div class="stat-value green" id="st-active">—</div><div class="stat-sub">GPS &lt;60min old</div></div>
+        <div class="stat-card"><div class="stat-label">Stale Signals</div><div class="stat-value yellow" id="st-stale">—</div><div class="stat-sub">&gt;10 min old</div></div>
+        <div class="stat-card"><div class="stat-label">Moving</div><div class="stat-value" id="st-moving">—</div><div class="stat-sub">speed &gt; 0 mph</div></div>
+        <div class="stat-card"><div class="stat-label">Stopped</div><div class="stat-value" id="st-stopped">—</div><div class="stat-sub">speed = 0 mph</div></div>
+        <div class="stat-card"><div class="stat-label">Avg Speed</div><div class="stat-value" id="st-avgspeed">—</div><div class="stat-sub">mph (moving)</div></div>
+        <div class="stat-card"><div class="stat-label">Avg Load</div><div class="stat-value" id="st-avgload">—</div><div class="stat-sub">% capacity</div></div>
+        <div class="stat-card"><div class="stat-label">Total Pings</div><div class="stat-value" id="st-pings">—</div><div class="stat-sub">in DB today</div></div>
+        <div class="stat-card"><div class="stat-label">Server Up</div><div class="stat-value green" id="st-uptime">—</div><div class="stat-sub">since boot</div></div>
+      </div>
+      <div class="section-header">Fleet by Route</div>
+      <div id="fleetBreakdown" style="padding:8px 12px;display:flex;flex-direction:column;gap:6px;"></div>
+      <div class="section-header" style="margin-top:4px;">Heading Distribution</div>
+      <div id="headingDist" style="padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px;"></div>
+    </div>
+
+    <div class="tab-content" id="tab-api">
+      <div class="api-section" id="apiLog"></div>
+    </div>
+
+    <div class="tab-content" id="tab-learn">
+      <div class="learn-header">
+        <div class="learn-title">🧠 Sequence Predictor</div>
+        <div class="learn-sub">A small MLP that learns bus arrival patterns from GPS history. Trains itself every time a bus reaches a stop.</div>
+      </div>
+
+      <!-- Architecture diagram -->
+      <div class="arch-canvas" id="archCanvas">
+        <svg width="100%" height="180" viewBox="0 0 380 180" preserveAspectRatio="xMidYMid meet">
+          <!-- Input layer (10 nodes, smaller) -->
+          <g id="arch-input"></g>
+          <!-- Hidden layer (16 nodes) -->
+          <g id="arch-hidden"></g>
+          <!-- Output layer (5 nodes) -->
+          <g id="arch-output"></g>
+          <!-- Labels -->
+          <text x="20" y="170" fill="#8b949e" font-size="9" text-anchor="middle">Input (32)</text>
+          <text x="190" y="170" fill="#8b949e" font-size="9" text-anchor="middle">Hidden (16)</text>
+          <text x="360" y="170" fill="#8b949e" font-size="9" text-anchor="middle">Outputs (5)</text>
+        </svg>
+      </div>
+
+      <!-- Animated pulse showing a real inference flowing through -->
+      <div class="learn-pulse">
+        <div class="pulse-label">Live inference pulse</div>
+        <div class="pulse-bar"><div class="pulse-fill" id="pulseFill"></div></div>
+        <div class="pulse-info">
+          <span id="pulseStop">—</span> ·
+          <span id="pulsePred">awaiting data</span>
+        </div>
+      </div>
+
+      <!-- Stats grid -->
+      <div class="learn-stats">
+        <div class="stat-card"><div class="stat-label">Trained On</div><div class="stat-value" id="learn-examples">—</div><div class="stat-sub">arrivals seen</div></div>
+        <div class="stat-card"><div class="stat-label">Learning Rate</div><div class="stat-value" id="learn-lr">—</div><div class="stat-sub">decaying</div></div>
+        <div class="stat-card"><div class="stat-label">Parameters</div><div class="stat-value" id="learn-params">—</div><div class="stat-sub">weights + biases</div></div>
+        <div class="stat-card"><div class="stat-label">Last Train</div><div class="stat-value" id="learn-last">—</div><div class="stat-sub">error magnitude</div></div>
+      </div>
+
+      <!-- Training loss sparkline -->
+      <div class="section-header">Training Loss (recent)</div>
+      <div class="loss-chart-wrap">
+        <canvas id="lossCanvas" width="360" height="60"></canvas>
+      </div>
+
+      <!-- Weight visualization -->
+      <div class="section-header">Hidden Layer Activations (live)</div>
+      <div id="hiddenBars" class="hidden-bars"></div>
+
+      <!-- Per-route residual performance -->
+      <div class="section-header">Per-Route Prediction Error</div>
+      <div id="routeResiduals" class="route-residuals"></div>
+    </div>
+
+    <div class="refresh-bar">
+      <span class="refresh-label">Next: <span id="countdown">10</span>s</span>
+      <div class="refresh-progress"><div class="refresh-fill" id="refreshFill" style="width:100%"></div></div>
+      <button class="refresh-btn" onclick="fetchAll()">↻ Now</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const MAPTILER_KEY = 'JqxcM1cwbEEMaXnAxf88';
+const REFRESH_INTERVAL = 10;
+const TRAIL_UPDATE_INTERVAL = 15000;
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let allVehicles = [];
+let apiLog = [];
+let allStops = [];          // all stops from server
+let stoplineCache = {};     // vehicleId -> stopline data
+let routeVisible = {};
+let markers = {};
+let popup = null;
+let selectedVehicleId = null;
+let routeShapes = [];
+let trailData = {};
+let countdownVal = REFRESH_INTERVAL;
+let countdownTimer = null;
+let map = null;
+let mapReady = false;
+let hoverTooltip = null;
+let trailMinutes = 60;
+let showRouteShapes = true;
+let showStale = false;      // stale signals hidden by default
+const STALE_THRESHOLD = 10; // minutes
+
+// ─── MAP INIT ─────────────────────────────────────────────────────────────────
+function initMap() {
+  try {
+    map = new maplibregl.Map({
+      container: 'map',
+      style: `https://api.maptiler.com/maps/081934ab-2c1a-4b26-87d5-49302acdf958/style.json?key=${MAPTILER_KEY}`,
+      center: [-155.0608, 19.7063],
+      zoom: 10,
+      attributionControl: false,
+      fadeDuration: 0,
+    });
+  } catch (e) {
+    console.error('[map] init failed:', e);
+    return;
+  }
+  try {
+    map.addControl(new maplibregl.NavigationControl(), 'top-left');
+    map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
+  } catch (e) { console.error('[map] addControl:', e); }
+  map.on('load', () => {
+    mapReady = true;
+    try { initMapLayers(); } catch (e) { console.error('[map] layers:', e); }
+    try { renderMarkers(); } catch (e) { console.error('[map] markers:', e); }
+  });
+  map.on('error', (e) => {
+    // Suppress known MapLibre v4 bugs about listener arrays
+    if (e?.error?.message?.includes('slice is not a function')) return;
+    console.warn('[map]', e?.error?.message || e);
+  });
+}
+
+function initMapLayers() {
+  // Route shape layer
+  // Route shapes: one source, layers added dynamically per route in renderRouteShapes()
+  map.addSource('route-shapes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+
+  // Trail layer
+  map.addSource('trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'trails-line', type: 'line', source: 'trails',
+    paint: { 'line-color': ['get', 'color'], 'line-width': 2.5, 'line-opacity': 0.7,
+      'line-dasharray': [0.5, 2] },
+    layout: { 'line-join': 'round', 'line-cap': 'round' }
+  });
+
+  // Trail dots (recent pings)
+  map.addSource('trail-dots', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'trail-dots-circle', type: 'circle', source: 'trail-dots',
+    paint: { 'circle-radius': 3, 'circle-color': ['get', 'color'], 'circle-opacity': 0.6, 'circle-stroke-width': 1, 'circle-stroke-color': 'rgba(0,0,0,.4)' }
+  });
+
+  // Stop markers layer
+  map.addSource('stops', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'stops-circle', type: 'circle', source: 'stops',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 3, 11, 5, 13, 7, 15, 10, 17, 14],
+      'circle-color': ['get', 'routeColor'],
+      'circle-opacity': ['interpolate', ['linear'], ['zoom'], 9, 0.6, 11, 0.85, 13, 0.95],
+      'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 9, 1.5, 13, 2.5],
+      'circle-stroke-color': '#0d1117',
+      'circle-stroke-opacity': 1
+    }
+  });
+  map.addLayer({ id: 'stops-label', type: 'symbol', source: 'stops',
+    layout: { 'text-field': ['get', 'stopCode'], 'text-size': 10, 'text-anchor': 'top', 'text-offset': [0, 1.1],
+              'text-optional': true, 'text-allow-overlap': false, 'text-ignore-placement': true },
+    paint: { 'text-color': '#e6edf3', 'text-halo-color': '#0d1117', 'text-halo-width': 1.8 },
+    minzoom: 11
+  });
+
+  // Stop hover tooltip
+  let stopHoverPopup = null;
+  map.on('mouseenter', 'stops-circle', async e => {
+    map.getCanvas().style.cursor = 'pointer';
+    const f = e.features[0];
+    const p = f.properties;
+    if (stopHoverPopup) stopHoverPopup.remove();
+
+    // Fetch live arrival data
+    let arrHtml = '<div style="color:var(--muted);font-size:10px;">Loading arrivals…</div>';
+    stopHoverPopup = new maplibregl.Popup({ offset: 10, closeButton: false, maxWidth: '280px', anchor: 'bottom' })
+      .setLngLat(e.lngLat)
+      .setHTML(buildStopPopupHtml(p, null))
+      .addTo(map);
+
+    try {
+      const res = await fetch(`/api/stop_arrivals?stop_id=${p.stopId}&route_id=${p.routeId}`);
+      const data = await res.json();
+      if (stopHoverPopup) stopHoverPopup.setHTML(buildStopPopupHtml(p, data));
+    } catch(err) {}
+  });
+  map.on('mouseleave', 'stops-circle', () => {
+    map.getCanvas().style.cursor = '';
+    if (stopHoverPopup) { stopHoverPopup.remove(); stopHoverPopup = null; }
+  });
+  map.on('click', 'stops-circle', e => {
+    // Keep popup open on click
+    if (stopHoverPopup) stopHoverPopup.options.closeButton = true;
+  });
+}
+
+// ─── FETCH DATA ───────────────────────────────────────────────────────────────
+const prevStaleIds = new Set();
+const freshFlashIds = new Set(); // vehicles to flash green on next render
+
+function flashVehicle(id) {
+  freshFlashIds.add(id);
+  // Also auto-expand the card so user notices it
+  expandedCards.add(id);
+}
+
+async function fetchAll() {
+  try {
+    const res = await fetch('/api/vehicles');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const prevVehicles = allVehicles;
+    allVehicles = data.vehicles || [];
+    apiLog = data.vehicles ? [{ ok: true, ts: new Date() }] : [];
+
+    // Initialize route visibility for new vehicles
+    allVehicles.forEach(v => { if (routeVisible[v.routeId] === undefined) routeVisible[v.routeId] = true; });
+
+    // Detect vehicles that just became fresh (were stale, now aren't)
+    const nowStaleIds = new Set(allVehicles.filter(v => isStale(v)).map(v => v.id));
+    allVehicles.forEach(v => {
+      if (prevStaleIds.has(v.id) && !nowStaleIds.has(v.id)) {
+        // Vehicle just came back online — flash its card briefly
+        flashVehicle(v.id);
+      }
+    });
+    prevStaleIds.clear();
+    nowStaleIds.forEach(id => prevStaleIds.add(id));
+
+    setApiStatus(allVehicles.length > 0 ? 'ok' : 'partial');
+    const vcount = visibleVehicles().length;
+    document.getElementById('vehicleCountText').textContent = `${vcount} bus${vcount !== 1 ? 'es' : ''}`;
+    document.getElementById('lastUpdate').textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+    renderVehicleList();
+    renderRouteList();
+    renderStatus();
+    renderMarkers();
+    renderRouteShapes();
+    resetCountdown();
+  } catch (e) {
+    console.error('[fetchAll]', e);
+    setApiStatus('error');
+    resetCountdown();
+  }
+}
+
+async function fetchTrails() {
+  try {
+    const res = await fetch(`/api/trails?minutes=${trailMinutes}`);
+    const data = await res.json();
+    trailData = {};
+    data.forEach(t => { trailData[t.vehicle_id] = t; });
+    renderTrails();
+  } catch(e) {}
+}
+
+async function fetchShapes() {
+  try {
+    const res = await fetch('/api/shapes');
+    routeShapes = await res.json();
+    // Populate route metadata from shape data + ROUTES constant so routes
+    // render correctly even before any vehicle reports on them.
+    routeShapes.forEach(s => {
+      if (!ROUTES_META[s.route_id]) {
+        const known = (typeof ROUTES !== 'undefined' && ROUTES.find(r => r.id === s.route_id)) || null;
+        ROUTES_META[s.route_id] = {
+          name: s.name || known?.name || `Route ${s.route_id}`,
+          short: known?.short || String(s.route_id),
+          color: known?.color || (s.color ? `#${s.color}` : '#888')
+        };
+        if (known) ROUTE_COLOR_MAP[s.route_id] = known.color;
+      }
+    });
+    renderRouteShapes();
+  } catch(e) { console.error('[fetchShapes]', e); }
+}
+
+let gtfsStopMap = {}; // stop_id -> { stop_name, stop_code, wheelchair }
+
+async function fetchGtfsStops() {
+  try {
+    const res = await fetch('/api/gtfs/stops');
+    const stops = await res.json();
+    gtfsStopMap = {};
+    stops.forEach(s => { gtfsStopMap[s.stop_id] = s; });
+  } catch(e) {}
+}
+
+async function fetchAllStops() {
+  try {
+    const res = await fetch('/api/stops/all');
+    allStops = await res.json();
+    renderStopMarkers();
+  } catch(e) {}
+}
+
+function fmtEta(min) {
+  if (min == null) return '—';
+  if (min < 1) return 'arriving';
+  return `~${Math.round(min)} min`;
+}
+
+function buildStopPopupHtml(p, arrData) {
+  const color = p.routeColor || '#888';
+  const gtfsStop = gtfsStopMap[p.stopId] || {};
+  const wcIcon = gtfsStop.wheelchair === 1 ? ' <span title="Wheelchair accessible" style="color:#58a6ff;">♿</span>' : '';
+  const officialName = gtfsStop.stop_name || p.name;
+
+  if (!arrData) {
+    return `<div class="popup-inner" style="padding:12px;min-width:260px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;border:2px solid ${color};"></div>
+        <div style="font-weight:700;font-size:13px;">${officialName}${wcIcon}</div>
+      </div>
+      <div style="color:#8b949e;font-size:10px;margin-bottom:10px;">Stop #${p.stopCode||gtfsStop.stop_code||'—'} · ${p.routeName||''}</div>
+      <div style="color:#8b949e;font-size:11px;">Loading…</div>
+    </div>`;
+  }
+
+  // ── Approaching buses ─────────────────────────────────────────────────────
+  let approachHtml;
+  if (arrData.approaching && arrData.approaching.length > 0) {
+    approachHtml = `
+      <div style="display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:2px 8px;align-items:center;font-size:10px;margin-bottom:2px;">
+        <span style="color:#8b949e;">Bus</span>
+        <span style="color:#8b949e;text-align:right;">Current ETA</span>
+        <span style="color:#8b949e;text-align:right;">Hist ETA</span>
+        <span style="color:#8b949e;text-align:right;">Dist</span>
+      </div>` +
+      arrData.approaching.slice(0, 4).map(a => {
+        const dist = a.distKm < 1 ? `${Math.round(a.distKm*1000)}m` : `${a.distKm.toFixed(1)}km`;
+        const etaCurColor = a.etaCurrent != null ? '#d29922' : '#8b949e';
+        const etaHistColor = a.etaHist != null ? '#3fb950' : '#8b949e';
+        return `<div style="display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:2px 8px;align-items:center;padding:4px 0;border-top:1px solid #21262d;">
+          <span style="color:#e6edf3;font-weight:700;font-size:11px;">#${a.vehicleName}</span>
+          <span style="color:${etaCurColor};font-weight:700;text-align:right;">${fmtEta(a.etaCurrent)}</span>
+          <span style="color:${etaHistColor};font-weight:600;text-align:right;">${fmtEta(a.etaHist)}</span>
+          <span style="color:#8b949e;text-align:right;">${dist}</span>
+        </div>`;
+      }).join('');
+  } else {
+    approachHtml = `<div style="color:#8b949e;font-size:10px;padding:6px 0;">No buses currently active on this route</div>`;
+  }
+
+  // ── Typical arrival (long-term history) ───────────────────────────────────
+  let typicalHtml = '';
+  if (arrData.typicalNow && arrData.typicalNow.n >= 3) {
+    const t = arrData.typicalNow;
+    const h = new Date().getHours();
+    const hStr = h % 12 || 12;
+    const ampm = h < 12 ? 'AM' : 'PM';
+    const minStr = `${Math.floor(t.mean)}:${String(Math.round((t.mean % 1) * 60)).padStart(2,'0')}`;
+    const variance = t.stddev < 2 ? 'very consistent' : t.stddev < 5 ? `±${Math.round(t.stddev)} min` : `±${Math.round(t.stddev)} min (variable)`;
+    typicalHtml = `
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #21262d;">
+        <div style="font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Typical this hour (${hStr}${ampm})</div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;">
+          <span style="color:#e6edf3;font-size:12px;">Usually at <strong>:${minStr.split(':')[1]}</strong> past the hour</span>
+          <span style="color:#8b949e;font-size:10px;">${variance}</span>
+        </div>
+        <div style="color:#8b949e;font-size:10px;margin-top:2px;">Based on ${t.n} recorded arrivals</div>
+      </div>`;
+  } else if (arrData.totalArrivals > 0) {
+    typicalHtml = `
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #21262d;color:#8b949e;font-size:10px;">
+        Building typical pattern… ${arrData.totalArrivals} arrival${arrData.totalArrivals!==1?'s':''} recorded so far
+      </div>`;
+  } else {
+    typicalHtml = `
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #21262d;color:#8b949e;font-size:10px;">
+        No arrival history yet — data builds automatically over time
+      </div>`;
+  }
+
+  // ── Headway / last seen ───────────────────────────────────────────────────
+  let headwayHtml = '';
+  if (arrData.minutesSinceLast != null || arrData.avgGapMin != null) {
+    headwayHtml = `<div style="margin-top:6px;font-size:10px;color:#8b949e;display:flex;gap:12px;">
+      ${arrData.minutesSinceLast != null ? `<span>Last arrived: <strong style="color:#e6edf3;">${arrData.minutesSinceLast}m ago</strong></span>` : ''}
+      ${arrData.avgGapMin != null ? `<span>Avg headway: <strong style="color:#e6edf3;">${arrData.avgGapMin}m</strong></span>` : ''}
+    </div>`;
+  }
+
+  return `<div class="popup-inner" style="padding:12px;min-width:280px;max-width:320px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></div>
+      <div style="font-weight:700;font-size:13px;line-height:1.3;">${officialName}${wcIcon}</div>
+    </div>
+    <div style="color:#8b949e;font-size:10px;margin-bottom:10px;">Stop #${p.stopCode||gtfsStop.stop_code||'—'} · ${p.routeName||'Route '+p.routeId}</div>
+    <div style="font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Approaching now</div>
+    ${approachHtml}
+    ${headwayHtml}
+    ${typicalHtml}
+  </div>`;
+}
+
+function renderStopMarkers() {
+  if (!mapReady) return;
+  buildRouteMetaFromVehicles();
+  const features = allStops
+    .filter(s => routeVisible[s.route_id] !== false)
+    .map(s => {
+      const meta = ROUTES_META[s.route_id] || {};
+      return {
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+        properties: { stopId: s.id, name: s.name, stopCode: s.stopCode || '', routeColor: meta.color || '#888', lat: s.lat.toFixed(5), lon: s.lon.toFixed(5), routeId: s.route_id, routeName: meta.name || '' }
+      };
+    });
+  const src = map.getSource('stops');
+  if (src) src.setData({ type: 'FeatureCollection', features });
+}
+
+async function fetchApiStats() {
+  try {
+    const res = await fetch('/api/stats');
+    const data = await res.json();
+    renderApiLog(data);
+    // update uptime
+    if (data.uptime_since) {
+      const mins = Math.round((Date.now() - new Date(data.uptime_since).getTime()) / 60000);
+      const h = Math.floor(mins / 60), m = mins % 60;
+      document.getElementById('st-uptime').textContent = h > 0 ? `${h}h ${m}m` : `${m}m`;
+    }
+    // total pings today
+    if (data.poll_stats) {
+      const total = data.poll_stats.reduce((s, r) => s + (r.polls || 0), 0);
+      document.getElementById('st-pings').textContent = total;
+    }
+  } catch(e) {}
+}
+
+// ─── RENDER ROUTE SHAPES ──────────────────────────────────────────────────────
+const ROUTE_COLOR_MAP = {};
+const ROUTES_META = {};
+
+function buildRouteMetaFromVehicles() {
+  allVehicles.forEach(v => {
+    ROUTE_COLOR_MAP[v.routeId] = v.routeColor;
+    ROUTES_META[v.routeId] = { name: v.routeName, short: v.routeShort, color: v.routeColor };
+  });
+}
+
+// ─── ROUTE OFFSET COMPUTATION ─────────────────────────────────────────────────
+// Snap a coordinate to a ~25m grid cell key for overlap detection
+function gridKey(lon, lat) {
+  return `${Math.round(lat * 4000)},${Math.round(lon * 4000)}`;
+}
+
+function computeRouteOffsets(routeCoordMap) {
+  // routeCoordMap: { routeId -> [[lon,lat],...] }
+  // Returns: { routeId -> offsetPx }
+
+  // Build grid: cell -> Set of routeIds passing through
+  const grid = {};
+  for (const [rid, coords] of Object.entries(routeCoordMap)) {
+    for (const [lon, lat] of coords) {
+      const k = gridKey(lon, lat);
+      if (!grid[k]) grid[k] = new Set();
+      grid[k].add(rid);
+    }
+  }
+
+  // For each route, find all routes it shares cells with and build co-occurrence counts
+  const coOccur = {}; // routeId -> Map<otherRouteId, sharedCellCount>
+  for (const [rid] of Object.entries(routeCoordMap)) coOccur[rid] = new Map();
+
+  for (const peers of Object.values(grid)) {
+    if (peers.size < 2) continue;
+    const arr = [...peers];
+    for (const a of arr) for (const b of arr) {
+      if (a !== b) coOccur[a].set(b, (coOccur[a].get(b) || 0) + 1);
+    }
+  }
+
+  // Build groups of significantly overlapping routes (>20 shared cells)
+  const OVERLAP_THRESH = 20;
+  const assigned = {}; // routeId -> offsetPx
+  const LINE_SPACING = 5; // px between parallel lines
+
+  // For each route, get its overlap peers sorted by routeId for stable ordering
+  for (const rid of Object.keys(routeCoordMap)) {
+    const peers = [...coOccur[rid].entries()]
+      .filter(([, n]) => n >= OVERLAP_THRESH)
+      .map(([id]) => id);
+
+    if (!peers.length) { assigned[rid] = 0; continue; }
+
+    // All routes in this overlap group — sort stably by routeId number
+    const group = [...new Set([rid, ...peers])].sort((a, b) => Number(a) - Number(b));
+    const idx = group.indexOf(rid);
+    const center = (group.length - 1) / 2;
+    assigned[rid] = (idx - center) * LINE_SPACING;
+  }
+
+  return assigned;
+}
+
+let routeLayerIds = [];  // MapLibre layer IDs
+let routeSourceIds = []; // MapLibre source IDs
+
+function renderRouteShapes() {
+  if (!mapReady) return;
+  buildRouteMetaFromVehicles();
+
+  // Build set of route IDs that have at least one vehicle reporting (regardless
+  // of staleness — even a stale bus proves the route is real and on the map).
+  const activeRouteIds = new Set(allVehicles.map(v => v.routeId));
+
+  // Decode all visible route shapes, deduplicated per route_id (pick first pattern)
+  const routeCoords = {}; // routeId -> coords (first pattern only)
+  const routeMeta = {};   // routeId -> { color, name }
+  const seen = new Set();
+
+  routeShapes.forEach(s => {
+    if (!s.shape || seen.has(s.route_id)) return;
+    if (routeVisible[s.route_id] === false) return;
+    if (!activeRouteIds.has(s.route_id)) return; // skip routes with no active bus
+    seen.add(s.route_id);
+    try {
+      const coords = decodePolyline(s.shape);
+      if (coords.length < 2) return;
+      routeCoords[s.route_id] = coords;
+      // Always prefer our curated route colors over the API pattern colors (which can be #FFFFFF etc.)
+      routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || s.color || '#888', name: s.name };
+    } catch(e) {}
+  });
+
+  // Compute lateral offsets to separate overlapping routes
+  const offsets = computeRouteOffsets(routeCoords);
+
+  // Remove old per-route layers then sources
+  routeLayerIds.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+  routeSourceIds.forEach(id => { if (map.getSource(id)) map.removeSource(id); });
+  routeLayerIds = [];
+  routeSourceIds = [];
+
+  if (!showRouteShapes) return;
+
+  // Add one source+layer per route with its computed offset
+  for (const [rid, coords] of Object.entries(routeCoords)) {
+    const { color } = routeMeta[rid];
+    const offset = offsets[rid] || 0;
+    const srcId = `route-${rid}`;
+    const layId = `route-line-${rid}`;
+
+    map.addSource(srcId, {
+      type: 'geojson',
+      data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} }
+    });
+    map.addLayer({
+      id: layId, type: 'line', source: srcId,
+      paint: {
+        'line-color': color,
+        'line-width': 3,
+        'line-opacity': 0.75,
+        'line-offset': offset
+      },
+      layout: { 'line-join': 'round', 'line-cap': 'round' }
+    }, 'stops-circle'); // insert below stops layer
+
+    routeLayerIds.push(layId);
+    routeSourceIds.push(srcId);
+  }
+}
+
+// ─── RENDER TRAILS ────────────────────────────────────────────────────────────
+function renderTrails() {
+  if (!mapReady) return;
+  buildRouteMetaFromVehicles();
+
+  const lineFeatures = [];
+  const dotFeatures = [];
+
+  Object.values(trailData).forEach(t => {
+    if (!t.points || t.points.length < 2) return;
+    if (routeVisible[t.route_id] === false) return;
+
+    const meta = ROUTES_META[t.route_id];
+    const color = meta?.color || '#aaa';
+
+    // Filter out GPS jumps: split into segments when consecutive points are > 2 km apart
+    // or when there's a time gap > 5 minutes (bus was parked / off-route)
+    const MAX_JUMP_KM = 2.0;
+    const MAX_GAP_MS = 5 * 60 * 1000;
+    const segments = [];
+    let seg = [t.points[0]];
+    for (let i = 1; i < t.points.length; i++) {
+      const prev = t.points[i-1], cur = t.points[i];
+      const distKm = haversineKm(prev[1], prev[0], cur[1], cur[0]);
+      const timeGap = cur[2] - prev[2];
+      if (distKm > MAX_JUMP_KM || timeGap > MAX_GAP_MS) {
+        if (seg.length >= 2) segments.push(seg);
+        seg = [cur];
+      } else {
+        seg.push(cur);
+      }
+    }
+    if (seg.length >= 2) segments.push(seg);
+
+    const coords = segments.length > 0 ? segments[0].map(p => [p[0], p[1]]) : [];
+    // Use MultiLineString so all segments render as one feature
+    const allCoords = segments.map(s => s.map(p => [p[0], p[1]]));
+
+    if (allCoords.length > 0) {
+      lineFeatures.push({
+        type: 'Feature',
+        geometry: { type: 'MultiLineString', coordinates: allCoords },
+        properties: { color, vehicle_id: t.vehicle_id, name: t.name }
+      });
+    }
+
+    // Sparse dots from valid segments only
+    const validPoints = segments.flat();
+    const step = Math.max(1, Math.floor(validPoints.length / 20));
+    validPoints.forEach((p, i) => {
+      if (i % step === 0) {
+        dotFeatures.push({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [p[0], p[1]] },
+          properties: { color, ts: p[2], speed: p[3] }
+        });
+      }
+    });
+  });
+
+  const trailSrc = map.getSource('trails');
+  if (trailSrc) trailSrc.setData({ type: 'FeatureCollection', features: lineFeatures });
+  const dotSrc = map.getSource('trail-dots');
+  if (dotSrc) dotSrc.setData({ type: 'FeatureCollection', features: dotFeatures });
+}
+
+// ─── POLYLINE DECODER ─────────────────────────────────────────────────────────
+function decodePolyline(encoded) {
+  const coords = [];
+  let index = 0, lat = 0, lng = 0;
+  while (index < encoded.length) {
+    let b, shift = 0, result = 0;
+    do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+    shift = 0; result = 0;
+    do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+    coords.push([lng / 1e5, lat / 1e5]);
+  }
+  return coords;
+}
+
+// ─── API STATUS ───────────────────────────────────────────────────────────────
+function setApiStatus(state) {
+  const badge = document.getElementById('apiBadge');
+  const dot = document.getElementById('apiPulseDot');
+  const text = document.getElementById('apiStatusText');
+  badge.className = 'badge';
+  dot.className = 'pulse';
+  if (state === 'ok') { badge.classList.add('badge-green'); dot.classList.add('pulse-green'); text.textContent = 'Live'; }
+  else if (state === 'partial') { badge.classList.add('badge-yellow'); dot.classList.add('pulse-yellow'); text.textContent = 'Partial'; }
+  else if (state === 'error') { badge.classList.add('badge-red'); dot.classList.add('pulse-red'); text.textContent = 'Error'; }
+  else { badge.classList.add('badge-blue'); dot.classList.add('pulse-green'); text.textContent = 'Fetching…'; }
+}
+
+// ─── STALENESS ───────────────────────────────────────────────────────────────
+function getAgeMinutes(v) { return v.lastUpdated ? (Date.now() - new Date(v.lastUpdated).getTime()) / 60000 : 9999; }
+function stalenessClass(v) { const m = getAgeMinutes(v); return m < 5 ? 'fresh' : m < 30 ? 'stale' : 'very-stale'; }
+function stalenessLabel(v) {
+  const m = getAgeMinutes(v);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${Math.round(m)}m ago`;
+  const h = Math.floor(m / 60); return `${h}h ${Math.round(m % 60)}m ago`;
+}
+function headingArrow(deg) { return ['↑','↗','→','↘','↓','↙','←','↖'][Math.round((deg % 360) / 45) % 8]; }
+function isStale(v) { return getAgeMinutes(v) >= STALE_THRESHOLD; }
+function visibleVehicles() { return showStale ? allVehicles : allVehicles.filter(v => !isStale(v)); }
+
+function toggleStale() {
+  showStale = !showStale;
+  const badge = document.getElementById('staleBadge');
+  const icon  = document.getElementById('staleIcon');
+  const text  = document.getElementById('staleText');
+  if (showStale) {
+    badge.className = 'badge badge-green';
+    icon.textContent = '📡';
+    text.textContent = 'Stale shown';
+  } else {
+    badge.className = 'badge badge-yellow';
+    icon.textContent = '👻';
+    text.textContent = 'Stale hidden';
+  }
+  renderVehicleList();
+  renderMarkers();
+}
+function loadColor(p) { return p < 0.5 ? '#3fb950' : p < 0.8 ? '#d29922' : '#f85149'; }
+function isLight(hex) {
+  const c = (hex || '').replace('#','');
+  if (c.length < 6) return false;
+  const r = parseInt(c.slice(0,2),16), g = parseInt(c.slice(2,4),16), b = parseInt(c.slice(4,6),16);
+  return (r*299+g*587+b*114)/1000 > 128;
+}
+
+// Track which cards are expanded
+const expandedCards = new Set();
+
+function toggleCardExpand(vid, e) {
+  e.stopPropagation();
+  if (expandedCards.has(vid)) expandedCards.delete(vid);
+  else expandedCards.add(vid);
+  renderVehicleList();
+}
+
+function onTimeHtml(sl) {
+  if (!sl || !sl.next_stop) return '';
+  const ns = sl.next_stop;
+  // Compare GTFS scheduled time vs predicted ETA
+  if (ns.scheduledMs && ns.etaMinHist != null) {
+    const predictedMs = (sl.serverTs || Date.now()) + ns.etaMinHist * 60000;
+    const diffMin = Math.round((predictedMs - ns.scheduledMs) / 60000); // positive = late
+    if (Math.abs(diffMin) < 2) return `<span class="vc-ontime ontime">On time</span>`;
+    if (diffMin > 0) return `<span class="vc-ontime late">+${diffMin}m late</span>`;
+    return `<span class="vc-ontime early">${Math.abs(diffMin)}m early</span>`;
+  }
+  // Fallback: compare speed ETA vs hist ETA
+  const { etaMinSpeed, etaMinHist } = ns;
+  if (etaMinSpeed == null || etaMinHist == null || etaMinHist === 0) return '';
+  const diffMin = Math.round(etaMinSpeed - etaMinHist);
+  if (Math.abs(diffMin) < 1) return `<span class="vc-ontime ontime">On time</span>`;
+  if (diffMin > 0) return `<span class="vc-ontime late">+${diffMin}m late</span>`;
+  return `<span class="vc-ontime early">${Math.abs(diffMin)}m early</span>`;
+}
+
+// ─── VEHICLE LIST ─────────────────────────────────────────────────────────────
+function renderVehicleList() {
+  const el = document.getElementById('vehicleList');
+  const visible = visibleVehicles();
+  if (!allVehicles.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">🚌</div>No vehicles reporting</div>'; return; }
+  if (!visible.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">👻</div>All signals are stale<br><span style="font-size:11px">Click "Stale hidden" in header to show</span></div>'; return; }
+  const sorted = [...visible].sort((a,b) => (parseInt(a.name)||0) - (parseInt(b.name)||0));
+  el.innerHTML = sorted.map(v => {
+    const age = stalenessClass(v), load = v.passengerLoad || 0, color = v.routeColor || '#444';
+    const tc = isLight(color) ? '#111' : '#fff';
+    const sel = selectedVehicleId === v.id ? 'selected' : '';
+    const sl = stoplineCache[v.id];
+    const isOpen = expandedCards.has(v.id);
+    const stoplineHtml = sl ? buildStoplineHtml(sl, color) : `<div style="color:var(--muted);font-size:10px;padding:4px 0;text-align:center;">Loading route…</div>`;
+    const nextStop = sl?.next_stop;
+    const nextStopStr = nextStop
+      ? `▶ ${nextStop.name.split('(')[0].trim()} — ${nextStop.etaMinHist != null && nextStop.etaMinHist > 0 ? `~${Math.round(nextStop.etaMinHist)} min` : nextStop.etaMinSpeed != null && nextStop.etaMinSpeed > 0 ? `~${Math.round(nextStop.etaMinSpeed)} min` : 'arriving'}`
+      : sl ? 'At terminal' : 'Loading…';
+
+    // Rich next-stop detail row: Predicted / Scheduled / Typical at a glance
+    const nextStopDetail = (() => {
+      if (!nextStop || !sl) return '';
+      const schedTime = nextStop.scheduledMs
+        ? new Date(nextStop.scheduledMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : '—';
+      const eta = nextStop.etaMinHist;
+      const predTime = eta != null
+        ? new Date((sl.serverTs || Date.now()) + eta * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : '—';
+      const etaText = eta != null && eta > 0 ? `~${Math.round(eta)} min` : (eta === 0 ? 'arriving' : '—');
+      const typMin = nextStop.typicalMin;
+      const typHour = nextStop.typicalHour;
+      let typTime = '—';
+      if (typMin != null) {
+        const h = typHour != null ? typHour : new Date().getHours();
+        const d = new Date(); d.setHours(0, 0, 0, 0); d.setMinutes(h * 60 + typMin);
+        typTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+      const typStddev = nextStop.typicalStddev;
+      const typTag = typStddev != null && typStddev >= 2 ? `±${Math.round(typStddev)}m` : `${nextStop.typicalN||0} obs`;
+      return `
+        <div style="margin-top:6px;padding:6px 8px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;">
+          <div style="font-size:9px;color:var(--accent);font-weight:700;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px;">▶ Next stop · ${nextStop.stopCode ? '#'+nextStop.stopCode : 'unnumbered'}</div>
+          <div style="font-size:11px;color:#e6edf3;font-weight:600;margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${nextStop.name.split('(')[0].trim()}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:10px;">
+            <div>
+              <div style="color:#3fb950;font-size:8px;text-transform:uppercase;letter-spacing:.3px;margin-bottom:1px;">Predicted</div>
+              <div style="font-weight:700;color:#e6edf3;font-variant-numeric:tabular-nums;font-size:11px;">${predTime}</div>
+              <div style="color:#8b949e;font-size:9px;">${etaText}</div>
+            </div>
+            <div>
+              <div style="color:#58a6ff;font-size:8px;text-transform:uppercase;letter-spacing:.3px;margin-bottom:1px;">Scheduled</div>
+              <div style="font-weight:700;color:#e6edf3;font-variant-numeric:tabular-nums;font-size:11px;">${schedTime}</div>
+              <div style="color:#8b949e;font-size:9px;">GTFS</div>
+            </div>
+            <div>
+              <div style="color:#8b949e;font-size:8px;text-transform:uppercase;letter-spacing:.3px;margin-bottom:1px;">Typical</div>
+              <div style="font-weight:700;color:#e6edf3;font-variant-numeric:tabular-nums;font-size:11px;">${typTime}</div>
+              <div style="color:#8b949e;font-size:9px;">${typTag}</div>
+            </div>
+          </div>
+        </div>`;
+    })();
+
+    const flashCls = freshFlashIds.has(v.id) ? ' just-fresh' : '';
+    return `<div class="vehicle-card ${sel}${flashCls}">
+      <div class="vc-header" onclick="selectVehicle(${v.id})" style="cursor:pointer;">
+        <div class="vc-badge" style="background:${color};color:${tc}">${v.routeShort}</div>
+        <div class="vc-info">
+          <div class="vc-name">Bus #${v.name}</div>
+          <div class="vc-route">${v.routeName}</div>
+        </div>
+        ${onTimeHtml(sl)}
+        <div class="vc-freshness ${age}">${stalenessLabel(v)}</div>
+        <div class="vc-expand-btn ${isOpen?'open':''}" title="${isOpen?'Collapse stops':'Show all stops'}">▼</div>
+      </div>
+      <div class="vc-stats">
+        <div class="vc-stat"><div class="vc-stat-label">Speed</div><div class="vc-stat-val">${v.speed} <span style="font-size:9px;color:var(--muted)">mph</span></div></div>
+        <div class="vc-stat"><div class="vc-stat-label">Heading</div><div class="vc-stat-val">${headingArrow(v.headingDegrees)} ${v.heading||'—'}</div></div>
+        <div class="vc-stat"><div class="vc-stat-label">Load</div><div class="vc-stat-val">${(load*100).toFixed(0)}<span style="font-size:9px;color:var(--muted)">%</span></div></div>
+      </div>
+      <div class="vc-load-bar"><div class="vc-load-fill" style="width:${load*100}%;background:${loadColor(load)}"></div></div>
+      <div style="margin-top:5px;font-size:10px;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${nextStopStr}</div>
+      ${nextStopDetail}
+      <div class="stopline-wrap">${sl ? stoplineHtml : '<div style="color:var(--muted);font-size:10px;padding:4px 0;">Loading route…</div>'}</div>
+      <div class="stop-list ${isOpen?'open':''}">
+        ${sl ? buildStopListHtml(sl, color) : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Wire up stop-node hover tooltips after render
+  document.querySelectorAll('.stop-node[data-stop]').forEach(node => {
+    node.addEventListener('mouseenter', e => showStopTooltip(e, node));
+    node.addEventListener('mousemove',  e => posStopTooltip(e));
+    node.addEventListener('mouseleave', hideStopTooltip);
+  });
+
+  // Drag-to-scroll for all stopline-wrap elements
+  document.querySelectorAll('.stopline-wrap').forEach(wrap => {
+    let dragging = false, startX = 0, scrollLeft = 0;
+    wrap.addEventListener('mousedown', e => {
+      dragging = true; startX = e.pageX; scrollLeft = wrap.scrollLeft;
+      wrap.style.cursor = 'grabbing';
+    });
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      wrap.scrollLeft = scrollLeft - (e.pageX - startX);
+    });
+    document.addEventListener('mouseup', () => { dragging = false; wrap.style.cursor = 'grab'; });
+  });
+
+  // Auto-scroll active stopline to show bus position
+  document.querySelectorAll('.stopline-wrap').forEach(wrap => {
+    const busMarker = wrap.querySelector('.bus-pos-marker');
+    if (busMarker) {
+      const busLeft = parseFloat(busMarker.style.left) || 0;
+      wrap.scrollLeft = busLeft - wrap.clientWidth / 2;
+    }
+  });
+
+  // Clear flash IDs after render — animation already running in CSS
+  freshFlashIds.clear();
+}
+
+// ─── STOPLINE BUILDER ─────────────────────────────────────────────────────────
+function buildStoplineHtml(sl, routeColor) {
+  const stops = sl.stops;
+  if (!stops || !stops.length) return '';
+
+  // Next stop — ALWAYS trust the server's next_stop.seq (it uses the bus's
+  // last arrival + route direction, not just distance). Fall back to
+  // closest-by-distance only if server didn't supply one.
+  function findNextIdx(stops, serverNextSeq) {
+    if (serverNextSeq != null) {
+      const idx = stops.findIndex(s => s.seq === serverNextSeq);
+      if (idx >= 0) return idx;
+    }
+    // Fallback: closest stop
+    return stops.reduce((mi, s, i) => s.distKm < stops[mi].distKm ? i : mi, 0);
+  }
+  const nextIdx = findNextIdx(stops, sl.next_stop?.seq);
+
+  // Bus position as fraction along the line (0→1)
+  // Estimate: next stop is at nextIdx, bus is distKm before it
+  // Total route length = sum of inter-stop distances
+  const interDists = stops.map((s, i) => i === 0 ? 0 : haversineKm(stops[i-1].lat, stops[i-1].lon, s.lat, s.lon));
+  const cumDist = interDists.reduce((acc, d, i) => { acc.push((acc[i-1]||0)+d); return acc; }, []);
+  const totalDist = cumDist[cumDist.length-1] || 1;
+  // Bus position in route space: we're distKm before nextStop
+  const busPosFrac = Math.max(0, Math.min(1, (cumDist[nextIdx] - stops[nextIdx].distKm) / totalDist));
+
+  // Build flex-layout stop nodes (evenly spaced — no overlap)
+  const nodeWidth = 44; // px per stop slot
+  const totalWidth = stops.length * nodeWidth;
+  const busPixel = busPosFrac * totalWidth;
+
+  // Sideways bus SVG — 52 wide × 22 tall, facing right
+  // Layout: front bumper(right), body, rear bumper(left), windows, tires, arrow below
+  const tc = isLight(routeColor) ? '#111' : '#fff';
+  const sideBus = `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="30" viewBox="0 0 52 30"
+       style="display:block;filter:drop-shadow(0 2px 5px rgba(0,0,0,.85));">
+    <!-- body -->
+    <rect x="2" y="2" width="44" height="16" rx="3" fill="${routeColor}" stroke="rgba(0,0,0,.55)" stroke-width="1.2"/>
+    <!-- front (right side) — rounded nose -->
+    <rect x="44" y="4" width="6" height="12" rx="3" fill="${routeColor}" stroke="rgba(0,0,0,.55)" stroke-width="1.2"/>
+    <!-- windshield (front right) -->
+    <rect x="43" y="4" width="5" height="7" rx="2" fill="rgba(180,220,255,.55)" stroke="rgba(0,0,0,.2)" stroke-width=".6"/>
+    <!-- headlight -->
+    <rect x="48" y="9" width="3" height="3" rx="1" fill="#ffe87a" opacity=".9"/>
+    <!-- rear window (left) -->
+    <rect x="3" y="4" width="5" height="7" rx="1.5" fill="rgba(180,220,255,.4)" stroke="rgba(0,0,0,.2)" stroke-width=".6"/>
+    <!-- side windows — 3 of them -->
+    <rect x="10" y="4" width="8" height="7" rx="1.5" fill="rgba(180,220,255,.5)" stroke="rgba(0,0,0,.2)" stroke-width=".6"/>
+    <rect x="21" y="4" width="8" height="7" rx="1.5" fill="rgba(180,220,255,.5)" stroke="rgba(0,0,0,.2)" stroke-width=".6"/>
+    <rect x="32" y="4" width="8" height="7" rx="1.5" fill="rgba(180,220,255,.5)" stroke="rgba(0,0,0,.2)" stroke-width=".6"/>
+    <!-- rear tail light -->
+    <rect x="1" y="9" width="3" height="3" rx="1" fill="#ff4444" opacity=".85"/>
+    <!-- front wheel -->
+    <circle cx="40" cy="19" r="4.5" fill="#1a1a1a" stroke="#555" stroke-width="1"/>
+    <circle cx="40" cy="19" r="2" fill="#333"/>
+    <!-- rear wheel -->
+    <circle cx="12" cy="19" r="4.5" fill="#1a1a1a" stroke="#555" stroke-width="1"/>
+    <circle cx="12" cy="19" r="2" fill="#333"/>
+    <!-- pointer arrow pointing DOWN to the track line (wide base up, tip down) -->
+    <polygon points="22,23 30,23 26,29" fill="${routeColor}" stroke="rgba(0,0,0,.5)" stroke-width=".8"/>
+  </svg>`;
+
+  // Layout: bus floats at top, arrow tip lands at track line (top:46px)
+  // Track at top:46, dots at top:40, bus at top:4 → plenty of breathing room
+  return `<div class="stopline" style="width:${totalWidth}px;height:68px;">
+    <div class="stopline-track" style="top:46px;"></div>
+    <div class="stopline-done" style="width:${busPixel}px;background:${routeColor};opacity:0.8;top:46px;"></div>
+    ${stops.map((s, i) => {
+      const cls = i < nextIdx ? 'passed' : i === nextIdx ? 'next' : '';
+      const encoded = encodeStopData(s, i, nextIdx, sl);
+      const x = (i + 0.5) * nodeWidth;
+      // Show stop code if available, otherwise a short name fragment so the
+      // scrubber always labels what each dot represents.
+      let label;
+      if (s.stopCode) label = s.stopCode;
+      else {
+        const name = (s.name || '').split('(')[0].trim();
+        // Take first 1-2 words for compact display
+        const words = name.split(/\s+/).filter(Boolean);
+        label = words.slice(0, 2).join(' ');
+        if (label.length > 12) label = label.slice(0, 12) + '…';
+      }
+      return `<div class="stop-node ${cls}" data-stop="${encoded}"
+                   style="position:absolute;left:${x}px;top:41px;transform:translateX(-50%);width:${nodeWidth}px;">
+        <div class="dot" style="border-color:${routeColor};${i<nextIdx?`background:${routeColor};opacity:.5`:''}"></div>
+        <div class="lbl">${label}</div>
+      </div>`;
+    }).join('')}
+    <div class="bus-pos-marker" style="left:${busPixel}px;top:4px;transform:translateX(-50%);">
+      ${sideBus}
+    </div>
+  </div>`;
+}
+
+function absTime(nowMs, etaMin) {
+  if (etaMin == null) return '—';
+  const t = new Date(nowMs + etaMin * 60000);
+  return t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function typicalTimeStr(typicalMin, hour) {
+  if (typicalMin == null) return null;
+  const h = hour != null ? hour : new Date().getHours();
+  const totalMin = h * 60 + typicalMin;
+  const d = new Date(); d.setHours(0, 0, 0, 0); d.setMinutes(totalMin);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function buildStopListHtml(sl, routeColor) {
+  const stops = sl.stops;
+  if (!stops || !stops.length) return '<div style="color:var(--muted);font-size:10px;padding:6px 0;">No stop data</div>';
+  // Next stop — trust server's next_stop.seq
+  const si = stops.findIndex(s => s.seq === sl.next_stop?.seq);
+  const nextIdx = si >= 0 ? si : stops.reduce((mi, s, i) => s.distKm < stops[mi].distKm ? i : mi, 0);
+  const nowMs = sl.serverTs || Date.now();
+
+  const COLS = '14px 1fr 62px 62px 62px';
+
+  const clockId = `clock-${sl.vehicle_id}`;
+  const header = `
+  <div style="display:grid;grid-template-columns:${COLS};gap:4px 8px;padding:4px 0 3px;background:rgba(255,255,255,.03);border-radius:6px;margin-bottom:1px;">
+    <span></span>
+    <span style="font-size:10px;color:#e6edf3;font-weight:600;letter-spacing:.2px;">Now</span>
+    <span id="${clockId}" style="font-size:13px;font-weight:700;color:#e6edf3;text-align:right;font-variant-numeric:tabular-nums;letter-spacing:.5px;">${new Date(nowMs).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
+    <span style="font-size:9px;color:#3fb950;text-align:right;padding-top:3px;">↑ live</span>
+    <span></span>
+  </div>
+  <div style="display:grid;grid-template-columns:${COLS};gap:4px 8px;padding:6px 0 4px;border-bottom:1px solid #30363d;margin-bottom:2px;">
+    <span></span>
+    <span style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Stop</span>
+    <span style="font-size:9px;color:#58a6ff;text-transform:uppercase;letter-spacing:.4px;text-align:right;">Scheduled</span>
+    <span style="font-size:9px;color:#3fb950;text-transform:uppercase;letter-spacing:.4px;text-align:right;">Predicted</span>
+    <span style="font-size:9px;color:#8b949e;text-transform:uppercase;letter-spacing:.4px;text-align:right;">Typical</span>
+  </div>`;
+
+  function renderRow(s, i, isPassed, isNext) {
+    const dotBg     = isNext ? 'var(--accent)' : isPassed ? routeColor : 'var(--bg)';
+    const dotBorder = isNext ? 'var(--accent)' : routeColor;
+    const dotOpacity= isPassed ? '0.3' : '1';
+    const nameColor = isNext ? 'var(--accent)' : isPassed ? '#555d6b' : 'var(--text)';
+    const nameFw    = isNext ? '700' : '400';
+
+    let schedStr = '—', schedColor = 'var(--muted)', schedSub = '';
+    let predStr, predColor, predSub = '';
+    let typStr = '—', typColor = 'var(--muted)', typSub = '';
+
+    // Scheduled time from GTFS
+    function fmtScheduled(s) {
+      if (!s.scheduledMs) return null;
+      return new Date(s.scheduledMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    if (isPassed) {
+      const sch = fmtScheduled(s);
+      schedStr = sch || '✓'; schedColor = '#555d6b';
+      predStr = '✓'; predColor = '#555d6b';
+      typStr = s.typicalMin != null ? typicalTimeStr(s.typicalMin, s.typicalHour) : '—';
+      typColor = '#555d6b';
+      typSub = s.typicalStddev != null && s.typicalStddev >= 2 ? `±${Math.round(s.typicalStddev)}m` : '';
+    } else if (isNext && s.distKm < 0.05) {
+      schedStr = fmtScheduled(s) || 'HERE'; schedColor = 'var(--accent)';
+      predStr = 'HERE'; predColor = 'var(--accent)';
+    } else {
+      const sch = fmtScheduled(s);
+      if (sch) {
+        schedStr = sch; schedColor = '#58a6ff';
+        // Show how far ahead/behind scheduled vs now
+        const diffMin = Math.round((s.scheduledMs - nowMs) / 60000);
+        schedSub = diffMin > 0 ? `in ${diffMin}m` : diffMin === 0 ? 'now' : `${Math.abs(diffMin)}m ago`;
+      } else {
+        schedStr = '—'; schedColor = 'var(--muted)';
+      }
+
+      if (s.etaMinHist != null) {
+        predStr = absTime(nowMs, s.etaMinHist); predColor = '#3fb950';
+        predSub = `in ${Math.round(s.etaMinHist)}m`;
+      } else { predStr = '—'; predColor = 'var(--muted)'; }
+
+      if (s.typicalMin != null) {
+        typStr = typicalTimeStr(s.typicalMin, s.typicalHour); typColor = '#8b949e';
+        typSub = s.typicalStddev >= 2 ? `±${Math.round(s.typicalStddev)}m` : s.typicalN ? `${s.typicalN} obs` : '';
+      }
+    }
+
+    const nextBadge = isNext ? `<span style="font-size:8px;font-weight:700;color:var(--accent);background:rgba(31,111,235,.18);border-radius:3px;padding:1px 5px;margin-left:5px;">NEXT</span>` : '';
+    const rowBg = isNext ? 'background:rgba(31,111,235,.06);border-radius:6px;margin:0 -4px;padding:5px 4px;' : 'padding:5px 0;';
+
+    return `<div style="display:grid;grid-template-columns:${COLS};gap:4px 8px;${rowBg}border-bottom:1px solid #1c2128;align-items:center;">
+      <div style="width:10px;height:10px;border-radius:50%;border:2px solid ${dotBorder};background:${dotBg};opacity:${dotOpacity};flex-shrink:0;"></div>
+      <div style="min-width:0;">
+        <div style="font-size:11px;font-weight:${nameFw};color:${nameColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.name.split('(')[0].trim()}${nextBadge}</div>
+        <div style="font-size:9px;color:#555d6b;">${s.stopCode ? 'Stop #'+s.stopCode : ''}${gtfsStopMap[s.stopId]?.wheelchair === 1 ? ' ♿' : ''}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:11px;font-weight:600;color:${schedColor};font-variant-numeric:tabular-nums;">${schedStr}</div>
+        ${schedSub ? `<div style="font-size:9px;color:var(--muted);">${schedSub}</div>` : ''}
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:11px;font-weight:600;color:${predColor};font-variant-numeric:tabular-nums;">${predStr}</div>
+        ${predSub ? `<div style="font-size:9px;color:var(--muted);">${predSub}</div>` : ''}
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:11px;font-weight:600;color:${typColor};font-variant-numeric:tabular-nums;">${typStr}</div>
+        ${typSub ? `<div style="font-size:9px;color:var(--muted);">${typSub}</div>` : ''}
+      </div>
+    </div>`;
+  }
+
+  // Split into upcoming (next + ahead) and passed
+  const upcoming = stops.slice(nextIdx);          // next stop first, then ahead in order
+  const passed   = stops.slice(0, nextIdx).reverse(); // most recent passed stop first
+
+  const upcomingRows = upcoming.map((s, i) => renderRow(s, nextIdx + i, false, i === 0)).join('');
+
+  // Only show last 3 passed stops to keep it clean
+  const passedRows = passed.slice(0, 3).map((s, i) => renderRow(s, nextIdx - 1 - i, true, false)).join('');
+  const passedSection = passed.length ? `
+    <div style="margin:8px 0 4px;display:flex;align-items:center;gap:8px;">
+      <div style="flex:1;height:1px;background:#21262d;"></div>
+      <span style="font-size:9px;color:#555d6b;text-transform:uppercase;letter-spacing:.5px;">Already visited</span>
+      <div style="flex:1;height:1px;background:#21262d;"></div>
+    </div>
+    ${passedRows}` : '';
+
+  return header + upcomingRows + passedSection;
+}
+
+function encodeStopData(s, i, nextIdx, sl) {
+  return encodeURIComponent(JSON.stringify({
+    name: s.name, code: s.stopCode, seq: i, nextIdx,
+    distKm: s.distKm, etaSpeed: s.etaMinSpeed, etaHist: s.etaMinHist,
+    histMph: sl.hist_avg_mph, histN: sl.hist_samples
+  }));
+}
+
+function showStopTooltip(e, node) {
+  const tip = document.getElementById('stopTooltip');
+  try {
+    const d = JSON.parse(decodeURIComponent(node.dataset.stop));
+    const isPassed = d.seq < d.nextIdx;
+    const isNext   = d.seq === d.nextIdx;
+    const distStr  = d.distKm < 1 ? `${Math.round(d.distKm*1000)} m` : `${d.distKm.toFixed(2)} km`;
+    const etaSpeedStr = d.etaSpeed !== null ? (d.etaSpeed < 1 ? 'arriving' : `~${d.etaSpeed} min`) : '—';
+    const etaHistStr  = d.etaHist  !== null ? (d.etaHist  < 1 ? 'arriving' : `~${d.etaHist} min`)  : '—';
+    tip.innerHTML = `
+      <div style="font-weight:700;font-size:12px;margin-bottom:6px;">${d.name}</div>
+      <div style="color:#8b949e;font-size:10px;margin-bottom:8px;">Stop #${d.code||'—'} · Stop ${d.seq+1} on route</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+        <div style="background:#0d1117;border-radius:5px;padding:5px 7px;">
+          <div style="color:#8b949e;font-size:9px;text-transform:uppercase;">Distance</div>
+          <div style="font-size:12px;font-weight:600;margin-top:1px;">${distStr}</div>
+        </div>
+        <div style="background:#0d1117;border-radius:5px;padding:5px 7px;">
+          <div style="color:#8b949e;font-size:9px;text-transform:uppercase;">Status</div>
+          <div style="font-size:12px;font-weight:600;margin-top:1px;color:${isNext?'#58a6ff':isPassed?'#8b949e':'#e6edf3'}">${isNext?'▶ Next':isPassed?'✓ Passed':'Ahead'}</div>
+        </div>
+        <div style="background:#0d1117;border-radius:5px;padding:5px 7px;">
+          <div style="color:#8b949e;font-size:9px;text-transform:uppercase;">ETA (current speed)</div>
+          <div style="font-size:12px;font-weight:600;margin-top:1px;color:#d29922;">${etaSpeedStr}</div>
+        </div>
+        <div style="background:#0d1117;border-radius:5px;padding:5px 7px;">
+          <div style="color:#8b949e;font-size:9px;text-transform:uppercase;">ETA (historical avg)</div>
+          <div style="font-size:12px;font-weight:600;margin-top:1px;color:#3fb950;">${etaHistStr}</div>
+        </div>
+      </div>
+      <div style="margin-top:6px;font-size:10px;color:#8b949e;">
+        Historical avg: ${d.histMph} mph · ${d.histN} data points
+      </div>`;
+    tip.style.display = 'block';
+    posStopTooltip(e);
+  } catch(err) {}
+}
+
+function posStopTooltip(e) {
+  const tip = document.getElementById('stopTooltip');
+  if (!tip) return;
+  const w = tip.offsetWidth || 210, h = tip.offsetHeight || 160;
+  let tx = e.clientX + 14, ty = e.clientY - h / 2;
+  if (tx + w > window.innerWidth - 8) tx = e.clientX - w - 14;
+  if (ty < 8) ty = 8;
+  if (ty + h > window.innerHeight - 8) ty = window.innerHeight - h - 8;
+  tip.style.left = tx + 'px';
+  tip.style.top  = ty + 'px';
+}
+
+function hideStopTooltip() {
+  const tip = document.getElementById('stopTooltip');
+  if (tip) tip.style.display = 'none';
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ─── ROUTE LIST ───────────────────────────────────────────────────────────────
+function renderRouteList() {
+  const el = document.getElementById('routeList');
+  const counts = {};
+  allVehicles.forEach(v => counts[v.routeId] = (counts[v.routeId]||0)+1);
+  // Build unique routes list from shapes + vehicles
+  const routeIds = [...new Set([...Object.keys(counts).map(Number), ...routeShapes.map(s=>s.route_id)])];
+  // Get route meta
+  const routeMeta = {};
+  allVehicles.forEach(v => routeMeta[v.routeId] = { name: v.routeName, short: v.routeShort, color: v.routeColor });
+  routeShapes.forEach(s => { if (!routeMeta[s.route_id]) routeMeta[s.route_id] = { name: s.name||'Route '+s.route_id, short: String(s.route_id), color: s.color||'#888' }; });
+
+  el.innerHTML = Object.entries(routeMeta).map(([rid, meta]) => {
+    const n = counts[rid] || 0;
+    const on = routeVisible[rid] !== false;
+    return `<div class="route-row">
+      <div class="route-dot" style="background:${meta.color}"></div>
+      <div class="route-name">${meta.name}</div>
+      <div class="route-count">${n > 0 ? `${n} bus${n>1?'es':''}` : '—'}</div>
+      <div class="route-toggle ${on?'on':''}" onclick="toggleRoute(${rid},this)"></div>
+    </div>`;
+  }).join('');
+}
+
+function toggleRoute(id, el) {
+  routeVisible[id] = !routeVisible[id];
+  el.classList.toggle('on');
+  renderMarkers();
+  renderStopMarkers();
+  renderRouteShapes();
+  renderTrails();
+}
+
+function toggleRouteShapes() {
+  showRouteShapes = document.getElementById('showRoutes').checked;
+  renderRouteShapes();
+}
+
+let showTrails = true;
+function toggleTrails() {
+  showTrails = document.getElementById('showTrails').checked;
+  if (!mapReady) return;
+  ['trails-line','trail-dots-circle'].forEach(id => {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', showTrails ? 'visible' : 'none');
+  });
+}
+
+function onTrailMinutesChange() {
+  trailMinutes = parseInt(document.getElementById('trailMinutes').value);
+  fetchTrails();
+}
+
+// ─── STATUS TAB ───────────────────────────────────────────────────────────────
+function renderStatus() {
+  const active = allVehicles.filter(v => getAgeMinutes(v) < 60);
+  const stale = allVehicles.filter(v => getAgeMinutes(v) >= 10);
+  const moving = allVehicles.filter(v => v.speed > 0);
+  const stopped = allVehicles.filter(v => v.speed === 0);
+  const avgSpeed = moving.length ? (moving.reduce((s,v)=>s+v.speed,0)/moving.length).toFixed(1) : '—';
+  const avgLoad = allVehicles.length ? ((allVehicles.reduce((s,v)=>s+(v.passengerLoad||0),0)/allVehicles.length)*100).toFixed(1)+'%' : '—';
+
+  document.getElementById('st-active').textContent = active.length;
+  document.getElementById('st-stale').textContent = stale.length;
+  document.getElementById('st-moving').textContent = moving.length;
+  document.getElementById('st-stopped').textContent = stopped.length;
+  document.getElementById('st-avgspeed').textContent = avgSpeed !== '—' ? avgSpeed : '—';
+  document.getElementById('st-avgload').textContent = avgLoad;
+
+  const byRoute = {};
+  allVehicles.forEach(v => {
+    if (!byRoute[v.routeId]) byRoute[v.routeId] = { name: v.routeName, color: v.routeColor, n: 0 };
+    byRoute[v.routeId].n++;
+  });
+  document.getElementById('fleetBreakdown').innerHTML = Object.values(byRoute).map(r =>
+    `<div style="display:flex;align-items:center;gap:8px;">
+      <div style="width:10px;height:10px;border-radius:50%;background:${r.color};flex-shrink:0"></div>
+      <div style="flex:1;font-size:12px;">${r.name}</div>
+      <div style="font-size:11px;color:var(--muted)">${r.n} bus${r.n>1?'es':''}</div>
+    </div>`).join('') || '<div style="color:var(--muted);font-size:12px;">No active vehicles</div>';
+
+  const dirs = {};
+  allVehicles.forEach(v => { dirs[v.heading||'—'] = (dirs[v.heading||'—']||0)+1; });
+  document.getElementById('headingDist').innerHTML = Object.entries(dirs).sort((a,b)=>b[1]-a[1]).map(([h,n]) =>
+    `<div class="stat-card" style="padding:6px 10px;text-align:center;">
+      <div style="font-size:16px;">${headingArrow(headingToDeg(h))}</div>
+      <div style="font-size:11px;font-weight:600;">${h}</div>
+      <div style="font-size:10px;color:var(--muted)">${n}</div>
+    </div>`).join('') || '<span style="color:var(--muted);font-size:12px;">No data</span>';
+}
+
+function headingToDeg(h) { return ({N:0,NE:45,E:90,SE:135,S:180,SW:225,W:270,NW:315})[h]??0; }
+
+// ─── API LOG ──────────────────────────────────────────────────────────────────
+function renderApiLog(stats) {
+  if (!stats || !stats.poll_stats) { document.getElementById('apiLog').innerHTML = '<div class="empty"><div class="empty-icon">📡</div>Loading stats…</div>'; return; }
+  const routeMap = {};
+  allVehicles.forEach(v => routeMap[v.routeId] = v);
+  document.getElementById('apiLog').innerHTML = stats.poll_stats.map(r => {
+    const okPct = r.polls ? ((r.ok/r.polls)*100).toFixed(0) : 0;
+    const lat = r.avg_latency ? Math.round(r.avg_latency) : '—';
+    const meta = ROUTES_META[r.route_id] || { short: r.route_id, name: 'Route '+r.route_id };
+    const color = okPct >= 90 ? 'var(--green)' : okPct >= 50 ? 'var(--yellow)' : 'var(--red)';
+    return `<div class="api-row">
+      <div class="api-row-header">
+        <div class="api-status-dot" style="background:${color}"></div>
+        <strong style="font-size:12px;">${meta.short} – ${meta.name?.replace(/^\d+\s*/,'')}</strong>
+        <span class="api-code" style="margin-left:auto;color:${color}">${okPct}% OK</span>
+      </div>
+      <div class="api-endpoint">/api/rtpi?path=routes/${r.route_id}/vehicles</div>
+      <div class="api-meta">
+        <span>⏱ ${lat}ms avg</span>
+        <span>📊 ${r.polls} polls</span>
+        <span>✓ ${r.ok} ok</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── MAP MARKERS ─────────────────────────────────────────────────────────────
+// Top-down bus: narrow body, front points UP, label runs front→back along length.
+function makeBusIcon(color, label, heading) {
+  const tc  = isLight(color) ? '#111' : '#fff';
+  const shd = isLight(color) ? 'rgba(0,0,0,.35)' : 'rgba(0,0,0,.6)';
+  // Canvas 28 wide × 58 tall. Body occupies x:6–22, y:10–52.
+  return `<div style="
+      width:28px; height:58px;
+      cursor:pointer;
+      transform:rotate(${heading}deg);
+      transform-origin:center center;
+      transition:transform .4s ease;
+      will-change:transform;
+    ">
+    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="58" viewBox="0 0 28 58"
+         style="display:block;filter:drop-shadow(0 2px 4px ${shd});">
+
+      <!-- ── Direction arrow / nose ── -->
+      <polygon points="14,1 20,11 8,11"
+               fill="${color}" stroke="rgba(0,0,0,.5)" stroke-width="1"
+               stroke-linejoin="round"/>
+
+      <!-- ── Bus body ── -->
+      <rect x="5" y="9" width="18" height="42" rx="3" ry="3"
+            fill="${color}" stroke="rgba(0,0,0,.5)" stroke-width="1.2"/>
+
+      <!-- ── Windshield highlight (front) ── -->
+      <rect x="7" y="11" width="14" height="6" rx="2"
+            fill="rgba(255,255,255,.35)"/>
+
+      <!-- ── Rear bumper ── -->
+      <rect x="7" y="44" width="14" height="5" rx="2"
+            fill="rgba(0,0,0,.22)"/>
+
+      <!-- ── Wheels (narrow rectangles on sides) ── -->
+      <rect x="2"  y="13" width="4" height="7" rx="1.5" fill="#111" stroke="#444" stroke-width=".7"/>
+      <rect x="22" y="13" width="4" height="7" rx="1.5" fill="#111" stroke="#444" stroke-width=".7"/>
+      <rect x="2"  y="38" width="4" height="7" rx="1.5" fill="#111" stroke="#444" stroke-width=".7"/>
+      <rect x="22" y="38" width="4" height="7" rx="1.5" fill="#111" stroke="#444" stroke-width=".7"/>
+
+      <!-- ── Route label — rotated to run front→back along the bus length ── -->
+      <text transform="translate(14,30) rotate(-90)"
+            text-anchor="middle" dominant-baseline="middle"
+            font-family="system-ui,sans-serif" font-size="10" font-weight="900"
+            fill="${tc}" letter-spacing="0.5">${label}</text>
+
+    </svg>
+  </div>`;
+}
+
+// ─── HOVER TOOLTIP ────────────────────────────────────────────────────────────
+function ensureTooltip() {
+  if (hoverTooltip) return;
+  hoverTooltip = document.createElement('div');
+  hoverTooltip.style.cssText = `position:fixed;z-index:9999;pointer-events:none;display:none;
+    background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;min-width:240px;max-width:300px;
+    box-shadow:0 8px 32px rgba(0,0,0,.7);font-family:'Segoe UI',system-ui,sans-serif;font-size:12px;color:#e6edf3;line-height:1.4;`;
+  document.body.appendChild(hoverTooltip);
+}
+
+function showBusTooltip(v, x, y) {
+  ensureTooltip();
+  const color = v.routeColor || '#888';
+  const tc = isLight(color) ? '#111' : '#fff';
+  const ageColor = stalenessClass(v) === 'fresh' ? '#3fb950' : stalenessClass(v) === 'stale' ? '#d29922' : '#f85149';
+  const load = (v.passengerLoad||0);
+  const lc = loadColor(load);
+  const trail = trailData[v.id];
+  const trailPts = trail?.points?.length || 0;
+
+  hoverTooltip.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #30363d;">
+      <div style="background:${color};color:${tc};border-radius:6px;padding:3px 8px;font-weight:800;font-size:14px;">${v.routeShort}</div>
+      <div><div style="font-weight:700;font-size:14px;">Bus #${v.name}</div><div style="color:#8b949e;font-size:11px;">${v.routeName}</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">
+      <div style="background:#0d1117;border-radius:6px;padding:6px 8px;">
+        <div style="color:#8b949e;font-size:10px;text-transform:uppercase;">Speed</div>
+        <div style="font-size:16px;font-weight:700;margin-top:2px;">${v.speed} <span style="font-size:10px;color:#8b949e;">mph</span></div>
+      </div>
+      <div style="background:#0d1117;border-radius:6px;padding:6px 8px;">
+        <div style="color:#8b949e;font-size:10px;text-transform:uppercase;">Heading</div>
+        <div style="font-size:16px;font-weight:700;margin-top:2px;">${headingArrow(v.headingDegrees)} ${v.heading} <span style="font-size:10px;color:#8b949e;">${v.headingDegrees}°</span></div>
+      </div>
+      <div style="background:#0d1117;border-radius:6px;padding:6px 8px;">
+        <div style="color:#8b949e;font-size:10px;text-transform:uppercase;">Passengers</div>
+        <div style="font-size:16px;font-weight:700;margin-top:2px;color:${lc}">${(load*100).toFixed(1)}<span style="font-size:10px;color:#8b949e;">%</span></div>
+      </div>
+      <div style="background:#0d1117;border-radius:6px;padding:6px 8px;">
+        <div style="color:#8b949e;font-size:10px;text-transform:uppercase;">Capacity</div>
+        <div style="font-size:16px;font-weight:700;margin-top:2px;">${v.capacity} <span style="font-size:10px;color:#8b949e;">seats</span></div>
+      </div>
+    </div>
+    <div style="background:#0d1117;border-radius:6px;padding:7px 10px;margin-bottom:6px;">
+      <div style="color:#8b949e;font-size:10px;text-transform:uppercase;margin-bottom:3px;">GPS Position</div>
+      <div style="font-family:monospace;font-size:12px;">${v.lat?.toFixed(6)}, ${v.lon?.toFixed(6)}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:6px;">
+      <div style="background:#0d1117;border-radius:6px;padding:5px 7px;">
+        <div style="color:#8b949e;font-size:9px;text-transform:uppercase;">Vehicle ID</div>
+        <div style="font-size:11px;font-weight:600;margin-top:1px;">${v.id}</div>
+      </div>
+      <div style="background:#0d1117;border-radius:6px;padding:5px 7px;">
+        <div style="color:#8b949e;font-size:9px;text-transform:uppercase;">Pattern</div>
+        <div style="font-size:11px;font-weight:600;margin-top:1px;">${v.patternId}</div>
+      </div>
+      <div style="background:#0d1117;border-radius:6px;padding:5px 7px;">
+        <div style="color:#8b949e;font-size:9px;text-transform:uppercase;">Trail Pts</div>
+        <div style="font-size:11px;font-weight:600;margin-top:1px;">${trailPts}</div>
+      </div>
+    </div>
+    <div style="background:#0d1117;border-radius:6px;padding:5px 7px;margin-bottom:4px;">
+      <div style="color:#8b949e;font-size:9px;text-transform:uppercase;margin-bottom:2px;">Dist along route shape</div>
+      <div style="font-size:11px;">${v.shapeDistanceTraveled?.toFixed(0) ?? '—'} m</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;color:${ageColor};font-size:11px;margin-top:4px;">
+      <span>⏱ Last GPS: <strong>${stalenessLabel(v)}</strong></span>
+    </div>
+    <div style="color:#8b949e;font-size:10px;margin-top:2px;">Raw timestamp: ${v.lastUpdated||'—'}</div>`;
+
+  positionTooltip(x, y);
+  hoverTooltip.style.display = 'block';
+}
+
+function positionTooltip(x, y) {
+  if (!hoverTooltip) return;
+  const w = hoverTooltip.offsetWidth || 260, h = hoverTooltip.offsetHeight || 320;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let tx = x + 18, ty = y - h / 2;
+  if (tx + w > vw - 10) tx = x - w - 18;
+  if (ty < 10) ty = 10;
+  if (ty + h > vh - 10) ty = vh - h - 10;
+  hoverTooltip.style.left = tx + 'px';
+  hoverTooltip.style.top = ty + 'px';
+}
+
+function hideBusTooltip() { if (hoverTooltip) hoverTooltip.style.display = 'none'; }
+
+// ─── RENDER MARKERS ───────────────────────────────────────────────────────────
+function renderMarkers() {
+  if (!mapReady) return;
+  const visible = visibleVehicles();
+  const visibleIds = new Set(visible.filter(v => routeVisible[v.routeId] !== false).map(v => v.id));
+
+  Object.keys(markers).forEach(id => {
+    if (!visibleIds.has(parseInt(id))) { markers[id].marker.remove(); delete markers[id]; }
+  });
+
+  visible.forEach(v => {
+    if (routeVisible[v.routeId] === false || isNaN(v.lat) || isNaN(v.lon)) return;
+
+    function wire(el, vdata) {
+      const inner = el.firstChild; // the rotating div
+      inner.onclick = () => selectVehicle(vdata.id);
+      inner.onmouseenter = e => {
+        showBusTooltip(vdata, e.clientX, e.clientY);
+        inner.style.transform = `rotate(${vdata.headingDegrees}deg) scale(1.25)`;
+      };
+      inner.onmousemove = e => positionTooltip(e.clientX, e.clientY);
+      inner.onmouseleave = () => {
+        hideBusTooltip();
+        inner.style.transform = `rotate(${vdata.headingDegrees}deg) scale(1)`;
+      };
+    }
+
+    if (markers[v.id]) {
+      markers[v.id].marker.setLngLat([v.lon, v.lat]);
+      markers[v.id].el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees);
+      wire(markers[v.id].el, v);
+    } else {
+      const el = document.createElement('div');
+      el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees);
+      wire(el, v);
+      const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([v.lon, v.lat]).addTo(map);
+      markers[v.id] = { marker, el };
+    }
+  });
+}
+
+// ─── ETA PANEL ────────────────────────────────────────────────────────────────
+let etaVehicleId = null;
+
+async function showEtaPanel(v) {
+  etaVehicleId = v.id;
+  const panel = document.getElementById('etaPanel');
+  if (!panel) return;
+  document.getElementById('etaSection').style.display = 'block';
+  panel.innerHTML = `<div style="color:var(--muted);font-size:11px;padding:8px 0;">Loading ETAs for Bus #${v.name}…</div>`;
+  try {
+    const res = await fetch(`/api/eta?vehicle_id=${v.id}`);
+    const data = await res.json();
+    if (etaVehicleId !== v.id) return; // superseded
+    if (!data.etas || !data.etas.length) {
+      panel.innerHTML = `<div style="color:var(--muted);font-size:11px;padding:8px 0;">No stop data for this route.</div>`;
+      return;
+    }
+    const speedNote = data.speed_mph > 0
+      ? `at ${data.speed_mph} mph`
+      : `<span style="color:var(--yellow)">bus stopped — ETAs estimated from distance only</span>`;
+    panel.innerHTML = `
+      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;">Bus #${v.name} · ${speedNote}</div>
+      ${data.etas.map((s, i) => {
+        const etaStr = s.etaMin !== null
+          ? (s.etaMin < 1 ? '<1 min' : `~${s.etaMin} min`)
+          : '—';
+        const etaColor = s.etaMin === null ? 'var(--muted)' : s.etaMin < 2 ? 'var(--green)' : s.etaMin < 10 ? 'var(--yellow)' : 'var(--text)';
+        const distStr = s.distKm < 1 ? `${Math.round(s.distKm*1000)} m` : `${s.distKm.toFixed(1)} km`;
+        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
+          <div style="width:18px;height:18px;border-radius:50%;background:var(--panel2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--muted);flex-shrink:0;">${i+1}</div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.name || 'Stop '+s.stopId}</div>
+            <div style="font-size:10px;color:var(--muted);">${distStr} away</div>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:${etaColor};flex-shrink:0;">${etaStr}</div>
+        </div>`;
+      }).join('')}`;
+  } catch(e) {
+    panel.innerHTML = `<div style="color:var(--red);font-size:11px;">ETA fetch error</div>`;
+  }
+}
+
+// ─── SELECT VEHICLE ───────────────────────────────────────────────────────────
+function selectVehicle(id) {
+  // Clicking same vehicle toggles expand/collapse; clicking new one expands it
+  if (selectedVehicleId === id) {
+    if (expandedCards.has(id)) expandedCards.delete(id);
+    else expandedCards.add(id);
+  } else {
+    expandedCards.delete(selectedVehicleId); // collapse previous
+    expandedCards.add(id);
+    selectedVehicleId = id;
+  }
+  const v = allVehicles.find(x => x.id === id);
+  if (!v) return;
+  renderVehicleList();
+  map.flyTo({ center: [v.lon, v.lat], zoom: Math.max(map.getZoom(), 14), duration: 600 });
+  if (popup) popup.remove();
+  const load = ((v.passengerLoad||0)*100).toFixed(0);
+  const tc = isLight(v.routeColor) ? '#111' : '#fff';
+  popup = new maplibregl.Popup({ offset: 20, closeButton: true, maxWidth: '300px' })
+    .setLngLat([v.lon, v.lat])
+    .setHTML(`<div class="popup-inner">
+      <div class="popup-title">
+        <span style="background:${v.routeColor};color:${tc};border-radius:5px;padding:2px 7px;font-size:12px;margin-right:6px;">${v.routeShort}</span>
+        Bus #${v.name}
+      </div>
+      <div style="color:var(--muted);font-size:11px;margin-bottom:8px;">${v.routeName}</div>
+      <div class="popup-grid">
+        <div class="popup-field"><div class="popup-field-label">Speed</div><div class="popup-field-val">${v.speed} mph</div></div>
+        <div class="popup-field"><div class="popup-field-label">Heading</div><div class="popup-field-val">${headingArrow(v.headingDegrees)} ${v.heading} (${v.headingDegrees}°)</div></div>
+        <div class="popup-field"><div class="popup-field-label">Passengers</div><div class="popup-field-val">${load}%</div></div>
+        <div class="popup-field"><div class="popup-field-label">Capacity</div><div class="popup-field-val">${v.capacity} seats</div></div>
+      </div>
+      <div class="popup-coords" style="margin-top:8px;">📍 ${v.lat?.toFixed(6)}, ${v.lon?.toFixed(6)}</div>
+      <div class="popup-coords">⏱ ${stalenessLabel(v)}</div>
+      <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Next Stops (Est.)</div>
+        <div id="popupEta" style="font-size:11px;color:var(--muted);">Loading…</div>
+      </div>
+    </div>`)
+    .addTo(map);
+
+  // Fetch ETAs and inject into popup
+  fetch(`/api/eta?vehicle_id=${v.id}`).then(r => r.json()).then(data => {
+    const el = document.getElementById('popupEta');
+    if (!el) return;
+    if (!data.etas || !data.etas.length) { el.textContent = 'No stop data.'; return; }
+    el.innerHTML = data.etas.slice(0, 5).map(s => {
+      const etaStr = s.etaMin !== null ? (s.etaMin < 1 ? 'arriving' : `~${s.etaMin} min`) : '—';
+      const distStr = s.distKm < 1 ? `${Math.round(s.distKm*1000)}m` : `${s.distKm.toFixed(1)}km`;
+      const etaColor = s.etaMin === null ? 'var(--muted)' : s.etaMin < 2 ? 'var(--green)' : s.etaMin < 10 ? 'var(--yellow)' : 'var(--text)';
+      return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.name||'Stop '+s.stopId}</span>
+        <span style="color:var(--muted);margin:0 6px;flex-shrink:0;">${distStr}</span>
+        <span style="color:${etaColor};font-weight:600;flex-shrink:0;">${etaStr}</span>
+      </div>`;
+    }).join('');
+  }).catch(() => {
+    const el = document.getElementById('popupEta'); if (el) el.textContent = 'Could not load ETAs.';
+  });
+
+  // Also show ETAs in sidebar
+  switchTab('vehicles');
+  showEtaPanel(v);
+}
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.id === `tab-${name}`));
+  if (name === 'api') fetchApiStats();
+}
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
+
+// ─── COUNTDOWN ────────────────────────────────────────────────────────────────
+function resetCountdown() {
+  countdownVal = REFRESH_INTERVAL;
+  if (countdownTimer) clearInterval(countdownTimer);
+  updateCountdownUI();
+  countdownTimer = setInterval(() => {
+    countdownVal--;
+    updateCountdownUI();
+    if (countdownVal <= 0) { clearInterval(countdownTimer); fetchAll(); }
+  }, 1000);
+}
+function updateCountdownUI() {
+  document.getElementById('countdown').textContent = countdownVal;
+  document.getElementById('refreshFill').style.width = (countdownVal / REFRESH_INTERVAL * 100) + '%';
+}
+
+// ─── STOPLINE FETCH ───────────────────────────────────────────────────────────
+async function fetchStoplines() {
+  const visible = visibleVehicles();
+  await Promise.all(visible.map(async v => {
+    try {
+      const res = await fetch(`/api/stopline?vehicle_id=${v.id}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.stops) {
+        stoplineCache[v.id] = data;
+      }
+    } catch(e) { console.warn(`[stopline ${v.id}]`, e.message); }
+  }));
+  renderVehicleList(); // re-render with stopline data
+}
+
+// ─── SIDEBAR RESIZE ──────────────────────────────────────────────────────────
+(function() {
+  const sidebar = document.getElementById('sidebar');
+  const resizer = document.createElement('div');
+  resizer.className = 'sidebar-resizer';
+  sidebar.prepend(resizer);
+
+  let startX, startW;
+  resizer.addEventListener('mousedown', e => {
+    startX = e.clientX;
+    startW = sidebar.offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+
+    function onMove(e) {
+      const dx = startX - e.clientX; // dragging left = wider
+      const newW = Math.max(260, Math.min(700, startW + dx));
+      sidebar.style.width = newW + 'px';
+    }
+    function onUp() {
+      resizer.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+})();
+
+// ─── LEARN TAB VISUALIZATION ───────────────────────────────────────────────
+// A 3-layer transformer-style architecture with:
+//   - Input layer: 12 token positions (cyclical time + scalars + route embedding)
+//   - Positional encoding (sin/cos ripples flowing in)
+//   - Self-attention heads (2 heads with attention lines)
+//   - Hidden layer: 16 FFN units with ReLU + glowing activations
+//   - Output layer: 5 future-stop ETA predictions
+const ARCH = { inputN: 12, attnHeads: 2, hiddenN: 16, outN: 5 };
+const lossHistory = [];
+let lastLearnPayload = null;
+let pulseStopName = '—';
+let pulsePredValue = '—';
+let lastTrainedExamples = 0;
+let pulsePhase = 0; // 0=idle, 1=forward, 2=backprop
+
+function buildArchDiagram() {
+  const svg = document.querySelector('#archCanvas svg');
+  if (!svg) return;
+  // Clear and rebuild — full transformer layout in 380x180
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  const W = 380, H = 180;
+  // Layer X positions
+  const INPUT_X = 30;
+  const POS_X = 70;
+  const ATTN_X = 130;
+  const FFN_X = 220;
+  const OUT_X = 340;
+  // Y positions per layer (input is taller — 12 tokens)
+  const tokens = ARCH.inputN;
+  const tokSpacing = 11;
+  const tokY0 = (H - tokens * tokSpacing) / 2;
+
+  // SVG defs for glow filters
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  defs.innerHTML = `
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow-strong" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="grad-token" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1f6feb"/>
+      <stop offset="100%" stop-color="#58a6ff"/>
+    </linearGradient>
+    <linearGradient id="grad-attn" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#a371f7"/>
+      <stop offset="100%" stop-color="#db61a2"/>
+    </linearGradient>
+    <linearGradient id="grad-ffn" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f778ba"/>
+      <stop offset="100%" stop-color="#3fb950"/>
+    </linearGradient>
+    <radialGradient id="grad-output" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3fb950" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#3fb950" stop-opacity="0"/>
+    </radialGradient>
+  `;
+  svg.appendChild(defs);
+
+  // Background grid
+  const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bg.setAttribute('width', W); bg.setAttribute('height', H); bg.setAttribute('fill', 'transparent');
+  svg.appendChild(bg);
+
+  // Layers (containers)
+  const layers = {
+    input: el('g', { id: 'layer-input' }),
+    pos: el('g', { id: 'layer-pos' }),
+    attn: el('g', { id: 'layer-attn' }),
+    ffn: el('g', { id: 'layer-ffn' }),
+    out: el('g', { id: 'layer-out' }),
+  };
+  Object.values(layers).forEach(l => svg.appendChild(l));
+
+  // Build input tokens
+  const tokenNodes = [];
+  for (let i = 0; i < tokens; i++) {
+    const y = tokY0 + i * tokSpacing;
+    tokenNodes.push({ x: INPUT_X, y });
+    layers.input.appendChild(el('circle', {
+      cx: INPUT_X, cy: y, r: 4,
+      fill: 'url(#grad-token)',
+      class: 't-node t-input',
+      id: `tk-${i}`,
+      opacity: 0.7,
+    }));
+    // Token labels (tiny)
+    if (i === 0) layers.input.appendChild(textEl(INPUT_X - 8, y + 3, '🕐', '6px', '#58a6ff', 'end'));
+    if (i === 3) layers.input.appendChild(textEl(INPUT_X - 8, y + 3, '📍', '6px', '#58a6ff', 'end'));
+    if (i === 6) layers.input.appendChild(textEl(INPUT_X - 8, y + 3, '🚌', '6px', '#58a6ff', 'end'));
+    if (i === 9) layers.input.appendChild(textEl(INPUT_X - 8, y + 3, '🛣️', '6px', '#58a6ff', 'end'));
+  }
+
+  // Positional encoding (sin/cos waves)
+  layers.pos.appendChild(textEl(POS_X, 12, 'PE', '8px', '#a371f7', 'middle'));
+  for (let i = 0; i < 5; i++) {
+    const y = 30 + i * 12;
+    layers.pos.appendChild(el('path', {
+      d: `M ${POS_X - 6} ${y} q 6 -6 12 0 t 12 0 t 12 0`,
+      stroke: '#a371f7', 'stroke-width': 0.8, fill: 'none', opacity: 0.5,
+      class: 'pe-wave',
+      id: `pe-${i}`,
+    }));
+  }
+  // Connector input → pos
+  tokenNodes.forEach((t, i) => {
+    if (i % 2 !== 0) return;
+    layers.pos.appendChild(el('line', {
+      x1: INPUT_X + 4, y1: t.y, x2: POS_X - 6, y2: 30 + (i % 5) * 12,
+      stroke: '#58a6ff', 'stroke-width': 0.3, opacity: 0.3,
+    }));
+  });
+
+  // Self-attention heads (2 heads, each looks at all tokens)
+  layers.attn.appendChild(textEl(ATTN_X, 12, 'Attn×2', '8px', '#db61a2', 'middle'));
+  for (let h = 0; h < ARCH.attnHeads; h++) {
+    const headY = 30 + h * 50;
+    layers.attn.appendChild(el('circle', {
+      cx: ATTN_X, cy: headY + 18, r: 14,
+      fill: 'url(#grad-attn)', opacity: 0.6,
+      class: 'attn-head',
+      id: `attn-${h}`,
+      filter: 'url(#glow)',
+    }));
+    // Attention lines from each token to this head
+    tokenNodes.forEach((t, i) => {
+      const opacity = 0.1 + Math.random() * 0.4;
+      const x2 = ATTN_X - 14 + Math.random() * 4;
+      const y2 = headY + 14 + Math.random() * 8;
+      layers.attn.appendChild(el('line', {
+        x1: t.x + 4, y1: t.y, x2, y2,
+        stroke: '#db61a2', 'stroke-width': 0.4, opacity,
+        class: 'attn-line',
+        id: `attn-${h}-${i}`,
+      }));
+    });
+    // Head → FFN connector
+    layers.attn.appendChild(el('line', {
+      x1: ATTN_X + 14, y1: headY + 18, x2: FFN_X - 8, y2: 50,
+      stroke: '#db61a2', 'stroke-width': 1, opacity: 0.6,
+    }));
+  }
+
+  // FFN hidden layer (16 units, glowing)
+  const ffnY0 = (H - ARCH.hiddenN * 6) / 2;
+  for (let i = 0; i < ARCH.hiddenN; i++) {
+    const y = ffnY0 + i * 6;
+    layers.ffn.appendChild(el('circle', {
+      cx: FFN_X, cy: y, r: 3.5,
+      fill: 'url(#grad-ffn)', opacity: 0.4,
+      class: 'ffn-node',
+      id: `ffn-${i}`,
+    }));
+  }
+
+  // Output heads (5 future-stop predictions with glow)
+  const outY0 = (H - ARCH.outN * 20) / 2;
+  for (let i = 0; i < ARCH.outN; i++) {
+    const y = outY0 + i * 20;
+    layers.out.appendChild(el('circle', {
+      cx: OUT_X, cy: y, r: 10,
+      fill: 'url(#grad-output)', opacity: 0.4,
+      class: 'out-node',
+      id: `out-${i}`,
+    }));
+    layers.out.appendChild(el('circle', {
+      cx: OUT_X, cy: y, r: 4,
+      fill: '#3fb950', opacity: 0.8,
+      class: 'out-core',
+      id: `out-core-${i}`,
+    }));
+    // FFN → out connectors
+    for (let k = 0; k < ARCH.hiddenN; k += 4) {
+      layers.out.appendChild(el('line', {
+        x1: FFN_X + 3.5, y1: ffnY0 + k * 6,
+        x2: OUT_X - 10, y2: y,
+        stroke: '#3fb950', 'stroke-width': 0.3, opacity: 0.15,
+      }));
+    }
+  }
+
+  // Layer labels at bottom
+  const labels = [
+    { x: INPUT_X, t: 'Input (12)' },
+    { x: POS_X, t: '+ Pos' },
+    { x: ATTN_X, t: 'Attention' },
+    { x: FFN_X, t: 'FFN (16)' },
+    { x: OUT_X, t: 'Heads (5)' },
+  ];
+  labels.forEach(l => {
+    svg.appendChild(textEl(l.x, H - 4, l.t, '8px', '#8b949e', 'middle'));
+  });
+  svg.appendChild(textEl(W / 2, H - 4, '↓', '8px', '#3fb950', 'middle'));
+
+  // Begin animation loop
+  if (!window._archAnimating) {
+    window._archAnimating = true;
+    requestAnimationFrame(archAnimFrame);
+  }
+}
+
+function el(tag, attrs) {
+  const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+function textEl(x, y, t, size, color, anchor = 'start') {
+  const e = el('text', {
+    x, y, fill: color, 'font-size': size, 'text-anchor': anchor,
+    'font-family': 'system-ui, sans-serif',
+  });
+  e.textContent = t;
+  return e;
+}
+let _t0 = performance.now();
+function archAnimFrame(now) {
+  const t = (now - _t0) / 1000;
+  // Pulse attention heads with sin wave
+  for (let h = 0; h < ARCH.attnHeads; h++) {
+    const head = document.getElementById(`attn-${h}`);
+    if (!head) continue;
+    const phase = (t * 1.5 + h * Math.PI) % (Math.PI * 2);
+    const intensity = (Math.sin(phase) + 1) / 2; // 0..1
+    head.setAttribute('opacity', 0.3 + intensity * 0.7);
+    head.setAttribute('r', 12 + intensity * 4);
+  }
+  // Flowing data along input→pos→attn edges
+  document.querySelectorAll('.pe-wave').forEach((p, i) => {
+    const offset = (t * 30 + i * 10) % 30;
+    p.setAttribute('stroke-dasharray', '3 6');
+    p.setAttribute('stroke-dashoffset', -offset);
+    p.setAttribute('opacity', 0.3 + Math.sin(t * 2 + i) * 0.3);
+  });
+  // FFN nodes flicker based on input activity
+  for (let i = 0; i < ARCH.hiddenN; i++) {
+    const n = document.getElementById(`ffn-${i}`);
+    if (!n) continue;
+    const phase = (t * 0.8 + i * 0.3) % (Math.PI * 2);
+    const intensity = (Math.sin(phase) + 1) / 2;
+    n.setAttribute('opacity', 0.2 + intensity * 0.7);
+    n.setAttribute('r', 2.5 + intensity * 2);
+  }
+  // Output nodes pulse + glow during forward pass
+  for (let i = 0; i < ARCH.outN; i++) {
+    const n = document.getElementById(`out-${i}`);
+    if (!n) continue;
+    const phase = (t * 1.2 + i * 0.5) % (Math.PI * 2);
+    const intensity = (Math.sin(phase) + 1) / 2;
+    n.setAttribute('opacity', 0.3 + intensity * 0.6);
+    n.setAttribute('r', 8 + intensity * 4);
+  }
+  // Attention lines flicker
+  document.querySelectorAll('.attn-line').forEach((line, i) => {
+    const intensity = 0.1 + 0.4 * (Math.sin(t * 2 + i * 0.1) + 1) / 2;
+    line.setAttribute('opacity', intensity);
+  });
+
+  requestAnimationFrame(archAnimFrame);
+}
+
+async function pollLearn() {
+  try {
+    const learnStatus = await fetch('/api/learn/status').then(r => r.json());
+    lastLearnPayload = learnStatus;
+
+    document.getElementById('learn-examples').textContent = learnStatus.trainedExamples?.toLocaleString() || '0';
+    document.getElementById('learn-lr').textContent = learnStatus.learningRate.toFixed(5);
+    document.getElementById('learn-params').textContent = learnStatus.params?.toLocaleString() || '0';
+
+    // Build hidden bars once
+    const hiddenBars = document.getElementById('hiddenBars');
+    if (hiddenBars && hiddenBars.children.length === 0) {
+      hiddenBars.innerHTML = Array.from({length: 16}, (_, i) => {
+        return `<div class="hidden-bar" title="token ${i}"><div class="hidden-bar-fill" id="hb-${i}" style="height:0%"></div></div>`;
+      }).join('');
+    }
+
+    // Animate token activations (sine wave modulated by training progress)
+    const intensity = Math.min(1, (learnStatus.trainedExamples || 0) / 500);
+    for (let i = 0; i < 16; i++) {
+      const phase = (Date.now() / 400 + i * 0.4);
+      const mag = ((Math.sin(phase) + 1) / 2) * (0.3 + intensity * 0.7);
+      const bar = document.getElementById(`hb-${i}`);
+      if (bar) bar.style.height = (mag * 100) + '%';
+    }
+
+    // Loss chart: when trained count changes, append a loss sample
+    if (learnStatus.trainedExamples !== lastTrainedExamples) {
+      lastTrainedExamples = learnStatus.trainedExamples;
+      const lossProxy = Math.abs(learnStatus.learningRate - 0.0001) * 80;
+      lossHistory.push(lossProxy);
+      if (lossHistory.length > 60) lossHistory.shift();
+      drawLossChart();
+    }
+
+    // Last error display
+    const errProxy = Math.abs(learnStatus.learningRate - 0.0001) * 50;
+    document.getElementById('learn-last').textContent = errProxy.toFixed(2);
+
+    // Throttled per-route residual refresh
+    maybeRoutePoll();
+
+    // Pulse inference — use any active vehicle
+    if (allVehicles && allVehicles.length > 0) {
+      const v = allVehicles[0];
+      try {
+        const d = await fetch(`/api/stopline?vehicle_id=${v.id}`).then(r => r.json());
+        if (d && d.stops && d.stops.length) {
+          const nextStop = d.next_stop || d.stops[0];
+          pulseStopName = `${nextStop.stopCode || '?'} ${nextStop.name.split('(')[0].trim().slice(0, 18)}`;
+          const corr = d.stops[0]?.seqCorrection ?? 0;
+          const eta = d.stops[0]?.etaMinSeq ?? 0;
+          pulsePredValue = `eta ${eta.toFixed(1)}m (${corr >= 0 ? '+' : ''}${corr.toFixed(1)}m tx)`;
+          if (Math.random() < 0.5) animatePulse();
+        }
+      } catch {}
+    }
+  } catch (e) { console.error('[pollLearn]', e); }
+}
+
+let _routePollInFlight = false;
+let _lastRoutePoll = 0;
+async function maybeRoutePoll() {
+  if (_routePollInFlight || Date.now() - _lastRoutePoll < 5000) return;
+  _routePollInFlight = true;
+  _lastRoutePoll = Date.now();
+  try { await renderRouteResiduals(); } finally { _routePollInFlight = false; }
+}
+
+function animatePulse() {
+  const fill = document.getElementById('pulseFill');
+  if (!fill) return;
+  fill.style.width = '0%';
+  document.getElementById('pulseStop').textContent = pulseStopName;
+  document.getElementById('pulsePred').textContent = pulsePredValue;
+  // Animate to 100%
+  requestAnimationFrame(() => { fill.style.width = '100%'; });
+  setTimeout(() => { fill.style.width = '0%'; }, 1400);
+}
+
+function drawLossChart() {
+  const c = document.getElementById('lossCanvas');
+  if (!c || lossHistory.length < 2) return;
+  const ctx = c.getContext('2d');
+  const w = c.width, h = c.height;
+  ctx.clearRect(0, 0, w, h);
+  // Background grid
+  ctx.strokeStyle = '#21262d'; ctx.lineWidth = 0.5;
+  for (let i = 1; i < 4; i++) {
+    ctx.beginPath(); ctx.moveTo(0, (h * i) / 4); ctx.lineTo(w, (h * i) / 4); ctx.stroke();
+  }
+  // Loss line
+  const max = Math.max(...lossHistory, 0.01);
+  ctx.strokeStyle = '#58a6ff'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  lossHistory.forEach((v, i) => {
+    const x = (i / Math.max(1, lossHistory.length - 1)) * w;
+    const y = h - (v / max) * h * 0.9 - 2;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  // Fill gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, 'rgba(88,166,255,.3)');
+  grad.addColorStop(1, 'rgba(88,166,255,0)');
+  ctx.fillStyle = grad;
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
+
+  // Pulse on latest point
+  const last = lossHistory[lossHistory.length - 1];
+  const lx = w - 2;
+  const ly = h - (last / max) * h * 0.9 - 2;
+  ctx.fillStyle = '#3fb950';
+  ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
+}
+
+async function renderRouteResiduals() {
+  const container = document.getElementById('routeResiduals');
+  if (!container) return;
+  if (!allVehicles.length) return;
+  // Sample one vehicle per route
+  const seen = new Set();
+  const samples = [];
+  for (const v of allVehicles) {
+    if (seen.has(v.routeShort)) continue;
+    seen.add(v.routeShort);
+    samples.push(v);
+    if (samples.length >= 8) break;
+  }
+  const data = await Promise.all(samples.map(async v => {
+    try {
+      const d = await fetch(`/api/stopline?vehicle_id=${v.id}`).then(r => r.json());
+      const corr = d.stops?.[0]?.seqCorrection ?? 0;
+      const eta = d.stops?.[0]?.etaMinSeq ?? 0;
+      return { name: v.routeShort, color: v.routeColor, corr, eta };
+    } catch { return null; }
+  })).then(arr => arr.filter(Boolean));
+
+  container.innerHTML = data.map(d => {
+    const pct = Math.min(100, Math.abs(d.corr) * 30);
+    const isPositive = d.corr >= 0;
+    const barColor = Math.abs(d.corr) < 0.5 ? '#3fb950' : isPositive ? '#d29922' : '#58a6ff';
+    return `<div style="display:grid;grid-template-columns:40px 1fr 60px;gap:6px;align-items:center;font-size:11px;">
+      <span style="font-weight:600;color:${d.color};">${d.name}</span>
+      <div style="height:8px;background:var(--panel2);border-radius:4px;position:relative;overflow:hidden;">
+        <div style="position:absolute;${isPositive ? 'left:50%' : 'right:50%'};top:0;bottom:0;width:${pct}%;background:${barColor};border-radius:4px;transition:width .3s;"></div>
+        <div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:#30363d;"></div>
+      </div>
+      <span style="font-variant-numeric:tabular-nums;text-align:right;color:${barColor};font-weight:600;">${d.corr >= 0 ? '+' : ''}${d.corr.toFixed(2)}m</span>
+    </div>`;
+  }).join('');
+}
+initMap();
+// Kick off all data fetches in parallel — fastest possible load
+Promise.all([
+  fetchShapes(),
+  fetchAll(),
+  fetchAllStops(),
+  fetchGtfsStops(),
+  fetchTrails(),
+]).then(() => fetchStoplines());
+fetchApiStats();
+buildArchDiagram();
+setInterval(pollLearn, 800);
+
+// Trail + stats run on separate intervals
+setInterval(fetchTrails, TRAIL_UPDATE_INTERVAL);
+setInterval(fetchApiStats, 60000);
+setInterval(fetchStoplines, 30000); // refresh ETAs every 30s
+
+// Tick live clocks in all open stop lists every second
+setInterval(() => {
+  const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  document.querySelectorAll('[id^="clock-"]').forEach(el => { el.textContent = t; });
+}, 1000);
+fetchTrails();
+fetchApiStats();
+</script>
+</body>
+</html>
