@@ -16,6 +16,131 @@
   }
   body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; font-size:13px; overflow:hidden; height:100vh; display:flex; flex-direction:column; }
 
+  /* ─── MOBILE / TOUCH ──────────────────────────────────────────── */
+  .sidebar-resizer { touch-action: none; }
+  @media (pointer: coarse) {
+    .sidebar-resizer { width: 14px; left: -4px; }
+  }
+  .mobile-menu-btn {
+    display: none;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    width: 34px; height: 34px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 18px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .mobile-menu-btn:hover { border-color: var(--accent); }
+  .locate-status {
+    font-size: 10px;
+    color: var(--muted);
+    margin-left: 6px;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity .25s;
+  }
+  .locate-status.show { opacity: 1; }
+  .locate-status.err  { color: var(--red); }
+  .locate-status.warn { color: var(--yellow); }
+
+  @media (max-width: 768px) {
+    .mobile-menu-btn { display: inline-flex; }
+    .main { flex-direction: column; }
+    #map { flex: 1 1 auto; min-height: 0; }
+    .sidebar {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      width: 100% !important;
+      max-width: none; min-width: 0;
+      height: 30vh;
+      border-left: none;
+      border-top: 1px solid var(--border);
+      box-shadow: 0 -8px 24px rgba(0,0,0,.45);
+      transition: height .25s ease;
+      z-index: 30;
+    }
+    .sidebar.sheet-mid  { height: 70vh; }
+    .sidebar.sheet-full { height: calc(100vh - var(--header-h)); }
+    .sidebar.dragging  { transition: none; }
+    .sidebar-resizer {
+      left: 0; right: 0; top: 0; bottom: auto;
+      width: 100%; height: 22px;
+      cursor: ns-resize;
+    }
+    .sidebar-resizer::after {
+      content: '';
+      position: absolute;
+      left: 50%; top: 7px; transform: translateX(-50%);
+      width: 38px; height: 4px;
+      border-radius: 2px;
+      background: var(--border);
+    }
+    .sidebar-resizer:hover,
+    .sidebar-resizer.dragging { background: transparent; }
+    .sidebar-resizer:hover::after,
+    .sidebar-resizer.dragging::after { background: var(--accent); }
+    .sidebar.collapsed .refresh-bar { display: none; }
+    .learn-stats { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* ─── GOLDEN PATH ARROWS (animated dashed line ahead of each bus) ── */
+  @keyframes flowDash { to { stroke-dashoffset: -200; } }
+  .bus-ahead-line { animation: flowDash 4s linear infinite; }
+
+  /* ─── OCCUPANCY BAR (inside bus marker) ───────────────────────────── */
+  .bus-occ-bar {
+    position: absolute;
+    left: 12px; top: 44px;
+    display: flex; gap: 1.5px; align-items: flex-end;
+    height: 5px;
+    transform: rotate(-90deg);
+    transform-origin: center;
+  }
+  .bus-occ-seg {
+    width: 1.5px; height: 100%;
+    background: rgba(255,255,255,.25);
+    border-radius: .5px;
+  }
+  .bus-occ-seg.lit { background: #fff; }
+
+  /* ─── DOCS TAB ────────────────────────────────────────────────────── */
+  .docs-section { padding:14px 16px; border-bottom:1px solid var(--border); }
+  .docs-h { font-size:13px; font-weight:700; color:#e6edf3; margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+  .docs-p { font-size:11px; color:#c9d1d9; line-height:1.55; margin-bottom:8px; }
+  .docs-link {
+    display:flex; align-items:center; gap:8px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 8px 10px;
+    margin-bottom: 5px;
+    font-size:11px;
+    color: var(--text);
+    text-decoration: none;
+    transition: border-color .15s;
+  }
+  .docs-link:hover { border-color: var(--accent); color:#fff; }
+  .docs-link-icon { font-size:14px; flex-shrink:0; }
+  .docs-link-meta { color: var(--muted); font-size:10px; margin-left:auto; }
+  .docs-grid { display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-top:4px; }
+  .docs-stat {
+    background: var(--panel2); border:1px solid var(--border);
+    border-radius:7px; padding:8px 10px;
+  }
+  .docs-stat-k { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+  .docs-stat-v { font-size:14px; font-weight:700; color:#e6edf3; margin-top:2px; }
+  code.inline { font-family:monospace; font-size:10px; background:var(--bg); padding:1px 5px; border-radius:3px; color:#58a6ff; }
+
+  /* ─── STOP ICONS ON MAP (clickable, larger) ──────────────────────── */
+  .maplibregl-canvas-container { cursor: grab; }
+
   header { height:var(--header-h); background:var(--panel); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; padding:0 16px; flex-shrink:0; z-index:10; }
   header img { height:32px; }
   header h1 { font-size:15px; font-weight:600; }
@@ -194,11 +319,17 @@
   <img src="https://s3.us-west-2.amazonaws.com/static.syncromatics.com/portal/158/logo.png" alt="Hele-On" onerror="this.style.display='none'">
   <h1>Hele-On Bus — Live Tracker</h1>
   <div class="header-badges">
+    <button class="mobile-menu-btn" id="mobileMenuBtn"
+            aria-label="Toggle sidebar" title="Toggle sidebar">☰</button>
     <div class="badge badge-blue" id="vehicleCountBadge"><div class="pulse pulse-green"></div><span id="vehicleCountText">— buses</span></div>
     <div class="badge" id="apiBadge"><div class="pulse" id="apiPulseDot"></div><span id="apiStatusText">Connecting…</span></div>
     <div class="badge badge-yellow" id="staleBadge" onclick="toggleStale()" style="cursor:pointer;user-select:none;" title="Click to show/hide stale signals">
       <span id="staleIcon">👻</span><span id="staleText">Stale hidden</span>
     </div>
+    <div class="badge badge-blue" id="locateBadge" style="cursor:pointer;user-select:none;" title="Show my location (tap again to stop tracking)">
+      <span id="locateIcon">📍</span><span id="locateText">Locate me</span>
+    </div>
+    <span class="locate-status" id="locateStatus"></span>
     <span style="font-size:10px;color:var(--muted)" id="lastUpdate"></span>
   </div>
 </header>
@@ -212,7 +343,8 @@
       <div class="tab" data-tab="routes">Routes</div>
       <div class="tab" data-tab="learn">🧠 Learn</div>
       <div class="tab" data-tab="status">Status</div>
-      <div class="tab" data-tab="api">API Log</div>
+      <div class="tab" data-tab="api">API</div>
+      <div class="tab" data-tab="docs">📚 Docs</div>
     </div>
 
     <div class="tab-content active" id="tab-vehicles">
@@ -262,6 +394,89 @@
 
     <div class="tab-content" id="tab-api">
       <div class="api-section" id="apiLog"></div>
+    </div>
+
+    <div class="tab-content" id="tab-docs">
+      <div class="docs-section">
+        <div class="docs-h">🚌 About this dashboard</div>
+        <div class="docs-p">
+          A live map of every Hele-On Bus in service right now, using the
+          County's <a href="https://www.myheleonbus.org/" target="_blank" style="color:#58a6ff">official transit feed</a>.
+          Polls 22 routes every 10 seconds, stores GPS pings in SQLite, and
+          runs a small transformer that learns typical arrival times for
+          each stop from history.
+        </div>
+      </div>
+
+      <div class="docs-section">
+        <div class="docs-h">🎨 How to read it</div>
+        <div class="docs-p">
+          <strong style="color:#e6edf3">Bus icons</strong> sit at the bus's
+          latest GPS position, pointing the way it's heading.
+          <strong style="color:#58a6ff">Blue stops</strong> are GTFS-registered
+          stops along active routes — click or tap one to see approaching
+          buses and historical arrivals.
+          <strong style="color:#d29922">Golden arrows</strong> ahead of a bus
+          show the next stretch of route it's about to travel.
+        </div>
+        <div class="docs-grid">
+          <div class="docs-stat"><div class="docs-stat-k">Snapshot</div><div class="docs-stat-v">10 s</div></div>
+          <div class="docs-stat"><div class="docs-stat-k">Routes</div><div class="docs-stat-v">22</div></div>
+          <div class="docs-stat"><div class="docs-stat-k">Backbone</div><div class="docs-stat-v">Node.js</div></div>
+          <div class="docs-stat"><div class="docs-stat-k">Map</div><div class="docs-stat-v">MapLibre</div></div>
+        </div>
+      </div>
+
+      <div class="docs-section">
+        <div class="docs-h">🧠 The predictor</div>
+        <div class="docs-p">
+          A 12-token single-head transformer (~704 parameters) trained
+          online every time a bus reaches a stop. Inputs are cyclical
+          time-of-day, distance to next stop, scheduled delta, speed,
+          and the historical average mph for that route. Outputs are
+          ETAs to the next 5 stops.
+        </div>
+      </div>
+
+      <div class="docs-section">
+        <div class="docs-h">🔗 Useful links</div>
+        <a class="docs-link" href="https://www.myheleonbus.org/" target="_blank">
+          <span class="docs-link-icon">🌐</span>
+          <span><strong>Hele-On Bus</strong> · county transit site</span>
+          <span class="docs-link-meta">myheleonbus.org</span>
+        </a>
+        <a class="docs-link" href="https://www.myheleonbus.org/gtfs" target="_blank">
+          <span class="docs-link-icon">📅</span>
+          <span><strong>GTFS feed</strong> · official schedule data</span>
+          <span class="docs-link-meta">.zip download</span>
+        </a>
+        <a class="docs-link" href="https://gtfs.org/schedule/" target="_blank">
+          <span class="docs-link-icon">📘</span>
+          <span><strong>GTFS spec</strong> · General Transit Feed Specification</span>
+          <span class="docs-link-meta">gtfs.org</span>
+        </a>
+        <a class="docs-link" href="https://maplibre.org/" target="_blank">
+          <span class="docs-link-icon">🗺️</span>
+          <span><strong>MapLibre GL</strong> · open-source map renderer</span>
+          <span class="docs-link-meta">BSD-3</span>
+        </a>
+        <a class="docs-link" href="https://github.com/hatsmagee/Bus-Tracker" target="_blank">
+          <span class="docs-link-icon">🐙</span>
+          <span><strong>Source code</strong> · GitHub repository</span>
+          <span class="docs-link-meta">MIT</span>
+        </a>
+      </div>
+
+      <div class="docs-section">
+        <div class="docs-h">🛠️ Tech stack</div>
+        <div class="docs-p">
+          <code class="inline">Node.js 22</code> ·
+          <code class="inline">sql.js</code> (WASM SQLite, no glibc) ·
+          <code class="inline">MapLibre GL v4.7.1</code> ·
+          <code class="inline">MapTiler</code> basemap ·
+          <code class="inline">Syncromatics</code> live API
+        </div>
+      </div>
     </div>
 
     <div class="tab-content" id="tab-learn">
@@ -404,53 +619,66 @@ function initMapLayers() {
     paint: { 'circle-radius': 3, 'circle-color': ['get', 'color'], 'circle-opacity': 0.6, 'circle-stroke-width': 1, 'circle-stroke-color': 'rgba(0,0,0,.4)' }
   });
 
-  // Stop markers layer
+  // Stop markers layer — bigger, more obvious, with thick contrasting stroke
   map.addSource('stops', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({ id: 'stops-circle', type: 'circle', source: 'stops',
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 3, 11, 5, 13, 7, 15, 10, 17, 14],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 5, 11, 7, 13, 10, 15, 13, 17, 17],
       'circle-color': ['get', 'routeColor'],
-      'circle-opacity': ['interpolate', ['linear'], ['zoom'], 9, 0.6, 11, 0.85, 13, 0.95],
-      'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 9, 1.5, 13, 2.5],
+      'circle-opacity': 0.95,
+      'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 11, 2.5, 13, 3.5, 17, 4],
       'circle-stroke-color': '#0d1117',
       'circle-stroke-opacity': 1
     }
   });
+  // Inner highlight ring so stops are easy to spot on any basemap
+  map.addLayer({ id: 'stops-halo', type: 'circle', source: 'stops',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 9, 11, 12, 13, 16, 15, 20, 17, 24],
+      'circle-color': 'rgba(255,255,255,0)',
+      'circle-stroke-width': 1.5,
+      'circle-stroke-color': 'rgba(255,255,255,.55)',
+      'circle-stroke-opacity': 0.7,
+      'circle-blur': 0.3
+    }
+  }, 'stops-circle');
   map.addLayer({ id: 'stops-label', type: 'symbol', source: 'stops',
     layout: { 'text-field': ['get', 'stopCode'], 'text-size': 10, 'text-anchor': 'top', 'text-offset': [0, 1.1],
               'text-optional': true, 'text-allow-overlap': false, 'text-ignore-placement': true },
     paint: { 'text-color': '#e6edf3', 'text-halo-color': '#0d1117', 'text-halo-width': 1.8 },
-    minzoom: 11
+    minzoom: 10
   });
 
-  // Stop hover tooltip
+  // Stop hover + click tooltip — hover for desktop, click/tap for mobile.
   let stopHoverPopup = null;
-  map.on('mouseenter', 'stops-circle', async e => {
-    map.getCanvas().style.cursor = 'pointer';
-    const f = e.features[0];
-    const p = f.properties;
+  let stopTapLockUntil = 0;
+  function openStopPopup(lngLat, p) {
     if (stopHoverPopup) stopHoverPopup.remove();
-
-    // Fetch live arrival data
-    let arrHtml = '<div style="color:var(--muted);font-size:10px;">Loading arrivals…</div>';
-    stopHoverPopup = new maplibregl.Popup({ offset: 10, closeButton: false, maxWidth: '280px', anchor: 'bottom' })
-      .setLngLat(e.lngLat)
+    stopHoverPopup = new maplibregl.Popup({ offset: 10, closeButton: true, maxWidth: '300px', anchor: 'bottom' })
+      .setLngLat(lngLat)
       .setHTML(buildStopPopupHtml(p, null))
       .addTo(map);
-
-    try {
-      const res = await fetch(`/api/stop_arrivals?stop_id=${p.stopId}&route_id=${p.routeId}`);
-      const data = await res.json();
-      if (stopHoverPopup) stopHoverPopup.setHTML(buildStopPopupHtml(p, data));
-    } catch(err) {}
+    fetch(`/api/stop_arrivals?stop_id=${p.stopId}&route_id=${p.routeId}`)
+      .then(r => r.json())
+      .then(data => { if (stopHoverPopup) stopHoverPopup.setHTML(buildStopPopupHtml(p, data)); })
+      .catch(() => {});
+  }
+  map.on('mouseenter', 'stops-circle', e => {
+    // Skip hover-popup if a recent tap is in flight (mobile)
+    if (Date.now() < stopTapLockUntil) return;
+    map.getCanvas().style.cursor = 'pointer';
+    openStopPopup(e.lngLat, e.features[0].properties);
   });
   map.on('mouseleave', 'stops-circle', () => {
     map.getCanvas().style.cursor = '';
-    if (stopHoverPopup) { stopHoverPopup.remove(); stopHoverPopup = null; }
+    if (stopHoverPopup && !stopHoverPopup._pinned) { stopHoverPopup.remove(); stopHoverPopup = null; }
   });
   map.on('click', 'stops-circle', e => {
-    // Keep popup open on click
-    if (stopHoverPopup) stopHoverPopup.options.closeButton = true;
+    e.preventDefault?.();
+    stopTapLockUntil = Date.now() + 600;  // suppress hover-popup briefly
+    if (stopHoverPopup) stopHoverPopup.remove();
+    openStopPopup(e.lngLat, e.features[0].properties);
+    stopHoverPopup && (stopHoverPopup._pinned = true);
   });
 }
 
@@ -760,6 +988,149 @@ function computeRouteOffsets(routeCoordMap) {
 let routeLayerIds = [];  // MapLibre layer IDs
 let routeSourceIds = []; // MapLibre source IDs
 
+// Build a fast lookup of route shape coordinates for the golden-path arrows.
+let routeShapeCoords = {}; // routeId -> [[lon,lat], ...]
+let aheadLayerIds = [];
+let aheadSourceIds = [];
+let aheadBusData = []; // [{ vid, srcId, layId, fullCoords, startIdx }]
+
+// Golden path arrows ahead of each bus. Two layers per bus:
+//   1) A solid golden base line (dim)
+//   2) 3 small moving dots that pulse along the ahead segment to show flow
+function renderAheadArrows() {
+  if (!mapReady) return;
+  // Remove old ahead layers
+  aheadLayerIds.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+  aheadSourceIds.forEach(id => { if (map.getSource(id)) map.removeSource(id); });
+  aheadLayerIds = []; aheadSourceIds = [];
+  aheadBusData = [];
+
+  const visible = visibleVehicles().filter(v => routeVisible[v.routeId] !== false);
+  visible.forEach(v => {
+    const coords = routeShapeCoords[v.routeId];
+    if (!coords || coords.length < 2) return;
+    // Find nearest point on shape to bus GPS
+    let bestIdx = 0, bestKm = Infinity;
+    for (let i = 0; i < coords.length; i++) {
+      const d = haversineKm(v.lat, v.lon, coords[i][1], coords[i][0]);
+      if (d < bestKm) { bestKm = d; bestIdx = i; }
+    }
+    if (bestKm > 0.5) return;
+    const ahead = coords.slice(bestIdx, Math.min(coords.length, bestIdx + 22));
+    if (ahead.length < 2) return;
+
+    // Base line (dim gold)
+    const srcId = `ahead-${v.id}`;
+    const layId = `ahead-line-${v.id}`;
+    map.addSource(srcId, {
+      type: 'geojson',
+      data: { type: 'Feature', geometry: { type: 'LineString', coordinates: ahead }, properties: {} }
+    });
+    map.addLayer({
+      id: layId, type: 'line', source: srcId,
+      paint: {
+        'line-color': '#ffcc33',
+        'line-width': 4,
+        'line-opacity': 0.55,
+        'line-dasharray': [0.6, 0.6],
+      },
+      layout: { 'line-cap': 'round', 'line-join': 'round' }
+    });
+
+    // Moving dots — animated by setData below
+    const dotsId = `ahead-dots-${v.id}`;
+    const dotsLay = `ahead-dots-circle-${v.id}`;
+    map.addSource(dotsId, {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+    map.addLayer({
+      id: dotsLay, type: 'circle', source: dotsId,
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['get', 'fade'], 0.55, 3, 1.0, 5],
+        'circle-color': '#ffd966',
+        'circle-opacity': ['get', 'fade'],
+        'circle-stroke-color': '#ffffff',
+        'circle-stroke-width': 1.2,
+        'circle-stroke-opacity': 0.9
+      }
+    });
+
+    aheadLayerIds.push(layId, dotsLay);
+    aheadSourceIds.push(srcId, dotsId);
+    aheadBusData.push({
+      vid: v.id,
+      coords: ahead,
+      dotsSrcId: dotsId,
+    });
+  });
+  // Kick the animation right away
+  aheadAnimFrame = 0;
+  animateAheadDots();
+}
+
+// Animate the moving dots ahead of each bus. Uses linear interpolation
+// along the ahead segment + a sliding window of 3 dots (lead, mid, trail).
+let aheadAnimFrame = 0;
+let aheadAnimTimer = null;
+function animateAheadDots() {
+  if (!mapReady || aheadBusData.length === 0) return;
+  aheadAnimFrame = (aheadAnimFrame + 1) % 360;
+  // 0..1 cycling phase; one cycle = 2.4 s (90 ms × 360 / 135 = 2.4 s)
+  const phase = aheadAnimFrame / 360;
+  for (const b of aheadBusData) {
+    const coords = b.coords;
+    if (coords.length < 2) continue;
+    const src = map.getSource(b.dotsSrcId);
+    if (!src) continue;
+    const totalLen = lineLength(coords);
+    // 3 dots spaced 0.15 of total length apart, leading dot sweeps 0..1
+    const lead = (phase + 0.0) % 1;
+    const mid  = (phase - 0.18 + 1) % 1;
+    const trail = (phase - 0.36 + 1) % 1;
+    const features = [];
+    for (const t of [trail, mid, lead]) {
+      const target = t * totalLen;
+      const [lng, lat] = interpAlong(coords, target);
+      // Fade the trailing dot
+      const fade = (t === trail) ? 0.55 : (t === mid ? 0.85 : 1.0);
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [lng, lat] },
+        properties: { fade }
+      });
+    }
+    src.setData({ type: 'FeatureCollection', features });
+  }
+}
+function lineLength(coords) {
+  let total = 0;
+  for (let i = 1; i < coords.length; i++) {
+    total += haversineKm(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]);
+  }
+  return total;
+}
+function interpAlong(coords, target) {
+  let acc = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const seg = haversineKm(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]);
+    if (acc + seg >= target) {
+      const t = seg === 0 ? 0 : (target - acc) / seg;
+      const lng = coords[i-1][0] + (coords[i][0] - coords[i-1][0]) * t;
+      const lat = coords[i-1][1] + (coords[i][1] - coords[i-1][1]) * t;
+      return [lng, lat];
+    }
+    acc += seg;
+  }
+  return coords[coords.length - 1];
+}
+
+function startAheadAnim() {
+  if (aheadAnimTimer) return;
+  aheadAnimTimer = setInterval(animateAheadDots, 90);
+}
+startAheadAnim();
+
 function renderRouteShapes() {
   if (!mapReady) return;
   buildRouteMetaFromVehicles();
@@ -772,6 +1143,7 @@ function renderRouteShapes() {
   const routeCoords = {}; // routeId -> coords (first pattern only)
   const routeMeta = {};   // routeId -> { color, name }
   const seen = new Set();
+  routeShapeCoords = {};
 
   routeShapes.forEach(s => {
     if (!s.shape || seen.has(s.route_id)) return;
@@ -782,6 +1154,7 @@ function renderRouteShapes() {
       const coords = decodePolyline(s.shape);
       if (coords.length < 2) return;
       routeCoords[s.route_id] = coords;
+      routeShapeCoords[s.route_id] = coords;
       // Always prefer our curated route colors over the API pattern colors (which can be #FFFFFF etc.)
       routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || s.color || '#888', name: s.name };
     } catch(e) {}
@@ -823,6 +1196,9 @@ function renderRouteShapes() {
     routeLayerIds.push(layId);
     routeSourceIds.push(srcId);
   }
+
+  // Golden path arrows ahead of each bus
+  renderAheadArrows();
 }
 
 // ─── RENDER TRAILS ────────────────────────────────────────────────────────────
@@ -1148,7 +1524,11 @@ function buildStoplineHtml(sl, routeColor) {
   // Sideways bus SVG — 52 wide × 22 tall, facing right
   // Layout: front bumper(right), body, rear bumper(left), windows, tires, arrow below
   const tc = isLight(routeColor) ? '#111' : '#fff';
-  const sideBus = `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="30" viewBox="0 0 52 30"
+  // Load indicator: 3 small lit segments at the rear (left side)
+  const l = Math.max(0, Math.min(1, sl?.load || 0));
+  const occColor = l < 0.5 ? '#3fb950' : l < 0.8 ? '#d29922' : '#f85149';
+  const segs = [0,1,2].map(i => l > (i+1)/3 - 0.05);
+  const sideBus = `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="36" viewBox="0 0 52 36"
        style="display:block;filter:drop-shadow(0 2px 5px rgba(0,0,0,.85));">
     <!-- body -->
     <rect x="2" y="2" width="44" height="16" rx="3" fill="${routeColor}" stroke="rgba(0,0,0,.55)" stroke-width="1.2"/>
@@ -1172,15 +1552,19 @@ function buildStoplineHtml(sl, routeColor) {
     <!-- rear wheel -->
     <circle cx="12" cy="19" r="4.5" fill="#1a1a1a" stroke="#555" stroke-width="1"/>
     <circle cx="12" cy="19" r="2" fill="#333"/>
+    <!-- occupancy bar (3 small segments below the bus, lit green/yellow/red) -->
+    <rect x="3"  y="20" width="3" height="1.6" rx="0.5" fill="${segs[0] ? occColor : 'rgba(255,255,255,.25)'}"/>
+    <rect x="7"  y="20" width="3" height="1.6" rx="0.5" fill="${segs[1] ? occColor : 'rgba(255,255,255,.25)'}"/>
+    <rect x="11" y="20" width="3" height="1.6" rx="0.5" fill="${segs[2] ? occColor : 'rgba(255,255,255,.25)'}"/>
     <!-- pointer arrow pointing DOWN to the track line (wide base up, tip down) -->
-    <polygon points="22,23 30,23 26,29" fill="${routeColor}" stroke="rgba(0,0,0,.5)" stroke-width=".8"/>
+    <polygon points="22,23 30,23 26,33" fill="${routeColor}" stroke="rgba(0,0,0,.5)" stroke-width=".8"/>
   </svg>`;
 
-  // Layout: bus floats at top, arrow tip lands at track line (top:46px)
-  // Track at top:46, dots at top:40, bus at top:4 → plenty of breathing room
+  // Layout: bus floats at top, arrow tip lands at track line (top:50px)
+  // Track at top:50, dots at top:45, bus at top:8 → arrow tip lands on track
   return `<div class="stopline" style="width:${totalWidth}px;height:68px;">
-    <div class="stopline-track" style="top:46px;"></div>
-    <div class="stopline-done" style="width:${busPixel}px;background:${routeColor};opacity:0.8;top:46px;"></div>
+    <div class="stopline-track" style="top:50px;"></div>
+    <div class="stopline-done" style="width:${busPixel}px;background:${routeColor};opacity:0.8;top:50px;"></div>
     ${stops.map((s, i) => {
       const cls = i < nextIdx ? 'passed' : i === nextIdx ? 'next' : '';
       const encoded = encodeStopData(s, i, nextIdx, sl);
@@ -1197,12 +1581,12 @@ function buildStoplineHtml(sl, routeColor) {
         if (label.length > 12) label = label.slice(0, 12) + '…';
       }
       return `<div class="stop-node ${cls}" data-stop="${encoded}"
-                   style="position:absolute;left:${x}px;top:41px;transform:translateX(-50%);width:${nodeWidth}px;">
+                   style="position:absolute;left:${x}px;top:45px;transform:translateX(-50%);width:${nodeWidth}px;">
         <div class="dot" style="border-color:${routeColor};${i<nextIdx?`background:${routeColor};opacity:.5`:''}"></div>
         <div class="lbl">${label}</div>
       </div>`;
     }).join('')}
-    <div class="bus-pos-marker" style="left:${busPixel}px;top:4px;transform:translateX(-50%);">
+    <div class="bus-pos-marker" style="left:${busPixel}px;top:8px;transform:translateX(-50%);">
       ${sideBus}
     </div>
   </div>`;
@@ -1530,9 +1914,13 @@ function renderApiLog(stats) {
 
 // ─── MAP MARKERS ─────────────────────────────────────────────────────────────
 // Top-down bus: narrow body, front points UP, label runs front→back along length.
-function makeBusIcon(color, label, heading) {
+function makeBusIcon(color, label, heading, load) {
   const tc  = isLight(color) ? '#111' : '#fff';
   const shd = isLight(color) ? 'rgba(0,0,0,.35)' : 'rgba(0,0,0,.6)';
+  // Occupancy: 3 segments light up based on load (0..1)
+  const l = Math.max(0, Math.min(1, load || 0));
+  const occColor = l < 0.5 ? '#3fb950' : l < 0.8 ? '#d29922' : '#f85149';
+  const segs = [0, 1, 2].map(i => l > (i + 1) / 3 - 0.05);
   // Canvas 28 wide × 58 tall. Body occupies x:6–22, y:10–52.
   return `<div style="
       width:28px; height:58px;
@@ -1573,6 +1961,13 @@ function makeBusIcon(color, label, heading) {
             text-anchor="middle" dominant-baseline="middle"
             font-family="system-ui,sans-serif" font-size="10" font-weight="900"
             fill="${tc}" letter-spacing="0.5">${label}</text>
+
+      <!-- ── Occupancy indicator (3 little segments at the rear, glowing green/yellow/red) ── -->
+      <g>
+        <rect x="8"  y="48.5" width="3" height="2" rx="0.5" fill="${segs[0] ? occColor : 'rgba(255,255,255,.25)'}"/>
+        <rect x="12.5" y="48.5" width="3" height="2" rx="0.5" fill="${segs[1] ? occColor : 'rgba(255,255,255,.25)'}"/>
+        <rect x="17" y="48.5" width="3" height="2" rx="0.5" fill="${segs[2] ? occColor : 'rgba(255,255,255,.25)'}"/>
+      </g>
 
     </svg>
   </div>`;
@@ -1695,11 +2090,11 @@ function renderMarkers() {
 
     if (markers[v.id]) {
       markers[v.id].marker.setLngLat([v.lon, v.lat]);
-      markers[v.id].el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees);
+      markers[v.id].el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees, v.passengerLoad);
       wire(markers[v.id].el, v);
     } else {
       const el = document.createElement('div');
-      el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees);
+      el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees, v.passengerLoad);
       wire(el, v);
       const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([v.lon, v.lat]).addTo(map);
       markers[v.id] = { marker, el };
@@ -1854,37 +2249,281 @@ async function fetchStoplines() {
   renderVehicleList(); // re-render with stopline data
 }
 
-// ─── SIDEBAR RESIZE ──────────────────────────────────────────────────────────
-(function() {
+// ─── SIDEBAR RESIZE / BOTTOM-SHEET (mouse + touch) ───────────────────────────
+function setupSidebarDrag() {
   const sidebar = document.getElementById('sidebar');
   const resizer = document.createElement('div');
   resizer.className = 'sidebar-resizer';
   sidebar.prepend(resizer);
+  const mq = window.matchMedia('(max-width: 768px)');
 
-  let startX, startW;
-  resizer.addEventListener('mousedown', e => {
-    startX = e.clientX;
-    startW = sidebar.offsetWidth;
+  function snapSidebar() {
+    const h = sidebar.offsetHeight;
+    const vh = window.innerHeight;
+    const headerH = 52;
+    const peek = 0.30 * vh, mid = 0.70 * vh, full = vh - headerH;
+    if (h < (peek + mid) / 2)        sidebar.classList.add('collapsed');
+    else if (h < (mid + full) / 2)   { sidebar.classList.remove('collapsed'); sidebar.classList.add('sheet-mid'); }
+    else                              { sidebar.classList.remove('collapsed', 'sheet-mid'); sidebar.classList.add('sheet-full'); }
+    sidebar.style.height = '';
+  }
+
+  function onDown(clientX, clientY, isTouch) {
+    const startX = clientX, startY = clientY;
+    const startW = sidebar.offsetWidth, startH = sidebar.offsetHeight;
     resizer.classList.add('dragging');
-    document.body.style.cursor = 'ew-resize';
+    sidebar.classList.add('dragging');
+    document.body.style.cursor = mq.matches ? 'ns-resize' : 'ew-resize';
     document.body.style.userSelect = 'none';
 
-    function onMove(e) {
-      const dx = startX - e.clientX; // dragging left = wider
-      const newW = Math.max(260, Math.min(700, startW + dx));
-      sidebar.style.width = newW + 'px';
-    }
-    function onUp() {
+    const moveHandler = e => {
+      const c = isTouch ? e.touches[0] : e;
+      if (mq.matches) {
+        const dy = startY - c.clientY;
+        const newH = Math.max(80, Math.min(window.innerHeight - 52, startH + dy));
+        sidebar.style.height = newH + 'px';
+        sidebar.classList.remove('sheet-mid', 'sheet-full');
+      } else {
+        const dx = startX - c.clientX;
+        const newW = Math.max(260, Math.min(700, startW + dx));
+        sidebar.style.width = newW + 'px';
+      }
+      if (e.cancelable) e.preventDefault();
+    };
+    const upHandler = () => {
       resizer.classList.remove('dragging');
+      sidebar.classList.remove('dragging');
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
+      detach();
+      if (mq.matches) snapSidebar();
+    };
+    function detach() {
+      if (isTouch) {
+        document.removeEventListener('touchmove', moveHandler);
+        document.removeEventListener('touchend', upHandler);
+        document.removeEventListener('touchcancel', upHandler);
+      } else {
+        document.removeEventListener('mousemove', moveHandler);
+        document.removeEventListener('mouseup', upHandler);
+      }
     }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    if (isTouch) {
+      document.addEventListener('touchmove', moveHandler, { passive: false });
+      document.addEventListener('touchend', upHandler);
+      document.addEventListener('touchcancel', upHandler);
+    } else {
+      document.addEventListener('mousemove', moveHandler);
+      document.addEventListener('mouseup', upHandler);
+    }
+  }
+
+  resizer.addEventListener('mousedown', e => onDown(e.clientX, e.clientY, false));
+  resizer.addEventListener('touchstart', e => {
+    const t = e.touches[0]; if (!t) return;
+    onDown(t.clientX, t.clientY, true);
+  }, { passive: true });
+
+  // Adapt layout when crossing the 768px breakpoint
+  if (mq.addEventListener) {
+    mq.addEventListener('change', () => {
+      if (!mq.matches) {
+        sidebar.classList.remove('sheet-mid', 'sheet-full', 'collapsed', 'dragging');
+        sidebar.style.height = '';
+        if (!sidebar.style.width) sidebar.style.width = '340px';
+      } else {
+        sidebar.style.width = '';
+        if (!sidebar.classList.contains('collapsed') &&
+            !sidebar.classList.contains('sheet-mid') &&
+            !sidebar.classList.contains('sheet-full')) {
+          sidebar.classList.add('collapsed'); // mobile peek
+        }
+      }
+    });
+  }
+  // On first load on mobile, start at peek
+  if (mq.matches) sidebar.classList.add('collapsed');
+}
+setupSidebarDrag();
+
+// ─── GEOLOCATE ("Where am I?") ───────────────────────────────────────────────
+let locateMarkerSrc = null;
+let locateAccuracySrc = null;
+let locateWatchId = null;
+let locateActive = false;
+let locateLastStatusTimer = null;
+
+function setLocateStatus(msg, kind = '') {
+  const el = document.getElementById('locateStatus');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.classList.remove('err', 'warn');
+  if (kind) el.classList.add(kind);
+  if (msg) {
+    el.classList.add('show');
+    clearTimeout(locateLastStatusTimer);
+    locateLastStatusTimer = setTimeout(() => el.classList.remove('show'), 3000);
+  } else {
+    el.classList.remove('show');
+  }
+}
+
+function setLocateBadgeVisual(state) {
+  const badge = document.getElementById('locateBadge');
+  const icon  = document.getElementById('locateIcon');
+  const text  = document.getElementById('locateText');
+  if (!badge) return;
+  badge.classList.remove('badge-blue', 'badge-yellow', 'badge-red', 'badge-green');
+  switch (state) {
+    case 'loading': badge.classList.add('badge-yellow'); icon.textContent = '⏳'; text.textContent = 'Locating…'; break;
+    case 'active':  badge.classList.add('badge-green');  icon.textContent = '🎯'; text.textContent = 'Tracking'; break;
+    case 'error':   badge.classList.add('badge-red');    icon.textContent = '⚠️'; text.textContent = 'Locate me'; break;
+    default:        badge.classList.add('badge-blue');   icon.textContent = '📍'; text.textContent = 'Locate me';
+  }
+}
+
+function ensureLocateLayers() {
+  if (!map || !mapReady) return false;
+  if (locateMarkerSrc) return true;
+  if (!map.getSource('user-location')) {
+    map.addSource('user-location', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  }
+  if (!map.getSource('user-accuracy')) {
+    map.addSource('user-accuracy', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  }
+  if (!map.getLayer('user-accuracy-circle')) {
+    map.addLayer({
+      id: 'user-accuracy-circle', type: 'circle', source: 'user-accuracy',
+      paint: { 'circle-radius': ['get', 'radius'],
+               'circle-color': '#1f6feb',
+               'circle-opacity': 0.10,
+               'circle-stroke-color': '#58a6ff',
+               'circle-stroke-width': 1.5,
+               'circle-stroke-opacity': 0.4 }
+    });
+  }
+  if (!map.getLayer('user-location-dot')) {
+    map.addLayer({
+      id: 'user-location-dot', type: 'circle', source: 'user-location',
+      paint: { 'circle-radius': 9,
+               'circle-color': '#1f6feb',
+               'circle-stroke-color': '#ffffff',
+               'circle-stroke-width': 3 }
+    });
+  }
+  locateMarkerSrc = map.getSource('user-location');
+  locateAccuracySrc = map.getSource('user-accuracy');
+  return true;
+}
+
+function updateLocatePosition(pos, isFirst) {
+  if (!ensureLocateLayers()) return;
+  const lng = pos.coords.longitude, lat = pos.coords.latitude;
+  const acc = pos.coords.accuracy;
+  locateMarkerSrc.setData({
+    type: 'FeatureCollection',
+    features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [lng, lat] }, properties: {} }]
   });
-})();
+  locateAccuracySrc.setData({
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [lng, lat] },
+      properties: { radius: Math.max(12, acc) }
+    }]
+  });
+  if (isFirst) {
+    map.flyTo({ center: [lng, lat], zoom: 14, speed: 1.2, curve: 1.4 });
+  } else if (locateActive) {
+    map.panTo([lng, lat], { duration: 800 });
+  }
+}
+
+function clearLocatePosition() {
+  if (locateMarkerSrc) locateMarkerSrc.setData({ type: 'FeatureCollection', features: [] });
+  if (locateAccuracySrc) locateAccuracySrc.setData({ type: 'FeatureCollection', features: [] });
+}
+
+function handleLocateError(err) {
+  let msg = 'Location unavailable';
+  if (err.code === 1)      msg = 'Location permission denied';
+  else if (err.code === 2) msg = 'Position unavailable';
+  else if (err.code === 3) msg = 'Location request timed out';
+  setLocateStatus(msg, 'err');
+  setLocateBadgeVisual('error');
+  stopLocateWatch(true);
+}
+
+function stopLocateWatch(keepBadge) {
+  if (locateWatchId != null) {
+    navigator.geolocation.clearWatch(locateWatchId);
+    locateWatchId = null;
+  }
+  locateActive = false;
+  if (!keepBadge) {
+    setLocateBadgeVisual('idle');
+    clearLocatePosition();
+    setLocateStatus('');
+  }
+}
+
+function startLocate() {
+  if (!('geolocation' in navigator)) {
+    setLocateStatus('Geolocation not supported in this browser', 'err');
+    setLocateBadgeVisual('error');
+    return;
+  }
+  if (!window.isSecureContext) {
+    setLocateStatus('Geolocation requires HTTPS', 'err');
+    setLocateBadgeVisual('error');
+    return;
+  }
+  setLocateBadgeVisual('loading');
+  setLocateStatus('Requesting location…');
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      updateLocatePosition(pos, true);
+      setLocateStatus('Location found — tracking', 'warn');
+      setLocateBadgeVisual('active');
+      locateActive = true;
+      locateWatchId = navigator.geolocation.watchPosition(
+        p => { updateLocatePosition(p, false); setLocateBadgeVisual('active'); },
+        handleLocateError,
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+      );
+    },
+    handleLocateError,
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+  );
+}
+
+function toggleLocate() {
+  if (locateActive) stopLocateWatch(false);
+  else              startLocate();
+}
+
+function setupLocateButton() {
+  const wire = () => {
+    if (!map || !mapReady) { setTimeout(wire, 250); return; }
+    document.getElementById('locateBadge')?.addEventListener('click', toggleLocate);
+    document.getElementById('mobileMenuBtn')?.addEventListener('click', () => {
+      const sb = document.getElementById('sidebar');
+      if (!sb) return;
+      // If it's already at peek, snap to mid; otherwise collapse to peek
+      if (sb.classList.contains('collapsed') || !sb.classList.contains('sheet-mid') && !sb.classList.contains('sheet-full')) {
+        sb.classList.remove('collapsed', 'sheet-full');
+        sb.classList.add('sheet-mid');
+        sb.style.height = '';
+      } else {
+        sb.classList.remove('sheet-mid', 'sheet-full');
+        sb.classList.add('collapsed');
+        sb.style.height = '';
+      }
+    });
+  };
+  wire();
+}
+setupLocateButton();
 
 // ─── LEARN TAB VISUALIZATION ───────────────────────────────────────────────
 // A 3-layer transformer-style architecture with:
