@@ -1,0 +1,35 @@
+# Render Blueprint — provisions the Hele-On Bus Tracker web service
+# and a cron job that pings it every 10 minutes so the free tier
+# never spins down.
+#
+# To use: in Render dashboard → New → Blueprint → point at this repo.
+# The cron job auto-pulls the web service's host via fromService.
+
+services:
+  # ── Web service: Node.js server + dashboard ────────────────────────────
+  - type: web
+    name: heleon-bus-tracker
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+
+  # ── Cron job: keep-alive ping so the web service stays warm ───────────
+  # Free tier sleeps after 15 min of no traffic. Pinging every 10 min
+  # keeps it ready for visitors (who otherwise wait ~30 s for a cold start).
+  # HOST env var is auto-filled with the web service's hostname.
+  - type: cron
+    name: heleon-keepalive
+    runtime: node
+    plan: free
+    schedule: "*/10 * * * *"
+    startCommand: node keepalive.js
+    envVars:
+      - key: HOST
+        fromService:
+          type: web
+          name: heleon-bus-tracker
+          property: host
