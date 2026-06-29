@@ -536,51 +536,9 @@ function buildTripIndex() {
   return rows.length;
 }
 
-// Decoded route-shape coordinates per route, for inferring the route of a bus
-// the realtime feeds didn't map. Built lazily from cached pattern shapes.
-let routeShapeIndex = null; // routeId -> [[lat,lon], ...] (sampled)
-function buildRouteShapeIndex() {
-  const rows = dbAll(`SELECT route_id, shape FROM route_shapes WHERE shape IS NOT NULL`);
-  const idx = {};
-  rows.forEach(r => {
-    if (idx[r.route_id]) return; // first pattern per route is enough for proximity
-    try {
-      const pts = decodePolyline(r.shape);
-      // Sample every ~5th point to keep the nearest-route scan cheap.
-      idx[r.route_id] = pts.filter((_, i) => i % 5 === 0);
-    } catch {}
-  });
-  routeShapeIndex = idx;
-}
-
-// Decode a Google-encoded polyline → [[lat,lon], ...].
-function decodePolyline(str) {
-  let index = 0, lat = 0, lng = 0; const coords = [];
-  while (index < str.length) {
-    let b, shift = 0, result = 0;
-    do { b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
-    lat += (result & 1) ? ~(result >> 1) : (result >> 1);
-    shift = 0; result = 0;
-    do { b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
-    lng += (result & 1) ? ~(result >> 1) : (result >> 1);
-    coords.push([lat / 1e5, lng / 1e5]);
-  }
-  return coords;
-}
-
-// Best-guess route for an unmapped bus: the route whose shape passes closest to
-// the bus, within 300 m. Returns null when nothing is plausibly close.
-function inferRouteByShape(lat, lon) {
-  if (!routeShapeIndex) buildRouteShapeIndex();
-  let bestRoute = null, bestKm = 0.3;
-  for (const rid in routeShapeIndex) {
-    for (const [slat, slon] of routeShapeIndex[rid]) {
-      const d = haversineKm(lat, lon, slat, slon);
-      if (d < bestKm) { bestKm = d; bestRoute = parseInt(rid); }
-    }
-  }
-  return bestRoute;
-}
+// We do NOT infer a bus's route from geometry. A bus's route comes only from the
+// agency feed (its per-route endpoint, remembered briefly across dropouts). If we
+// don't know it, we show no route rather than a guess.
 
 // ─── TRANSFORMER PREDICTOR (tiny single-block, single-head attention) ──────
 // Architecture:
@@ -985,13 +943,13 @@ async function pollFleet() {
       if (raw.lat < BBOX.minLat || raw.lat > BBOX.maxLat || raw.lon < BBOX.minLon || raw.lon > BBOX.maxLon) return;
       const luMs = raw.lastUpdated ? parseFleetTs(raw.lastUpdated) : ts;
       if ((ts - luMs) > VEHICLE_RETAIN_MS) return;
-      // Prefer the bus's last KNOWN route (so it doesn't flip routes when it
-      // briefly drops out of its per-route list); only guess from geometry if we
-      // have no recent memory of where it belongs.
+      // Use the bus's last KNOWN route from the real feed if we have a recent one
+      // (so it keeps its real route through a brief dropout). We do NOT guess a
+      // route from geometry — showing a fabricated route is worse than none.
+      // A bus with no known route shows as route-less (not in service).
       const mem = lastKnownRoute[raw.id];
-      const known = mem && (ts - mem.ts) < ROUTE_MEMORY_MS ? mem.routeId : null;
-      const routeId = known != null ? known : inferRouteByShape(raw.lat, raw.lon);
-      byId[raw.id] = Object.assign({}, raw, { _routeId: routeId, _luMs: luMs, _unassigned: !known });
+      const routeId = mem && (ts - mem.ts) < ROUTE_MEMORY_MS ? mem.routeId : null;
+      byId[raw.id] = Object.assign({}, raw, { _routeId: routeId, _luMs: luMs, _unassigned: true });
     });
   } catch {}
 
@@ -1030,10 +988,9 @@ async function pollFleet() {
       stale: (ts - luMs) > VEHICLE_STALE_MS && (ts - luMs) > 0,
       lastUpdated: new Date(luMs).toISOString(),
       routeId,
-      routeInferred: !!raw._unassigned, // roster-only bus: route is a nearest-shape guess
-      unassigned: !!raw._unassigned,    // reporting GPS but not on a route's vehicle list
-      routeName: route ? route.name : (raw._unassigned ? 'Not in service' : 'Not in service'),
-      routeShort: route ? route.short : '?',
+      unassigned: !!raw._unassigned,    // reporting GPS but not on a route's vehicle list now
+      routeName: route ? route.name : 'Not in service',
+      routeShort: route ? route.short : '—',
       routeColor: route ? route.color : '#8b949e',
     };
     vehicles.push(v);
@@ -1795,7 +1752,7 @@ async function handleApi(url, res) {
     // next-stop arrival is the agency's official prediction — otherwise the
     // scheduled-time match is a guess and the delta is meaningless.
     let scheduleDelayMin = null, scheduleSuspect = false;
-    if (nextStop && v.tripId && !v.routeInferred &&
+    if (nextStop && v.tripId && !v.unassigned &&
         nextStop.scheduledMs != null && nextStop.etaMinOfficial != null) {
       const predictedArrivalMs = nowMs + nextStop.etaMinOfficial * 60000;
       scheduleDelayMin = Math.round(((predictedArrivalMs - nextStop.scheduledMs) / 60000) * 10) / 10;
