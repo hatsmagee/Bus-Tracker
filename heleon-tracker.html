@@ -2340,8 +2340,14 @@ function renderMarkers() {
         // no implied motion yet.
         m.rc = rc; m.curDist = snap.dist; m.targetDist = snap.dist; m.alongSpeed = 0;
       } else {
-        // Off-route bus: no route motion. Just hold at the fix.
+        // Off-route bus (too far from its shape to trust route motion): glide
+        // smoothly in a straight line from where it's rendered to the new fix
+        // instead of snapping — a 200 m jump per poll looks broken.
         m.rc = null; m.alongSpeed = 0;
+        const cur = m.marker.getLngLat();
+        m.linFrom = [cur.lng, cur.lat];
+        m.linTo = fix;
+        m.linStart = nowT;
       }
       m.onRoute = onRoute;
       m.fix = fix;
@@ -2350,7 +2356,6 @@ function renderMarkers() {
       m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather, v.name);
       applyAgeOpacity(m.el, v);
       wire(m.el, v);
-      if (!onRoute) m.marker.setLngLat(fix); // off-route: place directly
     } else {
       const el = document.createElement('div');
       el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather, v.name);
@@ -2533,7 +2538,18 @@ function startMarkerAnim() {
     for (const id in markers) {
       const m = markers[id];
       if (!m.fix) continue;
-      if (!m.rc) continue; // off-route bus already placed at its fix; no animation
+      if (!m.rc) {
+        // Off-route: ease in a straight line from last rendered spot to the fix
+        // over ~1.4 s, instead of a hard snap (a 200 m jump per poll looks broken).
+        if (m.linFrom && m.linTo) {
+          const t = Math.min(1, (now - m.linStart) / 1400);
+          const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+          m.marker.setLngLat([m.linFrom[0] + (m.linTo[0]-m.linFrom[0])*e,
+                              m.linFrom[1] + (m.linTo[1]-m.linFrom[1])*e]);
+          if (t < 1) anyMoving = true; else { m.linFrom = null; }
+        }
+        continue;
+      }
       const remaining = m.targetDist - m.curDist;
       if (remaining > 0.3) {
         // Advance forward at the measured along-route speed. Cap the step so we
