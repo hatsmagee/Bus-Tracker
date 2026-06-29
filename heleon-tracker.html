@@ -2146,45 +2146,76 @@ function renderMarkers() {
     }
 
     const loadFrac = loadFraction(v);
-    // Speed in m/s (feed gives mph) and bearing for dead-reckoning projection.
-    const speedMps = (v.speed || 0) * 0.44704;
     const heading = v.headingDegrees;
+    const fix = [v.lon, v.lat];
+    const nowT = performance.now();
     if (markers[v.id]) {
       const m = markers[v.id];
-      // The new GPS fix is the anchor we dead-reckon forward from. Ease from the
-      // marker's currently-rendered (projected) spot to the fix so the
-      // correction is smooth, then continue projecting along heading at speed.
+      // ── Velocity-tracking loop with learned over/undershoot correction ──
+      // Measured velocity from the last two fixes self-corrects for the reported
+      // speed being wrong (bus slowed/turned): we use what actually happened.
+      const dt = Math.max(0.001, (nowT - m.fixTime) / 1000);            // s since last fix
+      const measVel = displacementMps(m.fix, fix, dt);                  // {vx,vy} m/s east/north
+      // Learn a gain that nudges our projection toward reality. When the last
+      // interval's prediction overshot the true fix, error<0 → shrink gain;
+      // undershot → grow it. This is the integral/feedback term of the loop.
+      if (m.predicted) {
+        const predErr = signedAlong(m.predicted, fix, m.fix);          // +: we fell short, -: overshot
+        const travelled = haversineKm(m.fix[1], m.fix[0], fix[1], fix[0]) * 1000 || 1;
+        m.gain = clamp(m.gain + 0.4 * (predErr / travelled), 0.4, 1.6); // bounded adaptation
+      }
+      // The marker is wherever it was rendered; from here it converges to the
+      // moving setpoint — never snaps.
       const cur = m.marker.getLngLat();
-      m.correctFrom = [cur.lng, cur.lat];
-      m.anchor = [v.lon, v.lat];
-      m.anchorTime = performance.now();
-      m.speedMps = speedMps;
+      m.renderPos = [cur.lng, cur.lat];
+      m.fix = fix;
+      m.fixTime = nowT;
+      m.vel = measVel;
+      m.interval = m.lastFixTime ? clamp((nowT - m.lastFixTime), 4000, 30000) : 15000;
+      m.lastFixTime = nowT;
       m.heading = heading;
+      // Where we now predict the bus will be at the next fix (for the next
+      // round's error measurement): fix + corrected velocity over one interval.
+      m.predicted = stepLatLon(fix, measVel, m.gain * m.interval / 1000);
       m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather, v.name);
       wire(m.el, v);
     } else {
       const el = document.createElement('div');
       el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather, v.name);
       wire(el, v);
-      const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([v.lon, v.lat]).addTo(map);
-      markers[v.id] = { marker, el, correctFrom: [v.lon, v.lat], anchor: [v.lon, v.lat],
-                        anchorTime: performance.now(), speedMps, heading };
+      const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(fix).addTo(map);
+      markers[v.id] = {
+        marker, el, heading,
+        fix, fixTime: nowT, lastFixTime: 0, renderPos: fix.slice(),
+        vel: { vx: 0, vy: 0 }, gain: 1, interval: 15000, predicted: null,
+      };
     }
   });
 
   startMarkerAnim();
 }
 
-// Project a [lon,lat] forward `meters` along a compass `bearing` (deg).
-// Equirectangular step — accurate enough at the few-hundred-metre scale a bus
-// covers between polls.
-function projectForward(lon, lat, bearing, meters) {
-  if (bearing == null || !meters) return [lon, lat];
-  const R = 6371000, br = bearing * Math.PI / 180, latR = lat * Math.PI / 180;
-  const dLat = (meters * Math.cos(br)) / R;
-  const dLon = (meters * Math.sin(br)) / (R * Math.cos(latR));
-  return [lon + dLon * 180 / Math.PI, lat + dLat * 180 / Math.PI];
+// Velocity (m/s, east/north components) implied by moving from a→b over dt sec.
+function displacementMps(a, b, dt) {
+  if (!a || !b) return { vx: 0, vy: 0 };
+  const mPerDegLat = 111320, mPerDegLon = mPerDegLat * Math.cos(b[1] * Math.PI / 180);
+  return { vx: (b[0] - a[0]) * mPerDegLon / dt, vy: (b[1] - a[1]) * mPerDegLat / dt };
 }
+// Advance a [lon,lat] by a velocity {vx,vy} m/s for `secs` seconds.
+function stepLatLon(p, vel, secs) {
+  const mPerDegLat = 111320, mPerDegLon = mPerDegLat * Math.cos(p[1] * Math.PI / 180) || 1e-6;
+  return [p[0] + vel.vx * secs / mPerDegLon, p[1] + vel.vy * secs / mPerDegLat];
+}
+// Signed distance (m) of point `pred` projected onto the actual travel direction
+// (origin→truth): positive when the prediction lagged behind the truth.
+function signedAlong(pred, truth, origin) {
+  const mPerDegLat = 111320, mPerDegLon = mPerDegLat * Math.cos(truth[1] * Math.PI / 180);
+  const dirx = (truth[0] - origin[0]) * mPerDegLon, diry = (truth[1] - origin[1]) * mPerDegLat;
+  const len = Math.hypot(dirx, diry) || 1;
+  const ex = (truth[0] - pred[0]) * mPerDegLon, ey = (truth[1] - pred[1]) * mPerDegLat;
+  return (ex * dirx + ey * diry) / len;
+}
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 // Normalize occupancy to a 0..1 fraction regardless of whether the feed gives
 // a raw passenger count + capacity or an already-normalized load.
@@ -2199,36 +2230,39 @@ function loadFraction(v) {
 // the latest fix. Runs only while at least one marker is mid-transition, then
 // stops itself to save battery.
 let markerAnimRAF = null;
-const CORRECT_MS = 900;          // ease the snap-to-fix correction over this long
-const DEAD_RECKON_CAP_MS = 22000; // stop projecting after this (poll interval + buffer)
+let markerLastFrame = 0;
+const FOLLOW = 6;          // tracking stiffness (per second) — higher = snappier convergence
 function startMarkerAnim() {
   if (markerAnimRAF) return;
   const tick = (now) => {
+    const frameDt = markerLastFrame ? Math.min(0.1, (now - markerLastFrame) / 1000) : 0.016;
+    markerLastFrame = now;
     let anyMoving = false;
     for (const id in markers) {
       const m = markers[id];
-      if (!m.anchor) continue;
-      const elapsed = now - m.anchorTime;
-      // Dead reckoning: where the bus *should* be now if it kept going from its
-      // last fix at its last speed/heading. This makes motion look continuous
-      // and real-time between 15 s polls instead of one slide on each update.
-      const projMeters = m.speedMps ? m.speedMps * (Math.min(elapsed, DEAD_RECKON_CAP_MS) / 1000) : 0;
-      const [plon, plat] = projectForward(m.anchor[0], m.anchor[1], m.heading, projMeters);
-      // For the first CORRECT_MS, blend from where the marker was (correctFrom)
-      // to the projected target so the GPS correction doesn't jump.
-      let lng = plon, lat = plat;
-      if (elapsed < CORRECT_MS && m.correctFrom) {
-        const t = elapsed / CORRECT_MS;
-        const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // easeInOutQuad
-        lng = m.correctFrom[0] + (plon - m.correctFrom[0]) * e;
-        lat = m.correctFrom[1] + (plat - m.correctFrom[1]) * e;
-      }
+      if (!m.fix) continue;
+      // ── Setpoint: the corrected dead-reckoned position the bus SHOULD be at
+      // right now. Velocity is what the bus actually did last interval, scaled by
+      // the learned gain (over/undershoot correction). Capped at one interval so
+      // a missing update doesn't fling the marker past the next real fix.
+      const since = Math.min((now - m.fixTime) / 1000, m.interval / 1000);
+      const target = stepLatLon(m.fix, m.vel, m.gain * since);
+      // ── Critically-damped follow: ease the rendered position toward the moving
+      // target. Exponential smoothing with frame-rate-independent alpha gives a
+      // smooth glide that always converges — no snap, no overshoot of its own.
+      const a = 1 - Math.exp(-FOLLOW * frameDt);
+      const lng = m.renderPos[0] + (target[0] - m.renderPos[0]) * a;
+      const lat = m.renderPos[1] + (target[1] - m.renderPos[1]) * a;
+      m.renderPos = [lng, lat];
       m.marker.setLngLat([lng, lat]);
-      // Keep animating while correcting OR while the bus is moving and not yet capped.
-      if (elapsed < CORRECT_MS || (m.speedMps > 0.3 && elapsed < DEAD_RECKON_CAP_MS)) anyMoving = true;
+      // Keep running while still converging or while the bus is moving within
+      // the current interval window.
+      const err = haversineKm(lat, lng, target[1], target[0]) * 1000;
+      const speed = Math.hypot(m.vel.vx, m.vel.vy);
+      if (err > 0.5 || (speed > 0.3 && since < m.interval / 1000)) anyMoving = true;
     }
     if (anyMoving && !document.hidden) { markerAnimRAF = requestAnimationFrame(tick); }
-    else { markerAnimRAF = null; }
+    else { markerAnimRAF = null; markerLastFrame = 0; }
   };
   markerAnimRAF = requestAnimationFrame(tick);
 }
