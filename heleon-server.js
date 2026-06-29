@@ -20,8 +20,8 @@ const { parseFeedMessage } = require('./gtfs-rt');
 // Big Island bounding box — fleet feed includes parked/relocated buses
 // (e.g. on Oʻahu for maintenance); ignore anything outside Hawaiʻi County.
 const BBOX = { minLat: 18.8, maxLat: 20.4, minLon: -156.2, maxLon: -154.7 };
-const VEHICLE_STALE_MS = 5 * 60 * 1000;   // a bus is "fresh"/live within this window
-const VEHICLE_RETAIN_MS = 30 * 60 * 1000; // keep showing last-known position (faded) up to here
+const VEHICLE_STALE_MS = 5 * 60 * 1000;        // a bus is "fresh"/live within this window
+const VEHICLE_RETAIN_MS = 48 * 60 * 60 * 1000; // keep showing last-known position (faded) up to 2 days
 const RT_VP_PATH = '/gtfs-rt/vehiclepositions';
 const RT_TU_PATH = '/gtfs-rt/tripupdates';
 

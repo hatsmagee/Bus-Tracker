@@ -1315,7 +1315,8 @@ function stalenessLabel(v) {
   const m = getAgeMinutes(v);
   if (m < 1) return 'just now';
   if (m < 60) return `${Math.round(m)}m ago`;
-  const h = Math.floor(m / 60); return `${h}h ${Math.round(m % 60)}m ago`;
+  if (m < 1440) { const h = Math.floor(m / 60); return `${h}h ${Math.round(m % 60)}m ago`; }
+  const d = Math.floor(m / 1440), h = Math.round((m % 1440) / 60); return `${d}d ${h}h ago`;
 }
 function headingArrow(deg) { return deg == null ? '' : ['↑','↗','→','↘','↓','↙','←','↖'][Math.round((deg % 360) / 45) % 8]; }
 // Compass label from bearing degrees (GTFS-RT gives degrees, not N/NE text).
@@ -2207,14 +2208,23 @@ function renderMarkers() {
 // (no velocity), so the marker just rests at its last-known spot, dimmed.
 function applyAgeOpacity(el, v) {
   const m = getAgeMinutes(v);
-  // Ghost out gracefully but NEVER vanish — floor at 0.5 so a stale bus is
-  // always clearly visible at its last-known spot.
+  // Fade by how long since the last GPS fix — solid when live, a faint ghost
+  // when the unit's been off for hours/days — but never invisible, so you can
+  // always see where each bus was last seen.
+  //   ≤5 min  : 1.0  (live)
+  //   5–30 min: 1.0 → 0.6  (just went quiet)
+  //   30m–48h : 0.6 → 0.22 (off-shift / GPS off — faint ghost)
   let opacity;
   if (m <= 5) opacity = 1;
-  else if (m >= 30) opacity = 0.5;
-  else opacity = 1 - 0.5 * ((m - 5) / 25); // linear 1 → 0.5 between 5 and 30 min
+  else if (m <= 30) opacity = 1 - 0.4 * ((m - 5) / 25);
+  else {
+    const t = Math.min(1, (m - 30) / (48 * 60 - 30)); // 0 at 30min → 1 at 48h
+    opacity = 0.6 - 0.38 * t;
+  }
   el.style.opacity = opacity.toFixed(2);
   el.style.transition = 'opacity .6s ease';
+  // Grayscale the older ghosts a touch so "off" reads at a glance.
+  el.style.filter = m > 30 ? 'grayscale(0.5)' : '';
 }
 
 // Velocity (m/s, east/north components) implied by moving from a→b over dt sec.
