@@ -20,7 +20,8 @@ const { parseFeedMessage } = require('./gtfs-rt');
 // Big Island bounding box — fleet feed includes parked/relocated buses
 // (e.g. on Oʻahu for maintenance); ignore anything outside Hawaiʻi County.
 const BBOX = { minLat: 18.8, maxLat: 20.4, minLon: -156.2, maxLon: -154.7 };
-const VEHICLE_STALE_MS = 5 * 60 * 1000; // hide buses whose GPS is >5 min old
+const VEHICLE_STALE_MS = 5 * 60 * 1000;   // a bus is "fresh"/live within this window
+const VEHICLE_RETAIN_MS = 30 * 60 * 1000; // keep showing last-known position (faded) up to here
 const RT_VP_PATH = '/gtfs-rt/vehiclepositions';
 const RT_TU_PATH = '/gtfs-rt/tripupdates';
 
@@ -952,7 +953,7 @@ async function pollFleet() {
       if (raw.lat == null || raw.lon == null) return;
       if (raw.lat < BBOX.minLat || raw.lat > BBOX.maxLat || raw.lon < BBOX.minLon || raw.lon > BBOX.maxLon) return;
       const luMs = raw.lastUpdated ? parseFleetTs(raw.lastUpdated) : ts;
-      if ((ts - luMs) > VEHICLE_STALE_MS) return; // only buses reporting in the last 5 min
+      if ((ts - luMs) > VEHICLE_RETAIN_MS) return; // keep last-known up to the retain window
       const prev = byId[raw.id];
       // Keep the reading from the route this bus is most freshly on; prefer one
       // with real speed/heading if timestamps tie.
@@ -992,6 +993,8 @@ async function pollFleet() {
       direction: ti ? ti.direction : null,
       shapeId: ti ? ti.shapeId : null,
       vehicleTs: luMs,
+      ageMin: Math.round(((ts - luMs) / 60000) * 10) / 10,
+      stale: (ts - luMs) > VEHICLE_STALE_MS, // older than the "live" window → show faded
       lastUpdated: new Date(luMs).toISOString(),
       routeId,
       routeInferred: false,        // route now comes straight from the endpoint
@@ -1009,15 +1012,17 @@ async function pollFleet() {
     lastGoodVehicle[id] = v;
   });
 
-  // Resilience: re-include any bus we saw recently but that dropped out of this
-  // cycle (transient upstream hiccup) as long as its GPS is still fresh. The
-  // page keeps showing it — flagged stale: true so the UI can dim/age it —
-  // instead of flickering it off and on.
+  // Keep showing each bus's last-known position even after it stops reporting,
+  // up to the retain window, so buses fade out gracefully instead of flickering
+  // off and back on. The client renders opacity by ageMin.
   const seen = new Set(vehicles.map(v => v.id));
   Object.values(lastGoodVehicle).forEach(v => {
     if (seen.has(v.id)) return;
-    if ((ts - v.vehicleTs) > VEHICLE_STALE_MS) { delete lastGoodVehicle[v.id]; return; }
-    vehicles.push(Object.assign({}, v, { stale: true }));
+    if ((ts - v.vehicleTs) > VEHICLE_RETAIN_MS) { delete lastGoodVehicle[v.id]; return; }
+    vehicles.push(Object.assign({}, v, {
+      stale: true,
+      ageMin: Math.round(((ts - v.vehicleTs) / 60000) * 10) / 10,
+    }));
   });
 
   return vehicles;

@@ -317,8 +317,8 @@
             aria-label="Toggle sidebar" title="Toggle sidebar">☰</button>
     <div class="badge badge-blue" id="vehicleCountBadge"><div class="pulse pulse-green"></div><span id="vehicleCountText">— buses</span></div>
     <div class="badge" id="apiBadge"><div class="pulse" id="apiPulseDot"></div><span id="apiStatusText">Connecting…</span></div>
-    <div class="badge badge-yellow" id="staleBadge" onclick="toggleStale()" style="cursor:pointer;user-select:none;" title="Click to show/hide stale signals">
-      <span id="staleIcon">👻</span><span id="staleText">Stale hidden</span>
+    <div class="badge badge-green" id="staleBadge" onclick="toggleStale()" style="cursor:pointer;user-select:none;" title="Faded buses = last-known position (GPS quiet a while). Click to hide them.">
+      <span id="staleIcon">📡</span><span id="staleText">Last-known shown</span>
     </div>
     <div class="badge badge-blue" id="locateBadge" style="cursor:pointer;user-select:none;" title="Show my location (tap again to stop tracking)">
       <span id="locateIcon">📍</span><span id="locateText">Locate me</span>
@@ -522,8 +522,8 @@ let mapReady = false;
 let hoverTooltip = null;
 let trailMinutes = 60;
 let showRouteShapes = true;
-let showStale = false;      // stale signals hidden by default
-const STALE_THRESHOLD = 10; // minutes
+let showStale = true;       // show last-known (faded) buses by default
+const STALE_THRESHOLD = 30; // minutes — match the server retain window
 
 // ─── MAP INIT ─────────────────────────────────────────────────────────────────
 function initMap() {
@@ -1329,11 +1329,11 @@ function toggleStale() {
   if (showStale) {
     badge.className = 'badge badge-green';
     icon.textContent = '📡';
-    text.textContent = 'Stale shown';
+    text.textContent = 'Last-known shown';
   } else {
     badge.className = 'badge badge-yellow';
     icon.textContent = '👻';
-    text.textContent = 'Stale hidden';
+    text.textContent = 'Live only';
   }
   renderVehicleList();
   renderMarkers();
@@ -2178,10 +2178,12 @@ function renderMarkers() {
       // round's error measurement): fix + corrected velocity over one interval.
       m.predicted = stepLatLon(fix, measVel, m.gain * m.interval / 1000);
       m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather, v.name);
+      applyAgeOpacity(m.el, v);
       wire(m.el, v);
     } else {
       const el = document.createElement('div');
       el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather, v.name);
+      applyAgeOpacity(el, v);
       wire(el, v);
       const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(fix).addTo(map);
       markers[v.id] = {
@@ -2193,6 +2195,20 @@ function renderMarkers() {
   });
 
   startMarkerAnim();
+}
+
+// Fade a bus marker by how long since its last GPS fix: solid when live (≤5 min),
+// progressively more transparent as it goes stale, so you can still see where a
+// bus last was instead of it blinking off the map. Stale buses also stop moving
+// (no velocity), so the marker just rests at its last-known spot, dimmed.
+function applyAgeOpacity(el, v) {
+  const m = getAgeMinutes(v);
+  let opacity;
+  if (m <= 5) opacity = 1;
+  else if (m >= 30) opacity = 0.3;
+  else opacity = 1 - 0.7 * ((m - 5) / 25); // linear 1 → 0.3 between 5 and 30 min
+  el.style.opacity = opacity.toFixed(2);
+  el.style.transition = 'opacity .6s ease';
 }
 
 // Velocity (m/s, east/north components) implied by moving from a→b over dt sec.
