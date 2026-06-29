@@ -906,47 +906,70 @@ async function pollVehiclePositions() {
   vpTripMap = nextTrip;
 }
 
-// Authoritative position source: the single fleet /vehicles JSON. It is the
-// freshest and most complete list (GTFS-RT VehiclePositions lags it), includes
-// occupancy, and is one request. We attach route/trip context from the merged
-// vehicleTripMap (built from both RT feeds), so no live bus is ever dropped.
+// Authoritative position source: routes/{id}/vehicles, polled per active route.
+// Unlike the bare /vehicles roster (which carries NO speed/heading and is full
+// of years-stale entries), this endpoint returns real motion data — speed,
+// headingDegrees, patternId — and tells us the route for free. We poll every
+// route in parallel and dedupe; a bus reported on multiple routes keeps the
+// freshest reading. GTFS-RT feeds then enrich each bus with its active trip and
+// official stop predictions. This is what makes arrows point the right way,
+// ETAs work, and every running bus (e.g. route 2) actually appear.
+// Last good per-vehicle reading, so a single failed/empty upstream poll never
+// makes a bus vanish from the page (the rider in the rain keeps seeing it, just
+// aging). Kept until the GPS itself goes stale (VEHICLE_STALE_MS).
+const lastGoodVehicle = {}; // vehicleId -> built vehicle object
+
 async function pollFleet() {
-  let res;
-  try { res = await upstreamFetch('vehicles'); }
-  catch { dbRun(`INSERT INTO poll_log(ts,route_id,status,latency,count) VALUES(?,?,0,0,0)`, [Date.now(), 0]); return []; }
-  dbRun(`INSERT INTO poll_log(ts,route_id,status,latency,count) VALUES(?,?,?,?,?)`,
-    [Date.now(), 0, res.status, res.latency, 0]);
-  if (res.status !== 200) return [];
-  let fleet;
-  try { fleet = JSON.parse(res.body); } catch { return []; }
-  if (!Array.isArray(fleet)) return [];
-
   const ts = Date.now();
-  const vehicles = [];
-  fleet.forEach(raw => {
-    if (raw.lat == null || raw.lon == null) return;
-    // Drop buses outside Hawaiʻi County (parked elsewhere) or with stale GPS.
-    if (raw.lat < BBOX.minLat || raw.lat > BBOX.maxLat || raw.lon < BBOX.minLon || raw.lon > BBOX.maxLon) return;
-    const luMs = raw.lastUpdated ? parseFleetTs(raw.lastUpdated) : ts;
-    if ((ts - luMs) > VEHICLE_STALE_MS) return;
+  const byId = {}; // vehicleId -> raw reading (freshest wins)
 
+  const results = await Promise.all(ROUTES.map(async route => {
+    let res;
+    try { res = await upstreamFetch(`routes/${route.id}/vehicles`); }
+    catch { return { rid: route.id, status: 0, latency: 0, count: 0 }; }
+    let arr = [];
+    if (res.status === 200) { try { arr = JSON.parse(res.body); } catch {} }
+    if (!Array.isArray(arr)) arr = [];
+    return { rid: route.id, status: res.status, latency: res.latency, list: arr };
+  }));
+
+  results.forEach(r => {
+    const list = r.list || [];
+    list.forEach(raw => {
+      if (raw.lat == null || raw.lon == null) return;
+      if (raw.lat < BBOX.minLat || raw.lat > BBOX.maxLat || raw.lon < BBOX.minLon || raw.lon > BBOX.maxLon) return;
+      const luMs = raw.lastUpdated ? parseFleetTs(raw.lastUpdated) : ts;
+      if ((ts - luMs) > VEHICLE_STALE_MS) return; // only buses reporting in the last 5 min
+      const prev = byId[raw.id];
+      // Keep the reading from the route this bus is most freshly on; prefer one
+      // with real speed/heading if timestamps tie.
+      if (!prev || luMs > prev._luMs || (luMs === prev._luMs && (raw.speed || 0) > (prev.speed || 0))) {
+        byId[raw.id] = Object.assign({}, raw, { _routeId: r.rid, _luMs: luMs });
+      }
+    });
+    dbRun(`INSERT INTO poll_log(ts,route_id,status,latency,count) VALUES(?,?,?,?,?)`,
+      [ts, r.rid, r.status, r.latency || 0, list.length]);
+  });
+
+  const vehicles = [];
+  Object.values(byId).forEach(raw => {
     const id = raw.id;
-    // Prefer the TripUpdates-derived active trip; fall back to VehiclePositions.
+    const luMs = raw._luMs;
+    // Route is authoritative from the endpoint we found the bus on.
+    const routeId = raw._routeId;
+    const route = ROUTE_MAP[routeId];
+    // Active trip + official predictions come from the RT feeds (best-effort).
     const tripId = (vehicleTripMap[id] && vehicleTripMap[id].tripId) || vpTripMap[id] || null;
     const ti = tripId ? tripRouteIndex[tripId] : null;
-    // Route from the RT trip mapping; otherwise infer from nearest route shape
-    // so a bus the feeds didn't map still shows on its route, not "unknown".
-    const routeId = ti ? ti.routeId : inferRouteByShape(raw.lat, raw.lon);
-    const routeInferred = !ti && routeId != null;
-    const route = ROUTE_MAP[routeId];
+    // Heading: prefer the GTFS-RT bearing (smoothed), else the endpoint's value.
     const brg = vpBearing[id] && (ts - vpBearing[id].ts) < VEHICLE_STALE_MS ? vpBearing[id].bearing
               : (raw.headingDegrees != null ? Math.round(raw.headingDegrees) : null);
     const v = {
       id, name: raw.name || String(id),
       lat: raw.lat, lon: raw.lon,
-      speed: raw.speed != null ? raw.speed : null,   // fleet JSON speed is already mph
+      speed: raw.speed != null ? raw.speed : null,   // mph
       headingDegrees: brg,
-      heading: raw.heading || null,
+      heading: raw.heading || null,                  // cardinal label (N/NE/…)
       passengerLoad: raw.passengerLoad != null ? raw.passengerLoad : 0,
       capacity: raw.capacity != null ? raw.capacity : null,
       shapeDistanceTraveled: raw.shapeDistanceTraveled || 0,
@@ -958,7 +981,7 @@ async function pollFleet() {
       vehicleTs: luMs,
       lastUpdated: new Date(luMs).toISOString(),
       routeId,
-      routeInferred,               // route is a nearest-shape guess, not from the feed
+      routeInferred: false,        // route now comes straight from the endpoint
       routeName: route ? route.name : 'Not in service',
       routeShort: route ? route.short : '?',
       routeColor: route ? route.color : '#8b949e',
@@ -969,16 +992,30 @@ async function pollFleet() {
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [ts, v.id, v.name, routeId, v.patternId, v.lat, v.lon, v.speed,
        v.heading, v.headingDegrees, v.passengerLoad, v.capacity, v.shapeDistanceTraveled, tripId]);
+
+    lastGoodVehicle[id] = v;
   });
+
+  // Resilience: re-include any bus we saw recently but that dropped out of this
+  // cycle (transient upstream hiccup) as long as its GPS is still fresh. The
+  // page keeps showing it — flagged stale: true so the UI can dim/age it —
+  // instead of flickering it off and on.
+  const seen = new Set(vehicles.map(v => v.id));
+  Object.values(lastGoodVehicle).forEach(v => {
+    if (seen.has(v.id)) return;
+    if ((ts - v.vehicleTs) > VEHICLE_STALE_MS) { delete lastGoodVehicle[v.id]; return; }
+    vehicles.push(Object.assign({}, v, { stale: true }));
+  });
+
   return vehicles;
 }
 
-// Fleet /vehicles lastUpdated has no timezone suffix and runs on Hawaiʻi local
-// time (HST, UTC-10). Parse it as HST → epoch ms.
+// routes/{id}/vehicles lastUpdated is ISO-8601 with a "Z" (UTC). Date.parse
+// handles it directly; the bare /vehicles roster used HST without a suffix, but
+// we no longer read that endpoint.
 function parseFleetTs(s) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/.exec(s);
-  if (!m) return Date.now();
-  return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] + 10, +m[5], +m[6]);
+  const t = Date.parse(s);
+  return Number.isNaN(t) ? Date.now() : t;
 }
 
 // Called after each poll — detect when a bus has moved past a stop
@@ -1452,36 +1489,43 @@ async function handleApi(url, res) {
 
     if (officialNext) {
       nextStop = officialNext;
-    } else if (sorted.length >= 2) {
-      const c0 = sorted[0], c1 = sorted[1];
-      if (Math.abs(c0.seq - c1.seq) === 1) {
-        nextStop = c0.seq > c1.seq ? c0 : c1;
+    } else {
+      // No agency feed for this trip — derive the next stop from geometry +
+      // sequence so we never highlight a stop the bus hasn't reached. Stops are
+      // ordered by seq. Find the nearest stop, then decide whether the bus has
+      // already passed it (closer to its successor) or is still approaching it.
+      // "Next" is the first stop in sequence at or ahead of the bus's progress.
+      const bySeq = [...stopETAs].sort((a, b) => a.seq - b.seq);
+      // Index of the geometrically nearest stop within the seq-ordered list.
+      let nearIdx = 0, nearDist = Infinity;
+      bySeq.forEach((s, i) => { if (s.distKm < nearDist) { nearDist = s.distKm; nearIdx = i; } });
+      const near = bySeq[nearIdx];
+      const prev = bySeq[nearIdx - 1];
+      const succ = bySeq[nearIdx + 1];
+      // Have we passed `near`? We have if we're now closer to its successor than
+      // the successor is to `near` minus our distance — i.e. projecting our
+      // position onto the near→succ segment puts us past `near`. Simple, robust
+      // proxy: compare distance-to-prev vs distance-to-succ.
+      let next;
+      if (succ && (!prev || (prev && near.distKm > 0.05))) {
+        // If we're closer to the successor's side, the bus has passed `near`.
+        const dSucc = succ ? succ.distKm : Infinity;
+        const dPrev = prev ? prev.distKm : Infinity;
+        if (dSucc < dPrev && near.distKm > 0.08) next = succ; else next = near;
       } else {
-        // Non-adjacent — use the last stop this vehicle actually arrived at
-        const lastIdx = vehicleLastStopIdx[vid];
-        let lastSeq = lastIdx && lastIdx.stopSeq != null ? lastIdx.stopSeq : null;
-        // If no live tracking, look at recent DB arrival history
-        if (lastSeq == null) {
-          const lastArr = dbGet(
-            `SELECT stop_seq FROM stop_arrivals WHERE vehicle_id=? ORDER BY ts DESC LIMIT 1`,
-            [vid]
-          );
-          if (lastArr && lastArr.stop_seq != null) lastSeq = lastArr.stop_seq;
-        }
-        if (lastSeq != null) {
-          // Pick the closest stop that is ahead in sequence (with wrap-around)
-          let bestAhead = null, bestBehind = null;
-          for (const s of stopETAs) {
-            if (s.seq > lastSeq) {
-              if (!bestAhead || s.distKm < bestAhead.distKm) bestAhead = s;
-            } else {
-              if (!bestBehind || s.distKm < bestBehind.distKm) bestBehind = s;
-            }
-          }
-          // If we've looped past the end, take the closest behind as the next stop
-          nextStop = bestAhead || bestBehind || sorted[0];
-        }
+        next = near;
       }
+      // Honour the last stop we actually recorded an arrival at, if more advanced.
+      const lastArr = dbGet(
+        `SELECT stop_seq FROM stop_arrivals WHERE vehicle_id=? ORDER BY ts DESC LIMIT 1`, [vid]);
+      const lastSeq = (vehicleLastStopIdx[vid] && vehicleLastStopIdx[vid].stopSeq != null)
+        ? vehicleLastStopIdx[vid].stopSeq
+        : (lastArr && lastArr.stop_seq != null ? lastArr.stop_seq : null);
+      if (lastSeq != null && next.seq <= lastSeq) {
+        const ahead = bySeq.find(s => s.seq > lastSeq);
+        if (ahead) next = ahead;
+      }
+      nextStop = next || sorted[0];
     }
 
     // ── GTFS scheduled times ──────────────────────────────────────────────────

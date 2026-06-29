@@ -715,6 +715,7 @@ async function fetchAll() {
     prevStaleIds.clear();
     nowStaleIds.forEach(id => prevStaleIds.add(id));
 
+    fetchFailCount = 0;
     setApiStatus(allVehicles.length > 0 ? 'ok' : 'partial');
     const vcount = visibleVehicles().length;
     document.getElementById('vehicleCountText').textContent = `${vcount} bus${vcount !== 1 ? 'es' : ''}`;
@@ -728,10 +729,16 @@ async function fetchAll() {
     resetCountdown();
   } catch (e) {
     console.error('[fetchAll]', e);
-    setApiStatus('error');
+    // Don't strobe red on a single transient hiccup — one failed poll on a flaky
+    // connection shouldn't alarm a rider at the stop. Show "Reconnecting…" and
+    // only escalate to a hard error after several consecutive failures. The map
+    // keeps showing the last-known buses the whole time.
+    fetchFailCount++;
+    setApiStatus(fetchFailCount >= 3 ? 'error' : 'partial');
     resetCountdown();
   }
 }
+let fetchFailCount = 0;
 
 async function fetchTrails() {
   try {
@@ -1056,11 +1063,10 @@ function renderRouteShapes() {
   if (!mapReady) return;
   buildRouteMetaFromVehicles();
 
-  // Build set of route IDs that have at least one vehicle reporting (regardless
-  // of staleness — even a stale bus proves the route is real and on the map).
-  const activeRouteIds = new Set(allVehicles.map(v => v.routeId));
-
-  // Decode all visible route shapes, deduplicated per route_id (pick first pattern)
+  // Decode every route shape, deduplicated per route_id (pick first pattern).
+  // We render ALL routes — not just ones with a live bus — so a rider in
+  // Pepeʻekeo or on Saddle Road can see where the route goes even when no bus
+  // is currently out. The Routes tab toggles control visibility per route.
   const routeCoords = {}; // routeId -> coords (first pattern only)
   const routeMeta = {};   // routeId -> { color, name }
   const seen = new Set();
@@ -1069,7 +1075,6 @@ function renderRouteShapes() {
   routeShapes.forEach(s => {
     if (!s.shape || seen.has(s.route_id)) return;
     if (routeVisible[s.route_id] === false) return;
-    if (!activeRouteIds.has(s.route_id)) return; // skip routes with no active bus
     seen.add(s.route_id);
     try {
       const coords = decodePolyline(s.shape);
@@ -1107,9 +1112,13 @@ function renderRouteShapes() {
       id: layId, type: 'line', source: srcId,
       paint: {
         'line-color': color,
-        'line-width': 3,
-        'line-opacity': 0.75,
-        'line-offset': offset
+        // Thin when zoomed out (so overlapping routes don't smear into a blob),
+        // thicker as you zoom in for tappability.
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.2, 11, 2, 14, 3.5, 17, 5],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.6, 12, 0.8],
+        // Lateral parallel-line offset only kicks in once zoomed in enough to
+        // see the separation; at low zoom routes collapse onto the road cleanly.
+        'line-offset': ['interpolate', ['linear'], ['zoom'], 11, 0, 14, offset, 17, offset * 1.6]
       },
       layout: { 'line-join': 'round', 'line-cap': 'round' }
     }, 'stops-circle'); // insert below stops layer
@@ -1212,7 +1221,7 @@ function setApiStatus(state) {
   badge.className = 'badge';
   dot.className = 'pulse';
   if (state === 'ok') { badge.classList.add('badge-green'); dot.classList.add('pulse-green'); text.textContent = 'Live'; }
-  else if (state === 'partial') { badge.classList.add('badge-yellow'); dot.classList.add('pulse-yellow'); text.textContent = 'Partial'; }
+  else if (state === 'partial') { badge.classList.add('badge-yellow'); dot.classList.add('pulse-yellow'); text.textContent = fetchFailCount > 0 ? 'Reconnecting…' : 'No buses out'; }
   else if (state === 'error') { badge.classList.add('badge-red'); dot.classList.add('pulse-red'); text.textContent = 'Error'; }
   else { badge.classList.add('badge-blue'); dot.classList.add('pulse-green'); text.textContent = 'Fetching…'; }
 }
@@ -1845,6 +1854,20 @@ function weatherEmoji(code, isDay) {
   if (code >= 95) return '⛈️';
   return '🌡️';
 }
+// WMO weather code → short human label.
+function weatherLabel(code) {
+  if (code == null) return '—';
+  if (code === 0) return 'Clear';
+  if (code <= 2) return 'Partly cloudy';
+  if (code === 3) return 'Overcast';
+  if (code === 45 || code === 48) return 'Fog';
+  if (code >= 51 && code <= 57) return 'Drizzle';
+  if (code >= 61 && code <= 67) return 'Rain';
+  if (code >= 71 && code <= 77) return 'Snow';
+  if (code >= 80 && code <= 82) return 'Showers';
+  if (code >= 95) return 'Thunderstorm';
+  return 'Mixed';
+}
 
 function makeBusIcon(color, label, heading, load, weather) {
   // Non-rotating weather badge sits above the bus (outside the rotating SVG so
@@ -1980,6 +2003,11 @@ function showBusTooltip(v, x, y) {
       <div style="color:#8b949e;font-size:9px;text-transform:uppercase;margin-bottom:2px;">Dist along route shape</div>
       <div style="font-size:11px;">${v.shapeDistanceTraveled?.toFixed(0) ?? '—'} m</div>
     </div>
+    ${v.weather ? `<div style="background:#0d1117;border-radius:6px;padding:6px 8px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
+      <div><div style="color:#8b949e;font-size:10px;text-transform:uppercase;">Weather here</div>
+      <div style="font-size:13px;font-weight:600;margin-top:2px;">${weatherEmoji(v.weather.code, v.weather.isDay)} ${weatherLabel(v.weather.code)}</div></div>
+      <div style="font-size:20px;font-weight:800;">${Math.round(v.weather.tempF)}°<span style="font-size:11px;color:#8b949e;">F</span></div>
+    </div>` : ''}
     <div style="display:flex;align-items:center;gap:6px;color:${ageColor};font-size:11px;margin-top:4px;">
       <span>⏱ Last GPS: <strong>${stalenessLabel(v)}</strong></span>
     </div>
@@ -2031,26 +2059,44 @@ function renderMarkers() {
     }
 
     const loadFrac = loadFraction(v);
+    // Speed in m/s (feed gives mph) and bearing for dead-reckoning projection.
+    const speedMps = (v.speed || 0) * 0.44704;
+    const heading = v.headingDegrees;
     if (markers[v.id]) {
       const m = markers[v.id];
-      // Smooth motion: animate from the marker's current rendered position to
-      // the new GPS fix over roughly one poll interval instead of snapping.
+      // The new GPS fix is the anchor we dead-reckon forward from. Ease from the
+      // marker's currently-rendered (projected) spot to the fix so the
+      // correction is smooth, then continue projecting along heading at speed.
       const cur = m.marker.getLngLat();
-      m.from = [cur.lng, cur.lat];
-      m.to = [v.lon, v.lat];
-      m.animStart = performance.now();
-      m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees, loadFrac, v.weather);
+      m.correctFrom = [cur.lng, cur.lat];
+      m.anchor = [v.lon, v.lat];
+      m.anchorTime = performance.now();
+      m.speedMps = speedMps;
+      m.heading = heading;
+      m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather);
       wire(m.el, v);
     } else {
       const el = document.createElement('div');
-      el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees, loadFrac, v.weather);
+      el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather);
       wire(el, v);
       const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([v.lon, v.lat]).addTo(map);
-      markers[v.id] = { marker, el, from: [v.lon, v.lat], to: [v.lon, v.lat], animStart: 0 };
+      markers[v.id] = { marker, el, correctFrom: [v.lon, v.lat], anchor: [v.lon, v.lat],
+                        anchorTime: performance.now(), speedMps, heading };
     }
   });
 
   startMarkerAnim();
+}
+
+// Project a [lon,lat] forward `meters` along a compass `bearing` (deg).
+// Equirectangular step — accurate enough at the few-hundred-metre scale a bus
+// covers between polls.
+function projectForward(lon, lat, bearing, meters) {
+  if (bearing == null || !meters) return [lon, lat];
+  const R = 6371000, br = bearing * Math.PI / 180, latR = lat * Math.PI / 180;
+  const dLat = (meters * Math.cos(br)) / R;
+  const dLon = (meters * Math.sin(br)) / (R * Math.cos(latR));
+  return [lon + dLon * 180 / Math.PI, lat + dLat * 180 / Math.PI];
 }
 
 // Normalize occupancy to a 0..1 fraction regardless of whether the feed gives
@@ -2066,20 +2112,33 @@ function loadFraction(v) {
 // the latest fix. Runs only while at least one marker is mid-transition, then
 // stops itself to save battery.
 let markerAnimRAF = null;
-const MARKER_ANIM_MS = 1400; // ease duration per fix; < poll interval
+const CORRECT_MS = 900;          // ease the snap-to-fix correction over this long
+const DEAD_RECKON_CAP_MS = 22000; // stop projecting after this (poll interval + buffer)
 function startMarkerAnim() {
   if (markerAnimRAF) return;
   const tick = (now) => {
     let anyMoving = false;
     for (const id in markers) {
       const m = markers[id];
-      if (!m.to) continue;
-      const t = m.animStart ? Math.min(1, (now - m.animStart) / MARKER_ANIM_MS) : 1;
-      const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // easeInOutQuad
-      const lng = m.from[0] + (m.to[0] - m.from[0]) * e;
-      const lat = m.from[1] + (m.to[1] - m.from[1]) * e;
+      if (!m.anchor) continue;
+      const elapsed = now - m.anchorTime;
+      // Dead reckoning: where the bus *should* be now if it kept going from its
+      // last fix at its last speed/heading. This makes motion look continuous
+      // and real-time between 15 s polls instead of one slide on each update.
+      const projMeters = m.speedMps ? m.speedMps * (Math.min(elapsed, DEAD_RECKON_CAP_MS) / 1000) : 0;
+      const [plon, plat] = projectForward(m.anchor[0], m.anchor[1], m.heading, projMeters);
+      // For the first CORRECT_MS, blend from where the marker was (correctFrom)
+      // to the projected target so the GPS correction doesn't jump.
+      let lng = plon, lat = plat;
+      if (elapsed < CORRECT_MS && m.correctFrom) {
+        const t = elapsed / CORRECT_MS;
+        const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // easeInOutQuad
+        lng = m.correctFrom[0] + (plon - m.correctFrom[0]) * e;
+        lat = m.correctFrom[1] + (plat - m.correctFrom[1]) * e;
+      }
       m.marker.setLngLat([lng, lat]);
-      if (t < 1) anyMoving = true;
+      // Keep animating while correcting OR while the bus is moving and not yet capped.
+      if (elapsed < CORRECT_MS || (m.speedMps > 0.3 && elapsed < DEAD_RECKON_CAP_MS)) anyMoving = true;
     }
     if (anyMoving && !document.hidden) { markerAnimRAF = requestAnimationFrame(tick); }
     else { markerAnimRAF = null; }

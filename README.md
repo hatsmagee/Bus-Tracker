@@ -6,8 +6,9 @@ entirely on your own machine — no cloud dependency, no API hammering.
 
 ## What it does
 
-- **Whole-fleet live positions** from the County's GTFS-realtime feed, on a
-  MapLibre map, color-coded by route, with smooth interpolation between updates
+- **Whole-fleet live positions** (per-route vehicle endpoint, with real speed +
+  heading), on a MapLibre map, color-coded by route, with dead-reckoning motion
+  so buses glide along their heading between polls instead of jumping
 - **Official predicted arrivals** from the GTFS-realtime TripUpdates feed as the
   headline ETA, with a transformer learning a correction on top
 - **Schedule adherence** (ahead/behind) with a sanity guard against bad matches
@@ -32,9 +33,11 @@ entirely on your own machine — no cloud dependency, no API hammering.
              │ HTTP /api/* (every 15s)
 ┌────────────▼────────────────────────────────────────────┐
 │ Node.js server (heleon-server.js)                       │
-│   - GTFS-realtime: VehiclePositions + TripUpdates       │
-│     (decoded by gtfs-rt.js, no protobuf dependency)     │
-│   - Fleet /vehicles JSON for complete positions+load    │
+│   - Positions from routes/{id}/vehicles (per route) —   │
+│     real speed + heading + route; resilient last-known  │
+│     cache so a bus never blinks out on a hiccup         │
+│   - GTFS-realtime: VehiclePositions + TripUpdates for   │
+│     active trip + official ETAs (gtfs-rt.js, no dep)    │
 │   - Transformer ETA correction model (online SGD)       │
 │   - Static GTFS loader (trips/stop_times/stops)         │
 │   - Open-Meteo weather (batched, cached)                │
