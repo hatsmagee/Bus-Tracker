@@ -588,10 +588,15 @@ function initMap() {
     map.addControl(new maplibregl.NavigationControl(), 'top-left');
     map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
   } catch (e) { console.error('[map] addControl:', e); }
+  window.map = map; // expose for debugging / console tooling
   map.on('load', () => {
     mapReady = true;
     try { initMapLayers(); } catch (e) { console.error('[map] layers:', e); }
     try { renderMarkers(); } catch (e) { console.error('[map] markers:', e); }
+    // Stops/shapes may have been fetched before the style finished loading;
+    // (re)render them now that the layers exist.
+    try { renderStopMarkers(); } catch (e) { console.error('[map] stops:', e); }
+    try { renderRouteShapes(); } catch (e) { console.error('[map] shapes:', e); }
   });
   map.on('error', (e) => {
     // Suppress known MapLibre v4 bugs about listener arrays
@@ -809,6 +814,13 @@ async function fetchTrails() {
   } catch(e) {}
 }
 
+// Upstream colors arrive sometimes as "FFCC99", sometimes "#FFCC99" — coerce
+// to a single leading hash so MapLibre doesn't choke on "##FFCC99".
+function normalizeColor(c) {
+  if (!c) return null;
+  return '#' + String(c).replace(/^#+/, '');
+}
+
 async function fetchShapes() {
   try {
     const res = await fetch('/api/shapes');
@@ -821,7 +833,7 @@ async function fetchShapes() {
         ROUTES_META[s.route_id] = {
           name: s.name || known?.name || `Route ${s.route_id}`,
           short: known?.short || String(s.route_id),
-          color: known?.color || (s.color ? `#${s.color}` : '#888')
+          color: known?.color || normalizeColor(s.color) || '#888'
         };
         if (known) ROUTE_COLOR_MAP[s.route_id] = known.color;
       }
@@ -1136,7 +1148,7 @@ function renderRouteShapes() {
       routeCoords[s.route_id] = coords;
       routeShapeCoords[s.route_id] = coords;
       // Always prefer our curated route colors over the API pattern colors (which can be #FFFFFF etc.)
-      routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || s.color || '#888', name: s.name };
+      routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || normalizeColor(s.color) || '#888', name: s.name };
     } catch(e) {}
   });
 
@@ -1784,7 +1796,7 @@ function renderRouteList() {
   // Get route meta
   const routeMeta = {};
   allVehicles.forEach(v => routeMeta[v.routeId] = { name: v.routeName, short: v.routeShort, color: v.routeColor });
-  routeShapes.forEach(s => { if (!routeMeta[s.route_id]) routeMeta[s.route_id] = { name: s.name||'Route '+s.route_id, short: String(s.route_id), color: s.color||'#888' }; });
+  routeShapes.forEach(s => { if (!routeMeta[s.route_id]) routeMeta[s.route_id] = { name: s.name||'Route '+s.route_id, short: String(s.route_id), color: normalizeColor(s.color)||'#888' }; });
 
   el.innerHTML = Object.entries(routeMeta).map(([rid, meta]) => {
     const n = counts[rid] || 0;
