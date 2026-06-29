@@ -552,6 +552,7 @@ function initMap() {
     // Stops/shapes may have been fetched before the style finished loading;
     // (re)render them now that the layers exist.
     try { renderStopMarkers(); } catch (e) { console.error('[map] stops:', e); }
+    try { renderLearnedStops(); } catch (e) {}
     try { renderRouteShapes(); } catch (e) { console.error('[map] shapes:', e); }
   });
   // Re-fan overlapping buses whenever the camera settles (overlap is zoom/pan
@@ -611,7 +612,7 @@ function initMapLayers() {
     // White halo so the route-coloured chevrons pop on any basemap.
     paint: {
       'icon-color': ['get', 'color'], 'icon-opacity': 1,
-      'icon-halo-color': '#ffffff', 'icon-halo-width': 1.6
+      'icon-halo-color': '#ffffff', 'icon-halo-width': 2.6
     }
   });
 
@@ -642,6 +643,21 @@ function initMapLayers() {
     },
     paint: { 'text-color': '#e6edf3', 'text-halo-color': '#0d1117', 'text-halo-width': 1.8 }
   });
+
+  // Learned (observed) stops — places buses repeatedly dwell that aren't an
+  // official stop. Distinct HOLLOW marker so it's clearly "observed, not
+  // published". Drawn under the official stops.
+  map.addSource('learned-stops', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'learned-stops-circle', type: 'circle', source: 'learned-stops',
+    minzoom: 12,
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 4, 15, 7, 17, 9],
+      'circle-color': 'rgba(0,0,0,0)',                 // hollow
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#d29922',                // amber ring = observed
+      'circle-opacity': 1
+    }
+  }, 'stops-circle');
 
   // Stop hover + click tooltip — hover for desktop, click/tap for mobile.
   let stopHoverPopup = null;
@@ -674,6 +690,20 @@ function initMapLayers() {
       openStopPopup(e.lngLat, e.features[0].properties);
       stopHoverPopup && (stopHoverPopup._pinned = true);
     });
+  });
+
+  // Learned-stop popup: explain it's observed, not official.
+  map.on('mouseenter', 'learned-stops-circle', () => { map.getCanvas().style.cursor = 'pointer'; });
+  map.on('mouseleave', 'learned-stops-circle', () => { map.getCanvas().style.cursor = ''; });
+  map.on('click', 'learned-stops-circle', e => {
+    const p = e.features[0].properties;
+    new maplibregl.Popup({ offset: 12, maxWidth: '260px' })
+      .setLngLat(e.lngLat)
+      .setHTML(`<div style="font-family:system-ui;font-size:12px;color:#e6edf3;">
+        <div style="font-weight:700;color:#d29922;margin-bottom:4px;">⊙ Observed stop</div>
+        Buses on this route repeatedly stop here, but it isn't an official
+        published stop. Seen on <b>${p.days}</b> days across <b>${p.runs}</b> runs.</div>`)
+      .addTo(map);
   });
 }
 
@@ -831,6 +861,25 @@ async function fetchAllStops() {
     allStops = await res.json();
     renderStopMarkers();
   } catch(e) {}
+}
+
+// Learned/observed stops (places buses repeatedly dwell that aren't official).
+let learnedStops = [];
+async function fetchLearnedStops() {
+  try {
+    learnedStops = await (await fetch('/api/learned-stops')).json();
+    renderLearnedStops();
+  } catch(e) {}
+}
+function renderLearnedStops() {
+  if (!mapReady) return;
+  const src = map.getSource('learned-stops');
+  if (!src) return;
+  const features = learnedStops
+    .filter(s => routeVisible[s.route_id] !== false)
+    .map(s => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+      properties: { route_id: s.route_id, days: s.days, runs: s.runs } }));
+  src.setData({ type: 'FeatureCollection', features });
 }
 
 function fmtEta(min) {
@@ -1125,10 +1174,10 @@ function doublebackLimit(rc, start, maxM) {
 // separated (not a super-fine thread) when zoomed out and tighten when zoomed in.
 function chevronSpacingM() {
   const z = map.getZoom();
-  // ~300 m apart at z11, ~30 m at z16+. Roughly constant on-screen spacing.
-  if (z <= 11) return 300;
-  if (z >= 16) return 30;
-  return 300 * Math.pow(0.5, (z - 11) / 1.0); // halve per zoom level
+  // Slightly fewer chevrons: a bit more space between them at every zoom.
+  if (z <= 11) return 420;
+  if (z >= 16) return 45;
+  return 420 * Math.pow(0.5, (z - 11) / 1.0); // halve per zoom level
 }
 // Emit a chevron every (zoom-scaled) spacing of route-distance, walking forward
 // from the bus's LIVE animated distance (getStart) + phase. Position and bearing
@@ -3025,6 +3074,7 @@ Promise.all([
   fetchShapes(),
   fetchAll(),
   fetchAllStops(),
+  fetchLearnedStops(),
   fetchGtfsStops(),
   fetchTrails(),
 ]).then(() => fetchStoplines());

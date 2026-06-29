@@ -1248,6 +1248,91 @@ function calcETAs(vehicle, stops) {
   }).sort((a, b) => a.distKm - b.distKm).slice(0, 8);
 }
 
+// ─── LEARNED ROUTE / STOPS (from observed GPS) ──────────────────────────────
+// Snap a lat/lon to a ~`m`-metre grid cell key.
+function cellKey(lat, lon, m) {
+  const dLat = m / 111320, dLon = m / (111320 * Math.cos(lat * Math.PI / 180));
+  return `${Math.round(lat / dLat)},${Math.round(lon / dLon)}`;
+}
+function cellCenter(key, m) {
+  const [a, b] = key.split(',').map(Number);
+  const lat = a * (m / 111320);
+  const lon = b * (m / (111320 * Math.cos(lat * Math.PI / 180)));
+  return [lon, lat];
+}
+
+// De-facto stops: cells where buses repeatedly DWELL across many distinct runs.
+// A single red-light pause is one run at that cell; a real stop recurs across
+// many runs (different vehicle-days). We also require it be away from any
+// official stop (>80 m) so we only surface stops riders don't already see.
+const LEARN_STOP_CELL_M = 35;
+const LEARN_STOP_MIN_DAYS = 3;        // must recur on ≥3 distinct calendar days
+const LEARN_STOP_MIN_RUNS = 4;        // …across ≥4 vehicle-days (runs)
+const OFFICIAL_NEAR_M = 80;
+function learnStops(routeId) {
+  const since = Date.now() - PINGS_RETAIN_MS;
+  const where = routeId ? `route_id=? AND` : '';
+  const params = routeId ? [routeId, since] : [since];
+  // Stopped (or crawling) pings only.
+  const rows = dbAll(
+    `SELECT vehicle_id, ts, lat, lon, route_id FROM pings
+     WHERE ${where} speed <= 2 AND ts > ?`, params);
+  const cells = {}; // cellKey -> { runs:Set, days:Set, perVeh:{}, route_id, n }
+  rows.forEach(r => {
+    const day = Math.floor(r.ts / 86400000);
+    const key = cellKey(r.lat, r.lon, LEARN_STOP_CELL_M);
+    const c = cells[key] || (cells[key] = { runs: new Set(), days: new Set(), perVeh: {}, route_id: r.route_id, n: 0 });
+    c.runs.add(r.vehicle_id + '|' + day);
+    c.days.add(day);
+    c.perVeh[r.vehicle_id] = (c.perVeh[r.vehicle_id] || 0) + 1;
+    c.n++;
+  });
+  const officials = dbAll(`SELECT lat, lon FROM stops`);
+  const out = [];
+  for (const key in cells) {
+    const c = cells[key];
+    // Recurrence gates: many separate runs AND across several distinct days, so
+    // a one-off pause or a single bad-luck red light never qualifies.
+    if (c.runs.size < LEARN_STOP_MIN_RUNS || c.days.size < LEARN_STOP_MIN_DAYS) continue;
+    // Yard filter: a real rider stop is a BRIEF dwell (bus pauses, then goes).
+    // A yard / transit center is a long park — huge sample counts per run. If the
+    // average dwell per run is very high (≫ a normal stop), it's parking, skip it.
+    const avgPerRun = c.n / c.runs.size;
+    if (avgPerRun > 40) continue; // ~40 polls ≈ 10 min sitting → not a stop
+    if (c.n > 2000) continue;     // absolute guard against the big yards
+    const [lon, lat] = cellCenter(key, LEARN_STOP_CELL_M);
+    if (officials.some(o => haversineKm(lat, lon, o.lat, o.lon) * 1000 < OFFICIAL_NEAR_M)) continue;
+    out.push({ lat, lon, runs: c.runs.size, days: c.days.size, samples: c.n, route_id: c.route_id });
+  }
+  out.sort((a, b) => b.runs - a.runs);
+  return out.slice(0, 300);
+}
+
+// Learned travel corridor for a route: the set of grid cells its buses actually
+// drive through often (incl. detours the GTFS shape omits), as point centers the
+// frontend can use to aim the direction chevrons along the real path.
+const LEARN_PATH_CELL_M = 30;
+const LEARN_PATH_MIN_RUNS = 3;
+function learnCorridor(routeId) {
+  if (!routeId) return [];
+  const since = Date.now() - PINGS_RETAIN_MS;
+  const rows = dbAll(
+    `SELECT vehicle_id, ts, lat, lon FROM pings WHERE route_id=? AND ts > ?`, [routeId, since]);
+  const cellRuns = {};
+  rows.forEach(r => {
+    const key = cellKey(r.lat, r.lon, LEARN_PATH_CELL_M);
+    const runId = r.vehicle_id + '|' + Math.floor(r.ts / 86400000);
+    (cellRuns[key] = cellRuns[key] || new Set()).add(runId);
+  });
+  const cells = [];
+  for (const key in cellRuns) {
+    if (cellRuns[key].size < LEARN_PATH_MIN_RUNS) continue;
+    const [lon, lat] = cellCenter(key, LEARN_PATH_CELL_M);
+    cells.push({ lat, lon, runs: cellRuns[key].size });
+  }
+  return cells;
+}
+
 // ─── HTTP SERVER ──────────────────────────────────────────────────────────────
 const MIME = { '.html':'text/html', '.js':'application/javascript', '.css':'text/css', '.ico':'image/x-icon' };
 
@@ -1336,6 +1421,21 @@ async function handleApi(url, res) {
     fleet.sort((a, b) => (rank[a.status] - rank[b.status]) || ((a.ageMin ?? 1e9) - (b.ageMin ?? 1e9)));
     const counts = fleet.reduce((m, f) => { m[f.status] = (m[f.status] || 0) + 1; return m; }, {});
     return json(res, { ts: now, total: fleet.length, counts, fleet });
+  }
+
+  // ── Learned, real-world data from observed GPS history ───────────────────
+  // De-facto stops: places a route's buses REPEATEDLY dwell, across many
+  // separate runs (so a one-off pause or a red light doesn't count), and that
+  // aren't already an official stop. Returned for a distinct "observed stop"
+  // marker on the map.
+  if (p === '/api/learned-stops') {
+    return json(res, learnStops(q.get('route_id') ? parseInt(q.get('route_id')) : null));
+  }
+  // Learned travel corridor: the high-traffic grid cells a route's buses
+  // actually drive through (incl. neighborhood detours not in the GTFS shape).
+  // The frontend uses this to aim the direction chevrons the way buses really go.
+  if (p === '/api/learned-path') {
+    return json(res, learnCorridor(q.get('route_id') ? parseInt(q.get('route_id')) : null));
   }
 
   if (p === '/api/trails') {
