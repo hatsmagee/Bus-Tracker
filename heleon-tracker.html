@@ -1076,8 +1076,13 @@ function renderRouteShapes() {
     if (routeVisible[s.route_id] === false) return;
     seen.add(s.route_id);
     try {
-      const coords = decodePolyline(s.shape);
+      let coords = decodePolyline(s.shape);
       if (coords.length < 2) return;
+      // GTFS shapes pack many near-duplicate vertices; those micro-segments are
+      // what make MapLibre's line-offset fan out / overshoot at corners. A light
+      // Douglas–Peucker simplify removes them so offset corners stay clean,
+      // while the path still follows the road. (~10 m tolerance.)
+      coords = simplifyPath(coords, 0.0001);
       routeCoords[s.route_id] = coords;
       routeShapeCoords[s.route_id] = coords;
       // Always prefer our curated route colors over the API pattern colors (which can be #FFFFFF etc.)
@@ -1100,7 +1105,7 @@ function renderRouteShapes() {
   // geometry (which runs along the real roads). A small pixel offset nudges
   // routes that share a road apart so they don't perfectly overlap; round joins
   // keep corners clean. No dashes — just colored roads.
-  const LINE_SPACING = 4; // px between adjacent parallel routes
+  const LINE_SPACING = 3; // px between adjacent parallel routes (small total width)
   for (const [rid, coords] of Object.entries(routeCoords)) {
     const { color } = routeMeta[rid];
     const og = offsets[rid] || { slot: 0 };
@@ -1116,11 +1121,13 @@ function renderRouteShapes() {
       id: layId, type: 'line', source: srcId,
       paint: {
         'line-color': color,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.4, 11, 2.2, 14, 3.5, 17, 5],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.4, 11, 2.2, 14, 3, 17, 4],
         'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.85, 12, 0.95],
-        'line-offset': ['interpolate', ['linear'], ['zoom'], 10, offset * 0.7, 14, offset, 17, offset * 1.4]
+        // Keep the offset modest at all zooms — large offsets are what make
+        // MapLibre's line-offset overshoot at corners.
+        'line-offset': ['interpolate', ['linear'], ['zoom'], 10, offset * 0.6, 14, offset, 17, offset * 1.2]
       },
-      layout: { 'line-join': 'round', 'line-cap': 'round' }
+      layout: { 'line-join': 'round', 'line-cap': 'round', 'line-round-limit': 1.05 }
     }, 'stops-circle'); // insert below stops layer
 
     routeLayerIds.push(layId);
@@ -1198,6 +1205,38 @@ function renderTrails() {
 }
 
 // ─── POLYLINE DECODER ─────────────────────────────────────────────────────────
+// Douglas–Peucker simplification of a [lon,lat] polyline. `tol` is in degrees
+// (~0.0001° ≈ 11 m). Removes near-collinear/near-duplicate vertices so offset
+// rendering doesn't fan out at corners.
+function simplifyPath(pts, tol) {
+  if (pts.length < 3) return pts;
+  const sqTol = tol * tol;
+  const keep = new Array(pts.length).fill(false);
+  keep[0] = keep[pts.length - 1] = true;
+  const stack = [[0, pts.length - 1]];
+  const segDistSq = (p, a, b) => {
+    let x = a[0], y = a[1], dx = b[0] - x, dy = b[1] - y;
+    if (dx || dy) {
+      const t = ((p[0] - x) * dx + (p[1] - y) * dy) / (dx * dx + dy * dy);
+      if (t > 1) { x = b[0]; y = b[1]; } else if (t > 0) { x += dx * t; y += dy * t; }
+    }
+    dx = p[0] - x; dy = p[1] - y; return dx * dx + dy * dy;
+  };
+  while (stack.length) {
+    const [first, last] = stack.pop();
+    let maxSq = 0, idx = -1;
+    for (let i = first + 1; i < last; i++) {
+      const d = segDistSq(pts[i], pts[first], pts[last]);
+      if (d > maxSq) { maxSq = d; idx = i; }
+    }
+    if (maxSq > sqTol && idx !== -1) {
+      keep[idx] = true;
+      stack.push([first, idx], [idx, last]);
+    }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+
 function decodePolyline(encoded) {
   const coords = [];
   let index = 0, lat = 0, lng = 0;
