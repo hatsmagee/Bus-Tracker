@@ -37,29 +37,33 @@ const POLL_INTERVAL = 15000; // GTFS-RT refreshes ~every 15-30s; lighter on band
 const DB_SAVE_INTERVAL = 30000;
 const UPSTREAM = 'myheleonbus.org';
 
+// Colors chosen to be dark and saturated enough to read on the light basemap,
+// and mutually distinct (no two routes share a hue). The old palette was full
+// of pale pastels (lavender, peach, pale green/blue) that vanished on the map
+// and several near-duplicates. These are a hand-tuned dark categorical set.
 const ROUTES = [
-  { id: 5600, name: '10 KAU HILO',              short: '10',  color: '#E36C09' },
-  { id: 5602, name: '102 INTRA HILO KAUMANA',   short: '102', color: '#5F497A' },
-  { id: 5603, name: '103 INTRA HILO WAIAKEA UKA',short:'103', color: '#4BACC6' },
-  { id: 5604, name: '101 INTRA HILO KEAUKAHA',  short: '101', color: '#CCC0D9' },
-  { id: 5606, name: '70 NORTH KOHALA S. KOHALA', short: '70', color: '#C2D69B' },
-  { id: 5613, name: '1 HILO KONA',               short: '1',  color: '#FFCC99' },
-  { id: 5615, name: '201 KONA TROLLEY',          short: '201',color: '#FF00FF' },
-  { id: 5704, name: '2 BLUELINE HILO KONA',      short: '2',  color: '#0000FF' },
-  { id: 5709, name: '11 REDLINE HILO VOLCANO',   short: '11', color: '#FF0000' },
-  { id: 5724, name: '40 PAHOA',                  short: '40', color: '#548DD4' },
-  { id: 5725, name: '60 HILO WAIMEA',            short: '60', color: '#76923C' },
-  { id: 5728, name: '75 N. KOHALA WAIKOLOA KONA',short: '75', color: '#C2D69B' },
-  { id: 5729, name: '76 GREENLINE HONOKAA KONA', short: '76', color: '#00B050' },
-  { id: 5730, name: '80 HILO S. KOHALA RESORTS', short: '80', color: '#E5B8B7' },
-  { id: 5745, name: '90 PAHALA S. KOHALA RESORTS',short:'90', color: '#D99694' },
-  { id: 5748, name: '104 INTRA HILO MOHOULI',   short: '104', color: '#FFC000' },
-  { id: 5750, name: '202 CENTRAL KAILUA-KONA',  short: '202', color: '#F79646' },
-  { id: 5756, name: '402 HAWAIIAN PARADISE PARK',short:'402', color: '#92CDDC' },
-  { id: 5759, name: '403 FERN ACRES',           short: '403', color: '#B8CCE4' },
-  { id: 5821, name: '12 VOLCANO TO OCEANVIEW',  short: '12',  color: '#FF6666' },
-  { id: 5824, name: '203 NORTH KAILUA-KONA',    short: '203', color: '#E26B0A' },
-  { id: 5982, name: '504 KEALAKEKUA KONA TRIPPER',short:'504',color: '#948A54' },
+  { id: 5600, name: '10 KAU HILO',              short: '10',  color: '#B5460F' }, // burnt orange
+  { id: 5602, name: '102 INTRA HILO KAUMANA',   short: '102', color: '#5B2C8D' }, // deep violet
+  { id: 5603, name: '103 INTRA HILO WAIAKEA UKA',short:'103', color: '#0E7C86' }, // teal
+  { id: 5604, name: '101 INTRA HILO KEAUKAHA',  short: '101', color: '#9C27B0' }, // magenta-purple
+  { id: 5606, name: '70 NORTH KOHALA S. KOHALA', short: '70', color: '#3E7A1E' }, // forest green
+  { id: 5613, name: '1 HILO KONA',               short: '1',  color: '#8A5A00' }, // bronze
+  { id: 5615, name: '201 KONA TROLLEY',          short: '201',color: '#C2148C' }, // dark pink
+  { id: 5704, name: '2 BLUELINE HILO KONA',      short: '2',  color: '#1539C4' }, // strong blue
+  { id: 5709, name: '11 REDLINE HILO VOLCANO',   short: '11', color: '#C81E1E' }, // strong red
+  { id: 5724, name: '40 PAHOA',                  short: '40', color: '#2563A8' }, // steel blue
+  { id: 5725, name: '60 HILO WAIMEA',            short: '60', color: '#5E7A0F' }, // olive
+  { id: 5728, name: '75 N. KOHALA WAIKOLOA KONA',short: '75', color: '#0F8A6B' }, // sea green
+  { id: 5729, name: '76 GREENLINE HONOKAA KONA', short: '76', color: '#1B7A3D' }, // green
+  { id: 5730, name: '80 HILO S. KOHALA RESORTS', short: '80', color: '#A11D5B' }, // raspberry
+  { id: 5745, name: '90 PAHALA S. KOHALA RESORTS',short:'90', color: '#8E3B1E' }, // brick
+  { id: 5748, name: '104 INTRA HILO MOHOULI',   short: '104', color: '#9E7A00' }, // dark gold
+  { id: 5750, name: '202 CENTRAL KAILUA-KONA',  short: '202', color: '#C75A00' }, // pumpkin
+  { id: 5756, name: '402 HAWAIIAN PARADISE PARK',short:'402', color: '#1C6E9E' }, // ocean blue
+  { id: 5759, name: '403 FERN ACRES',           short: '403', color: '#3F51B5' }, // indigo
+  { id: 5821, name: '12 VOLCANO TO OCEANVIEW',  short: '12',  color: '#D11A4B' }, // crimson-pink
+  { id: 5824, name: '203 NORTH KAILUA-KONA',    short: '203', color: '#7A4A12' }, // coffee
+  { id: 5982, name: '504 KEALAKEKUA KONA TRIPPER',short:'504',color: '#4A6B1E' }, // moss
 ];
 const ROUTE_MAP = Object.fromEntries(ROUTES.map(r => [r.id, r]));
 
@@ -1263,6 +1267,9 @@ async function handleApi(url, res) {
 
   if (p === '/api/shapes') {
     const rows = dbAll(`SELECT route_id, pattern_id, name, direction, color, shape FROM route_shapes`);
+    // Always serve our curated dark/distinct palette, not the upstream pattern
+    // colors (which include pale pastels and #FFFFFF that vanish on the map).
+    rows.forEach(r => { if (ROUTE_MAP[r.route_id]) r.color = ROUTE_MAP[r.route_id].color; });
     return json(res, rows);
   }
 

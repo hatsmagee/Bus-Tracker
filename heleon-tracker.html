@@ -1115,7 +1115,7 @@ function renderRouteShapes() {
         // Thin when zoomed out (so overlapping routes don't smear into a blob),
         // thicker as you zoom in for tappability.
         'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.2, 11, 2, 14, 3.5, 17, 5],
-        'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.6, 12, 0.8],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.75, 12, 0.92],
         // Lateral parallel-line offset only kicks in once zoomed in enough to
         // see the separation; at low zoom routes collapse onto the road cleanly.
         'line-offset': ['interpolate', ['linear'], ['zoom'], 11, 0, 14, offset, 17, offset * 1.6]
