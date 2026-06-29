@@ -998,17 +998,6 @@ function computeRouteOffsets(routeCoordMap) {
   return assigned;
 }
 
-// Distinct dash patterns so overlapping routes read as different even where the
-// pixel offset puts them close together (e.g. zoomed out). Index 0 is solid.
-const DASH_PATTERNS = [
-  null,        // solid
-  [3, 2],      // dashed
-  [1, 1.5],    // dotted
-  [5, 2, 1, 2],// dash-dot
-  [2, 3],      // sparse dash
-  [6, 2],      // long dash
-];
-
 let routeLayerIds = [];  // MapLibre layer IDs
 let routeSourceIds = []; // MapLibre source IDs
 
@@ -1107,19 +1096,15 @@ function renderRouteShapes() {
 
   if (!showRouteShapes) return;
 
-  // One source+layer per route. We use MapLibre's paint `line-offset` (it
-  // zoom-scales cleanly and round joins keep corners smooth — no hand-rolled
-  // geometry spikes), and additionally give each route in an overlap group a
-  // distinct DASH pattern. The dashes are what let you tell stacked routes apart
-  // even zoomed out, where the small pixel offset alone isn't enough.
+  // One solid colored line per route, following the agency's actual route
+  // geometry (which runs along the real roads). A small pixel offset nudges
+  // routes that share a road apart so they don't perfectly overlap; round joins
+  // keep corners clean. No dashes — just colored roads.
   const LINE_SPACING = 4; // px between adjacent parallel routes
   for (const [rid, coords] of Object.entries(routeCoords)) {
     const { color } = routeMeta[rid];
-    const og = offsets[rid] || { slot: 0, groupSize: 1 };
-    const offset = og.slot * LINE_SPACING;
-    // Assign a dash pattern by slot within the group (solid for ungrouped/center).
-    const dashIdx = og.groupSize > 1 ? (Math.round(og.slot + (og.groupSize - 1) / 2) % DASH_PATTERNS.length) : 0;
-    const dash = DASH_PATTERNS[dashIdx];
+    const og = offsets[rid] || { slot: 0 };
+    const offset = (og.slot || 0) * LINE_SPACING;
     const srcId = `route-${rid}`;
     const layId = `route-line-${rid}`;
 
@@ -1127,16 +1112,14 @@ function renderRouteShapes() {
       type: 'geojson',
       data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} }
     });
-    const paint = {
-      'line-color': color,
-      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.4, 11, 2.2, 14, 3.5, 17, 5],
-      'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.85, 12, 0.95],
-      'line-offset': ['interpolate', ['linear'], ['zoom'], 10, offset * 0.7, 14, offset, 17, offset * 1.4]
-    };
-    if (dash) paint['line-dasharray'] = dash;
     map.addLayer({
       id: layId, type: 'line', source: srcId,
-      paint,
+      paint: {
+        'line-color': color,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.4, 11, 2.2, 14, 3.5, 17, 5],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.85, 12, 0.95],
+        'line-offset': ['interpolate', ['linear'], ['zoom'], 10, offset * 0.7, 14, offset, 17, offset * 1.4]
+      },
       layout: { 'line-join': 'round', 'line-cap': 'round' }
     }, 'stops-circle'); // insert below stops layer
 
