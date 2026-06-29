@@ -1869,13 +1869,19 @@ function weatherLabel(code) {
   return 'Mixed';
 }
 
-function makeBusIcon(color, label, heading, load, weather) {
+function makeBusIcon(color, label, heading, load, weather, busNo) {
   // Non-rotating weather badge sits above the bus (outside the rotating SVG so
   // the symbol stays upright as the bus turns).
   const wx = weather ? weatherEmoji(weather.code, weather.isDay) : '';
   const weatherBadge = wx ? `<div style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);
       font-size:13px;line-height:1;pointer-events:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.5));"
       title="${weather.tempF}°F">${wx}</div>` : '';
+  // Upright bus-number badge so two buses on the SAME route are distinguishable
+  // (the big rotated label is the route; this small tag is the vehicle number).
+  const numBadge = busNo ? `<div style="position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);
+      background:#0d1117;color:#e6edf3;border:1px solid rgba(255,255,255,.4);border-radius:7px;
+      padding:0 4px;font-size:9px;font-weight:700;line-height:13px;pointer-events:none;white-space:nowrap;
+      filter:drop-shadow(0 1px 1px rgba(0,0,0,.5));">#${busNo}</div>` : '';
   const tc  = isLight(color) ? '#111' : '#fff';
   const shd = isLight(color) ? 'rgba(0,0,0,.35)' : 'rgba(0,0,0,.6)';
   // Occupancy: 3 segments light up based on load (0..1)
@@ -1935,6 +1941,7 @@ function makeBusIcon(color, label, heading, load, weather) {
 
     </svg>
     </div>
+    ${numBadge}
   </div>`;
 }
 
@@ -2073,11 +2080,11 @@ function renderMarkers() {
       m.anchorTime = performance.now();
       m.speedMps = speedMps;
       m.heading = heading;
-      m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather);
+      m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather, v.name);
       wire(m.el, v);
     } else {
       const el = document.createElement('div');
-      el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather);
+      el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather, v.name);
       wire(el, v);
       const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([v.lon, v.lat]).addTo(map);
       markers[v.id] = { marker, el, correctFrom: [v.lon, v.lat], anchor: [v.lon, v.lat],
