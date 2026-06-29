@@ -1059,6 +1059,9 @@ function renderAheadArrows() {
                     properties: { color: v.routeColor } });
   });
   src.setData({ type: 'FeatureCollection', features });
+  // The per-route line layers are (re)added above these, so lift the ahead
+  // layers back to the top each time or the golden arrows hide under the routes.
+  ['ahead-glow', 'ahead-line', 'ahead-arrows'].forEach(id => { if (map.getLayer(id)) map.moveLayer(id); });
   startAheadAnim();
 }
 
@@ -2011,12 +2014,6 @@ function makeBusIcon(color, label, heading, load, weather, busNo) {
       <rect x="2"  y="38" width="4" height="7" rx="1.5" fill="#111" stroke="#444" stroke-width=".7"/>
       <rect x="22" y="38" width="4" height="7" rx="1.5" fill="#111" stroke="#444" stroke-width=".7"/>
 
-      <!-- ── Route label — rotated to run front→back along the bus length ── -->
-      <text transform="translate(14,30) rotate(-90)"
-            text-anchor="middle" dominant-baseline="middle"
-            font-family="system-ui,sans-serif" font-size="10" font-weight="900"
-            fill="${tc}" letter-spacing="0.5">${label}</text>
-
       <!-- ── Occupancy indicator (3 little segments at the rear, glowing green/yellow/red) ── -->
       <g>
         <rect x="8"  y="48.5" width="3" height="2" rx="0.5" fill="${segs[0] ? occColor : 'rgba(255,255,255,.25)'}"/>
@@ -2026,6 +2023,10 @@ function makeBusIcon(color, label, heading, load, weather, busNo) {
 
     </svg>
     </div>
+    <!-- Route label — OUTSIDE the rotating div so it stays upright at any heading -->
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+      pointer-events:none;font-family:system-ui,sans-serif;font-size:10px;font-weight:900;
+      letter-spacing:.3px;color:${tc};text-shadow:0 1px 2px ${shd};">${label}</div>
     ${numBadge}
   </div>`;
 }
@@ -2204,6 +2205,9 @@ function renderMarkers() {
   });
 
   startMarkerAnim();
+  // Refresh the golden direction arrows each poll so they follow the buses as
+  // they move (renderRouteShapes is now skipped on most polls by its guard).
+  renderAheadArrows();
 }
 
 // Fade a bus marker by how long since its last GPS fix: solid when live (≤5 min),

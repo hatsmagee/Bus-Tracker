@@ -1601,6 +1601,17 @@ async function handleApi(url, res) {
       }
     }
 
+    // Sanity-check the official next-stop against geometry: if the feed's pick is
+    // far from the bus but a stop at the same-or-lower trip sequence is much
+    // closer, the bus hasn't actually reached the feed's pick yet — prefer the
+    // nearer earlier-sequence stop. Guards against the feed dropping just-passed
+    // stops so the highlight jumps several stops ahead of the bus.
+    if (officialNext) {
+      const nearer = stopETAs.filter(s => s.seq <= officialNext.seq && s.distKm + 0.3 < officialNext.distKm)
+                             .sort((a, b) => a.distKm - b.distKm)[0];
+      if (nearer && officialNext.distKm > 0.6) officialNext = nearer;
+    }
+
     if (officialNext) {
       nextStop = officialNext;
     } else {
