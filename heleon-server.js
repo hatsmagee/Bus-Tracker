@@ -436,6 +436,49 @@ function upstreamFetch(apiPath) {
   });
 }
 
+// ─── WEATHER (Open-Meteo — free, no API key) ───────────────────────────────
+// Big Island microclimates vary wildly (rainy Hilo vs sunny Kona), so we fetch
+// current conditions at each active bus's location. Done server-side and cached
+// ~10 min so it's one shared request, not per-client (saves mobile battery/data).
+let weatherByVehicle = {}; // vehicleId -> { tempF, code, isDay, ts }
+let weatherLastFetch = 0;
+const WEATHER_TTL_MS = 10 * 60 * 1000;
+
+function fetchJson(host, reqPath) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({ hostname: host, path: reqPath, method: 'GET',
+      headers: { 'User-Agent': 'heleon-tracker' }, timeout: 10000 }, res => {
+      let b = ''; res.on('data', d => b += d);
+      res.on('end', () => { try { resolve(JSON.parse(b)); } catch (e) { reject(e); } });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.end();
+  });
+}
+
+async function refreshWeather() {
+  const now = Date.now();
+  if (now - weatherLastFetch < WEATHER_TTL_MS) return;
+  const buses = latestVehicles.filter(v => v.lat != null && v.lon != null);
+  if (!buses.length) return;
+  weatherLastFetch = now;
+  const lats = buses.map(v => v.lat.toFixed(3)).join(',');
+  const lons = buses.map(v => v.lon.toFixed(3)).join(',');
+  try {
+    const path = `/v1/forecast?latitude=${lats}&longitude=${lons}` +
+                 `&current=temperature_2m,weather_code,is_day&temperature_unit=fahrenheit`;
+    let data = await fetchJson('api.open-meteo.com', path);
+    if (!Array.isArray(data)) data = [data]; // single point isn't wrapped in an array
+    const next = {};
+    buses.forEach((v, i) => {
+      const cur = data[i] && data[i].current;
+      if (cur) next[v.id] = { tempF: Math.round(cur.temperature_2m), code: cur.weather_code, isDay: !!cur.is_day, ts: now };
+    });
+    weatherByVehicle = next;
+  } catch (e) { /* weather is best-effort; keep last good values */ }
+}
+
 // Fetch a binary body (GTFS-RT protobuf) from the upstream host.
 function fetchBinary(reqPath) {
   return new Promise((resolve, reject) => {
@@ -1018,6 +1061,9 @@ async function pollAll() {
   ]);
   const vehicles = await pollFleet().catch(() => []);
   latestVehicles = vehicles;
+  // Attach cached microclimate weather + refresh it in the background.
+  latestVehicles.forEach(v => { v.weather = weatherByVehicle[v.id] || null; });
+  refreshWeather().catch(() => {});
   // Detect stop arrivals for each active vehicle
   latestVehicles.forEach(v => {
     if (v.routeId) { try { detectArrivals(v, v.routeId); } catch(e) {} }

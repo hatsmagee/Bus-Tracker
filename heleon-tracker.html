@@ -1906,7 +1906,28 @@ function renderApiLog(stats) {
 
 // ─── MAP MARKERS ─────────────────────────────────────────────────────────────
 // Top-down bus: narrow body, front points UP, label runs front→back along length.
-function makeBusIcon(color, label, heading, load) {
+// Map a WMO weather code → emoji. Night variants for clear/cloudy.
+function weatherEmoji(code, isDay) {
+  if (code == null) return '';
+  if (code === 0) return isDay ? '☀️' : '🌙';
+  if (code <= 2) return isDay ? '🌤️' : '☁️';
+  if (code === 3) return '☁️';
+  if (code === 45 || code === 48) return '🌫️';
+  if (code >= 51 && code <= 57) return '🌦️';
+  if (code >= 61 && code <= 67) return '🌧️';
+  if (code >= 71 && code <= 77) return '🌨️';
+  if (code >= 80 && code <= 82) return '🌧️';
+  if (code >= 95) return '⛈️';
+  return '🌡️';
+}
+
+function makeBusIcon(color, label, heading, load, weather) {
+  // Non-rotating weather badge sits above the bus (outside the rotating SVG so
+  // the symbol stays upright as the bus turns).
+  const wx = weather ? weatherEmoji(weather.code, weather.isDay) : '';
+  const weatherBadge = wx ? `<div style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);
+      font-size:13px;line-height:1;pointer-events:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.5));"
+      title="${weather.tempF}°F">${wx}</div>` : '';
   const tc  = isLight(color) ? '#111' : '#fff';
   const shd = isLight(color) ? 'rgba(0,0,0,.35)' : 'rgba(0,0,0,.6)';
   // Occupancy: 3 segments light up based on load (0..1)
@@ -1914,7 +1935,10 @@ function makeBusIcon(color, label, heading, load) {
   const occColor = l < 0.5 ? '#3fb950' : l < 0.8 ? '#d29922' : '#f85149';
   const segs = [0, 1, 2].map(i => l > (i + 1) / 3 - 0.05);
   // Canvas 28 wide × 58 tall. Body occupies x:6–22, y:10–52.
-  return `<div style="
+  // Outer wrapper stays upright (holds the weather badge); inner div rotates.
+  return `<div style="position:relative;width:28px;height:58px;">
+    ${weatherBadge}
+    <div class="bus-rot" style="
       width:28px; height:58px;
       cursor:pointer;
       transform:rotate(${heading}deg);
@@ -1962,6 +1986,7 @@ function makeBusIcon(color, label, heading, load) {
       </g>
 
     </svg>
+    </div>
   </div>`;
 }
 
@@ -2067,7 +2092,7 @@ function renderMarkers() {
     if (routeVisible[v.routeId] === false || isNaN(v.lat) || isNaN(v.lon)) return;
 
     function wire(el, vdata) {
-      const inner = el.firstChild; // the rotating div
+      const inner = el.querySelector('.bus-rot') || el.firstChild; // the rotating div
       inner.onclick = () => selectVehicle(vdata.id);
       inner.onmouseenter = e => {
         showBusTooltip(vdata, e.clientX, e.clientY);
@@ -2089,11 +2114,11 @@ function renderMarkers() {
       m.from = [cur.lng, cur.lat];
       m.to = [v.lon, v.lat];
       m.animStart = performance.now();
-      m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees, loadFrac);
+      m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees, loadFrac, v.weather);
       wire(m.el, v);
     } else {
       const el = document.createElement('div');
-      el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees, loadFrac);
+      el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees, loadFrac, v.weather);
       wire(el, v);
       const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([v.lon, v.lat]).addTo(map);
       markers[v.id] = { marker, el, from: [v.lon, v.lat], to: [v.lon, v.lat], animStart: 0 };
