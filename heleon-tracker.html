@@ -586,32 +586,30 @@ function initMapLayers() {
     map.addImage('busstop', makeStopIcon(), { pixelRatio: 2 });
   }
   if (!map.hasImage('chevron')) {
-    map.addImage('chevron', makeChevronIcon(), { pixelRatio: 2 });
+    map.addImage('chevron', makeChevronIcon(), { pixelRatio: 2, sdf: true });
   }
 
-  // "Where the bus is going" — one shared source holding each active bus's
-  // forward route segment. A glowing line plus chevron arrows that point along
-  // the path show direction of travel; the dash animation conveys flow.
+  // "Where the bus is going" — each chevron is its own POINT feature placed on
+  // the route centerline ahead of the bus, with an explicit bearing so it points
+  // exactly along travel direction. The chevron is an SDF icon so icon-color can
+  // tint it to the route's colour. Animating the sampling offset marches them all
+  // forward together (a flowing stream). Source data is rebuilt each frame.
   map.addSource('ahead', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-  map.addLayer({ id: 'ahead-glow', type: 'line', source: 'ahead',
-    paint: { 'line-color': '#ffd34d', 'line-width': 10, 'line-opacity': 0.16, 'line-blur': 4 },
-    layout: { 'line-cap': 'round', 'line-join': 'round' }
-  });
-  // Faint guide line — the bold chevrons are the star, so keep this subtle.
-  map.addLayer({ id: 'ahead-line', type: 'line', source: 'ahead',
-    paint: { 'line-color': '#ffcc33', 'line-width': 2, 'line-opacity': 0.35 },
-    layout: { 'line-cap': 'round', 'line-join': 'round' }
-  });
   map.addLayer({ id: 'ahead-arrows', type: 'symbol', source: 'ahead',
     layout: {
-      'symbol-placement': 'line',
-      // Small, densely-packed chevrons that stream along the route.
-      'symbol-spacing': 22,
       'icon-image': 'chevron',
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.32, 14, 0.45, 17, 0.6],
-      'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map'
+      // Substantial, roughly constant on-screen size (pairs with the fixed-size
+      // bus marker). Slightly bigger now for legibility.
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.75, 14, 0.7, 17, 0.62],
+      'icon-rotate': ['get', 'bearing'],          // per-chevron heading along the road
+      'icon-rotation-alignment': 'map',
+      'icon-allow-overlap': true, 'icon-ignore-placement': true,
     },
-    paint: { 'icon-opacity': 1 }
+    // White halo so the route-coloured chevrons pop on any basemap.
+    paint: {
+      'icon-color': ['get', 'color'], 'icon-opacity': 1,
+      'icon-halo-color': '#ffffff', 'icon-halo-width': 1.6
+    }
   });
 
   // Stop markers layer.
@@ -700,28 +698,18 @@ function makeStopIcon() {
   return x.getImageData(0, 0, s, s);
 }
 
-// Bold, glowing forward chevron for the "where it's going" arrows — like a
-// boost-pad arrow: bright yellow, fat, with a dark outline + glow. Drawn with
-// its APEX pointing DOWN; with symbol-placement:line MapLibre aligns the icon's
-// up-axis to the line's forward (travel) direction, so an apex-down chevron
-// points the way the bus is going.
+// Forward chevron as an SDF alpha mask (white on transparent) so MapLibre's
+// icon-color can tint it to each route's colour. Drawn with its APEX pointing UP
+// (north); each chevron's icon-rotate is set to the road bearing so the apex
+// points along the direction of travel.
 function makeChevronIcon() {
   const s = 48, c = document.createElement('canvas');
   c.width = s; c.height = s;
   const x = c.getContext('2d');
   x.lineCap = 'round'; x.lineJoin = 'round';
-  // apex at bottom (y=34), arms up at y=15 → chevron points DOWN
-  const chevron = () => { x.beginPath(); x.moveTo(9, 15); x.lineTo(24, 34); x.lineTo(39, 15); x.stroke(); };
-  // outer glow
-  x.shadowColor = 'rgba(255,210,40,0.9)'; x.shadowBlur = 8;
-  x.strokeStyle = '#1a1200'; x.lineWidth = 13; chevron();
-  x.shadowBlur = 0;
-  // dark outline
-  x.strokeStyle = '#1a1200'; x.lineWidth = 12; chevron();
-  // bright yellow fill
-  x.strokeStyle = '#ffd21a'; x.lineWidth = 7; chevron();
-  // hot highlight core
-  x.strokeStyle = '#fff6c0'; x.lineWidth = 2.5; chevron();
+  // apex at top (y=14), arms down at y=33 → points UP (rotate=0 ⇒ north)
+  x.strokeStyle = '#ffffff'; x.lineWidth = 9;
+  x.beginPath(); x.moveTo(9, 33); x.lineTo(24, 14); x.lineTo(39, 33); x.stroke();
   return x.getImageData(0, 0, s, s);
 }
 
@@ -1053,7 +1041,8 @@ let routeShapeCoords = {}; // routeId -> [[lon,lat], ...]
 // shape ahead of its current position and draw it as one feature in the shared
 // `ahead` source. Chevron arrows (symbol-placement:line) point along it and the
 // dash animates to convey flow. One source/3 layers total — cheap and elegant.
-let aheadSegments = []; // full forward paths (in travel direction) for animation
+// Each entry: { coords:[[lon,lat]…] in travel direction starting at the bus, color }
+let aheadSegments = [];
 function renderAheadArrows() {
   if (!mapReady) return;
   const src = map.getSource('ahead');
@@ -1061,36 +1050,44 @@ function renderAheadArrows() {
   aheadSegments = [];
   const visible = visibleVehicles().filter(v => routeVisible[v.routeId] !== false);
   visible.forEach(v => {
-    const coords = routeShapeCoords[v.routeId];
-    if (!coords || coords.length < 2) return;
-    // Nearest shape vertex to the bus's GPS fix.
-    let bestIdx = 0, bestKm = Infinity;
-    for (let i = 0; i < coords.length; i++) {
-      const d = haversineKm(v.lat, v.lon, coords[i][1], coords[i][0]);
-      if (d < bestKm) { bestKm = d; bestIdx = i; }
-    }
-    if (bestKm > 0.5) return; // bus too far off its shape — skip
-    // Build the segment in the bus's ACTUAL travel direction. The shape is a
-    // single digitized line; the bus may run it forwards or backwards. Pick the
-    // direction (forward/back along the shape) whose bearing matches the bus
-    // heading, so the chevrons always point the way the bus is going.
-    const fwd = coords.slice(bestIdx, Math.min(coords.length, bestIdx + 30));
-    const back = coords.slice(Math.max(0, bestIdx - 29), bestIdx + 1).reverse();
-    let seg = fwd;
-    if (v.headingDegrees != null) {
-      const bFwd = fwd.length > 1 ? bearingDeg(fwd[0], fwd[Math.min(5, fwd.length - 1)]) : null;
-      const bBack = back.length > 1 ? bearingDeg(back[0], back[Math.min(5, back.length - 1)]) : null;
-      const diff = (a) => a == null ? 999 : Math.abs(((a - v.headingDegrees + 540) % 360) - 180);
-      if (diff(bBack) < diff(bFwd)) seg = back; // bus runs the shape in reverse
-    }
-    if (seg.length < 2) return;
-    aheadSegments.push({ coords: seg });
+    const m = markers[v.id];
+    // Anchor the chevrons to the bus's ANIMATED position on the route (m.curDist
+    // along m.rc), not the raw GPS fix — so they flow smoothly from where the bus
+    // icon actually is. Off-route buses (no m.rc) get no chevrons.
+    if (!m || !m.rc) return;
+    const rc = m.rc, total = rc.total;
+    const start = m.curDist;
+    // Project ahead up to AHEAD_MAX_M, but stop early if the route doubles back
+    // near a stretch we'd already be drawing — otherwise chevrons would overlap
+    // going both ways on the same road. Once the bus passes the fold (start moves
+    // past it), the limit opens back up and chevrons project further again.
+    const end = doublebackLimit(rc, start, AHEAD_MAX_M);
+    if (end - start < 5) return;
+    aheadSegments.push({ rc, start, end, color: v.routeColor || '#ffd21a',
+                         getStart: () => markers[v.id] && markers[v.id].rc === rc ? markers[v.id].curDist : start });
   });
   drawAheadAt(0);
-  // The per-route line layers are (re)added above these, so lift the ahead
-  // layers back to the top each time or the golden arrows hide under the routes.
-  ['ahead-glow', 'ahead-line', 'ahead-arrows'].forEach(id => { if (map.getLayer(id)) map.moveLayer(id); });
+  if (map.getLayer('ahead-arrows')) map.moveLayer('ahead-arrows'); // keep above route lines
   startAheadAnim();
+}
+
+const AHEAD_MAX_M = 1200; // only show the next ~1.2 km of route ahead of the bus
+// Truncate a [lon,lat] path to at most `maxM` metres, interpolating the final
+// point. Keeps the chevron stream to a single forward leg.
+function capPathLength(coords, maxM) {
+  const out = [coords[0]];
+  let acc = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const segM = haversineKm(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]) * 1000;
+    if (acc + segM >= maxM) {
+      const t = (maxM - acc) / (segM || 1);
+      out.push([coords[i-1][0] + (coords[i][0] - coords[i-1][0]) * t,
+                coords[i-1][1] + (coords[i][1] - coords[i-1][1]) * t]);
+      return out;
+    }
+    out.push(coords[i]); acc += segM;
+  }
+  return out;
 }
 
 // Compass bearing (deg) from [lon,lat] a → b.
@@ -1101,47 +1098,68 @@ function bearingDeg(a, b) {
   const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
-// Trim `startM` metres off the front of a polyline (drops the leading portion,
-// interpolating the new first point). Used to march the evenly-spaced chevrons
-// forward so they appear to flow in the travel direction.
-function trimFront(coords, startM) {
-  if (startM <= 0) return coords;
-  let acc = 0;
-  for (let i = 1; i < coords.length; i++) {
-    const segM = haversineKm(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]) * 1000;
-    if (acc + segM >= startM) {
-      const t = (startM - acc) / (segM || 1);
-      const lng = coords[i-1][0] + (coords[i][0] - coords[i-1][0]) * t;
-      const lat = coords[i-1][1] + (coords[i][1] - coords[i-1][1]) * t;
-      return [[lng, lat], ...coords.slice(i)];
-    }
-    acc += segM;
+
+// How far ahead to draw chevrons, stopping early if the route folds back near a
+// stretch already covered (so we don't draw both directions on the same road).
+// Returns the cap distance; opens back up once the bus passes the fold.
+function doublebackLimit(rc, start, maxM) {
+  const startPos = posAtDist(rc, start);
+  const hardEnd = Math.min(rc.total, start + maxM);
+  const step = 25; // sample the forward path every 25 m
+  let prevFar = false;
+  for (let d = start + step; d <= hardEnd; d += step) {
+    const p = posAtDist(rc, d);
+    const distFromStart = haversineKm(startPos[1], startPos[0], p[1], p[0]) * 1000;
+    // Once we've gone reasonably far from the bus, watch for the path coming back
+    // close to the start point — that's the fold; cap just before it.
+    if (distFromStart > 150) prevFar = true;
+    if (prevFar && distFromStart < 80) return d - step;
   }
-  return coords.slice(-2);
+  return hardEnd;
 }
-// Render the ahead segments with the chevron pattern shifted forward by phaseM.
+
+// Spacing between chevrons in METRES, scaled by zoom so they stay visually
+// separated (not a super-fine thread) when zoomed out and tighten when zoomed in.
+function chevronSpacingM() {
+  const z = map.getZoom();
+  // ~300 m apart at z11, ~30 m at z16+. Roughly constant on-screen spacing.
+  if (z <= 11) return 300;
+  if (z >= 16) return 30;
+  return 300 * Math.pow(0.5, (z - 11) / 1.0); // halve per zoom level
+}
+// Emit a chevron every (zoom-scaled) spacing of route-distance, walking forward
+// from the bus's LIVE animated distance (getStart) + phase. Position and bearing
+// come from the route polyline so chevrons sit on the centerline pointing along
+// travel, flowing from where the bus icon currently is (not the GPS fix).
 function drawAheadAt(phaseM) {
   const src = map.getSource('ahead');
   if (!src) return;
-  const features = aheadSegments.map(s => ({
-    type: 'Feature',
-    geometry: { type: 'LineString', coordinates: trimFront(s.coords, phaseM) },
-    properties: {},
-  }));
+  const spacing = chevronSpacingM();
+  const features = [];
+  for (const s of aheadSegments) {
+    const rc = s.rc;
+    const startD = (s.getStart ? s.getStart() : s.start);
+    const endD = s.end; // smart limit (shortens before a doubleback)
+    for (let d = startD + (phaseM % spacing); d < endD; d += spacing) {
+      const p = posAtDist(rc, d);
+      const p2 = posAtDist(rc, Math.min(rc.total, d + 6)); // tiny lookahead for bearing
+      features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: p },
+        properties: { bearing: bearingDeg(p, p2), color: s.color } });
+    }
+  }
   src.setData({ type: 'FeatureCollection', features });
 }
 
-// Marching-chevron flow: advance the trim offset each frame so the densely
-// spaced chevrons appear to stream forward along the route in travel direction.
+// Flow: advance the sampling offset each frame so every chevron streams forward
+// along the road together. Loops over one spacing so it's seamless.
 let aheadAnimRAF = null, aheadLastFrame = 0, aheadPhase = 0;
-const CHEVRON_SPACING_M = 25; // phase loop period (m) — kept short so wrap is seamless at dense spacing
 function startAheadAnim() {
   if (aheadAnimRAF) return;
   const tick = (now) => {
     if (!aheadSegments.length || document.hidden) { aheadAnimRAF = null; aheadLastFrame = 0; return; }
     const dt = aheadLastFrame ? (now - aheadLastFrame) / 1000 : 0.016;
     aheadLastFrame = now;
-    aheadPhase = (aheadPhase + 14 * dt) % CHEVRON_SPACING_M; // ~14 m/s flow, loops seamlessly
+    aheadPhase = (aheadPhase + 12 * dt) % chevronSpacingM(); // ~12 m/s flow, loops over current spacing
     drawAheadAt(aheadPhase);
     aheadAnimRAF = requestAnimationFrame(tick);
   };
