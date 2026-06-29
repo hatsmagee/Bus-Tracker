@@ -427,6 +427,10 @@
           of each bus along the road, showing where it's about to go. A
           <strong style="color:#e6edf3">weather symbol</strong> above each bus
           shows live conditions there, and the colored bar shows how full it is.
+          A soft <strong style="color:#d29922">amber/red glow</strong> marks
+          congestion — where a bus is crawling well below the normal speed for
+          that spot (inferred from our own GPS history, since no public
+          traffic-signal feed exists anywhere).
           The <strong style="color:#e6edf3">Fleet</strong> tab lists every bus the
           agency knows — live, idle, or dormant — with full telemetry.
         </div>
@@ -650,6 +654,17 @@ function initMapLayers() {
     paint: { 'text-color': '#e6edf3', 'text-halo-color': '#0d1117', 'text-halo-width': 1.8 }
   });
 
+  // Congestion (GPS-derived): a soft glow where a bus is crawling well below the
+  // typical speed for that spot. Our honest "traffic" signal — no public feed.
+  map.addSource('traffic', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'traffic-glow', type: 'circle', source: 'traffic',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 10, 14, 22, 17, 38],
+      'circle-color': ['match', ['get', 'severity'], 'heavy', '#f85149', '#d29922'],
+      'circle-opacity': 0.22, 'circle-blur': 0.8
+    }
+  });
+
   // Learned (observed) stops — places buses repeatedly dwell that aren't an
   // official stop. Distinct HOLLOW marker so it's clearly "observed, not
   // published". Drawn under the official stops.
@@ -798,6 +813,7 @@ async function fetchAll() {
     renderStatus();
     renderMarkers();
     renderRouteShapes();
+    fetchTraffic();
     resetCountdown();
   } catch (e) {
     console.error('[fetchAll]', e);
@@ -866,6 +882,17 @@ async function fetchAllStops() {
     const res = await fetch('/api/stops/all');
     allStops = await res.json();
     renderStopMarkers();
+  } catch(e) {}
+}
+
+// GPS-derived congestion glow.
+async function fetchTraffic() {
+  try {
+    const t = await (await fetch('/api/traffic')).json();
+    const src = map.getSource('traffic');
+    if (src) src.setData({ type: 'FeatureCollection',
+      features: t.map(c => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [c.lon, c.lat] },
+        properties: { severity: c.severity } })) });
   } catch(e) {}
 }
 
