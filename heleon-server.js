@@ -1583,17 +1583,16 @@ async function handleApi(url, res) {
     // ── Schedule adherence ────────────────────────────────────────────────────
     // Compare the predicted arrival at the next stop with its scheduled time.
     // delayMin > 0 = behind schedule (late); < 0 = ahead (early).
+    // Only trust schedule adherence when we know the bus's real trip AND the
+    // next-stop arrival is the agency's official prediction — otherwise the
+    // scheduled-time match is a guess and the delta is meaningless.
     let scheduleDelayMin = null, scheduleSuspect = false;
-    if (nextStop) {
-      const schedMs = nextStop.scheduledMs;
-      const predMin = nextStop.etaMin; // minutes from now until arrival
-      if (schedMs != null && predMin != null) {
-        const predictedArrivalMs = nowMs + predMin * 60000;
-        scheduleDelayMin = Math.round(((predictedArrivalMs - schedMs) / 60000) * 10) / 10;
-        // Sanity guard: a >2h discrepancy means trip/schedule matching is wrong,
-        // not that the bus is genuinely 2h late. Flag rather than display nonsense.
-        if (Math.abs(scheduleDelayMin) > 120) scheduleSuspect = true;
-      }
+    if (nextStop && v.tripId && !v.routeInferred &&
+        nextStop.scheduledMs != null && nextStop.etaMinOfficial != null) {
+      const predictedArrivalMs = nowMs + nextStop.etaMinOfficial * 60000;
+      scheduleDelayMin = Math.round(((predictedArrivalMs - nextStop.scheduledMs) / 60000) * 10) / 10;
+      // >2h means trip/schedule matching is wrong, not a genuinely late bus.
+      if (Math.abs(scheduleDelayMin) > 120) { scheduleSuspect = true; scheduleDelayMin = null; }
     }
 
     return json(res, {

@@ -339,11 +339,9 @@
   <div id="map"></div>
   <div class="sidebar" id="sidebar">
     <div class="tabs">
-      <div class="tab active" data-tab="vehicles">Vehicles</div>
-      <div class="tab" data-tab="routes">Routes</div>
-      <div class="tab" data-tab="learn">🧠 Learn</div>
-      <div class="tab" data-tab="status">Status</div>
-      <div class="tab" data-tab="api">API</div>
+      <div class="tab active" data-tab="vehicles">🚌 Buses</div>
+      <div class="tab" data-tab="routes">🗺️ Routes</div>
+      <div class="tab" data-tab="system">📊 System</div>
       <div class="tab" data-tab="docs">📚 Docs</div>
     </div>
 
@@ -375,7 +373,7 @@
       <div id="routeList"><div class="empty"><div class="empty-icon">🗺️</div>Loading…</div></div>
     </div>
 
-    <div class="tab-content" id="tab-status">
+    <div class="tab-content" id="tab-system">
       <div class="status-grid">
         <div class="stat-card"><div class="stat-label">Active Buses</div><div class="stat-value green" id="st-active">—</div><div class="stat-sub">GPS &lt;60min old</div></div>
         <div class="stat-card"><div class="stat-label">Stale Signals</div><div class="stat-value yellow" id="st-stale">—</div><div class="stat-sub">&gt;10 min old</div></div>
@@ -390,9 +388,11 @@
       <div id="fleetBreakdown" style="padding:8px 12px;display:flex;flex-direction:column;gap:6px;"></div>
       <div class="section-header" style="margin-top:4px;">Heading Distribution</div>
       <div id="headingDist" style="padding:8px 12px;display:flex;flex-wrap:wrap;gap:6px;"></div>
-    </div>
 
-    <div class="tab-content" id="tab-api">
+      <div class="section-header" style="margin-top:4px;">🧠 ETA Predictor</div>
+      <div id="learnInline" style="padding:0;"></div>
+
+      <div class="section-header" style="margin-top:4px;">📡 Upstream API Polling</div>
       <div class="api-section" id="apiLog"></div>
     </div>
 
@@ -477,61 +477,6 @@
           <code class="inline">Syncromatics</code> live API
         </div>
       </div>
-    </div>
-
-    <div class="tab-content" id="tab-learn">
-      <div class="learn-header">
-        <div class="learn-title">🧠 Sequence Predictor</div>
-        <div class="learn-sub">A small MLP that learns bus arrival patterns from GPS history. Trains itself every time a bus reaches a stop.</div>
-      </div>
-
-      <!-- Architecture diagram -->
-      <div class="arch-canvas" id="archCanvas">
-        <svg width="100%" height="180" viewBox="0 0 380 180" preserveAspectRatio="xMidYMid meet">
-          <!-- Input layer (10 nodes, smaller) -->
-          <g id="arch-input"></g>
-          <!-- Hidden layer (16 nodes) -->
-          <g id="arch-hidden"></g>
-          <!-- Output layer (5 nodes) -->
-          <g id="arch-output"></g>
-          <!-- Labels -->
-          <text x="20" y="170" fill="#8b949e" font-size="9" text-anchor="middle">Input (32)</text>
-          <text x="190" y="170" fill="#8b949e" font-size="9" text-anchor="middle">Hidden (16)</text>
-          <text x="360" y="170" fill="#8b949e" font-size="9" text-anchor="middle">Outputs (5)</text>
-        </svg>
-      </div>
-
-      <!-- Animated pulse showing a real inference flowing through -->
-      <div class="learn-pulse">
-        <div class="pulse-label">Live inference pulse</div>
-        <div class="pulse-bar"><div class="pulse-fill" id="pulseFill"></div></div>
-        <div class="pulse-info">
-          <span id="pulseStop">—</span> ·
-          <span id="pulsePred">awaiting data</span>
-        </div>
-      </div>
-
-      <!-- Stats grid -->
-      <div class="learn-stats">
-        <div class="stat-card"><div class="stat-label">Trained On</div><div class="stat-value" id="learn-examples">—</div><div class="stat-sub">arrivals seen</div></div>
-        <div class="stat-card"><div class="stat-label">Learning Rate</div><div class="stat-value" id="learn-lr">—</div><div class="stat-sub">decaying</div></div>
-        <div class="stat-card"><div class="stat-label">Parameters</div><div class="stat-value" id="learn-params">—</div><div class="stat-sub">weights + biases</div></div>
-        <div class="stat-card"><div class="stat-label">Last Train</div><div class="stat-value" id="learn-last">—</div><div class="stat-sub">error magnitude</div></div>
-      </div>
-
-      <!-- Training loss sparkline -->
-      <div class="section-header">Training Loss (recent)</div>
-      <div class="loss-chart-wrap">
-        <canvas id="lossCanvas" width="360" height="60"></canvas>
-      </div>
-
-      <!-- Weight visualization -->
-      <div class="section-header">Hidden Layer Activations (live)</div>
-      <div id="hiddenBars" class="hidden-bars"></div>
-
-      <!-- Per-route residual performance -->
-      <div class="section-header">Per-Route Prediction Error</div>
-      <div id="routeResiduals" class="route-residuals"></div>
     </div>
 
     <div class="refresh-bar">
@@ -2270,10 +2215,12 @@ function selectVehicle(id) {
 }
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
+let activeTab = 'vehicles';
 function switchTab(name) {
+  activeTab = name;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.id === `tab-${name}`));
-  if (name === 'api') fetchApiStats();
+  if (name === 'system') { fetchApiStats(); pollLearn(); }
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
 
@@ -2851,61 +2798,21 @@ function archAnimFrame(now) {
 
 async function pollLearn() {
   try {
-    const learnStatus = await fetch('/api/learn/status').then(r => r.json());
-    lastLearnPayload = learnStatus;
-
-    document.getElementById('learn-examples').textContent = learnStatus.trainedExamples?.toLocaleString() || '0';
-    document.getElementById('learn-lr').textContent = learnStatus.learningRate.toFixed(5);
-    document.getElementById('learn-params').textContent = learnStatus.params?.toLocaleString() || '0';
-
-    // Build hidden bars once
-    const hiddenBars = document.getElementById('hiddenBars');
-    if (hiddenBars && hiddenBars.children.length === 0) {
-      hiddenBars.innerHTML = Array.from({length: 16}, (_, i) => {
-        return `<div class="hidden-bar" title="token ${i}"><div class="hidden-bar-fill" id="hb-${i}" style="height:0%"></div></div>`;
-      }).join('');
-    }
-
-    // Animate token activations (sine wave modulated by training progress)
-    const intensity = Math.min(1, (learnStatus.trainedExamples || 0) / 500);
-    for (let i = 0; i < 16; i++) {
-      const phase = (Date.now() / 400 + i * 0.4);
-      const mag = ((Math.sin(phase) + 1) / 2) * (0.3 + intensity * 0.7);
-      const bar = document.getElementById(`hb-${i}`);
-      if (bar) bar.style.height = (mag * 100) + '%';
-    }
-
-    // Loss chart: when trained count changes, append a loss sample
-    if (learnStatus.trainedExamples !== lastTrainedExamples) {
-      lastTrainedExamples = learnStatus.trainedExamples;
-      const lossProxy = Math.abs(learnStatus.learningRate - 0.0001) * 80;
-      lossHistory.push(lossProxy);
-      if (lossHistory.length > 60) lossHistory.shift();
-      drawLossChart();
-    }
-
-    // Last error display
-    const errProxy = Math.abs(learnStatus.learningRate - 0.0001) * 50;
-    document.getElementById('learn-last').textContent = errProxy.toFixed(2);
-
-    // Throttled per-route residual refresh
-    maybeRoutePoll();
-
-    // Pulse inference — use any active vehicle
-    if (allVehicles && allVehicles.length > 0) {
-      const v = allVehicles[0];
-      try {
-        const d = await fetch(`/api/stopline?vehicle_id=${v.id}`).then(r => r.json());
-        if (d && d.stops && d.stops.length) {
-          const nextStop = d.next_stop || d.stops[0];
-          pulseStopName = `${nextStop.stopCode || '?'} ${nextStop.name.split('(')[0].trim().slice(0, 18)}`;
-          const corr = d.stops[0]?.seqCorrection ?? 0;
-          const eta = d.stops[0]?.etaMinSeq ?? 0;
-          pulsePredValue = `eta ${eta.toFixed(1)}m (${corr >= 0 ? '+' : ''}${corr.toFixed(1)}m tx)`;
-          if (Math.random() < 0.5) animatePulse();
-        }
-      } catch {}
-    }
+    const s = await fetch('/api/learn/status').then(r => r.json());
+    lastLearnPayload = s;
+    const el = document.getElementById('learnInline');
+    if (!el) return;
+    el.innerHTML = `
+      <div style="font-size:11px;color:var(--muted);padding:0 12px 8px;">
+        Server-side transformer that learns a correction on top of the agency's
+        official ETAs, trained on every recorded stop arrival.
+      </div>
+      <div class="status-grid">
+        <div class="stat-card"><div class="stat-label">Trained On</div><div class="stat-value">${(s.trainedExamples||0).toLocaleString()}</div><div class="stat-sub">arrivals seen</div></div>
+        <div class="stat-card"><div class="stat-label">Parameters</div><div class="stat-value">${(s.params||0).toLocaleString()}</div><div class="stat-sub">weights + biases</div></div>
+        <div class="stat-card"><div class="stat-label">Learning Rate</div><div class="stat-value">${(s.learningRate||0).toFixed(5)}</div><div class="stat-sub">decaying</div></div>
+        <div class="stat-card"><div class="stat-label">Architecture</div><div class="stat-value" style="font-size:12px;">self-attn</div><div class="stat-sub">12 tok × 8d</div></div>
+      </div>`;
   } catch (e) { console.error('[pollLearn]', e); }
 }
 
@@ -3010,13 +2917,12 @@ Promise.all([
   fetchGtfsStops(),
   fetchTrails(),
 ]).then(() => fetchStoplines());
-fetchApiStats();
-buildArchDiagram();
-setInterval(pollLearn, 800);
+// Diagnostics (System tab) only refresh while that tab is open — no point
+// hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
+setInterval(() => { if (activeTab === 'system' && !document.hidden) { pollLearn(); fetchApiStats(); } }, 5000);
 
-// Trail + stats run on separate intervals
+// Trail + ETA refresh on their own cadence
 setInterval(fetchTrails, TRAIL_UPDATE_INTERVAL);
-setInterval(fetchApiStats, 60000);
 setInterval(fetchStoplines, 30000); // refresh ETAs every 30s
 
 // Tick live clocks in all open stop lists every second
@@ -3025,7 +2931,6 @@ setInterval(() => {
   document.querySelectorAll('[id^="clock-"]').forEach(el => { el.textContent = t; });
 }, 1000);
 fetchTrails();
-fetchApiStats();
 </script>
 </body>
 </html>
