@@ -1376,7 +1376,7 @@ function getTraffic() {
 }
 
 // ─── HTTP SERVER ──────────────────────────────────────────────────────────────
-const MIME = { '.html':'text/html', '.js':'application/javascript', '.css':'text/css', '.ico':'image/x-icon' };
+const MIME = { '.html':'text/html', '.js':'application/javascript', '.css':'text/css', '.ico':'image/x-icon', '.svg':'image/svg+xml', '.png':'image/png', '.json':'application/json' };
 
 function json(res, data, status = 200) {
   res.writeHead(status, { 'Content-Type':'application/json', 'Access-Control-Allow-Origin':'*' });
