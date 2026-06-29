@@ -7,21 +7,29 @@ entirely on your own machine — no cloud dependency, no API hammering.
 ## What it does
 
 - **Whole-fleet live positions** (per-route vehicle endpoint, with real speed +
-  heading), on a MapLibre map, color-coded by route, with dead-reckoning motion
-  so buses glide along their heading between polls instead of jumping
+  heading), on a MapLibre map, color-coded by route. Buses ride their **snapped
+  route polyline**, advancing forward at their real pace between polls — smooth,
+  never reversing, no drift when stopped. Markers stay upright, fan out when they
+  overlap, and fade to a ghost (kept up to 2 days) when their GPS goes quiet.
 - **Official predicted arrivals** from the GTFS-realtime TripUpdates feed as the
   headline ETA, with a transformer learning a correction on top
 - **Schedule adherence** (ahead/behind) with a sanity guard against bad matches
 - **Snap-to-road route shapes** — route geometry is map-matched to the real road
-  network (Valhalla) offline and vendored in, so lines lie cleanly on the roads;
-  parallel-line offset keeps overlapping routes readable
-- **Directional "where it's going" arrows** ahead of each bus
-- **Recognizable bus-stop markers** with popups for approaching buses & history
+  network (Valhalla) offline and vendored in; parallel-line offset keeps
+  overlapping routes readable
+- **Animated direction chevrons** streaming ahead of each bus along the real
+  road, route-colored, pointing the way it's about to go
+- **Official bus stops** + **learned "observed" stops** — places buses repeatedly
+  dwell that aren't published (recurrence-filtered, not red lights / yards)
+- **GPS-derived congestion glow** — where a bus crawls below the typical speed
+  for that spot (our honest "traffic" signal; no public signal feed exists)
 - **Microclimate weather** symbol over each bus (Open-Meteo, free, no API key)
 - **Occupancy bar** on each bus icon
+- **Fleet tab** — every vehicle the agency knows (live / idle / dormant) with
+  full telemetry and a derived status explaining why each is/isn't on the map
 - **Transformer ETA correction model** (12-token self-attention) retrained
   server-side on every recorded stop arrival
-- Desktop + mobile (bottom-sheet) responsive UI
+- Desktop + mobile (bottom-sheet) responsive UI; polling pauses when hidden
 
 ## Architecture
 
