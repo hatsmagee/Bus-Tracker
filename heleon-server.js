@@ -15,6 +15,14 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
+const { parseFeedMessage } = require('./gtfs-rt');
+
+// Big Island bounding box — fleet feed includes parked/relocated buses
+// (e.g. on Oʻahu for maintenance); ignore anything outside Hawaiʻi County.
+const BBOX = { minLat: 18.8, maxLat: 20.4, minLon: -156.2, maxLon: -154.7 };
+const VEHICLE_STALE_MS = 5 * 60 * 1000; // hide buses whose GPS is >5 min old
+const RT_VP_PATH = '/gtfs-rt/vehiclepositions';
+const RT_TU_PATH = '/gtfs-rt/tripupdates';
 
 // Render.com sets PORT=10000 and RENDER=1; on Render the filesystem is
 // ephemeral so we keep SQLite + GTFS zip under /tmp. Locally we keep them
@@ -25,7 +33,7 @@ const DATA_DIR = IS_RENDER ? '/tmp' : __dirname;
 const DB_PATH = path.join(DATA_DIR, IS_RENDER ? 'heleon.db' : 'heleon.db');
 const GTFS_ZIP_PATH = path.join(DATA_DIR, 'heleon-gtfs.zip');
 const HTML_PATH = path.join(__dirname, 'heleon-tracker.html');
-const POLL_INTERVAL = 10000;
+const POLL_INTERVAL = 15000; // GTFS-RT refreshes ~every 15-30s; lighter on bandwidth
 const DB_SAVE_INTERVAL = 30000;
 const UPSTREAM = 'myheleonbus.org';
 
@@ -157,6 +165,16 @@ async function openDb() {
   )`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_gtfs_route_stop ON gtfs_stop_times(route_id, stop_id)`);
 
+  // GTFS trips — maps the realtime feed's trip_id to route / direction / shape
+  db.run(`CREATE TABLE IF NOT EXISTS gtfs_trips (
+    trip_id     TEXT PRIMARY KEY,
+    route_id    INTEGER,
+    service_id  TEXT,
+    direction   INTEGER,
+    shape_id    TEXT,
+    headsign    TEXT
+  )`);
+
   // Persist DB to disk periodically
   setInterval(saveDb, DB_SAVE_INTERVAL);
 }
@@ -263,12 +281,15 @@ function parseGtfsZip() {
   const gtfsStops = parseCsv(stopsText);
 
   const tripMap = {};
+  const tripRows = [];
   trips.forEach(t => {
     tripMap[t.trip_id] = {
       route_id: parseInt(t.route_id),
       service_id: t.service_id,
       direction_id: parseInt(t.direction_id) || 0,
     };
+    tripRows.push([t.trip_id, parseInt(t.route_id), t.service_id,
+                   parseInt(t.direction_id) || 0, t.shape_id || '', t.trip_headsign || '']);
   });
 
   const stRows = [];
@@ -286,7 +307,7 @@ function parseGtfsZip() {
     parseInt(s.wheelchair_boarding) || 0
   ]).filter(r => !isNaN(r[0]));
 
-  return { stRows, stopRows };
+  return { stRows, stopRows, tripRows };
 }
 
 async function loadGtfs(forceRefresh = false) {
@@ -325,7 +346,7 @@ async function loadGtfs(forceRefresh = false) {
     return; // keep existing data
   }
 
-  const { stRows, stopRows } = parsed;
+  const { stRows, stopRows, tripRows } = parsed;
   if (stRows.length < 100) {
     console.error(`[gtfs] Suspiciously few rows (${stRows.length}) — aborting reload to protect existing data`);
     return;
@@ -342,9 +363,14 @@ async function loadGtfs(forceRefresh = false) {
     stopRows.forEach(r => {
       db.run(`INSERT INTO gtfs_stops(stop_id,stop_code,stop_name,stop_lat,stop_lon,wheelchair) VALUES(?,?,?,?,?,?)`, r);
     });
+    db.run('DELETE FROM gtfs_trips');
+    (tripRows || []).forEach(r => {
+      db.run(`INSERT OR REPLACE INTO gtfs_trips(trip_id,route_id,service_id,direction,shape_id,headsign) VALUES(?,?,?,?,?,?)`, r);
+    });
     db.run('COMMIT');
     saveDb();
-    console.log(`[gtfs] Loaded ${stRows.length} stop times, ${stopRows.length} stops`);
+    buildTripIndex();
+    console.log(`[gtfs] Loaded ${stRows.length} stop times, ${stopRows.length} stops, ${(tripRows||[]).length} trips`);
   } catch(e) {
     db.run('ROLLBACK');
     console.error('[gtfs] DB insert error:', e.message);
@@ -390,13 +416,51 @@ function upstreamFetch(apiPath) {
   });
 }
 
+// Fetch a binary body (GTFS-RT protobuf) from the upstream host.
+function fetchBinary(reqPath) {
+  return new Promise((resolve, reject) => {
+    const t0 = Date.now();
+    const req = https.request({
+      hostname: UPSTREAM, path: reqPath, method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': `https://${UPSTREAM}/` },
+      timeout: 10000,
+    }, res => {
+      const chunks = [];
+      res.on('data', d => chunks.push(d));
+      res.on('end', () => resolve({ status: res.statusCode, buf: Buffer.concat(chunks), latency: Date.now() - t0 }));
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.end();
+  });
+}
+
 // ─── POLLING ─────────────────────────────────────────────────────────────────
 let latestVehicles = [];
+let tripUpdateIndex = {};   // tripId -> { stopId: predictedArrivalMs }
 let lastPollStats = { ts: null, total: 0 };
 const startTime = new Date().toISOString();
 
+// trip_id -> { routeId, direction, shapeId, headsign } built from GTFS trips.txt.
+// Lets us attach full route context to each live vehicle from the realtime feed.
+let tripRouteIndex = {};
+let tripLastBuilt = 0;
+
 // Track last known closest-stop index per vehicle for arrival detection
 const vehicleLastStopIdx = {}; // vehicleId -> { stopIdx, stopId, ts }
+
+// Last-known passenger load/capacity per vehicle (GTFS-RT omits occupancy on
+// this feed, so we carry it forward from the legacy JSON fleet endpoint).
+const vehicleLoadCache = {}; // vehicleId -> { load, capacity, ts }
+
+function buildTripIndex() {
+  const rows = dbAll(`SELECT trip_id, route_id, direction, shape_id, headsign FROM gtfs_trips`);
+  const idx = {};
+  rows.forEach(r => { idx[r.trip_id] = { routeId: r.route_id, direction: r.direction, shapeId: r.shape_id, headsign: r.headsign }; });
+  tripRouteIndex = idx;
+  tripLastBuilt = Date.now();
+  return rows.length;
+}
 
 // ─── TRANSFORMER PREDICTOR (tiny single-block, single-head attention) ──────
 // Architecture:
@@ -668,29 +732,104 @@ async function trainFromHistory() {
   console.log(`[learn] Trained transformer on ${n} examples, total loss: ${totalLoss.toFixed(1)}, lr=${TX.lr.toFixed(5)}`);
 }
 
-async function pollRoute(route) {
-  let result;
-  try { result = await upstreamFetch(`routes/${route.id}/vehicles`); }
-  catch(e) {
-    dbRun(`INSERT INTO poll_log(ts,route_id,status,latency,count) VALUES(?,?,0,0,0)`, [Date.now(), route.id]);
-    return [];
-  }
+// Refresh per-vehicle occupancy from the legacy fleet JSON endpoint. GTFS-RT
+// VehiclePositions on this feed omits occupancy, so we poll the cheap single
+// /vehicles call occasionally and carry the value forward between RT polls.
+async function refreshOccupancy() {
+  try {
+    const r = await upstreamFetch('vehicles');
+    if (r.status !== 200) return;
+    const fleet = JSON.parse(r.body);
+    if (!Array.isArray(fleet)) return;
+    const ts = Date.now();
+    fleet.forEach(v => {
+      if (v.passengerLoad != null || v.capacity != null) {
+        vehicleLoadCache[v.id] = { load: v.passengerLoad, capacity: v.capacity, ts };
+      }
+    });
+  } catch { /* occupancy is best-effort */ }
+}
+
+// Pull the TripUpdates feed → tripId -> { stopId: predictedArrivalMs, _seq }.
+// These are the agency's official predicted arrival times (headline ETA).
+async function pollTripUpdates() {
+  let res;
+  try { res = await fetchBinary(RT_TU_PATH); } catch { return; }
+  if (res.status !== 200 || !res.buf.length) return;
+  let feed;
+  try { feed = parseFeedMessage(res.buf); } catch { return; }
+  const idx = {};
+  feed.forEach(e => {
+    const tu = e.tripUpdate;
+    if (!tu || !tu.trip || !tu.trip.tripId) return;
+    const byStop = {};
+    tu.stopTimeUpdates.forEach(s => {
+      const t = (s.arrival && s.arrival.time) || (s.departure && s.departure.time);
+      if (t && s.stopId) byStop[s.stopId] = { ms: t * 1000, seq: s.stopSeq };
+    });
+    idx[tu.trip.tripId] = byStop;
+  });
+  tripUpdateIndex = idx;
+}
+
+// Pull the VehiclePositions feed → array of vehicles in the legacy contract
+// shape (id/name/lat/lon/speed/headingDegrees/route*) so the frontend is unchanged.
+async function pollVehiclePositions() {
+  let res;
+  try { res = await fetchBinary(RT_VP_PATH); }
+  catch { dbRun(`INSERT INTO poll_log(ts,route_id,status,latency,count) VALUES(?,?,0,0,0)`, [Date.now(), 0]); return []; }
   dbRun(`INSERT INTO poll_log(ts,route_id,status,latency,count) VALUES(?,?,?,?,?)`,
-    [Date.now(), route.id, result.status, result.latency, 0]);
-  if (result.status !== 200) return [];
-  let vehicles;
-  try { vehicles = JSON.parse(result.body); } catch { return []; }
-  if (!Array.isArray(vehicles) || !vehicles.length) return [];
+    [Date.now(), 0, res.status, res.latency, 0]);
+  if (res.status !== 200 || !res.buf.length) return [];
+  let feed;
+  try { feed = parseFeedMessage(res.buf); } catch { return []; }
 
   const ts = Date.now();
-  vehicles.forEach(v => {
+  const vehicles = [];
+  feed.forEach(e => {
+    const vp = e.vehicle;
+    if (!vp || vp.lat == null || vp.lon == null) return;
+    // Drop parked/relocated buses outside Hawaiʻi County or with stale GPS.
+    if (vp.lat < BBOX.minLat || vp.lat > BBOX.maxLat || vp.lon < BBOX.minLon || vp.lon > BBOX.maxLon) return;
+    if (vp.timestamp && (ts - vp.timestamp * 1000) > VEHICLE_STALE_MS) return;
+
+    const tripId = vp.trip && vp.trip.tripId;
+    const ti = tripId ? tripRouteIndex[tripId] : null;
+    const routeId = (ti && ti.routeId) || (vp.trip && parseInt(vp.trip.routeId)) || null;
+    const route = ROUTE_MAP[routeId];
+    const id = parseInt(vp.vehicleId || vp.vehicleLabel) || vp.vehicleId;
+    const speedMph = vp.speed != null ? Math.round(vp.speed * 2.23694 * 10) / 10 : null; // m/s → mph
+    const load = vehicleLoadCache[id];
+
+    const v = {
+      id, name: vp.vehicleLabel || String(id),
+      lat: vp.lat, lon: vp.lon,
+      speed: speedMph,
+      headingDegrees: vp.bearing != null ? Math.round(vp.bearing) : null,
+      heading: null,
+      passengerLoad: load ? load.load : 0,
+      capacity: load ? load.capacity : null,
+      shapeDistanceTraveled: 0,
+      patternId: null,
+      tripId,
+      headsign: ti ? ti.headsign : null,
+      direction: ti ? ti.direction : null,
+      shapeId: ti ? ti.shapeId : null,
+      currentStopSeq: vp.currentStopSeq,
+      vehicleTs: vp.timestamp ? vp.timestamp * 1000 : ts,
+      routeId,
+      routeName: route ? route.name : (tripId || 'Unknown'),
+      routeShort: route ? route.short : (routeId || '?'),
+      routeColor: route ? route.color : '#888888',
+    };
+    vehicles.push(v);
+
     dbRun(`INSERT INTO pings (ts,vehicle_id,vehicle_name,route_id,pattern_id,lat,lon,speed,heading,heading_deg,passenger_load,capacity,shape_dist,last_updated)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [ts, v.id, v.name, route.id, v.patternId, v.lat, v.lon, v.speed,
-       v.heading, v.headingDegrees, v.passengerLoad, v.capacity,
-       v.shapeDistanceTraveled, v.lastUpdated]);
+      [ts, v.id, v.name, routeId, null, v.lat, v.lon, v.speed,
+       null, v.headingDegrees, v.passengerLoad, v.capacity, 0, tripId]);
   });
-  return vehicles.map(v => ({ ...v, routeId: route.id, routeName: route.name, routeShort: route.short, routeColor: route.color }));
+  return vehicles;
 }
 
 // Called after each poll — detect when a bus has moved past a stop
@@ -772,11 +911,15 @@ function detectArrivals(vehicle, routeId) {
 }
 
 async function pollAll() {
-  const results = await Promise.all(ROUTES.map(r => pollRoute(r).catch(() => [])));
-  latestVehicles = results.flat();
+  // Two cheap requests (positions + trip updates) replace 22 per-route polls.
+  const [vehicles] = await Promise.all([
+    pollVehiclePositions().catch(() => []),
+    pollTripUpdates().catch(() => {}),
+  ]);
+  latestVehicles = vehicles;
   // Detect stop arrivals for each active vehicle
   latestVehicles.forEach(v => {
-    try { detectArrivals(v, v.routeId); } catch(e) {}
+    if (v.routeId) { try { detectArrivals(v, v.routeId); } catch(e) {} }
   });
   lastPollStats = { ts: Date.now(), total: latestVehicles.length };
   process.stdout.write(`\r[${new Date().toLocaleTimeString()}] ${latestVehicles.length} vehicles  `);
@@ -1078,11 +1221,19 @@ async function handleApi(url, res) {
       ? (histRows.reduce((s, r) => s + r.speed, 0) / histRows.length) * 1.60934
       : speedKmh;
 
+    // Official agency predictions for this vehicle's trip (GTFS-RT TripUpdates),
+    // keyed by stop_id → { ms, seq }. This is the headline ETA when present.
+    const officialStops = (v.tripId && tripUpdateIndex[v.tripId]) || {};
+    const nowMsEta = Date.now();
+
     // Find closest stop to figure out which direction/sequence we're travelling
     const stopETAs = stops.map((stop, i) => {
       const distKm = haversineKm(v.lat, v.lon, stop.lat, stop.lon);
       const etaSpeed = speedKmh > 1 ? (distKm / speedKmh) * 60 : null;
       const etaHist  = histAvgSpeed > 1 ? (distKm / histAvgSpeed) * 60 : etaSpeed;
+      // Official predicted arrival (minutes from now), if the agency feed has it.
+      const off = officialStops[String(stop.id)] || officialStops[stop.id];
+      const etaOfficial = off ? Math.round(((off.ms - nowMsEta) / 60000) * 10) / 10 : null;
 
       // Sequence-model prediction: predicts residuals for next 5 stops
       // Pass sched delta vs GTFS scheduled time (positive = bus behind schedule)
@@ -1095,15 +1246,25 @@ async function handleApi(url, res) {
       const correction = seqPred.out[0];
       const etaSeq = etaHist != null ? Math.max(0, etaHist + correction) : null;
 
+      // Headline ETA: prefer the agency's official prediction; fall back to the
+      // model-corrected estimate, then plain historical/speed estimates.
+      let etaMin, etaSource;
+      if (etaOfficial != null)      { etaMin = etaOfficial; etaSource = 'official'; }
+      else if (etaSeq != null)      { etaMin = Math.round(etaSeq * 10) / 10; etaSource = 'model'; }
+      else if (etaHist != null)     { etaMin = Math.round(etaHist * 10) / 10; etaSource = 'historical'; }
+      else if (etaSpeed != null)    { etaMin = Math.round(etaSpeed * 10) / 10; etaSource = 'speed'; }
+      else                          { etaMin = null; etaSource = null; }
+
       return {
         stopId: stop.id, name: stop.name, stopCode: stop.stopCode,
         lat: stop.lat, lon: stop.lon, seq: stop.seq,
         distKm: Math.round(distKm * 1000) / 1000,
+        etaMin, etaSource,
+        etaMinOfficial: etaOfficial,
         etaMinSpeed: etaSpeed !== null ? Math.round(etaSpeed * 10) / 10 : null,
         etaMinHist:  etaHist  !== null ? Math.round(etaHist  * 10) / 10 : null,
         etaMinSeq:   etaSeq != null ? Math.round(etaSeq * 10) / 10 : null,
         seqCorrection: Math.round(correction * 10) / 10,
-        seqPrediction: seqPred.out.map(o => Math.round(o * 10) / 10),
         histSampleCount: histRows.length,
         histAvgSpeedMph: Math.round(histAvgSpeed / 1.60934 * 10) / 10,
       };
@@ -1116,7 +1277,28 @@ async function handleApi(url, res) {
     // and pick the closest stop whose seq is ahead of (or wrapping from) that.
     const sorted = [...stopETAs].sort((a, b) => a.distKm - b.distKm);
     let nextStop = sorted[0];
-    if (sorted.length >= 2) {
+
+    // Authoritative next stop from the agency feed: the upcoming stop in this
+    // trip's TripUpdates with the smallest still-in-the-future predicted arrival.
+    // You can't be heading to a stop you haven't reached, so this beats geometry.
+    let officialNext = null;
+    if (Object.keys(officialStops).length) {
+      // The trip's GTFS stop sequence is authoritative: the next stop is the
+      // future stop_time_update with the lowest trip sequence number.
+      let bestSeq = Infinity, bestMs = Infinity;
+      for (const s of stopETAs) {
+        const off = officialStops[String(s.id)] || officialStops[s.id];
+        if (!off || off.ms <= nowMsEta - 30000) continue;
+        const seq = off.seq != null ? off.seq : Infinity;
+        if (seq < bestSeq || (seq === bestSeq && off.ms < bestMs)) {
+          bestSeq = seq; bestMs = off.ms; officialNext = s;
+        }
+      }
+    }
+
+    if (officialNext) {
+      nextStop = officialNext;
+    } else if (sorted.length >= 2) {
       const c0 = sorted[0], c1 = sorted[1];
       if (Math.abs(c0.seq - c1.seq) === 1) {
         nextStop = c0.seq > c1.seq ? c0 : c1;
@@ -1353,10 +1535,13 @@ const server = http.createServer((req, res) => {
 
   await fetchAllStops();
   await loadGtfs();
+  buildTripIndex();
   // Train learning model on past stop_arrivals history
   try { await trainFromHistory(); } catch(e) { console.error('[learn] train error:', e.message); }
+  await refreshOccupancy();
   await pollAll();
   setInterval(pollAll, POLL_INTERVAL);
+  setInterval(refreshOccupancy, 60 * 1000); // occupancy changes slowly — 1/min is plenty
   setInterval(fetchShapes, 24 * 60 * 60 * 1000);
   setInterval(fetchAllStops, 24 * 60 * 60 * 1000);
   setInterval(discoverNewRoutes, 10 * 60 * 1000); // check for new routes every 10 min
