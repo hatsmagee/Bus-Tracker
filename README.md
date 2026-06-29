@@ -6,34 +6,42 @@ entirely on your own machine — no cloud dependency, no API hammering.
 
 ## What it does
 
-- **Live vehicle positions** on a MapLibre map, color-coded by route
+- **Whole-fleet live positions** from the County's GTFS-realtime feed, on a
+  MapLibre map, color-coded by route, with smooth interpolation between updates
+- **Official predicted arrivals** from the GTFS-realtime TripUpdates feed as the
+  headline ETA, with a transformer learning a correction on top
+- **Schedule adherence** (ahead/behind) with a sanity guard against bad matches
 - **Route shape rendering** with parallel-line offset so overlapping routes stay readable
-- **Stop markers** with hover popup showing approaching buses, recent arrivals, and historical typical arrival pattern
-- **Per-vehicle card** with Predicted / Scheduled / Typical arrival times for the next stop
-- **GTFS scheduled times** loaded from the official County GTFS feed and matched to live data
-- **Transformer-based ETA predictor** (12-token self-attention, 704 params) that retrains on every bus arrival
-- **Systemd user service** for 24/7 background polling
+- **Directional "where it's going" arrows** ahead of each bus
+- **Recognizable bus-stop markers** with popups for approaching buses & history
+- **Microclimate weather** symbol over each bus (Open-Meteo, free, no API key)
+- **Occupancy bar** on each bus icon
+- **Transformer ETA correction model** (12-token self-attention) retrained
+  server-side on every recorded stop arrival
+- Desktop + mobile (bottom-sheet) responsive UI
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ Browser (heleon-tracker.html)                           │
-│   - MapLibre GL map                                     │
-│   - Sidebar with vehicle cards                          │
-│   - 5 tabs: Vehicles / Routes / Learn / Status / API    │
+│   - MapLibre GL map, smooth bus interpolation           │
+│   - Sidebar with vehicle cards + scrubber timelines     │
+│   - 4 tabs: Buses / Routes / System / Docs              │
 └────────────┬────────────────────────────────────────────┘
-             │ HTTP /api/* (every 10s)
+             │ HTTP /api/* (every 15s)
 ┌────────────▼────────────────────────────────────────────┐
 │ Node.js server (heleon-server.js)                       │
-│   - Polls 22 routes every 10s                           │
-│   - Stores GPS pings in SQLite (sql.js)                 │
-│   - Transformer ETA model (online SGD)                 │
-│   - GTFS loader (conditional HTTP, daily refresh)      │
-│   - Systemd service on 0.0.0.0:8765                     │
+│   - GTFS-realtime: VehiclePositions + TripUpdates       │
+│     (decoded by gtfs-rt.js, no protobuf dependency)     │
+│   - Fleet /vehicles JSON for complete positions+load    │
+│   - Transformer ETA correction model (online SGD)       │
+│   - Static GTFS loader (trips/stop_times/stops)         │
+│   - Open-Meteo weather (batched, cached)                │
+│   - SQLite (sql.js) with periodic prune + VACUUM        │
 └────────────┬────────────────────────────────────────────┘
              │ HTTPS
-       Syncromatics API  ←→  myheleonbus.org/gtfs
+   myheleonbus.org  (Syncromatics RTPI + GTFS-RT)  ·  open-meteo.com
 ```
 
 ## Quick start
@@ -59,7 +67,7 @@ Set environment variables before starting the server:
 |----------------|---------------|--------------------------------------|
 | `PORT`         | 8765 (local) / 10000 (Render) | HTTP port                            |
 | `RENDER`       | unset         | When set by Render, the server stores SQLite + GTFS zip under `/tmp` (ephemeral disk) |
-| `POLL_INTERVAL`| 10000 (ms)    | How often to poll each route         |
+| `POLL_INTERVAL`| 15000 (ms)    | How often to poll the realtime feeds |
 | `MAPTILER_KEY` | (built-in)    | MapTiler API key for basemap tiles   |
 
 ## Deploying to Render.com
@@ -131,9 +139,9 @@ If Render assigned a different hostname, edit
 
 ## Files
 
-- `heleon-server.js` — main backend (polling, DB, GTFS, transformer)
-- `heleon-tracker.html` — single-file dashboard (~2,300 lines)
-- `heleon-proxy.js` — simple static + CORS proxy (alternative entry)
+- `heleon-server.js` — main backend (GTFS-RT polling, DB, GTFS, transformer, weather)
+- `gtfs-rt.js` — dependency-free GTFS-realtime protobuf decoder
+- `heleon-tracker.html` — single-file dashboard
 - `scripts/keepalive.sh` — bash script that pings the Render URL
 - `render.yaml` — Render Blueprint (web service only)
 - `systemd/heleon-tracker.service` — local tracker systemd unit
@@ -150,15 +158,17 @@ If Render assigned a different hostname, edit
 
 ## The transformer model
 
-The ETA predictor is a small transformer block trained on the bus arrival
-history recorded in SQLite. It runs entirely in Node.js with hand-written
-backprop — no ML framework, no GPU needed. Architecture:
+The headline arrival times come from the agency's official GTFS-realtime
+TripUpdates feed. On top of that, a small transformer block learns a
+*correction* from recorded arrival history. It runs entirely in Node.js with
+hand-written backprop — no ML framework, no GPU needed. Architecture:
 
-- 12 input tokens × 8 dimensions (speed, distance, cyclical hour/minute/dow)
+- 12 input tokens × 8 dimensions; raw features: speed, distance, and cyclical
+  time encoded as sin/cos pairs for both hour-of-day and day-of-week
 - Single self-attention head (Q/K/V projections, softmax, weighted sum)
 - Residual + LayerNorm + 8→16→8 FFN with ReLU
 - Mean pool + 5 output heads (one per future stop)
-- **704 parameters**, retrained online every time a bus reaches a stop
+- Retrained online every time a bus reaches a stop (server-side only)
 
 ## License
 
