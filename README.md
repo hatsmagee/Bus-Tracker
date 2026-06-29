@@ -12,7 +12,9 @@ entirely on your own machine — no cloud dependency, no API hammering.
 - **Official predicted arrivals** from the GTFS-realtime TripUpdates feed as the
   headline ETA, with a transformer learning a correction on top
 - **Schedule adherence** (ahead/behind) with a sanity guard against bad matches
-- **Route shape rendering** with parallel-line offset so overlapping routes stay readable
+- **Snap-to-road route shapes** — route geometry is map-matched to the real road
+  network (Valhalla) offline and vendored in, so lines lie cleanly on the roads;
+  parallel-line offset keeps overlapping routes readable
 - **Directional "where it's going" arrows** ahead of each bus
 - **Recognizable bus-stop markers** with popups for approaching buses & history
 - **Microclimate weather** symbol over each bus (Open-Meteo, free, no API key)
@@ -145,6 +147,9 @@ If Render assigned a different hostname, edit
 - `heleon-server.js` — main backend (GTFS-RT polling, DB, GTFS, transformer, weather)
 - `gtfs-rt.js` — dependency-free GTFS-realtime protobuf decoder
 - `heleon-tracker.html` — single-file dashboard
+- `scripts/match-routes.js` — one-time build step that snaps route shapes to the
+  road network (Valhalla map-matching) → `data/route-shapes-matched.json`
+- `data/route-shapes-matched.json` — vendored snap-to-road route geometry
 - `scripts/keepalive.sh` — bash script that pings the Render URL
 - `render.yaml` — Render Blueprint (web service only)
 - `systemd/heleon-tracker.service` — local tracker systemd unit

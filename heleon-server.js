@@ -33,6 +33,15 @@ const DATA_DIR = IS_RENDER ? '/tmp' : __dirname;
 const DB_PATH = path.join(DATA_DIR, IS_RENDER ? 'heleon.db' : 'heleon.db');
 const GTFS_ZIP_PATH = path.join(DATA_DIR, 'heleon-gtfs.zip');
 const HTML_PATH = path.join(__dirname, 'heleon-tracker.html');
+const MATCHED_SHAPES_PATH = path.join(__dirname, 'data', 'route-shapes-matched.json');
+
+// Snap-to-road route geometry, produced offline by scripts/match-routes.js
+// (Valhalla map-matching) and vendored into the repo. routeId -> encoded
+// polyline that follows the actual roads. We prefer these over the raw GTFS
+// shapes when drawing routes, so lines are smooth and lie on the road. Loaded
+// once at startup; empty {} if the file isn't present.
+let MATCHED_SHAPES = {};
+try { MATCHED_SHAPES = JSON.parse(fs.readFileSync(MATCHED_SHAPES_PATH, 'utf8')); } catch {}
 const POLL_INTERVAL = 15000; // GTFS-RT refreshes ~every 15-30s; lighter on bandwidth
 const DB_SAVE_INTERVAL = 30000;
 const UPSTREAM = 'myheleonbus.org';
@@ -1269,7 +1278,11 @@ async function handleApi(url, res) {
     const rows = dbAll(`SELECT route_id, pattern_id, name, direction, color, shape FROM route_shapes`);
     // Always serve our curated dark/distinct palette, not the upstream pattern
     // colors (which include pale pastels and #FFFFFF that vanish on the map).
-    rows.forEach(r => { if (ROUTE_MAP[r.route_id]) r.color = ROUTE_MAP[r.route_id].color; });
+    rows.forEach(r => {
+      if (ROUTE_MAP[r.route_id]) r.color = ROUTE_MAP[r.route_id].color;
+      // Prefer the snap-to-road matched geometry when we have it.
+      if (MATCHED_SHAPES[r.route_id]) { r.shape = MATCHED_SHAPES[r.route_id]; r.matched = true; }
+    });
     return json(res, rows);
   }
 

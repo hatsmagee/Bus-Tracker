@@ -1078,11 +1078,11 @@ function renderRouteShapes() {
     try {
       let coords = decodePolyline(s.shape);
       if (coords.length < 2) return;
-      // GTFS shapes pack many near-duplicate vertices; those micro-segments are
-      // what make MapLibre's line-offset fan out / overshoot at corners. A light
-      // Douglas–Peucker simplify removes them so offset corners stay clean,
-      // while the path still follows the road. (~10 m tolerance.)
-      coords = simplifyPath(coords, 0.0001);
+      // Light Douglas–Peucker simplify to drop near-duplicate vertices (those
+      // micro-segments make line-offset fan out at corners). The shapes are
+      // already snapped to roads server-side (Valhalla), so use a gentle
+      // tolerance (~3 m) that cleans redundant points without cutting corners.
+      coords = simplifyPath(coords, 0.00003);
       routeCoords[s.route_id] = coords;
       routeShapeCoords[s.route_id] = coords;
       // Always prefer our curated route colors over the API pattern colors (which can be #FFFFFF etc.)
