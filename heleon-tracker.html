@@ -554,6 +554,9 @@ function initMap() {
     try { renderStopMarkers(); } catch (e) { console.error('[map] stops:', e); }
     try { renderRouteShapes(); } catch (e) { console.error('[map] shapes:', e); }
   });
+  // Re-fan overlapping buses whenever the camera settles (overlap is zoom/pan
+  // dependent — buses separate as you zoom in).
+  map.on('moveend', () => { try { deOverlapMarkers(); } catch (e) {} });
   map.on('error', (e) => {
     // Suppress known MapLibre v4 bugs about listener arrays
     if (e?.error?.message?.includes('slice is not a function')) return;
@@ -2284,6 +2287,44 @@ function renderMarkers() {
   // Refresh the golden direction arrows each poll so they follow the buses as
   // they move (renderRouteShapes is now skipped on most polls by its guard).
   renderAheadArrows();
+  deOverlapMarkers();
+}
+
+// Fan out buses that overlap on screen so none is hidden behind another. We
+// nudge each clustered marker by a small pixel offset around the shared point
+// (via Marker.setOffset, which doesn't move the underlying coordinate). As you
+// zoom in the buses separate naturally and the offsets fall away — so it gets
+// more accurate the closer you look.
+function deOverlapMarkers() {
+  if (!mapReady) return;
+  const ids = Object.keys(markers);
+  const pts = ids.map(id => {
+    const ll = markers[id].marker.getLngLat();
+    const p = map.project(ll);
+    return { id, x: p.x, y: p.y };
+  });
+  const THRESH = 26; // px — closer than this counts as overlapping
+  const used = new Set();
+  for (let i = 0; i < pts.length; i++) {
+    if (used.has(pts[i].id)) continue;
+    const cluster = [pts[i]];
+    for (let j = i + 1; j < pts.length; j++) {
+      if (used.has(pts[j].id)) continue;
+      if (Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y) < THRESH) cluster.push(pts[j]);
+    }
+    if (cluster.length === 1) {
+      markers[pts[i].id].marker.setOffset([0, 0]);
+      used.add(pts[i].id);
+    } else {
+      // Fan the cluster out evenly around a small ring.
+      const R = 16;
+      cluster.forEach((c, k) => {
+        const ang = (2 * Math.PI * k) / cluster.length - Math.PI / 2;
+        markers[c.id].marker.setOffset([Math.cos(ang) * R, Math.sin(ang) * R]);
+        used.add(c.id);
+      });
+    }
+  }
 }
 
 // Fade a bus marker by how long since its last GPS fix: solid when live (≤5 min),
