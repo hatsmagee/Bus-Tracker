@@ -965,6 +965,22 @@ async function pollFleet() {
       [ts, r.rid, r.status, r.latency || 0, list.length]);
   });
 
+  // Also sweep the full roster for buses that are reporting fresh GPS but aren't
+  // assigned to any route's vehicle list (idle / between-runs). They'd otherwise
+  // be invisible even though they're clearly out. We infer their route from the
+  // nearest route shape so they still show in context.
+  try {
+    const roster = JSON.parse((await upstreamFetch('vehicles')).body);
+    if (Array.isArray(roster)) roster.forEach(raw => {
+      if (byId[raw.id]) return;                  // already have a per-route reading
+      if (raw.lat == null || raw.lon == null) return;
+      if (raw.lat < BBOX.minLat || raw.lat > BBOX.maxLat || raw.lon < BBOX.minLon || raw.lon > BBOX.maxLon) return;
+      const luMs = raw.lastUpdated ? parseFleetTs(raw.lastUpdated) : ts;
+      if ((ts - luMs) > VEHICLE_RETAIN_MS) return;
+      byId[raw.id] = Object.assign({}, raw, { _routeId: inferRouteByShape(raw.lat, raw.lon), _luMs: luMs, _unassigned: true });
+    });
+  } catch {}
+
   const vehicles = [];
   Object.values(byId).forEach(raw => {
     const id = raw.id;
@@ -993,12 +1009,16 @@ async function pollFleet() {
       direction: ti ? ti.direction : null,
       shapeId: ti ? ti.shapeId : null,
       vehicleTs: luMs,
-      ageMin: Math.round(((ts - luMs) / 60000) * 10) / 10,
-      stale: (ts - luMs) > VEHICLE_STALE_MS, // older than the "live" window → show faded
+      // The bare roster clock is skewed, so a roster-only age can come out
+      // slightly negative — clamp sub-3h skew to "just now" rather than show a
+      // bogus negative/stale age.
+      ageMin: (() => { let a = (ts - luMs) / 60000; if (a < 0) a = a > -180 ? 0 : a; return Math.round(a * 10) / 10; })(),
+      stale: (ts - luMs) > VEHICLE_STALE_MS && (ts - luMs) > 0,
       lastUpdated: new Date(luMs).toISOString(),
       routeId,
-      routeInferred: false,        // route now comes straight from the endpoint
-      routeName: route ? route.name : 'Not in service',
+      routeInferred: !!raw._unassigned, // roster-only bus: route is a nearest-shape guess
+      unassigned: !!raw._unassigned,    // reporting GPS but not on a route's vehicle list
+      routeName: route ? route.name : (raw._unassigned ? 'Not in service' : 'Not in service'),
       routeShort: route ? route.short : '?',
       routeColor: route ? route.color : '#8b949e',
     };
