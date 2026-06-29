@@ -1058,9 +1058,23 @@ function startAheadAnim() {
   aheadAnimRAF = requestAnimationFrame(tick);
 }
 
-function renderRouteShapes() {
+let _routeShapesSig = null;
+function renderRouteShapes(force) {
   if (!mapReady) return;
   buildRouteMetaFromVehicles();
+
+  // Route geometry only changes when the set of routes, their visibility, or the
+  // shapes data changes — NOT on every vehicle poll. Re-rendering every 10 s tore
+  // down and rebuilt all the line layers, which made the routes flash. Skip the
+  // rebuild when nothing relevant has changed (callers that change visibility or
+  // load new shapes pass force=true).
+  const sig = JSON.stringify({
+    n: routeShapes.length,
+    vis: routeShapes.map(s => `${s.route_id}:${routeVisible[s.route_id] !== false ? 1 : 0}`).sort(),
+    show: showRouteShapes
+  });
+  if (!force && sig === _routeShapesSig) return;
+  _routeShapesSig = sig;
 
   // Decode every route shape, deduplicated per route_id (pick first pattern).
   // We render ALL routes — not just ones with a live bus — so a rider in
@@ -1785,13 +1799,13 @@ function toggleRoute(id, el) {
   el.classList.toggle('on');
   renderMarkers();
   renderStopMarkers();
-  renderRouteShapes();
+  renderRouteShapes(true);
   renderTrails();
 }
 
 function toggleRouteShapes() {
   showRouteShapes = document.getElementById('showRoutes').checked;
-  renderRouteShapes();
+  renderRouteShapes(true);
 }
 
 let showTrails = true;
