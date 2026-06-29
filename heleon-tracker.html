@@ -594,20 +594,24 @@ function initMapLayers() {
   // the path show direction of travel; the dash animation conveys flow.
   map.addSource('ahead', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({ id: 'ahead-glow', type: 'line', source: 'ahead',
-    paint: { 'line-color': '#ffd34d', 'line-width': 7, 'line-opacity': 0.18, 'line-blur': 3 },
+    paint: { 'line-color': '#ffd34d', 'line-width': 10, 'line-opacity': 0.16, 'line-blur': 4 },
     layout: { 'line-cap': 'round', 'line-join': 'round' }
   });
+  // Faint guide line — the bold chevrons are the star, so keep this subtle.
   map.addLayer({ id: 'ahead-line', type: 'line', source: 'ahead',
-    paint: { 'line-color': '#ffcc33', 'line-width': 3, 'line-opacity': 0.7, 'line-dasharray': [0, 2, 3] },
+    paint: { 'line-color': '#ffcc33', 'line-width': 2, 'line-opacity': 0.35 },
     layout: { 'line-cap': 'round', 'line-join': 'round' }
   });
   map.addLayer({ id: 'ahead-arrows', type: 'symbol', source: 'ahead',
     layout: {
-      'symbol-placement': 'line', 'symbol-spacing': 60,
-      'icon-image': 'chevron', 'icon-size': 0.5,
+      'symbol-placement': 'line',
+      // Bigger spacing so each big chevron stands alone and reads clearly.
+      'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 11, 70, 15, 110],
+      'icon-image': 'chevron',
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.7, 14, 1.0, 17, 1.3],
       'icon-allow-overlap': true, 'icon-rotation-alignment': 'map'
     },
-    paint: { 'icon-opacity': 0.95 }
+    paint: { 'icon-opacity': 1 }
   });
 
   // Stop markers layer.
@@ -696,16 +700,26 @@ function makeStopIcon() {
   return x.getImageData(0, 0, s, s);
 }
 
-// Forward-pointing chevron for the "where it's going" arrows. Drawn pointing
-// up (north); symbol-placement:line rotates it to follow the route direction.
+// Bold, glowing forward chevron for the "where it's going" arrows — like a
+// boost-pad arrow: bright yellow, fat, with a dark outline + glow so it reads
+// clearly on any basemap and stands out above the thin route line. Drawn
+// pointing up (north); symbol-placement:line rotates it along the route.
 function makeChevronIcon() {
-  const s = 24, c = document.createElement('canvas');
+  const s = 48, c = document.createElement('canvas');
   c.width = s; c.height = s;
   const x = c.getContext('2d');
-  x.strokeStyle = '#3a2a00'; x.lineWidth = 5; x.lineCap = 'round'; x.lineJoin = 'round';
-  x.beginPath(); x.moveTo(5, 16); x.lineTo(12, 7); x.lineTo(19, 16); x.stroke();
-  x.strokeStyle = '#fff3c4'; x.lineWidth = 2.5;
-  x.beginPath(); x.moveTo(5, 16); x.lineTo(12, 7); x.lineTo(19, 16); x.stroke();
+  x.lineCap = 'round'; x.lineJoin = 'round';
+  const chevron = () => { x.beginPath(); x.moveTo(9, 33); x.lineTo(24, 14); x.lineTo(39, 33); x.stroke(); };
+  // outer glow
+  x.shadowColor = 'rgba(255,210,40,0.9)'; x.shadowBlur = 8;
+  x.strokeStyle = '#1a1200'; x.lineWidth = 13; chevron();
+  x.shadowBlur = 0;
+  // dark outline
+  x.strokeStyle = '#1a1200'; x.lineWidth = 12; chevron();
+  // bright yellow fill
+  x.strokeStyle = '#ffd21a'; x.lineWidth = 7; chevron();
+  // hot highlight core
+  x.strokeStyle = '#fff6c0'; x.lineWidth = 2.5; chevron();
   return x.getImageData(0, 0, s, s);
 }
 
