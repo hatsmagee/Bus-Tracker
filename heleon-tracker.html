@@ -701,15 +701,17 @@ function makeStopIcon() {
 }
 
 // Bold, glowing forward chevron for the "where it's going" arrows — like a
-// boost-pad arrow: bright yellow, fat, with a dark outline + glow so it reads
-// clearly on any basemap and stands out above the thin route line. Drawn
-// pointing up (north); symbol-placement:line rotates it along the route.
+// boost-pad arrow: bright yellow, fat, with a dark outline + glow. Drawn with
+// its APEX pointing DOWN; with symbol-placement:line MapLibre aligns the icon's
+// up-axis to the line's forward (travel) direction, so an apex-down chevron
+// points the way the bus is going.
 function makeChevronIcon() {
   const s = 48, c = document.createElement('canvas');
   c.width = s; c.height = s;
   const x = c.getContext('2d');
   x.lineCap = 'round'; x.lineJoin = 'round';
-  const chevron = () => { x.beginPath(); x.moveTo(9, 33); x.lineTo(24, 14); x.lineTo(39, 33); x.stroke(); };
+  // apex at bottom (y=34), arms up at y=15 → chevron points DOWN
+  const chevron = () => { x.beginPath(); x.moveTo(9, 15); x.lineTo(24, 34); x.lineTo(39, 15); x.stroke(); };
   // outer glow
   x.shadowColor = 'rgba(255,210,40,0.9)'; x.shadowBlur = 8;
   x.strokeStyle = '#1a1200'; x.lineWidth = 13; chevron();
