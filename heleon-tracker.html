@@ -1120,7 +1120,8 @@ let routeLayerIds = [];  // MapLibre layer IDs
 let routeSourceIds = []; // MapLibre source IDs
 
 // Build a fast lookup of route shape coordinates for the golden-path arrows.
-let routeShapeCoords = {}; // routeId -> [[lon,lat], ...]
+let routeShapeCoords = {}; // routeId -> [[lon,lat], ...] (first pattern, for the drawn line)
+let allPatternCoords = {}; // routeId -> [ [[lon,lat]…], … ] (all patterns, for snapping)
 
 // "Where the bus is going": for each active bus, take the slice of its route
 // shape ahead of its current position and draw it as one feature in the shared
@@ -1277,24 +1278,31 @@ function renderRouteShapes(force) {
   const routeMeta = {};   // routeId -> { color, name }
   const seen = new Set();
   routeShapeCoords = {};
+  allPatternCoords = {};
 
   routeShapes.forEach(s => {
-    if (!s.shape || seen.has(s.route_id)) return;
+    if (!s.shape) return;
     if (routeVisible[s.route_id] === false) return;
-    seen.add(s.route_id);
+    let coords;
     try {
-      let coords = decodePolyline(s.shape);
+      coords = decodePolyline(s.shape);
       if (coords.length < 2) return;
       // Light Douglas–Peucker simplify to drop near-duplicate vertices (those
       // micro-segments make line-offset fan out at corners). The shapes are
       // already snapped to roads server-side (Valhalla), so use a gentle
       // tolerance (~3 m) that cleans redundant points without cutting corners.
       coords = simplifyPath(coords, 0.00003);
-      routeCoords[s.route_id] = coords;
-      routeShapeCoords[s.route_id] = coords;
-      // Always prefer our curated route colors over the API pattern colors (which can be #FFFFFF etc.)
-      routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || normalizeColor(s.color) || '#888', name: s.name };
-    } catch(e) {}
+    } catch(e) { return; }
+    // Keep EVERY pattern's polyline for motion/chevron snapping — a bus on
+    // pattern 2/3 is far from pattern 1, so snapping to all patterns keeps it
+    // on-route. The drawn route LINE still uses just the first pattern.
+    (allPatternCoords[s.route_id] = allPatternCoords[s.route_id] || []).push(coords);
+    if (seen.has(s.route_id)) return;
+    seen.add(s.route_id);
+    routeCoords[s.route_id] = coords;
+    routeShapeCoords[s.route_id] = coords;
+    // Always prefer our curated route colors over the API pattern colors (which can be #FFFFFF etc.)
+    routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || normalizeColor(s.color) || '#888', name: s.name };
   });
 
   // Compute lateral offsets to separate overlapping routes
@@ -2316,13 +2324,10 @@ function renderMarkers() {
     const heading = v.headingDegrees;
     const fix = [v.lon, v.lat];
     const nowT = performance.now();
-    // Route polyline for snap-to-road motion (may be absent for unmapped routes).
-    const shapeCoords = routeShapeCoords[v.routeId];
-    const rc = (shapeCoords && shapeCoords.length > 1) ? routeCum(v.routeId, shapeCoords) : null;
-    // Snap the fix to the route to get its distance-along-route. If the bus is
-    // far off any route shape (>120 m), we can't trust route motion — fall back
-    // to just sitting at the fix (no animated movement).
-    let snap = rc ? snapToRoute(rc, fix) : null;
+    // Snap to whichever of the route's PATTERNS the bus is nearest (a bus on
+    // pattern 2/3 is far from pattern 1). Pick the closest; if it's within 120 m
+    // we trust route-snapped motion, else the bus glides straight to its fix.
+    const { rc, snap } = nearestPatternSnap(v.routeId, fix);
     const onRoute = snap && snap.offRoute < 120;
 
     if (markers[v.id]) {
@@ -2470,15 +2475,30 @@ function metersBetween(a, b) {
 }
 // Build (and cache) a cumulative-distance table for a route polyline so we can
 // map distance↔position. coords: [[lon,lat],…].
-const _routeCumCache = {};
+// Cumulative-distance table for a polyline. Cached on the coords array itself
+// (a WeakMap), so each pattern gets its own table regardless of route.
+const _routeCumCache = new WeakMap();
 function routeCum(routeId, coords) {
-  const c = _routeCumCache[routeId];
-  if (c && c.coords === coords) return c;
+  const cached = _routeCumCache.get(coords);
+  if (cached) return cached;
   const cum = [0];
   for (let i = 1; i < coords.length; i++) cum[i] = cum[i - 1] + metersBetween(coords[i - 1], coords[i]);
   const entry = { coords, cum, total: cum[cum.length - 1] || 0 };
-  _routeCumCache[routeId] = entry;
+  _routeCumCache.set(coords, entry);
   return entry;
+}
+// Of all a route's pattern polylines, return the cumulative table + snap for the
+// one the point is nearest to. Falls back to the first-pattern shape.
+function nearestPatternSnap(routeId, pt) {
+  const pats = allPatternCoords[routeId] || (routeShapeCoords[routeId] ? [routeShapeCoords[routeId]] : []);
+  let best = null;
+  for (const coords of pats) {
+    if (!coords || coords.length < 2) continue;
+    const rc = routeCum(routeId, coords);
+    const snap = snapToRoute(rc, pt);
+    if (!best || snap.offRoute < best.snap.offRoute) best = { rc, snap };
+  }
+  return best || { rc: null, snap: null };
 }
 // Snap a [lon,lat] point to the polyline; return its distance-along-route (m).
 // Searches near a hint distance first (cheap) then falls back to full scan.
