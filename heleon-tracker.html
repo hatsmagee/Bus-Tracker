@@ -87,6 +87,14 @@
     .sidebar-resizer:hover::after,
     .sidebar-resizer.dragging::after { background: var(--accent); }
     .sidebar.collapsed .refresh-bar { display: none; }
+    /* Tighten the header so the title + badges don't collide on a phone. The
+       logo is enough branding; hide the long wordmark. */
+    header { gap: 8px; padding: 0 10px; }
+    header img { height: 26px; }
+    header h1 { display: none; }
+    .header-badges { gap: 5px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .badge { padding: 3px 7px; font-size: 10px; white-space: nowrap; flex-shrink: 0; }
+    #lastUpdate { display: none; }              /* shown in the sheet instead */
   }
 
   /* ─── GOLDEN PATH ARROWS (animated dashed line ahead of each bus) ── */
@@ -2815,11 +2823,18 @@ function resetCountdown() {
   if (countdownTimer) clearInterval(countdownTimer);
   updateCountdownUI();
   countdownTimer = setInterval(() => {
+    // Pause polling while the tab is hidden — no point spending the rider's data
+    // and battery fetching updates they can't see. Resumes on visibility.
+    if (document.hidden) return;
     countdownVal--;
     updateCountdownUI();
     if (countdownVal <= 0) { clearInterval(countdownTimer); fetchAll(); }
   }, 1000);
 }
+// Refresh immediately when the tab becomes visible again (so it's current).
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && countdownVal <= 0) fetchAll();
+});
 function updateCountdownUI() {
   document.getElementById('countdown').textContent = countdownVal;
   document.getElementById('refreshFill').style.width = (countdownVal / REFRESH_INTERVAL * 100) + '%';
@@ -3154,16 +3169,16 @@ setInterval(() => { if (activeTab === 'system' && !document.hidden) { pollLearn(
 // so only when actually visible).
 setInterval(() => { if (activeTab === 'fleet' && !document.hidden) fetchFleet(); }, 15000);
 
-// Trail + ETA refresh on their own cadence
-setInterval(fetchTrails, TRAIL_UPDATE_INTERVAL);
-setInterval(fetchStoplines, 30000); // refresh ETAs every 30s
+// Trail + ETA refresh on their own cadence — skipped while the tab is hidden.
+setInterval(() => { if (!document.hidden) fetchTrails(); }, TRAIL_UPDATE_INTERVAL);
+setInterval(() => { if (!document.hidden) fetchStoplines(); }, 30000); // refresh ETAs every 30s
 
 // Tick live clocks in all open stop lists every second
 setInterval(() => {
   const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   document.querySelectorAll('[id^="clock-"]').forEach(el => { el.textContent = t; });
 }, 1000);
-fetchTrails();
+// (fetchTrails already runs in the startup Promise.all above — no duplicate here.)
 </script>
 </body>
 </html>

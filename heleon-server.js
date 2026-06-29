@@ -1338,6 +1338,8 @@ function learnCorridor(routeId) {
 // zones from our own buses: where a bus is RIGHT NOW moving well below the
 // historical typical speed for that spot, that's real congestion / a long light.
 // Typical speed per ~150 m cell is cached and refreshed lazily.
+// Short-lived memo for the heavy /api/stopline computation (see handler).
+const stoplineMemo = new Map();
 let trafficTypical = null, trafficTypicalTs = 0;
 const TRAFFIC_CELL = 700;          // ~150 m grid (lat*700 rounding)
 const TRAFFIC_TYPICAL_TTL = 30 * 60 * 1000;
@@ -1652,6 +1654,13 @@ async function handleApi(url, res) {
   // Returns stops in order, each with: distKm, etaMinSpeed (pure speed), etaMinHistorical (avg from pings)
   if (p === '/api/stopline') {
     const vid = parseInt(q.get('vehicle_id'));
+    // Memoize the (fairly heavy) stopline result briefly — many clients ask for
+    // the same vehicle every 30 s, and a bus's stop predictions don't change
+    // meaningfully within ~8 s. Keyed by vehicle + the latest poll timestamp.
+    const memoKey = vid + ':' + lastPollStats.ts;
+    const cached = stoplineMemo.get(memoKey);
+    if (cached && Date.now() - cached.t < 8000) return json(res, cached.data);
+
     const v = latestVehicles.find(x => x.id === vid);
     if (!v) return json(res, { error: 'vehicle not found' }, 404);
     const stops = await ensureStops(v.routeId);
@@ -1919,7 +1928,7 @@ async function handleApi(url, res) {
       if (Math.abs(scheduleDelayMin) > 45) { scheduleSuspect = true; scheduleDelayMin = null; }
     }
 
-    return json(res, {
+    const payload = {
       vehicle_id: vid,
       route: v.routeName,
       routeShort: v.routeShort,
@@ -1935,7 +1944,10 @@ async function handleApi(url, res) {
       etaPrimarySource: nextStop ? nextStop.etaSource : null,
       stops: stopETAs,   // in route sequence order
       serverTs: nowMs,
-    });
+    };
+    stoplineMemo.set(memoKey, { t: Date.now(), data: payload });
+    if (stoplineMemo.size > 200) stoplineMemo.clear(); // bound the cache
+    return json(res, payload);
   }
 
   // GTFS official stop data (names, wheelchair)
