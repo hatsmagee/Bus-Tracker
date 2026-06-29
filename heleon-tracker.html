@@ -979,7 +979,7 @@ function computeRouteOffsets(routeCoordMap) {
   // Build groups of significantly overlapping routes (>20 shared cells)
   const OVERLAP_THRESH = 20;
   const assigned = {}; // routeId -> offsetPx
-  const LINE_SPACING = 5; // px between parallel lines
+  const LINE_SPACING = 6; // px between parallel lines (visible even zoomed out)
 
   // For each route, get its overlap peers sorted by routeId for stable ordering
   for (const rid of Object.keys(routeCoordMap)) {
@@ -1115,10 +1115,14 @@ function renderRouteShapes() {
         // Thin when zoomed out (so overlapping routes don't smear into a blob),
         // thicker as you zoom in for tappability.
         'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.2, 11, 2, 14, 3.5, 17, 5],
-        'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.75, 12, 0.92],
-        // Lateral parallel-line offset only kicks in once zoomed in enough to
-        // see the separation; at low zoom routes collapse onto the road cleanly.
-        'line-offset': ['interpolate', ['linear'], ['zoom'], 11, 0, 14, offset, 17, offset * 1.6]
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 12, 0.92],
+        // Keep routes that share a road separated as distinct parallel ribbons
+        // at EVERY zoom — never collapse to one line, or several routes on the
+        // same street look like a single route. Offset is in line-widths, so it
+        // scales with the line; we keep a meaningful fraction when zoomed out and
+        // open it up further as you zoom in.
+        'line-offset': ['interpolate', ['linear'], ['zoom'],
+          8, offset * 0.6, 11, offset * 0.8, 14, offset, 17, offset * 1.5]
       },
       layout: { 'line-join': 'round', 'line-cap': 'round' }
     }, 'stops-circle'); // insert below stops layer
