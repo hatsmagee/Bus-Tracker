@@ -605,11 +605,11 @@ function initMapLayers() {
   map.addLayer({ id: 'ahead-arrows', type: 'symbol', source: 'ahead',
     layout: {
       'symbol-placement': 'line',
-      // Bigger spacing so each big chevron stands alone and reads clearly.
-      'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 11, 70, 15, 110],
+      // Small, densely-packed chevrons that stream along the route.
+      'symbol-spacing': 22,
       'icon-image': 'chevron',
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.7, 14, 1.0, 17, 1.3],
-      'icon-allow-overlap': true, 'icon-rotation-alignment': 'map'
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.32, 14, 0.45, 17, 0.6],
+      'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map'
     },
     paint: { 'icon-opacity': 1 }
   });
@@ -1051,11 +1051,12 @@ let routeShapeCoords = {}; // routeId -> [[lon,lat], ...]
 // shape ahead of its current position and draw it as one feature in the shared
 // `ahead` source. Chevron arrows (symbol-placement:line) point along it and the
 // dash animates to convey flow. One source/3 layers total — cheap and elegant.
+let aheadSegments = []; // full forward paths (in travel direction) for animation
 function renderAheadArrows() {
   if (!mapReady) return;
   const src = map.getSource('ahead');
   if (!src) return;
-  const features = [];
+  aheadSegments = [];
   const visible = visibleVehicles().filter(v => routeVisible[v.routeId] !== false);
   visible.forEach(v => {
     const coords = routeShapeCoords[v.routeId];
@@ -1067,38 +1068,79 @@ function renderAheadArrows() {
       if (d < bestKm) { bestKm = d; bestIdx = i; }
     }
     if (bestKm > 0.5) return; // bus too far off its shape — skip
-    const ahead = coords.slice(bestIdx, Math.min(coords.length, bestIdx + 26));
-    if (ahead.length < 2) return;
-    features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: ahead },
-                    properties: { color: v.routeColor } });
+    // Build the segment in the bus's ACTUAL travel direction. The shape is a
+    // single digitized line; the bus may run it forwards or backwards. Pick the
+    // direction (forward/back along the shape) whose bearing matches the bus
+    // heading, so the chevrons always point the way the bus is going.
+    const fwd = coords.slice(bestIdx, Math.min(coords.length, bestIdx + 30));
+    const back = coords.slice(Math.max(0, bestIdx - 29), bestIdx + 1).reverse();
+    let seg = fwd;
+    if (v.headingDegrees != null) {
+      const bFwd = fwd.length > 1 ? bearingDeg(fwd[0], fwd[Math.min(5, fwd.length - 1)]) : null;
+      const bBack = back.length > 1 ? bearingDeg(back[0], back[Math.min(5, back.length - 1)]) : null;
+      const diff = (a) => a == null ? 999 : Math.abs(((a - v.headingDegrees + 540) % 360) - 180);
+      if (diff(bBack) < diff(bFwd)) seg = back; // bus runs the shape in reverse
+    }
+    if (seg.length < 2) return;
+    aheadSegments.push({ coords: seg });
   });
-  src.setData({ type: 'FeatureCollection', features });
+  drawAheadAt(0);
   // The per-route line layers are (re)added above these, so lift the ahead
   // layers back to the top each time or the golden arrows hide under the routes.
   ['ahead-glow', 'ahead-line', 'ahead-arrows'].forEach(id => { if (map.getLayer(id)) map.moveLayer(id); });
   startAheadAnim();
 }
 
-// Animate the forward line's dash offset so the arrows appear to flow forward.
-// rAF-based, throttled, and pauses when the tab is hidden or no arrows exist.
-let aheadAnimRAF = null, aheadDashPhase = 0, aheadLastFrame = 0;
-// A short loop of dash patterns; stepping through them marches the dash forward.
-const AHEAD_DASHES = [[0,1,2,1],[0.5,1,1.5,1],[1,1,1,1],[1.5,1,0.5,1],[2,1,0,1]];
+// Compass bearing (deg) from [lon,lat] a → b.
+function bearingDeg(a, b) {
+  const φ1 = a[1] * Math.PI / 180, φ2 = b[1] * Math.PI / 180;
+  const Δλ = (b[0] - a[0]) * Math.PI / 180;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+// Trim `startM` metres off the front of a polyline (drops the leading portion,
+// interpolating the new first point). Used to march the evenly-spaced chevrons
+// forward so they appear to flow in the travel direction.
+function trimFront(coords, startM) {
+  if (startM <= 0) return coords;
+  let acc = 0;
+  for (let i = 1; i < coords.length; i++) {
+    const segM = haversineKm(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]) * 1000;
+    if (acc + segM >= startM) {
+      const t = (startM - acc) / (segM || 1);
+      const lng = coords[i-1][0] + (coords[i][0] - coords[i-1][0]) * t;
+      const lat = coords[i-1][1] + (coords[i][1] - coords[i-1][1]) * t;
+      return [[lng, lat], ...coords.slice(i)];
+    }
+    acc += segM;
+  }
+  return coords.slice(-2);
+}
+// Render the ahead segments with the chevron pattern shifted forward by phaseM.
+function drawAheadAt(phaseM) {
+  const src = map.getSource('ahead');
+  if (!src) return;
+  const features = aheadSegments.map(s => ({
+    type: 'Feature',
+    geometry: { type: 'LineString', coordinates: trimFront(s.coords, phaseM) },
+    properties: {},
+  }));
+  src.setData({ type: 'FeatureCollection', features });
+}
+
+// Marching-chevron flow: advance the trim offset each frame so the densely
+// spaced chevrons appear to stream forward along the route in travel direction.
+let aheadAnimRAF = null, aheadLastFrame = 0, aheadPhase = 0;
+const CHEVRON_SPACING_M = 25; // phase loop period (m) — kept short so wrap is seamless at dense spacing
 function startAheadAnim() {
   if (aheadAnimRAF) return;
   const tick = (now) => {
-    const data = map.getSource('ahead') && map.getSource('ahead')._data;
-    const hasArrows = data && data.features && data.features.length;
-    if (!hasArrows || document.hidden) { aheadAnimRAF = null; return; }
-    if (now - aheadLastFrame > 120) {          // ~8fps; enough for a flowing dash
-      aheadLastFrame = now;
-      // Cycle through a small fixed set of dash patterns so MapLibre's line
-      // atlas doesn't fill up (avoids "LineAtlas out of space").
-      aheadDashPhase = (aheadDashPhase + 1) % AHEAD_DASHES.length;
-      if (map.getLayer('ahead-line')) {
-        map.setPaintProperty('ahead-line', 'line-dasharray', AHEAD_DASHES[aheadDashPhase]);
-      }
-    }
+    if (!aheadSegments.length || document.hidden) { aheadAnimRAF = null; aheadLastFrame = 0; return; }
+    const dt = aheadLastFrame ? (now - aheadLastFrame) / 1000 : 0.016;
+    aheadLastFrame = now;
+    aheadPhase = (aheadPhase + 14 * dt) % CHEVRON_SPACING_M; // ~14 m/s flow, loops seamlessly
+    drawAheadAt(aheadPhase);
     aheadAnimRAF = requestAnimationFrame(tick);
   };
   aheadAnimRAF = requestAnimationFrame(tick);
