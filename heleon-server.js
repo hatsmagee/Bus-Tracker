@@ -458,6 +458,7 @@ function fetchBinary(reqPath) {
 // ─── POLLING ─────────────────────────────────────────────────────────────────
 let latestVehicles = [];
 let tripUpdateIndex = {};   // tripId -> { stopId: predictedArrivalMs }
+let vehicleTripMap = {};    // vehicleId -> tripId  (merged from both RT feeds)
 let lastPollStats = { ts: null, total: 0 };
 const startTime = new Date().toISOString();
 
@@ -469,10 +470,6 @@ let tripLastBuilt = 0;
 // Track last known closest-stop index per vehicle for arrival detection
 const vehicleLastStopIdx = {}; // vehicleId -> { stopIdx, stopId, ts }
 
-// Last-known passenger load/capacity per vehicle (GTFS-RT omits occupancy on
-// this feed, so we carry it forward from the legacy JSON fleet endpoint).
-const vehicleLoadCache = {}; // vehicleId -> { load, capacity, ts }
-
 function buildTripIndex() {
   const rows = dbAll(`SELECT trip_id, route_id, direction, shape_id, headsign FROM gtfs_trips`);
   const idx = {};
@@ -480,6 +477,52 @@ function buildTripIndex() {
   tripRouteIndex = idx;
   tripLastBuilt = Date.now();
   return rows.length;
+}
+
+// Decoded route-shape coordinates per route, for inferring the route of a bus
+// the realtime feeds didn't map. Built lazily from cached pattern shapes.
+let routeShapeIndex = null; // routeId -> [[lat,lon], ...] (sampled)
+function buildRouteShapeIndex() {
+  const rows = dbAll(`SELECT route_id, shape FROM route_shapes WHERE shape IS NOT NULL`);
+  const idx = {};
+  rows.forEach(r => {
+    if (idx[r.route_id]) return; // first pattern per route is enough for proximity
+    try {
+      const pts = decodePolyline(r.shape);
+      // Sample every ~5th point to keep the nearest-route scan cheap.
+      idx[r.route_id] = pts.filter((_, i) => i % 5 === 0);
+    } catch {}
+  });
+  routeShapeIndex = idx;
+}
+
+// Decode a Google-encoded polyline → [[lat,lon], ...].
+function decodePolyline(str) {
+  let index = 0, lat = 0, lng = 0; const coords = [];
+  while (index < str.length) {
+    let b, shift = 0, result = 0;
+    do { b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+    shift = 0; result = 0;
+    do { b = str.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+    coords.push([lat / 1e5, lng / 1e5]);
+  }
+  return coords;
+}
+
+// Best-guess route for an unmapped bus: the route whose shape passes closest to
+// the bus, within 300 m. Returns null when nothing is plausibly close.
+function inferRouteByShape(lat, lon) {
+  if (!routeShapeIndex) buildRouteShapeIndex();
+  let bestRoute = null, bestKm = 0.3;
+  for (const rid in routeShapeIndex) {
+    for (const [slat, slon] of routeShapeIndex[rid]) {
+      const d = haversineKm(lat, lon, slat, slon);
+      if (d < bestKm) { bestKm = d; bestRoute = parseInt(rid); }
+    }
+  }
+  return bestRoute;
 }
 
 // ─── TRANSFORMER PREDICTOR (tiny single-block, single-head attention) ──────
@@ -753,24 +796,6 @@ async function trainFromHistory() {
   console.log(`[learn] Trained transformer on ${n} examples, total loss: ${totalLoss.toFixed(1)}, lr=${TX.lr.toFixed(5)}`);
 }
 
-// Refresh per-vehicle occupancy from the legacy fleet JSON endpoint. GTFS-RT
-// VehiclePositions on this feed omits occupancy, so we poll the cheap single
-// /vehicles call occasionally and carry the value forward between RT polls.
-async function refreshOccupancy() {
-  try {
-    const r = await upstreamFetch('vehicles');
-    if (r.status !== 200) return;
-    const fleet = JSON.parse(r.body);
-    if (!Array.isArray(fleet)) return;
-    const ts = Date.now();
-    fleet.forEach(v => {
-      if (v.passengerLoad != null || v.capacity != null) {
-        vehicleLoadCache[v.id] = { load: v.passengerLoad, capacity: v.capacity, ts };
-      }
-    });
-  } catch { /* occupancy is best-effort */ }
-}
-
 // Pull the TripUpdates feed → tripId -> { stopId: predictedArrivalMs, _seq }.
 // These are the agency's official predicted arrival times (headline ETA).
 async function pollTripUpdates() {
@@ -780,6 +805,7 @@ async function pollTripUpdates() {
   let feed;
   try { feed = parseFeedMessage(res.buf); } catch { return; }
   const idx = {};
+  const now = Date.now();
   feed.forEach(e => {
     const tu = e.tripUpdate;
     if (!tu || !tu.trip || !tu.trip.tripId) return;
@@ -789,68 +815,120 @@ async function pollTripUpdates() {
       if (t && s.stopId) byStop[s.stopId] = { ms: t * 1000, seq: s.stopSeq };
     });
     idx[tu.trip.tripId] = byStop;
+    // Map this vehicle to the trip it's *currently* on: the trip whose first
+    // predicted stop is nearest now (a vehicle appears on several upcoming trips).
+    if (tu.vehicleId) {
+      const id = parseInt(tu.vehicleId) || tu.vehicleId;
+      const firstMs = tu.stopTimeUpdates.reduce((m, s) => {
+        const t = s.arrival && s.arrival.time; return t ? Math.min(m, t * 1000) : m;
+      }, Infinity);
+      const prev = vehicleTripMap[id];
+      if (!prev || Math.abs(firstMs - now) < Math.abs((prev._ms || Infinity) - now)) {
+        vehicleTripMap[id] = { tripId: tu.trip.tripId, _ms: firstMs };
+      }
+    }
   });
   tripUpdateIndex = idx;
 }
 
-// Pull the VehiclePositions feed → array of vehicles in the legacy contract
-// shape (id/name/lat/lon/speed/headingDegrees/route*) so the frontend is unchanged.
+// Merge the VehiclePositions feed's vehicle→trip and bearing into shared maps.
+// VP is sometimes laggy/incomplete on this feed, so it augments rather than
+// drives the vehicle list (the fleet JSON below is the authoritative source).
+const vpBearing = {}; // vehicleId -> { bearing, ts }
 async function pollVehiclePositions() {
   let res;
-  try { res = await fetchBinary(RT_VP_PATH); }
+  try { res = await fetchBinary(RT_VP_PATH); } catch { return; }
+  if (res.status !== 200 || !res.buf.length) return;
+  let feed;
+  try { feed = parseFeedMessage(res.buf); } catch { return; }
+  const now = Date.now();
+  feed.forEach(e => {
+    const vp = e.vehicle;
+    if (!vp || !vp.vehicleId) return;
+    const id = parseInt(vp.vehicleId) || vp.vehicleId;
+    const tripId = vp.trip && vp.trip.tripId;
+    if (tripId && (!vehicleTripMap[id] || vp.timestamp * 1000 >= (vehicleTripMap[id]._vpTs || 0))) {
+      vehicleTripMap[id] = { tripId, _ms: vehicleTripMap[id] && vehicleTripMap[id]._ms, _vpTs: (vp.timestamp || 0) * 1000 };
+    }
+    if (vp.bearing != null && vp.timestamp && (now - vp.timestamp * 1000) < VEHICLE_STALE_MS) {
+      vpBearing[id] = { bearing: Math.round(vp.bearing), ts: vp.timestamp * 1000 };
+    }
+  });
+}
+
+// Authoritative position source: the single fleet /vehicles JSON. It is the
+// freshest and most complete list (GTFS-RT VehiclePositions lags it), includes
+// occupancy, and is one request. We attach route/trip context from the merged
+// vehicleTripMap (built from both RT feeds), so no live bus is ever dropped.
+async function pollFleet() {
+  let res;
+  try { res = await upstreamFetch('vehicles'); }
   catch { dbRun(`INSERT INTO poll_log(ts,route_id,status,latency,count) VALUES(?,?,0,0,0)`, [Date.now(), 0]); return []; }
   dbRun(`INSERT INTO poll_log(ts,route_id,status,latency,count) VALUES(?,?,?,?,?)`,
     [Date.now(), 0, res.status, res.latency, 0]);
-  if (res.status !== 200 || !res.buf.length) return [];
-  let feed;
-  try { feed = parseFeedMessage(res.buf); } catch { return []; }
+  if (res.status !== 200) return [];
+  let fleet;
+  try { fleet = JSON.parse(res.body); } catch { return []; }
+  if (!Array.isArray(fleet)) return [];
 
   const ts = Date.now();
   const vehicles = [];
-  feed.forEach(e => {
-    const vp = e.vehicle;
-    if (!vp || vp.lat == null || vp.lon == null) return;
-    // Drop parked/relocated buses outside Hawaiʻi County or with stale GPS.
-    if (vp.lat < BBOX.minLat || vp.lat > BBOX.maxLat || vp.lon < BBOX.minLon || vp.lon > BBOX.maxLon) return;
-    if (vp.timestamp && (ts - vp.timestamp * 1000) > VEHICLE_STALE_MS) return;
+  fleet.forEach(raw => {
+    if (raw.lat == null || raw.lon == null) return;
+    // Drop buses outside Hawaiʻi County (parked elsewhere) or with stale GPS.
+    if (raw.lat < BBOX.minLat || raw.lat > BBOX.maxLat || raw.lon < BBOX.minLon || raw.lon > BBOX.maxLon) return;
+    const luMs = raw.lastUpdated ? parseFleetTs(raw.lastUpdated) : ts;
+    if ((ts - luMs) > VEHICLE_STALE_MS) return;
 
-    const tripId = vp.trip && vp.trip.tripId;
+    const id = raw.id;
+    const trip = vehicleTripMap[id];
+    const tripId = trip ? trip.tripId : null;
     const ti = tripId ? tripRouteIndex[tripId] : null;
-    const routeId = (ti && ti.routeId) || (vp.trip && parseInt(vp.trip.routeId)) || null;
+    // Route from the RT trip mapping; otherwise infer from nearest route shape
+    // so a bus the feeds didn't map still shows on its route, not "unknown".
+    const routeId = ti ? ti.routeId : inferRouteByShape(raw.lat, raw.lon);
+    const routeInferred = !ti && routeId != null;
     const route = ROUTE_MAP[routeId];
-    const id = parseInt(vp.vehicleId || vp.vehicleLabel) || vp.vehicleId;
-    const speedMph = vp.speed != null ? Math.round(vp.speed * 2.23694 * 10) / 10 : null; // m/s → mph
-    const load = vehicleLoadCache[id];
-
+    const brg = vpBearing[id] && (ts - vpBearing[id].ts) < VEHICLE_STALE_MS ? vpBearing[id].bearing
+              : (raw.headingDegrees != null ? Math.round(raw.headingDegrees) : null);
     const v = {
-      id, name: vp.vehicleLabel || String(id),
-      lat: vp.lat, lon: vp.lon,
-      speed: speedMph,
-      headingDegrees: vp.bearing != null ? Math.round(vp.bearing) : null,
-      heading: null,
-      passengerLoad: load ? load.load : 0,
-      capacity: load ? load.capacity : null,
-      shapeDistanceTraveled: 0,
-      patternId: null,
+      id, name: raw.name || String(id),
+      lat: raw.lat, lon: raw.lon,
+      speed: raw.speed != null ? raw.speed : null,   // fleet JSON speed is already mph
+      headingDegrees: brg,
+      heading: raw.heading || null,
+      passengerLoad: raw.passengerLoad != null ? raw.passengerLoad : 0,
+      capacity: raw.capacity != null ? raw.capacity : null,
+      shapeDistanceTraveled: raw.shapeDistanceTraveled || 0,
+      patternId: raw.patternId || null,
       tripId,
       headsign: ti ? ti.headsign : null,
       direction: ti ? ti.direction : null,
       shapeId: ti ? ti.shapeId : null,
-      currentStopSeq: vp.currentStopSeq,
-      vehicleTs: vp.timestamp ? vp.timestamp * 1000 : ts,
+      vehicleTs: luMs,
+      lastUpdated: new Date(luMs).toISOString(),
       routeId,
-      routeName: route ? route.name : (tripId || 'Unknown'),
-      routeShort: route ? route.short : (routeId || '?'),
-      routeColor: route ? route.color : '#888888',
+      routeInferred,               // route is a nearest-shape guess, not from the feed
+      routeName: route ? route.name : 'Not in service',
+      routeShort: route ? route.short : '?',
+      routeColor: route ? route.color : '#8b949e',
     };
     vehicles.push(v);
 
     dbRun(`INSERT INTO pings (ts,vehicle_id,vehicle_name,route_id,pattern_id,lat,lon,speed,heading,heading_deg,passenger_load,capacity,shape_dist,last_updated)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [ts, v.id, v.name, routeId, null, v.lat, v.lon, v.speed,
-       null, v.headingDegrees, v.passengerLoad, v.capacity, 0, tripId]);
+      [ts, v.id, v.name, routeId, v.patternId, v.lat, v.lon, v.speed,
+       v.heading, v.headingDegrees, v.passengerLoad, v.capacity, v.shapeDistanceTraveled, tripId]);
   });
   return vehicles;
+}
+
+// Fleet /vehicles lastUpdated has no timezone suffix and runs on Hawaiʻi local
+// time (HST, UTC-10). Parse it as HST → epoch ms.
+function parseFleetTs(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/.exec(s);
+  if (!m) return Date.now();
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] + 10, +m[5], +m[6]);
 }
 
 // Called after each poll — detect when a bus has moved past a stop
@@ -932,11 +1010,13 @@ function detectArrivals(vehicle, routeId) {
 }
 
 async function pollAll() {
-  // Two cheap requests (positions + trip updates) replace 22 per-route polls.
-  const [vehicles] = await Promise.all([
-    pollVehiclePositions().catch(() => []),
+  // Build the vehicle→trip + ETA maps from both RT feeds first, then read the
+  // authoritative fleet list. Three cheap requests replace 22 per-route polls.
+  await Promise.all([
     pollTripUpdates().catch(() => {}),
+    pollVehiclePositions().catch(() => {}),
   ]);
+  const vehicles = await pollFleet().catch(() => []);
   latestVehicles = vehicles;
   // Detect stop arrivals for each active vehicle
   latestVehicles.forEach(v => {
@@ -1587,10 +1667,8 @@ const server = http.createServer((req, res) => {
   buildTripIndex();
   // Train learning model on past stop_arrivals history
   try { await trainFromHistory(); } catch(e) { console.error('[learn] train error:', e.message); }
-  await refreshOccupancy();
   await pollAll();
   setInterval(pollAll, POLL_INTERVAL);
-  setInterval(refreshOccupancy, 60 * 1000); // occupancy changes slowly — 1/min is plenty
   setTimeout(pruneDb, 30000);                // prune shortly after boot
   setInterval(pruneDb, 24 * 60 * 60 * 1000); // and daily thereafter
   setInterval(fetchShapes, 24 * 60 * 60 * 1000);

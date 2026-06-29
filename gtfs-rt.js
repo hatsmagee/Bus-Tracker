@@ -108,8 +108,11 @@ function parseTripUpdate(buf) {
       scheduleRelationship: num(stu[5]),
     };
   });
+  let vehicleId = null;
+  if (t[3]) { const vd = decodeMessage(t[3][0]); vehicleId = str(vd[1]) || str(vd[2]); }
   return {
     trip,
+    vehicleId,                 // TripUpdate.vehicle (VehicleDescriptor)
     timestamp: num(t[4]),
     delay: num(t[5]),
     stopTimeUpdates,

@@ -619,34 +619,62 @@ function initMapLayers() {
     paint: { 'circle-radius': 3, 'circle-color': ['get', 'color'], 'circle-opacity': 0.6, 'circle-stroke-width': 1, 'circle-stroke-color': 'rgba(0,0,0,.4)' }
   });
 
-  // Stop markers layer — bigger, more obvious, with thick contrasting stroke
+  // Bus-stop marker icon — a recognizable rounded sign with a bus glyph,
+  // not an anonymous coloured dot. Registered once as a map image.
+  if (!map.hasImage('busstop')) {
+    map.addImage('busstop', makeStopIcon(), { pixelRatio: 2 });
+  }
+  if (!map.hasImage('chevron')) {
+    map.addImage('chevron', makeChevronIcon(), { pixelRatio: 2 });
+  }
+
+  // "Where the bus is going" — one shared source holding each active bus's
+  // forward route segment. A glowing line plus chevron arrows that point along
+  // the path show direction of travel; the dash animation conveys flow.
+  map.addSource('ahead', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'ahead-glow', type: 'line', source: 'ahead',
+    paint: { 'line-color': '#ffd34d', 'line-width': 7, 'line-opacity': 0.18, 'line-blur': 3 },
+    layout: { 'line-cap': 'round', 'line-join': 'round' }
+  });
+  map.addLayer({ id: 'ahead-line', type: 'line', source: 'ahead',
+    paint: { 'line-color': '#ffcc33', 'line-width': 3, 'line-opacity': 0.7, 'line-dasharray': [0, 2, 3] },
+    layout: { 'line-cap': 'round', 'line-join': 'round' }
+  });
+  map.addLayer({ id: 'ahead-arrows', type: 'symbol', source: 'ahead',
+    layout: {
+      'symbol-placement': 'line', 'symbol-spacing': 60,
+      'icon-image': 'chevron', 'icon-size': 0.5,
+      'icon-allow-overlap': true, 'icon-rotation-alignment': 'map'
+    },
+    paint: { 'icon-opacity': 0.95 }
+  });
+
+  // Stop markers layer.
   map.addSource('stops', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  // Small base dot (route-coloured) so a stop is still locatable when zoomed out.
   map.addLayer({ id: 'stops-circle', type: 'circle', source: 'stops',
+    maxzoom: 13,
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 5, 11, 7, 13, 10, 15, 13, 17, 17],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 3, 11, 4.5, 13, 6],
       'circle-color': ['get', 'routeColor'],
-      'circle-opacity': 0.95,
-      'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 11, 2.5, 13, 3.5, 17, 4],
-      'circle-stroke-color': '#0d1117',
-      'circle-stroke-opacity': 1
+      'circle-opacity': 0.9,
+      'circle-stroke-width': 1.5,
+      'circle-stroke-color': '#fff',
+      'circle-stroke-opacity': 0.85
     }
   });
-  // Inner highlight ring so stops are easy to spot on any basemap
-  map.addLayer({ id: 'stops-halo', type: 'circle', source: 'stops',
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 9, 11, 12, 13, 16, 15, 20, 17, 24],
-      'circle-color': 'rgba(255,255,255,0)',
-      'circle-stroke-width': 1.5,
-      'circle-stroke-color': 'rgba(255,255,255,.55)',
-      'circle-stroke-opacity': 0.7,
-      'circle-blur': 0.3
-    }
-  }, 'stops-circle');
-  map.addLayer({ id: 'stops-label', type: 'symbol', source: 'stops',
-    layout: { 'text-field': ['get', 'stopCode'], 'text-size': 10, 'text-anchor': 'top', 'text-offset': [0, 1.1],
-              'text-optional': true, 'text-allow-overlap': false, 'text-ignore-placement': true },
-    paint: { 'text-color': '#e6edf3', 'text-halo-color': '#0d1117', 'text-halo-width': 1.8 },
-    minzoom: 10
+  // Bus-stop sign icons appear as you zoom in — the obvious, tappable indicator.
+  map.addLayer({ id: 'stops-icon', type: 'symbol', source: 'stops',
+    minzoom: 12.5,
+    layout: {
+      'icon-image': 'busstop',
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 12.5, 0.5, 15, 0.8, 17, 1.05],
+      'icon-allow-overlap': true,
+      'icon-anchor': 'bottom',
+      'text-field': ['get', 'stopCode'], 'text-size': 10, 'text-anchor': 'top', 'text-offset': [0, 0.3],
+      'text-optional': true, 'text-allow-overlap': false
+    },
+    paint: { 'text-color': '#e6edf3', 'text-halo-color': '#0d1117', 'text-halo-width': 1.8 }
   });
 
   // Stop hover + click tooltip — hover for desktop, click/tap for mobile.
@@ -663,23 +691,61 @@ function initMapLayers() {
       .then(data => { if (stopHoverPopup) stopHoverPopup.setHTML(buildStopPopupHtml(p, data)); })
       .catch(() => {});
   }
-  map.on('mouseenter', 'stops-circle', e => {
-    // Skip hover-popup if a recent tap is in flight (mobile)
-    if (Date.now() < stopTapLockUntil) return;
-    map.getCanvas().style.cursor = 'pointer';
-    openStopPopup(e.lngLat, e.features[0].properties);
+  ['stops-circle', 'stops-icon'].forEach(layer => {
+    map.on('mouseenter', layer, e => {
+      if (Date.now() < stopTapLockUntil) return; // mobile tap in flight
+      map.getCanvas().style.cursor = 'pointer';
+      openStopPopup(e.lngLat, e.features[0].properties);
+    });
+    map.on('mouseleave', layer, () => {
+      map.getCanvas().style.cursor = '';
+      if (stopHoverPopup && !stopHoverPopup._pinned) { stopHoverPopup.remove(); stopHoverPopup = null; }
+    });
+    map.on('click', layer, e => {
+      e.preventDefault?.();
+      stopTapLockUntil = Date.now() + 600;
+      if (stopHoverPopup) stopHoverPopup.remove();
+      openStopPopup(e.lngLat, e.features[0].properties);
+      stopHoverPopup && (stopHoverPopup._pinned = true);
+    });
   });
-  map.on('mouseleave', 'stops-circle', () => {
-    map.getCanvas().style.cursor = '';
-    if (stopHoverPopup && !stopHoverPopup._pinned) { stopHoverPopup.remove(); stopHoverPopup = null; }
-  });
-  map.on('click', 'stops-circle', e => {
-    e.preventDefault?.();
-    stopTapLockUntil = Date.now() + 600;  // suppress hover-popup briefly
-    if (stopHoverPopup) stopHoverPopup.remove();
-    openStopPopup(e.lngLat, e.features[0].properties);
-    stopHoverPopup && (stopHoverPopup._pinned = true);
-  });
+}
+
+// Render a bus-stop "sign" icon as an ImageData for map.addImage. A blue
+// rounded pin with a white bus glyph — instantly readable as a transit stop.
+function makeStopIcon() {
+  const s = 48, c = document.createElement('canvas');
+  c.width = s; c.height = s;
+  const x = c.getContext('2d');
+  // teardrop pin
+  x.fillStyle = '#1f6feb';
+  x.strokeStyle = '#fff'; x.lineWidth = 3;
+  x.beginPath();
+  x.arc(s/2, s/2 - 6, 15, Math.PI*0.15, Math.PI*0.85, true);
+  x.lineTo(s/2, s - 3);
+  x.closePath();
+  x.fill(); x.stroke();
+  // white bus glyph
+  x.fillStyle = '#fff';
+  x.fillRect(s/2 - 9, s/2 - 13, 18, 13);
+  x.fillStyle = '#1f6feb';
+  x.fillRect(s/2 - 7, s/2 - 11, 14, 6);   // windows
+  x.fillStyle = '#fff';
+  x.beginPath(); x.arc(s/2 - 5, s/2 - 1, 2, 0, 7); x.arc(s/2 + 5, s/2 - 1, 2, 0, 7); x.fill();
+  return x.getImageData(0, 0, s, s);
+}
+
+// Forward-pointing chevron for the "where it's going" arrows. Drawn pointing
+// up (north); symbol-placement:line rotates it to follow the route direction.
+function makeChevronIcon() {
+  const s = 24, c = document.createElement('canvas');
+  c.width = s; c.height = s;
+  const x = c.getContext('2d');
+  x.strokeStyle = '#3a2a00'; x.lineWidth = 5; x.lineCap = 'round'; x.lineJoin = 'round';
+  x.beginPath(); x.moveTo(5, 16); x.lineTo(12, 7); x.lineTo(19, 16); x.stroke();
+  x.strokeStyle = '#fff3c4'; x.lineWidth = 2.5;
+  x.beginPath(); x.moveTo(5, 16); x.lineTo(12, 7); x.lineTo(19, 16); x.stroke();
+  return x.getImageData(0, 0, s, s);
 }
 
 // ─── FETCH DATA ───────────────────────────────────────────────────────────────
@@ -990,146 +1056,60 @@ let routeSourceIds = []; // MapLibre source IDs
 
 // Build a fast lookup of route shape coordinates for the golden-path arrows.
 let routeShapeCoords = {}; // routeId -> [[lon,lat], ...]
-let aheadLayerIds = [];
-let aheadSourceIds = [];
-let aheadBusData = []; // [{ vid, srcId, layId, fullCoords, startIdx }]
 
-// Golden path arrows ahead of each bus. Two layers per bus:
-//   1) A solid golden base line (dim)
-//   2) 3 small moving dots that pulse along the ahead segment to show flow
+// "Where the bus is going": for each active bus, take the slice of its route
+// shape ahead of its current position and draw it as one feature in the shared
+// `ahead` source. Chevron arrows (symbol-placement:line) point along it and the
+// dash animates to convey flow. One source/3 layers total — cheap and elegant.
 function renderAheadArrows() {
   if (!mapReady) return;
-  // Remove old ahead layers
-  aheadLayerIds.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
-  aheadSourceIds.forEach(id => { if (map.getSource(id)) map.removeSource(id); });
-  aheadLayerIds = []; aheadSourceIds = [];
-  aheadBusData = [];
-
+  const src = map.getSource('ahead');
+  if (!src) return;
+  const features = [];
   const visible = visibleVehicles().filter(v => routeVisible[v.routeId] !== false);
   visible.forEach(v => {
     const coords = routeShapeCoords[v.routeId];
     if (!coords || coords.length < 2) return;
-    // Find nearest point on shape to bus GPS
+    // Nearest shape vertex to the bus's GPS fix.
     let bestIdx = 0, bestKm = Infinity;
     for (let i = 0; i < coords.length; i++) {
       const d = haversineKm(v.lat, v.lon, coords[i][1], coords[i][0]);
       if (d < bestKm) { bestKm = d; bestIdx = i; }
     }
-    if (bestKm > 0.5) return;
-    const ahead = coords.slice(bestIdx, Math.min(coords.length, bestIdx + 22));
+    if (bestKm > 0.5) return; // bus too far off its shape — skip
+    const ahead = coords.slice(bestIdx, Math.min(coords.length, bestIdx + 26));
     if (ahead.length < 2) return;
-
-    // Base line (dim gold)
-    const srcId = `ahead-${v.id}`;
-    const layId = `ahead-line-${v.id}`;
-    map.addSource(srcId, {
-      type: 'geojson',
-      data: { type: 'Feature', geometry: { type: 'LineString', coordinates: ahead }, properties: {} }
-    });
-    map.addLayer({
-      id: layId, type: 'line', source: srcId,
-      paint: {
-        'line-color': '#ffcc33',
-        'line-width': 4,
-        'line-opacity': 0.55,
-        'line-dasharray': [0.6, 0.6],
-      },
-      layout: { 'line-cap': 'round', 'line-join': 'round' }
-    });
-
-    // Moving dots — animated by setData below
-    const dotsId = `ahead-dots-${v.id}`;
-    const dotsLay = `ahead-dots-circle-${v.id}`;
-    map.addSource(dotsId, {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features: [] }
-    });
-    map.addLayer({
-      id: dotsLay, type: 'circle', source: dotsId,
-      paint: {
-        'circle-radius': ['interpolate', ['linear'], ['get', 'fade'], 0.55, 3, 1.0, 5],
-        'circle-color': '#ffd966',
-        'circle-opacity': ['get', 'fade'],
-        'circle-stroke-color': '#ffffff',
-        'circle-stroke-width': 1.2,
-        'circle-stroke-opacity': 0.9
-      }
-    });
-
-    aheadLayerIds.push(layId, dotsLay);
-    aheadSourceIds.push(srcId, dotsId);
-    aheadBusData.push({
-      vid: v.id,
-      coords: ahead,
-      dotsSrcId: dotsId,
-    });
+    features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: ahead },
+                    properties: { color: v.routeColor } });
   });
-  // Kick the animation right away
-  aheadAnimFrame = 0;
-  animateAheadDots();
+  src.setData({ type: 'FeatureCollection', features });
+  startAheadAnim();
 }
 
-// Animate the moving dots ahead of each bus. Uses linear interpolation
-// along the ahead segment + a sliding window of 3 dots (lead, mid, trail).
-let aheadAnimFrame = 0;
-let aheadAnimTimer = null;
-function animateAheadDots() {
-  if (!mapReady || aheadBusData.length === 0) return;
-  aheadAnimFrame = (aheadAnimFrame + 1) % 360;
-  // 0..1 cycling phase; one cycle = 2.4 s (90 ms × 360 / 135 = 2.4 s)
-  const phase = aheadAnimFrame / 360;
-  for (const b of aheadBusData) {
-    const coords = b.coords;
-    if (coords.length < 2) continue;
-    const src = map.getSource(b.dotsSrcId);
-    if (!src) continue;
-    const totalLen = lineLength(coords);
-    // 3 dots spaced 0.15 of total length apart, leading dot sweeps 0..1
-    const lead = (phase + 0.0) % 1;
-    const mid  = (phase - 0.18 + 1) % 1;
-    const trail = (phase - 0.36 + 1) % 1;
-    const features = [];
-    for (const t of [trail, mid, lead]) {
-      const target = t * totalLen;
-      const [lng, lat] = interpAlong(coords, target);
-      // Fade the trailing dot
-      const fade = (t === trail) ? 0.55 : (t === mid ? 0.85 : 1.0);
-      features.push({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [lng, lat] },
-        properties: { fade }
-      });
-    }
-    src.setData({ type: 'FeatureCollection', features });
-  }
-}
-function lineLength(coords) {
-  let total = 0;
-  for (let i = 1; i < coords.length; i++) {
-    total += haversineKm(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]);
-  }
-  return total;
-}
-function interpAlong(coords, target) {
-  let acc = 0;
-  for (let i = 1; i < coords.length; i++) {
-    const seg = haversineKm(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]);
-    if (acc + seg >= target) {
-      const t = seg === 0 ? 0 : (target - acc) / seg;
-      const lng = coords[i-1][0] + (coords[i][0] - coords[i-1][0]) * t;
-      const lat = coords[i-1][1] + (coords[i][1] - coords[i-1][1]) * t;
-      return [lng, lat];
-    }
-    acc += seg;
-  }
-  return coords[coords.length - 1];
-}
-
+// Animate the forward line's dash offset so the arrows appear to flow forward.
+// rAF-based, throttled, and pauses when the tab is hidden or no arrows exist.
+let aheadAnimRAF = null, aheadDashPhase = 0, aheadLastFrame = 0;
+// A short loop of dash patterns; stepping through them marches the dash forward.
+const AHEAD_DASHES = [[0,1,2,1],[0.5,1,1.5,1],[1,1,1,1],[1.5,1,0.5,1],[2,1,0,1]];
 function startAheadAnim() {
-  if (aheadAnimTimer) return;
-  aheadAnimTimer = setInterval(animateAheadDots, 90);
+  if (aheadAnimRAF) return;
+  const tick = (now) => {
+    const data = map.getSource('ahead') && map.getSource('ahead')._data;
+    const hasArrows = data && data.features && data.features.length;
+    if (!hasArrows || document.hidden) { aheadAnimRAF = null; return; }
+    if (now - aheadLastFrame > 120) {          // ~8fps; enough for a flowing dash
+      aheadLastFrame = now;
+      // Cycle through a small fixed set of dash patterns so MapLibre's line
+      // atlas doesn't fill up (avoids "LineAtlas out of space").
+      aheadDashPhase = (aheadDashPhase + 1) % AHEAD_DASHES.length;
+      if (map.getLayer('ahead-line')) {
+        map.setPaintProperty('ahead-line', 'line-dasharray', AHEAD_DASHES[aheadDashPhase]);
+      }
+    }
+    aheadAnimRAF = requestAnimationFrame(tick);
+  };
+  aheadAnimRAF = requestAnimationFrame(tick);
 }
-startAheadAnim();
 
 function renderRouteShapes() {
   if (!mapReady) return;
@@ -2088,18 +2068,61 @@ function renderMarkers() {
       };
     }
 
+    const loadFrac = loadFraction(v);
     if (markers[v.id]) {
-      markers[v.id].marker.setLngLat([v.lon, v.lat]);
-      markers[v.id].el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees, v.passengerLoad);
-      wire(markers[v.id].el, v);
+      const m = markers[v.id];
+      // Smooth motion: animate from the marker's current rendered position to
+      // the new GPS fix over roughly one poll interval instead of snapping.
+      const cur = m.marker.getLngLat();
+      m.from = [cur.lng, cur.lat];
+      m.to = [v.lon, v.lat];
+      m.animStart = performance.now();
+      m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees, loadFrac);
+      wire(m.el, v);
     } else {
       const el = document.createElement('div');
-      el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees, v.passengerLoad);
+      el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, v.headingDegrees, loadFrac);
       wire(el, v);
       const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([v.lon, v.lat]).addTo(map);
-      markers[v.id] = { marker, el };
+      markers[v.id] = { marker, el, from: [v.lon, v.lat], to: [v.lon, v.lat], animStart: 0 };
     }
   });
+
+  startMarkerAnim();
+}
+
+// Normalize occupancy to a 0..1 fraction regardless of whether the feed gives
+// a raw passenger count + capacity or an already-normalized load.
+function loadFraction(v) {
+  if (v.capacity && v.passengerLoad != null && v.passengerLoad > 1) {
+    return Math.max(0, Math.min(1, v.passengerLoad / v.capacity));
+  }
+  return Math.max(0, Math.min(1, v.passengerLoad || 0));
+}
+
+// requestAnimationFrame loop that eases each marker from its last position to
+// the latest fix. Runs only while at least one marker is mid-transition, then
+// stops itself to save battery.
+let markerAnimRAF = null;
+const MARKER_ANIM_MS = 1400; // ease duration per fix; < poll interval
+function startMarkerAnim() {
+  if (markerAnimRAF) return;
+  const tick = (now) => {
+    let anyMoving = false;
+    for (const id in markers) {
+      const m = markers[id];
+      if (!m.to) continue;
+      const t = m.animStart ? Math.min(1, (now - m.animStart) / MARKER_ANIM_MS) : 1;
+      const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // easeInOutQuad
+      const lng = m.from[0] + (m.to[0] - m.from[0]) * e;
+      const lat = m.from[1] + (m.to[1] - m.from[1]) * e;
+      m.marker.setLngLat([lng, lat]);
+      if (t < 1) anyMoving = true;
+    }
+    if (anyMoving && !document.hidden) { markerAnimRAF = requestAnimationFrame(tick); }
+    else { markerAnimRAF = null; }
+  };
+  markerAnimRAF = requestAnimationFrame(tick);
 }
 
 // ─── ETA PANEL ────────────────────────────────────────────────────────────────
