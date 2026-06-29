@@ -413,16 +413,22 @@
       <div class="docs-section">
         <div class="docs-h">🎨 How to read it</div>
         <div class="docs-p">
-          <strong style="color:#e6edf3">Bus icons</strong> sit at the bus's
-          latest GPS position, pointing the way it's heading.
-          <strong style="color:#58a6ff">Blue stops</strong> are GTFS-registered
-          stops along active routes — click or tap one to see approaching
-          buses and historical arrivals.
-          <strong style="color:#d29922">Golden arrows</strong> ahead of a bus
-          show the next stretch of route it's about to travel. A small
+          <strong style="color:#e6edf3">Bus icons</strong> glide smoothly along
+          the road between GPS updates (snapped to the route, moving forward at
+          the bus's real pace) with the route number always upright. Buses that
+          overlap fan out so none is hidden, and ones whose GPS has gone quiet
+          fade to a ghost at their last-known spot.
+          <strong style="color:#58a6ff">Blue stops</strong> are official
+          GTFS stops — click one for approaching buses and history.
+          <strong style="color:#d29922">Amber rings</strong> are <em>observed</em>
+          stops: spots where buses repeatedly stop that aren't official, learned
+          from GPS history.
+          <strong style="color:#d29922">Direction chevrons</strong> stream ahead
+          of each bus along the road, showing where it's about to go. A
           <strong style="color:#e6edf3">weather symbol</strong> above each bus
-          shows the live conditions at its location, and the colored bar on the
-          bus shows how full it is.
+          shows live conditions there, and the colored bar shows how full it is.
+          The <strong style="color:#e6edf3">Fleet</strong> tab lists every bus the
+          agency knows — live, idle, or dormant — with full telemetry.
         </div>
         <div class="docs-grid">
           <div class="docs-stat"><div class="docs-stat-k">Refresh</div><div class="docs-stat-v">15 s</div></div>
