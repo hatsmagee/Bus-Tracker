@@ -1023,12 +1023,20 @@ async function pollFleet() {
   return vehicles;
 }
 
-// routes/{id}/vehicles lastUpdated is ISO-8601 with a "Z" (UTC). Date.parse
-// handles it directly; the bare /vehicles roster used HST without a suffix, but
-// we no longer read that endpoint.
+// Two timestamp shapes from the agency: routes/{id}/vehicles gives ISO-8601 with
+// a "Z" (UTC); the bare /vehicles roster gives no suffix and runs on Hawaiʻi
+// local time (HST, UTC-10). Detect which and parse accordingly.
 function parseFleetTs(s) {
-  const t = Date.parse(s);
-  return Number.isNaN(t) ? Date.now() : t;
+  if (!s) return null;
+  // Has an explicit zone (Z or ±hh:mm)? Then it's absolute — trust Date.parse.
+  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s)) {
+    const t = Date.parse(s);
+    return Number.isNaN(t) ? null : t;
+  }
+  // Bare local time → interpret as HST (UTC-10).
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/.exec(s);
+  if (!m) { const t = Date.parse(s); return Number.isNaN(t) ? null : t; }
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] + 10, +m[5], +m[6]);
 }
 
 // Called after each poll — detect when a bus has moved past a stop
@@ -1258,6 +1266,80 @@ async function handleApi(url, res) {
 
   if (p === '/api/vehicles') {
     return json(res, { ts: lastPollStats.ts, vehicles: latestVehicles, stats: lastPollStats });
+  }
+
+  // Everything we can scrape about the WHOLE fleet — every vehicle the agency
+  // API knows about, live or not, with all telemetry and a derived status that
+  // explains why a bus is or isn't on the map. Powers the Fleet tab.
+  if (p === '/api/fleet') {
+    const now = Date.now();
+    // Full roster (every vehicle ever registered) …
+    let roster = [];
+    try { roster = JSON.parse((await upstreamFetch('vehicles')).body); } catch {}
+    if (!Array.isArray(roster)) roster = [];
+    // … plus the per-route endpoint, which carries the live speed/heading/route
+    // for the ones currently reporting.
+    const liveByRoute = {}; // id -> { ...raw, routeId }
+    await Promise.all(ROUTES.map(async route => {
+      let vs = [];
+      try { vs = JSON.parse((await upstreamFetch(`routes/${route.id}/vehicles`)).body); } catch {}
+      if (Array.isArray(vs)) vs.forEach(v => {
+        const t = parseFleetTs(v.lastUpdated);
+        const prev = liveByRoute[v.id];
+        if (!prev || t > prev._t) liveByRoute[v.id] = Object.assign({}, v, { routeId: route.id, _t: t });
+      });
+    }));
+
+    const fleet = roster.map(r => {
+      const live = liveByRoute[r.id];
+      const src = live || r;                       // prefer the richer per-route record
+      const luMs = parseFleetTs(src.lastUpdated);
+      // The per-route feed timestamps (live) are reliable (zoned). The bare
+      // roster clock is skewed, so a roster-only age can come out slightly
+      // negative — clamp to 0 and treat sub-hour skew as "just now".
+      let ageMin = luMs ? (now - luMs) / 60000 : null;
+      if (ageMin != null && ageMin < 0) ageMin = ageMin > -180 ? 0 : null;
+      const inBox = src.lat != null && src.lat >= BBOX.minLat && src.lat <= BBOX.maxLat &&
+                    src.lon >= BBOX.minLon && src.lon <= BBOX.maxLon;
+      const routeId = live ? live.routeId : null;
+      const route = ROUTE_MAP[routeId];
+      const tripId = (vehicleTripMap[r.id] && vehicleTripMap[r.id].tripId) || vpTripMap[r.id] || null;
+      // Derived status: why it is / isn't on the map.
+      let status, reason;
+      if (ageMin == null)            { status = 'unknown';  reason = 'No GPS timestamp'; }
+      else if (ageMin < 5 && live)   { status = 'live';     reason = 'Reporting now'; }
+      else if (ageMin < 5)           { status = 'idle';     reason = 'Fresh GPS but not assigned to a route'; }
+      else if (ageMin < 60)          { status = 'recent';   reason = `Last seen ${Math.round(ageMin)} min ago`; }
+      else if (ageMin < 1440)        { status = 'offshift'; reason = `Last seen ${Math.round(ageMin/60)} h ago`; }
+      else                           { status = 'dormant';  reason = `Last seen ${Math.round(ageMin/1440)} d ago`; }
+      if (!inBox && src.lat != null) reason = 'Outside Hawaiʻi County';
+      return {
+        id: r.id,
+        name: r.name || String(r.id),
+        status, reason,
+        onMap: status === 'live',
+        lat: src.lat ?? null, lon: src.lon ?? null,
+        speed: src.speed ?? null,
+        heading: src.heading ?? null,
+        headingDegrees: src.headingDegrees ?? null,
+        passengerLoad: src.passengerLoad ?? null,
+        capacity: src.capacity ?? null,
+        patternId: src.patternId ?? null,
+        shapeDistanceTraveled: src.shapeDistanceTraveled ?? null,
+        routeId,
+        routeShort: route ? route.short : null,
+        routeName: route ? route.name : null,
+        tripId,
+        lastUpdated: src.lastUpdated || null,
+        ageMin: ageMin != null ? Math.round(ageMin * 10) / 10 : null,
+        weather: weatherByVehicle[r.id] || null,
+      };
+    });
+    // Sort: live first, then by recency.
+    const rank = { live: 0, idle: 1, recent: 2, offshift: 3, dormant: 4, unknown: 5 };
+    fleet.sort((a, b) => (rank[a.status] - rank[b.status]) || ((a.ageMin ?? 1e9) - (b.ageMin ?? 1e9)));
+    const counts = fleet.reduce((m, f) => { m[f.status] = (m[f.status] || 0) + 1; return m; }, {});
+    return json(res, { ts: now, total: fleet.length, counts, fleet });
   }
 
   if (p === '/api/trails') {

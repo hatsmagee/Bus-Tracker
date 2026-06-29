@@ -175,6 +175,25 @@
   .stat-value { font-size:22px; font-weight:700; }
   .stat-value.green{color:var(--green)} .stat-value.yellow{color:var(--yellow)} .stat-value.red{color:var(--red)}
   .stat-sub { color:var(--muted); font-size:10px; margin-top:2px; }
+  /* ── Fleet tab ── */
+  .fleet-summary { display:flex; flex-wrap:wrap; gap:6px; padding:10px 12px; border-bottom:1px solid var(--border); }
+  .fleet-chip { display:flex; align-items:center; gap:5px; background:var(--panel2); border:1px solid var(--border);
+    border-radius:14px; padding:3px 9px; font-size:11px; }
+  .fleet-chip b { font-size:13px; }
+  .fleet-dot { width:8px; height:8px; border-radius:50%; }
+  .fleet-table { width:100%; border-collapse:collapse; font-size:11px; }
+  .fleet-table th { position:sticky; top:0; background:var(--panel); color:var(--muted); text-align:left;
+    font-weight:600; padding:6px 8px; border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer; user-select:none; }
+  .fleet-table th:hover { color:var(--fg); }
+  .fleet-table td { padding:5px 8px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  .fleet-table tr:hover td { background:var(--panel2); }
+  .fleet-table tr.is-live td { cursor:pointer; }
+  .fleet-badge { display:inline-block; padding:1px 6px; border-radius:6px; font-size:10px; font-weight:700; color:#fff; }
+  .s-live{background:#2ea043} .s-idle{background:#1f6feb} .s-recent{background:#9e6a03}
+  .s-offshift{background:#6e7681} .s-dormant{background:#484f58} .s-unknown{background:#30363d}
+  .fleet-rt { display:inline-block; padding:1px 6px; border-radius:5px; font-weight:700; font-size:10px; color:#fff; }
+  .fleet-search { width:100%; box-sizing:border-box; padding:6px 10px; margin:8px 12px; width:calc(100% - 24px);
+    background:var(--panel2); border:1px solid var(--border); border-radius:6px; color:var(--fg); font-size:12px; }
   .section-header { padding:10px 12px 6px; font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; border-bottom:1px solid var(--border); flex-shrink:0; }
 
   .vehicle-card { border-bottom:1px solid var(--border); padding:10px 12px; transition:background .1s; }
@@ -315,6 +334,7 @@
   <div class="sidebar" id="sidebar">
     <div class="tabs">
       <div class="tab active" data-tab="vehicles">🚌 Buses</div>
+      <div class="tab" data-tab="fleet">🚍 Fleet</div>
       <div class="tab" data-tab="routes">🗺️ Routes</div>
       <div class="tab" data-tab="system">📊 System</div>
       <div class="tab" data-tab="docs">📚 Docs</div>
@@ -328,6 +348,13 @@
           <span style="font-size:10px;cursor:pointer;color:var(--muted);" onclick="document.getElementById('etaSection').style.display='none'">✕</span>
         </div>
         <div id="etaPanel" style="padding:8px 12px;max-height:220px;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-fleet">
+      <div id="fleetSummary" class="fleet-summary"></div>
+      <div id="fleetTableWrap" style="overflow:auto;flex:1;">
+        <div class="empty"><div class="empty-icon">🚍</div>Loading fleet…</div>
       </div>
     </div>
 
@@ -2320,8 +2347,113 @@ function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.id === `tab-${name}`));
   if (name === 'system') { fetchApiStats(); pollLearn(); }
+  if (name === 'fleet') fetchFleet();
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
+
+// ─── FLEET TAB ────────────────────────────────────────────────────────────────
+// Everything we can scrape about every bus the agency API knows about — live,
+// idle, off-shift, or dormant — with a derived status explaining why each is or
+// isn't on the map, plus all GPS telemetry.
+let fleetData = [];
+let fleetSort = { key: 'status', dir: 1 };
+let fleetFilter = '';
+const FLEET_STATUS_META = {
+  live:     { label: 'Live',     color: '#2ea043', desc: 'Reporting GPS now & assigned to a route' },
+  idle:     { label: 'Idle',     color: '#1f6feb', desc: 'Fresh GPS but not on a route' },
+  recent:   { label: 'Recent',   color: '#9e6a03', desc: 'Seen in the last hour' },
+  offshift: { label: 'Off-shift',color: '#6e7681', desc: 'Seen earlier today' },
+  dormant:  { label: 'Dormant',  color: '#484f58', desc: 'Not seen in over a day' },
+  unknown:  { label: 'Unknown',  color: '#30363d', desc: 'No GPS timestamp' },
+};
+async function fetchFleet() {
+  const wrap = document.getElementById('fleetTableWrap');
+  try {
+    const res = await fetch('/api/fleet');
+    const data = await res.json();
+    fleetData = data.fleet || [];
+    renderFleetSummary(data.counts || {}, data.total || fleetData.length);
+    renderFleetTable();
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>Couldn't load fleet</div>`;
+  }
+}
+function renderFleetSummary(counts, total) {
+  const order = ['live','idle','recent','offshift','dormant','unknown'];
+  const chips = order.filter(k => counts[k]).map(k => {
+    const m = FLEET_STATUS_META[k];
+    return `<div class="fleet-chip" title="${m.desc}"><span class="fleet-dot" style="background:${m.color}"></span>${m.label} <b>${counts[k]}</b></div>`;
+  }).join('');
+  document.getElementById('fleetSummary').innerHTML =
+    `<div class="fleet-chip" style="border-color:var(--accent)"><b>${total}</b> total buses</div>` + chips;
+}
+function fleetSortBtn(key, label) {
+  const arrow = fleetSort.key === key ? (fleetSort.dir > 0 ? ' ▲' : ' ▼') : '';
+  return `<th onclick="setFleetSort('${key}')">${label}${arrow}</th>`;
+}
+function setFleetSort(key) {
+  if (fleetSort.key === key) fleetSort.dir *= -1; else { fleetSort.key = key; fleetSort.dir = 1; }
+  renderFleetTable();
+}
+function onFleetSearch(v) { fleetFilter = v.toLowerCase(); renderFleetTable(); }
+function renderFleetTable() {
+  const wrap = document.getElementById('fleetTableWrap');
+  let rows = fleetData.slice();
+  if (fleetFilter) rows = rows.filter(f =>
+    String(f.name).toLowerCase().includes(fleetFilter) ||
+    String(f.id).includes(fleetFilter) ||
+    (f.routeShort && String(f.routeShort).toLowerCase().includes(fleetFilter)) ||
+    (f.status && f.status.includes(fleetFilter)));
+  const k = fleetSort.key, dir = fleetSort.dir;
+  const statusRank = { live:0, idle:1, recent:2, offshift:3, dormant:4, unknown:5 };
+  rows.sort((a, b) => {
+    let av, bv;
+    if (k === 'status') { av = statusRank[a.status]; bv = statusRank[b.status]; }
+    else { av = a[k]; bv = b[k]; }
+    if (av == null) av = dir > 0 ? Infinity : -Infinity;
+    if (bv == null) bv = dir > 0 ? Infinity : -Infinity;
+    if (typeof av === 'string') return dir * av.localeCompare(bv);
+    return dir * (av - bv);
+  });
+  const head = `<thead><tr>
+    ${fleetSortBtn('name','Bus')}${fleetSortBtn('status','Status')}${fleetSortBtn('routeShort','Route')}
+    ${fleetSortBtn('speed','Speed')}${fleetSortBtn('headingDegrees','Heading')}${fleetSortBtn('passengerLoad','Load')}
+    ${fleetSortBtn('ageMin','GPS age')}<th>Position</th>${fleetSortBtn('tripId','Trip')}<th>Weather</th><th>Why</th>
+  </tr></thead>`;
+  const body = rows.map(f => {
+    const m = FLEET_STATUS_META[f.status] || FLEET_STATUS_META.unknown;
+    const rtColor = f.routeShort && ROUTE_COLOR_MAP[f.routeId] ? ROUTE_COLOR_MAP[f.routeId] : '#30363d';
+    const age = f.ageMin == null ? '—' : f.ageMin < 1 ? 'now' : f.ageMin < 60 ? `${Math.round(f.ageMin)}m`
+              : f.ageMin < 1440 ? `${Math.round(f.ageMin/60)}h` : `${Math.round(f.ageMin/1440)}d`;
+    const pos = (f.lat != null && f.lon != null) ? `${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}` : '—';
+    const load = f.passengerLoad != null ? (f.passengerLoad <= 1 ? `${Math.round(f.passengerLoad*100)}%` : f.passengerLoad) : '—';
+    const hdg = f.headingDegrees != null ? `${compass(f.headingDegrees)} ${f.headingDegrees}°` : (f.heading || '—');
+    const wx = f.weather ? `${weatherEmoji(f.weather.code, f.weather.isDay)} ${Math.round(f.weather.tempF)}°` : '—';
+    const clickable = f.onMap ? `class="is-live" onclick="focusFleetBus(${f.id})"` : '';
+    return `<tr ${clickable}>
+      <td><b>#${f.name}</b></td>
+      <td><span class="fleet-badge s-${f.status}">${m.label}</span></td>
+      <td>${f.routeShort ? `<span class="fleet-rt" style="background:${rtColor}">${f.routeShort}</span>` : '—'}</td>
+      <td>${f.speed != null ? f.speed + ' mph' : '—'}</td>
+      <td>${hdg}</td>
+      <td>${load}</td>
+      <td>${age}</td>
+      <td style="font-family:monospace;font-size:10px;">${pos}</td>
+      <td style="font-size:10px;">${f.tripId || '—'}</td>
+      <td>${wx}</td>
+      <td style="color:var(--muted);font-size:10px;">${f.reason || ''}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML =
+    `<input class="fleet-search" placeholder="Filter by bus #, route, or status…" oninput="onFleetSearch(this.value)" value="${fleetFilter}">
+     <table class="fleet-table">${head}<tbody>${body}</tbody></table>`;
+  // keep focus in the search box after re-render
+  if (fleetFilter) { const i = wrap.querySelector('.fleet-search'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }
+}
+function focusFleetBus(id) {
+  const f = fleetData.find(x => x.id === id);
+  if (f && f.lat != null && mapReady) map.flyTo({ center: [f.lon, f.lat], zoom: 15 });
+}
 
 // ─── COUNTDOWN ────────────────────────────────────────────────────────────────
 function resetCountdown() {
@@ -2663,6 +2795,9 @@ Promise.all([
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
 setInterval(() => { if (activeTab === 'system' && !document.hidden) { pollLearn(); fetchApiStats(); } }, 5000);
+// Refresh the Fleet table while it's open (it's a heavier multi-request scrape,
+// so only when actually visible).
+setInterval(() => { if (activeTab === 'fleet' && !document.hidden) fetchFleet(); }, 15000);
 
 // Trail + ETA refresh on their own cadence
 setInterval(fetchTrails, TRAIL_UPDATE_INTERVAL);
