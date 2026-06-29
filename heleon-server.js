@@ -1742,28 +1742,18 @@ async function handleApi(url, res) {
     // You can't be heading to a stop you haven't reached, so this beats geometry.
     let officialNext = null;
     if (Object.keys(officialStops).length) {
-      // The trip's GTFS stop sequence is authoritative: the next stop is the
-      // future stop_time_update with the lowest trip sequence number.
-      let bestSeq = Infinity, bestMs = Infinity;
+      // The next stop is the one the agency predicts the SOONEST arrival for —
+      // i.e. the smallest still-in-the-future predicted time. (Lowest sequence is
+      // wrong: the feed predicts the whole trip, and on a route that revisits low
+      // sequence numbers the soonest-arriving stop is the real next one, not the
+      // numerically-lowest.)
+      let bestMs = Infinity;
       for (const s of stopETAs) {
-        const off = officialStops[String(s.id)] || officialStops[s.id];
-        if (!off || off.ms <= nowMsEta - 30000) continue;
-        const seq = off.seq != null ? off.seq : Infinity;
-        if (seq < bestSeq || (seq === bestSeq && off.ms < bestMs)) {
-          bestSeq = seq; bestMs = off.ms; officialNext = s;
-        }
+        // NOTE: stopETAs entries carry `stopId` (not `id`).
+        const off = officialStops[String(s.stopId)] || officialStops[s.stopId];
+        if (!off || off.ms <= nowMsEta - 30000) continue; // already passed
+        if (off.ms < bestMs) { bestMs = off.ms; officialNext = s; }
       }
-    }
-
-    // Sanity-check the official next-stop against geometry: if the feed's pick is
-    // far from the bus but a stop at the same-or-lower trip sequence is much
-    // closer, the bus hasn't actually reached the feed's pick yet — prefer the
-    // nearer earlier-sequence stop. Guards against the feed dropping just-passed
-    // stops so the highlight jumps several stops ahead of the bus.
-    if (officialNext) {
-      const nearer = stopETAs.filter(s => s.seq <= officialNext.seq && s.distKm + 0.3 < officialNext.distKm)
-                             .sort((a, b) => a.distKm - b.distKm)[0];
-      if (nearer && officialNext.distKm > 0.6) officialNext = nearer;
     }
 
     if (officialNext) {
