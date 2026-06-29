@@ -375,11 +375,11 @@
       <div class="docs-section">
         <div class="docs-h">🚌 About this dashboard</div>
         <div class="docs-p">
-          A live map of every Hele-On Bus in service right now, using the
-          County's <a href="https://www.myheleonbus.org/" target="_blank" style="color:#58a6ff">official transit feed</a>.
-          Polls 22 routes every 10 seconds, stores GPS pings in SQLite, and
-          runs a small transformer that learns typical arrival times for
-          each stop from history.
+          A live map of every Hele-On Bus in service right now, built on the
+          County's <a href="https://www.myheleonbus.org/" target="_blank" style="color:#58a6ff">official GTFS-realtime feed</a>.
+          It reads the whole fleet from one VehiclePositions feed, shows the
+          agency's own predicted arrival times (TripUpdates), and layers a small
+          transformer on top that learns each stop's typical timing from history.
         </div>
       </div>
 
@@ -392,10 +392,13 @@
           stops along active routes — click or tap one to see approaching
           buses and historical arrivals.
           <strong style="color:#d29922">Golden arrows</strong> ahead of a bus
-          show the next stretch of route it's about to travel.
+          show the next stretch of route it's about to travel. A small
+          <strong style="color:#e6edf3">weather symbol</strong> above each bus
+          shows the live conditions at its location, and the colored bar on the
+          bus shows how full it is.
         </div>
         <div class="docs-grid">
-          <div class="docs-stat"><div class="docs-stat-k">Snapshot</div><div class="docs-stat-v">10 s</div></div>
+          <div class="docs-stat"><div class="docs-stat-k">Refresh</div><div class="docs-stat-v">15 s</div></div>
           <div class="docs-stat"><div class="docs-stat-k">Routes</div><div class="docs-stat-v">22</div></div>
           <div class="docs-stat"><div class="docs-stat-k">Backbone</div><div class="docs-stat-v">Node.js</div></div>
           <div class="docs-stat"><div class="docs-stat-k">Map</div><div class="docs-stat-v">MapLibre</div></div>
@@ -405,11 +408,12 @@
       <div class="docs-section">
         <div class="docs-h">🧠 The predictor</div>
         <div class="docs-p">
-          A 12-token single-head transformer (~704 parameters) trained
-          online every time a bus reaches a stop. Inputs are cyclical
-          time-of-day, distance to next stop, scheduled delta, speed,
-          and the historical average mph for that route. Outputs are
-          ETAs to the next 5 stops.
+          Headline arrival times come straight from the agency's official
+          realtime predictions. On top of those, a 12-token single-head
+          transformer (trained server-side every time a bus reaches a stop)
+          learns a correction from history. Inputs are cyclical time-of-day and
+          day-of-week (sin/cos), distance to the next stop, and speed; outputs
+          are ETA adjustments for the next 5 stops.
         </div>
       </div>
 
@@ -434,6 +438,11 @@
           <span class="docs-link-icon">🗺️</span>
           <span><strong>MapLibre GL</strong> · open-source map renderer</span>
           <span class="docs-link-meta">BSD-3</span>
+        </a>
+        <a class="docs-link" href="https://open-meteo.com/" target="_blank">
+          <span class="docs-link-icon">⛅</span>
+          <span><strong>Open-Meteo</strong> · free weather API (no key)</span>
+          <span class="docs-link-meta">open-meteo.com</span>
         </a>
         <a class="docs-link" href="https://github.com/hatsmagee/Bus-Tracker" target="_blank">
           <span class="docs-link-icon">🐙</span>
@@ -1217,7 +1226,9 @@ function stalenessLabel(v) {
   if (m < 60) return `${Math.round(m)}m ago`;
   const h = Math.floor(m / 60); return `${h}h ${Math.round(m % 60)}m ago`;
 }
-function headingArrow(deg) { return ['↑','↗','→','↘','↓','↙','←','↖'][Math.round((deg % 360) / 45) % 8]; }
+function headingArrow(deg) { return deg == null ? '' : ['↑','↗','→','↘','↓','↙','←','↖'][Math.round((deg % 360) / 45) % 8]; }
+// Compass label from bearing degrees (GTFS-RT gives degrees, not N/NE text).
+function compass(deg) { return deg == null ? '—' : ['N','NE','E','SE','S','SW','W','NW'][Math.round((deg % 360) / 45) % 8]; }
 function isStale(v) { return getAgeMinutes(v) >= STALE_THRESHOLD; }
 function visibleVehicles() { return showStale ? allVehicles : allVehicles.filter(v => !isStale(v)); }
 
@@ -1283,7 +1294,7 @@ function renderVehicleList() {
     const stoplineHtml = sl ? buildStoplineHtml(sl, color) : `<div style="color:var(--muted);font-size:10px;padding:4px 0;text-align:center;">Loading route…</div>`;
     const nextStop = sl?.next_stop;
     const nextStopStr = nextStop
-      ? `▶ ${nextStop.name.split('(')[0].trim()} — ${nextStop.etaMinHist != null && nextStop.etaMinHist > 0 ? `~${Math.round(nextStop.etaMinHist)} min` : nextStop.etaMinSpeed != null && nextStop.etaMinSpeed > 0 ? `~${Math.round(nextStop.etaMinSpeed)} min` : 'arriving'}`
+      ? `▶ ${nextStop.name.split('(')[0].trim()} — ${nextStop.etaMin != null ? (nextStop.etaMin < 1 ? 'arriving' : `~${Math.round(nextStop.etaMin)} min`) : 'arriving'}`
       : sl ? 'At terminal' : 'Loading…';
 
     // Rich next-stop detail row: Predicted / Scheduled / Typical at a glance
@@ -1797,15 +1808,18 @@ function renderApiLog(stats) {
   document.getElementById('apiLog').innerHTML = stats.poll_stats.map(r => {
     const okPct = r.polls ? ((r.ok/r.polls)*100).toFixed(0) : 0;
     const lat = r.avg_latency ? Math.round(r.avg_latency) : '—';
-    const meta = ROUTES_META[r.route_id] || { short: r.route_id, name: 'Route '+r.route_id };
+    // route_id 0 = the combined GTFS-realtime poll (positions + trip updates).
+    const isRt = !r.route_id;
+    const meta = isRt ? { short: '📡', name: 'GTFS-realtime feed' }
+                      : (ROUTES_META[r.route_id] || { short: r.route_id, name: 'Route '+r.route_id });
     const color = okPct >= 90 ? 'var(--green)' : okPct >= 50 ? 'var(--yellow)' : 'var(--red)';
     return `<div class="api-row">
       <div class="api-row-header">
         <div class="api-status-dot" style="background:${color}"></div>
-        <strong style="font-size:12px;">${meta.short} – ${meta.name?.replace(/^\d+\s*/,'')}</strong>
+        <strong style="font-size:12px;">${meta.short} ${isRt ? '' : '– '}${meta.name?.replace(/^\d+\s*/,'')}</strong>
         <span class="api-code" style="margin-left:auto;color:${color}">${okPct}% OK</span>
       </div>
-      <div class="api-endpoint">/api/rtpi?path=routes/${r.route_id}/vehicles</div>
+      <div class="api-endpoint">${isRt ? 'gtfs-rt/vehiclepositions + tripupdates' : '/api/rtpi?path=routes/'+r.route_id+'/vehicles'}</div>
       <div class="api-meta">
         <span>⏱ ${lat}ms avg</span>
         <span>📊 ${r.polls} polls</span>
@@ -1933,7 +1947,7 @@ function showBusTooltip(v, x, y) {
       </div>
       <div style="background:#0d1117;border-radius:6px;padding:6px 8px;">
         <div style="color:#8b949e;font-size:10px;text-transform:uppercase;">Heading</div>
-        <div style="font-size:16px;font-weight:700;margin-top:2px;">${headingArrow(v.headingDegrees)} ${v.heading} <span style="font-size:10px;color:#8b949e;">${v.headingDegrees}°</span></div>
+        <div style="font-size:16px;font-weight:700;margin-top:2px;">${headingArrow(v.headingDegrees)} ${compass(v.headingDegrees)} <span style="font-size:10px;color:#8b949e;">${v.headingDegrees != null ? v.headingDegrees+'°' : ''}</span></div>
       </div>
       <div style="background:#0d1117;border-radius:6px;padding:6px 8px;">
         <div style="color:#8b949e;font-size:10px;text-transform:uppercase;">Passengers</div>
@@ -2143,7 +2157,7 @@ function selectVehicle(id) {
       <div style="color:var(--muted);font-size:11px;margin-bottom:8px;">${v.routeName}</div>
       <div class="popup-grid">
         <div class="popup-field"><div class="popup-field-label">Speed</div><div class="popup-field-val">${v.speed} mph</div></div>
-        <div class="popup-field"><div class="popup-field-label">Heading</div><div class="popup-field-val">${headingArrow(v.headingDegrees)} ${v.heading} (${v.headingDegrees}°)</div></div>
+        <div class="popup-field"><div class="popup-field-label">Heading</div><div class="popup-field-val">${headingArrow(v.headingDegrees)} ${compass(v.headingDegrees)}${v.headingDegrees != null ? ' ('+v.headingDegrees+'°)' : ''}</div></div>
         <div class="popup-field"><div class="popup-field-label">Passengers</div><div class="popup-field-val">${load}%</div></div>
         <div class="popup-field"><div class="popup-field-label">Capacity</div><div class="popup-field-val">${v.capacity} seats</div></div>
       </div>
