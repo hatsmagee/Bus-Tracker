@@ -187,6 +187,26 @@ function saveDb() {
   } catch(e) { console.error('[db] Save error:', e.message); }
 }
 
+// Keep the DB lean: raw GPS pings and poll logs are only useful for recent
+// history and short-term training. Long-term signal lives in stop_arrivals,
+// which we keep. Prunes then VACUUMs to actually reclaim disk.
+const PINGS_RETAIN_MS    = 14 * 86400000; // 2 weeks of raw GPS
+const POLLLOG_RETAIN_MS  = 2 * 86400000;  // 2 days of poll telemetry
+const ARRIVALS_RETAIN_MS = 90 * 86400000; // 90 days of arrivals for typical patterns
+function pruneDb() {
+  if (!db) return;
+  try {
+    const now = Date.now();
+    db.run(`DELETE FROM pings WHERE ts < ?`, [now - PINGS_RETAIN_MS]);
+    db.run(`DELETE FROM poll_log WHERE ts < ?`, [now - POLLLOG_RETAIN_MS]);
+    db.run(`DELETE FROM stop_arrivals WHERE ts < ?`, [now - ARRIVALS_RETAIN_MS]);
+    db.run('VACUUM');
+    saveDb();
+    const sz = fs.existsSync(DB_PATH) ? Math.round(fs.statSync(DB_PATH).size / 1024) : 0;
+    console.log(`[db] Pruned + vacuumed (${sz} KB)`);
+  } catch(e) { console.error('[db] Prune error:', e.message); }
+}
+
 // ─── GTFS LOADER ─────────────────────────────────────────────────────────────
 function parseTimeToSec(t) {
   // GTFS times can be >24:00:00 for next-day runs
@@ -503,7 +523,9 @@ const TX = {
   init() {
     const r = (rows, cols) => Array.from({length: rows}, () =>
       Array.from({length: cols}, () => (Math.random() - 0.5) * 0.3));
-    const rawDim = 5; // 5 raw features per token (speed, dist, hour_sin, hour_cos, dow_sin)
+    const rawDim = 6; // speed, dist, hour_sin, hour_cos, dow_sin, dow_cos
+                      // (sin+cos pairs give a unique, continuous encoding of
+                      //  cyclical time — a lone sinusoid aliases distinct values)
     this.embedW = r(this.dModel, rawDim);
     this.posW = r(this.dModel, this.nTokens);
     this.Wq = r(this.dModel, this.dModel);
@@ -668,27 +690,26 @@ function layerNorm(x, gamma, beta) {
   return x.map((xi, i) => gamma[i] * (xi - mean) / std + beta[i]);
 }
 
-// Build token sequence from bus state. Each token = [speed, distance, hour_sin, hour_cos, dow_sin]
-// Position encodes temporal ordering of features.
+// Build token sequence from bus state. Each token =
+//   [speed, distance, hour_sin, hour_cos, dow_sin, dow_cos]
+// Time-of-day and day-of-week are encoded as sin/cos pairs so that 23:59 sits
+// next to 00:01 and Sunday next to Monday (true cyclical continuity). Token
+// *position* in the sequence is supplied separately by the learned positional
+// encoding (posW) inside forward(), so we must NOT fold position into the time
+// value here — doing so would tell the model a different clock time per token.
 function buildTokenSequence(vehicle, distanceKm, schedDeltaSec, routeId) {
   const now = new Date();
-  const hour = now.getHours() + now.getMinutes() / 60;
-  const dow = now.getDay();
-  const routeIdx = TX.routeIds.indexOf(routeId);
-  // 12 tokens, each carrying a slice of state
+  const hour = now.getHours() + now.getMinutes() / 60;       // 0..24
+  const dow = now.getDay();                                   // 0..6 (Sun..Sat)
+  const hourSin = Math.sin(2 * Math.PI * hour / 24);
+  const hourCos = Math.cos(2 * Math.PI * hour / 24);
+  const dowSin  = Math.sin(2 * Math.PI * dow / 7);
+  const dowCos  = Math.cos(2 * Math.PI * dow / 7);
+  const speedNorm = Math.min((vehicle.speed || 0) / 60, 1);
+  const distNorm  = Math.min(distanceKm / 30, 1);
   const tokens = [];
   for (let i = 0; i < 12; i++) {
-    // Modulate scalars across positions to give the model positional info
-    const pos = i / 12;
-    const speedNorm = Math.min((vehicle.speed || 0) / 60, 1) * (1 - pos * 0.3);
-    const distNorm = Math.min(distanceKm / 30, 1) * (1 - pos * 0.3);
-    tokens.push([
-      speedNorm,                                 // token-level speed
-      distNorm,                                  // token-level distance
-      Math.sin(2 * Math.PI * (hour + pos) / 24), // hour_sin with position offset
-      Math.cos(2 * Math.PI * (hour + pos) / 24), // hour_cos with position offset
-      Math.sin(2 * Math.PI * (dow + pos) / 7),   // dow_sin with position offset
-    ]);
+    tokens.push([speedNorm, distNorm, hourSin, hourCos, dowSin, dowCos]);
   }
   return tokens;
 }
@@ -1378,6 +1399,13 @@ async function handleApi(url, res) {
       }
     });
 
+    // Exact trip schedule: GTFS-RT gives us the actual trip_id, so use that
+    // trip's own scheduled stop times instead of the nearest-time heuristic.
+    if (v.tripId) {
+      dbAll(`SELECT stop_id, arrival_sec FROM gtfs_stop_times WHERE trip_id=?`, [v.tripId])
+        .forEach(r => { scheduledMap[r.stop_id] = r.arrival_sec; scheduledTripId[r.stop_id] = v.tripId; });
+    }
+
     // Enrich each stop with historical typical arrival time from stop_arrivals
     // Group all recorded arrivals by hour-of-day, compute mean minute-of-hour & stddev
     const nowMs = Date.now();
@@ -1426,15 +1454,36 @@ async function handleApi(url, res) {
       stop.typicalHour = Math.floor(mean / 60); // remember which hour the typical is from
     });
 
+    // ── Schedule adherence ────────────────────────────────────────────────────
+    // Compare the predicted arrival at the next stop with its scheduled time.
+    // delayMin > 0 = behind schedule (late); < 0 = ahead (early).
+    let scheduleDelayMin = null, scheduleSuspect = false;
+    if (nextStop) {
+      const schedMs = nextStop.scheduledMs;
+      const predMin = nextStop.etaMin; // minutes from now until arrival
+      if (schedMs != null && predMin != null) {
+        const predictedArrivalMs = nowMs + predMin * 60000;
+        scheduleDelayMin = Math.round(((predictedArrivalMs - schedMs) / 60000) * 10) / 10;
+        // Sanity guard: a >2h discrepancy means trip/schedule matching is wrong,
+        // not that the bus is genuinely 2h late. Flag rather than display nonsense.
+        if (Math.abs(scheduleDelayMin) > 120) scheduleSuspect = true;
+      }
+    }
+
     return json(res, {
       vehicle_id: vid,
       route: v.routeName,
       routeShort: v.routeShort,
       routeColor: v.routeColor,
+      tripId: v.tripId || null,
+      headsign: v.headsign || null,
       speed_mph: v.speed,
       hist_avg_mph: Math.round(histAvgSpeed / 1.60934 * 10) / 10,
       hist_samples: histRows.length,
       next_stop: nextStop,
+      scheduleDelayMin,            // +late / −early, null if unknown
+      scheduleSuspect,             // true when delay is implausible (>2h)
+      etaPrimarySource: nextStop ? nextStop.etaSource : null,
       stops: stopETAs,   // in route sequence order
       serverTs: nowMs,
     });
@@ -1461,7 +1510,7 @@ async function handleApi(url, res) {
 
   // Learning model state
   if (p === '/api/learn/status') {
-    const totalParams = TX.dModel * 5 + TX.dModel * TX.nTokens +
+    const totalParams = TX.dModel * 6 + TX.dModel * TX.nTokens +
                        TX.dModel * TX.dModel * 4 + TX.ffnDim * TX.dModel +
                        TX.dModel * TX.ffnDim + TX.outDim * TX.dModel +
                        TX.dModel * 2; // lnGamma + lnBeta
@@ -1542,6 +1591,8 @@ const server = http.createServer((req, res) => {
   await pollAll();
   setInterval(pollAll, POLL_INTERVAL);
   setInterval(refreshOccupancy, 60 * 1000); // occupancy changes slowly — 1/min is plenty
+  setTimeout(pruneDb, 30000);                // prune shortly after boot
+  setInterval(pruneDb, 24 * 60 * 60 * 1000); // and daily thereafter
   setInterval(fetchShapes, 24 * 60 * 60 * 1000);
   setInterval(fetchAllStops, 24 * 60 * 60 * 1000);
   setInterval(discoverNewRoutes, 10 * 60 * 1000); // check for new routes every 10 min
