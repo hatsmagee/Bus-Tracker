@@ -744,7 +744,9 @@ async function fetchAll() {
 
     fetchFailCount = 0;
     setApiStatus(allVehicles.length > 0 ? 'ok' : 'partial');
-    const vcount = visibleVehicles().length;
+    // Header count = in-service buses (excludes parked/not-in-service ones that
+    // are only shown faded on the map).
+    const vcount = visibleVehicles().filter(v => !v.unassigned).length;
     document.getElementById('vehicleCountText').textContent = `${vcount} bus${vcount !== 1 ? 'es' : ''}`;
     document.getElementById('lastUpdate').textContent = 'Updated ' + new Date().toLocaleTimeString();
 
@@ -1370,9 +1372,11 @@ function onTimeHtml(sl) {
 // ─── VEHICLE LIST ─────────────────────────────────────────────────────────────
 function renderVehicleList() {
   const el = document.getElementById('vehicleList');
-  const visible = visibleVehicles();
+  // The Buses list shows in-service buses only — unassigned/"not in service"
+  // ones still appear on the map (faded) but would just be noise in this list.
+  const visible = visibleVehicles().filter(v => !v.unassigned);
   if (!allVehicles.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">🚌</div>No vehicles reporting</div>'; return; }
-  if (!visible.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">👻</div>All signals are stale<br><span style="font-size:11px">Click "Stale hidden" in header to show</span></div>'; return; }
+  if (!visible.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">👻</div>No buses in service right now<br><span style="font-size:11px">Check the Fleet tab for all vehicles</span></div>'; return; }
   const sorted = [...visible].sort((a,b) => (parseInt(a.name)||0) - (parseInt(b.name)||0));
   el.innerHTML = sorted.map(v => {
     const age = stalenessClass(v), load = v.passengerLoad || 0, color = v.routeColor || '#444';
