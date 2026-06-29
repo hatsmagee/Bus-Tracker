@@ -849,6 +849,7 @@ async function pollTripUpdates() {
   try { feed = parseFeedMessage(res.buf); } catch { return; }
   const idx = {};
   const now = Date.now();
+  const tripMap = {}; // rebuilt fresh each poll so stale trips don't linger
   feed.forEach(e => {
     const tu = e.tripUpdate;
     if (!tu || !tu.trip || !tu.trip.tripId) return;
@@ -858,26 +859,32 @@ async function pollTripUpdates() {
       if (t && s.stopId) byStop[s.stopId] = { ms: t * 1000, seq: s.stopSeq };
     });
     idx[tu.trip.tripId] = byStop;
-    // Map this vehicle to the trip it's *currently* on: the trip whose first
-    // predicted stop is nearest now (a vehicle appears on several upcoming trips).
+    // Map this vehicle to the trip it's *currently operating*. A vehicle appears
+    // in the feed on several consecutive trips (its block); the active one is the
+    // trip whose predicted-stop time window contains "now" (or starts soonest).
     if (tu.vehicleId) {
       const id = parseInt(tu.vehicleId) || tu.vehicleId;
-      const firstMs = tu.stopTimeUpdates.reduce((m, s) => {
-        const t = s.arrival && s.arrival.time; return t ? Math.min(m, t * 1000) : m;
-      }, Infinity);
-      const prev = vehicleTripMap[id];
-      if (!prev || Math.abs(firstMs - now) < Math.abs((prev._ms || Infinity) - now)) {
-        vehicleTripMap[id] = { tripId: tu.trip.tripId, _ms: firstMs };
+      const times = tu.stopTimeUpdates.map(s => s.arrival && s.arrival.time).filter(Boolean).map(t => t * 1000);
+      if (times.length) {
+        const firstMs = Math.min(...times), lastMs = Math.max(...times);
+        // Score: 0 if now is within the trip's window (active), else distance to it.
+        const score = now >= firstMs && now <= lastMs ? 0 : Math.min(Math.abs(firstMs - now), Math.abs(lastMs - now));
+        const prev = tripMap[id];
+        if (!prev || score < prev._score) {
+          tripMap[id] = { tripId: tu.trip.tripId, _score: score };
+        }
       }
     }
   });
   tripUpdateIndex = idx;
+  vehicleTripMap = tripMap; // TripUpdates is authoritative for active trip
 }
 
 // Merge the VehiclePositions feed's vehicle→trip and bearing into shared maps.
 // VP is sometimes laggy/incomplete on this feed, so it augments rather than
 // drives the vehicle list (the fleet JSON below is the authoritative source).
-const vpBearing = {}; // vehicleId -> { bearing, ts }
+const vpBearing = {};  // vehicleId -> { bearing, ts }
+let vpTripMap = {};     // vehicleId -> tripId, used only when TripUpdates lacks the bus
 async function pollVehiclePositions() {
   let res;
   try { res = await fetchBinary(RT_VP_PATH); } catch { return; }
@@ -885,18 +892,18 @@ async function pollVehiclePositions() {
   let feed;
   try { feed = parseFeedMessage(res.buf); } catch { return; }
   const now = Date.now();
+  const nextTrip = {};
   feed.forEach(e => {
     const vp = e.vehicle;
     if (!vp || !vp.vehicleId) return;
     const id = parseInt(vp.vehicleId) || vp.vehicleId;
     const tripId = vp.trip && vp.trip.tripId;
-    if (tripId && (!vehicleTripMap[id] || vp.timestamp * 1000 >= (vehicleTripMap[id]._vpTs || 0))) {
-      vehicleTripMap[id] = { tripId, _ms: vehicleTripMap[id] && vehicleTripMap[id]._ms, _vpTs: (vp.timestamp || 0) * 1000 };
-    }
+    if (tripId) nextTrip[id] = tripId;
     if (vp.bearing != null && vp.timestamp && (now - vp.timestamp * 1000) < VEHICLE_STALE_MS) {
       vpBearing[id] = { bearing: Math.round(vp.bearing), ts: vp.timestamp * 1000 };
     }
   });
+  vpTripMap = nextTrip;
 }
 
 // Authoritative position source: the single fleet /vehicles JSON. It is the
@@ -924,8 +931,8 @@ async function pollFleet() {
     if ((ts - luMs) > VEHICLE_STALE_MS) return;
 
     const id = raw.id;
-    const trip = vehicleTripMap[id];
-    const tripId = trip ? trip.tripId : null;
+    // Prefer the TripUpdates-derived active trip; fall back to VehiclePositions.
+    const tripId = (vehicleTripMap[id] && vehicleTripMap[id].tripId) || vpTripMap[id] || null;
     const ti = tripId ? tripRouteIndex[tripId] : null;
     // Route from the RT trip mapping; otherwise infer from nearest route shape
     // so a bus the feeds didn't map still shows on its route, not "unknown".
@@ -1591,8 +1598,11 @@ async function handleApi(url, res) {
         nextStop.scheduledMs != null && nextStop.etaMinOfficial != null) {
       const predictedArrivalMs = nowMs + nextStop.etaMinOfficial * 60000;
       scheduleDelayMin = Math.round(((predictedArrivalMs - nextStop.scheduledMs) / 60000) * 10) / 10;
-      // >2h means trip/schedule matching is wrong, not a genuinely late bus.
-      if (Math.abs(scheduleDelayMin) > 120) { scheduleSuspect = true; scheduleDelayMin = null; }
+      // A delay beyond ~45 min on these short routes almost always means the
+      // static GTFS schedule for this trip_id doesn't line up with the realtime
+      // feed's trip (versioning drift), not a genuinely hour-late bus. Trust the
+      // official live ETA, but don't display a misleading adherence number.
+      if (Math.abs(scheduleDelayMin) > 45) { scheduleSuspect = true; scheduleDelayMin = null; }
     }
 
     return json(res, {

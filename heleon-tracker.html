@@ -87,7 +87,6 @@
     .sidebar-resizer:hover::after,
     .sidebar-resizer.dragging::after { background: var(--accent); }
     .sidebar.collapsed .refresh-bar { display: none; }
-    .learn-stats { grid-template-columns: 1fr 1fr; }
   }
 
   /* ─── GOLDEN PATH ARROWS (animated dashed line ahead of each bus) ── */
@@ -219,30 +218,6 @@
   .api-section { padding:12px; display:flex; flex-direction:column; gap:8px; }
   .api-row { background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
 
-  /* ─── Learn tab ─────────────────────────────────────────────────── */
-  .learn-header { padding:10px 12px 6px; border-bottom:1px solid var(--border); }
-  .learn-title { font-size:14px; font-weight:700; color:#e6edf3; margin-bottom:4px; }
-  .learn-sub { font-size:10px; color:#8b949e; line-height:1.4; }
-  .arch-canvas { background:linear-gradient(180deg, #0d1117 0%, #161b22 100%); border-bottom:1px solid var(--border); padding:8px; }
-  .arch-canvas svg { display:block; }
-  .arch-node { transition: opacity .3s; }
-  .arch-edge { stroke:#30363d; stroke-width:0.5; opacity:.4; transition: stroke .2s, opacity .2s; }
-  .arch-edge.hot { stroke:#58a6ff; opacity:.9; }
-  .learn-pulse { padding:10px 12px; border-bottom:1px solid var(--border); }
-  .pulse-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:4px; }
-  .pulse-bar { height:6px; background:var(--panel2); border-radius:3px; overflow:hidden; position:relative; }
-  .pulse-fill { height:100%; background:linear-gradient(90deg, #58a6ff 0%, #a371f7 50%, #3fb950 100%); width:0%; transition:width .3s; box-shadow:0 0 8px rgba(88,166,255,.6); }
-  .pulse-info { font-size:10px; color:#8b949e; margin-top:4px; }
-  .pulse-info #pulseStop { color:#e6edf3; font-weight:600; }
-  .pulse-info #pulsePred { color:#3fb950; font-variant-numeric:tabular-nums; }
-  .learn-stats { padding:8px 12px; display:grid; grid-template-columns:1fr 1fr; gap:6px; border-bottom:1px solid var(--border); }
-  .loss-chart-wrap { padding:6px 12px; border-bottom:1px solid var(--border); background:#0d1117; }
-  #lossCanvas { width:100%; height:60px; display:block; }
-  .hidden-bars { padding:8px 12px; display:flex; flex-wrap:wrap; gap:3px; border-bottom:1px solid var(--border); }
-  .hidden-bar { width:14px; height:24px; background:var(--panel2); border-radius:2px; position:relative; overflow:hidden; }
-  .hidden-bar-fill { position:absolute; bottom:0; left:0; right:0; background:linear-gradient(0deg, #1f6feb 0%, #58a6ff 100%); transition:height .3s, background .3s; }
-  .hidden-bar.negative .hidden-bar-fill { background:linear-gradient(0deg, #6e7681 0%, #8b949e 100%); }
-  .route-residuals { padding:6px 12px 12px; display:flex; flex-direction:column; gap:3px; }
   .api-row-header { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
   .api-status-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
   .api-endpoint { font-family:monospace; font-size:10px; color:var(--muted); word-break:break-all; }
@@ -1282,21 +1257,12 @@ function toggleCardExpand(vid, e) {
 }
 
 function onTimeHtml(sl) {
-  if (!sl || !sl.next_stop) return '';
-  const ns = sl.next_stop;
-  // Compare GTFS scheduled time vs predicted ETA
-  if (ns.scheduledMs && ns.etaMinHist != null) {
-    const predictedMs = (sl.serverTs || Date.now()) + ns.etaMinHist * 60000;
-    const diffMin = Math.round((predictedMs - ns.scheduledMs) / 60000); // positive = late
-    if (Math.abs(diffMin) < 2) return `<span class="vc-ontime ontime">On time</span>`;
-    if (diffMin > 0) return `<span class="vc-ontime late">+${diffMin}m late</span>`;
-    return `<span class="vc-ontime early">${Math.abs(diffMin)}m early</span>`;
-  }
-  // Fallback: compare speed ETA vs hist ETA
-  const { etaMinSpeed, etaMinHist } = ns;
-  if (etaMinSpeed == null || etaMinHist == null || etaMinHist === 0) return '';
-  const diffMin = Math.round(etaMinSpeed - etaMinHist);
-  if (Math.abs(diffMin) < 1) return `<span class="vc-ontime ontime">On time</span>`;
+  if (!sl) return '';
+  // Trust the server's vetted schedule adherence (it knows the bus's real trip
+  // and suppresses implausible deltas from GTFS/realtime versioning drift).
+  if (sl.scheduleDelayMin == null) return '';
+  const diffMin = Math.round(sl.scheduleDelayMin);
+  if (Math.abs(diffMin) < 2) return `<span class="vc-ontime ontime">On time</span>`;
   if (diffMin > 0) return `<span class="vc-ontime late">+${diffMin}m late</span>`;
   return `<span class="vc-ontime early">${Math.abs(diffMin)}m early</span>`;
 }
@@ -2532,274 +2498,10 @@ function setupLocateButton() {
 }
 setupLocateButton();
 
-// ─── LEARN TAB VISUALIZATION ───────────────────────────────────────────────
-// A 3-layer transformer-style architecture with:
-//   - Input layer: 12 token positions (cyclical time + scalars + route embedding)
-//   - Positional encoding (sin/cos ripples flowing in)
-//   - Self-attention heads (2 heads with attention lines)
-//   - Hidden layer: 16 FFN units with ReLU + glowing activations
-//   - Output layer: 5 future-stop ETA predictions
-const ARCH = { inputN: 12, attnHeads: 2, hiddenN: 16, outN: 5 };
-const lossHistory = [];
-let lastLearnPayload = null;
-let pulseStopName = '—';
-let pulsePredValue = '—';
-let lastTrainedExamples = 0;
-let pulsePhase = 0; // 0=idle, 1=forward, 2=backprop
-
-function buildArchDiagram() {
-  const svg = document.querySelector('#archCanvas svg');
-  if (!svg) return;
-  // Clear and rebuild — full transformer layout in 380x180
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
-
-  const W = 380, H = 180;
-  // Layer X positions
-  const INPUT_X = 30;
-  const POS_X = 70;
-  const ATTN_X = 130;
-  const FFN_X = 220;
-  const OUT_X = 340;
-  // Y positions per layer (input is taller — 12 tokens)
-  const tokens = ARCH.inputN;
-  const tokSpacing = 11;
-  const tokY0 = (H - tokens * tokSpacing) / 2;
-
-  // SVG defs for glow filters
-  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-  defs.innerHTML = `
-    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="2" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <filter id="glow-strong" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="4" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <linearGradient id="grad-token" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#1f6feb"/>
-      <stop offset="100%" stop-color="#58a6ff"/>
-    </linearGradient>
-    <linearGradient id="grad-attn" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#a371f7"/>
-      <stop offset="100%" stop-color="#db61a2"/>
-    </linearGradient>
-    <linearGradient id="grad-ffn" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#f778ba"/>
-      <stop offset="100%" stop-color="#3fb950"/>
-    </linearGradient>
-    <radialGradient id="grad-output" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#3fb950" stop-opacity="0.9"/>
-      <stop offset="100%" stop-color="#3fb950" stop-opacity="0"/>
-    </radialGradient>
-  `;
-  svg.appendChild(defs);
-
-  // Background grid
-  const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  bg.setAttribute('width', W); bg.setAttribute('height', H); bg.setAttribute('fill', 'transparent');
-  svg.appendChild(bg);
-
-  // Layers (containers)
-  const layers = {
-    input: el('g', { id: 'layer-input' }),
-    pos: el('g', { id: 'layer-pos' }),
-    attn: el('g', { id: 'layer-attn' }),
-    ffn: el('g', { id: 'layer-ffn' }),
-    out: el('g', { id: 'layer-out' }),
-  };
-  Object.values(layers).forEach(l => svg.appendChild(l));
-
-  // Build input tokens
-  const tokenNodes = [];
-  for (let i = 0; i < tokens; i++) {
-    const y = tokY0 + i * tokSpacing;
-    tokenNodes.push({ x: INPUT_X, y });
-    layers.input.appendChild(el('circle', {
-      cx: INPUT_X, cy: y, r: 4,
-      fill: 'url(#grad-token)',
-      class: 't-node t-input',
-      id: `tk-${i}`,
-      opacity: 0.7,
-    }));
-    // Token labels (tiny)
-    if (i === 0) layers.input.appendChild(textEl(INPUT_X - 8, y + 3, '🕐', '6px', '#58a6ff', 'end'));
-    if (i === 3) layers.input.appendChild(textEl(INPUT_X - 8, y + 3, '📍', '6px', '#58a6ff', 'end'));
-    if (i === 6) layers.input.appendChild(textEl(INPUT_X - 8, y + 3, '🚌', '6px', '#58a6ff', 'end'));
-    if (i === 9) layers.input.appendChild(textEl(INPUT_X - 8, y + 3, '🛣️', '6px', '#58a6ff', 'end'));
-  }
-
-  // Positional encoding (sin/cos waves)
-  layers.pos.appendChild(textEl(POS_X, 12, 'PE', '8px', '#a371f7', 'middle'));
-  for (let i = 0; i < 5; i++) {
-    const y = 30 + i * 12;
-    layers.pos.appendChild(el('path', {
-      d: `M ${POS_X - 6} ${y} q 6 -6 12 0 t 12 0 t 12 0`,
-      stroke: '#a371f7', 'stroke-width': 0.8, fill: 'none', opacity: 0.5,
-      class: 'pe-wave',
-      id: `pe-${i}`,
-    }));
-  }
-  // Connector input → pos
-  tokenNodes.forEach((t, i) => {
-    if (i % 2 !== 0) return;
-    layers.pos.appendChild(el('line', {
-      x1: INPUT_X + 4, y1: t.y, x2: POS_X - 6, y2: 30 + (i % 5) * 12,
-      stroke: '#58a6ff', 'stroke-width': 0.3, opacity: 0.3,
-    }));
-  });
-
-  // Self-attention heads (2 heads, each looks at all tokens)
-  layers.attn.appendChild(textEl(ATTN_X, 12, 'Attn×2', '8px', '#db61a2', 'middle'));
-  for (let h = 0; h < ARCH.attnHeads; h++) {
-    const headY = 30 + h * 50;
-    layers.attn.appendChild(el('circle', {
-      cx: ATTN_X, cy: headY + 18, r: 14,
-      fill: 'url(#grad-attn)', opacity: 0.6,
-      class: 'attn-head',
-      id: `attn-${h}`,
-      filter: 'url(#glow)',
-    }));
-    // Attention lines from each token to this head
-    tokenNodes.forEach((t, i) => {
-      const opacity = 0.1 + Math.random() * 0.4;
-      const x2 = ATTN_X - 14 + Math.random() * 4;
-      const y2 = headY + 14 + Math.random() * 8;
-      layers.attn.appendChild(el('line', {
-        x1: t.x + 4, y1: t.y, x2, y2,
-        stroke: '#db61a2', 'stroke-width': 0.4, opacity,
-        class: 'attn-line',
-        id: `attn-${h}-${i}`,
-      }));
-    });
-    // Head → FFN connector
-    layers.attn.appendChild(el('line', {
-      x1: ATTN_X + 14, y1: headY + 18, x2: FFN_X - 8, y2: 50,
-      stroke: '#db61a2', 'stroke-width': 1, opacity: 0.6,
-    }));
-  }
-
-  // FFN hidden layer (16 units, glowing)
-  const ffnY0 = (H - ARCH.hiddenN * 6) / 2;
-  for (let i = 0; i < ARCH.hiddenN; i++) {
-    const y = ffnY0 + i * 6;
-    layers.ffn.appendChild(el('circle', {
-      cx: FFN_X, cy: y, r: 3.5,
-      fill: 'url(#grad-ffn)', opacity: 0.4,
-      class: 'ffn-node',
-      id: `ffn-${i}`,
-    }));
-  }
-
-  // Output heads (5 future-stop predictions with glow)
-  const outY0 = (H - ARCH.outN * 20) / 2;
-  for (let i = 0; i < ARCH.outN; i++) {
-    const y = outY0 + i * 20;
-    layers.out.appendChild(el('circle', {
-      cx: OUT_X, cy: y, r: 10,
-      fill: 'url(#grad-output)', opacity: 0.4,
-      class: 'out-node',
-      id: `out-${i}`,
-    }));
-    layers.out.appendChild(el('circle', {
-      cx: OUT_X, cy: y, r: 4,
-      fill: '#3fb950', opacity: 0.8,
-      class: 'out-core',
-      id: `out-core-${i}`,
-    }));
-    // FFN → out connectors
-    for (let k = 0; k < ARCH.hiddenN; k += 4) {
-      layers.out.appendChild(el('line', {
-        x1: FFN_X + 3.5, y1: ffnY0 + k * 6,
-        x2: OUT_X - 10, y2: y,
-        stroke: '#3fb950', 'stroke-width': 0.3, opacity: 0.15,
-      }));
-    }
-  }
-
-  // Layer labels at bottom
-  const labels = [
-    { x: INPUT_X, t: 'Input (12)' },
-    { x: POS_X, t: '+ Pos' },
-    { x: ATTN_X, t: 'Attention' },
-    { x: FFN_X, t: 'FFN (16)' },
-    { x: OUT_X, t: 'Heads (5)' },
-  ];
-  labels.forEach(l => {
-    svg.appendChild(textEl(l.x, H - 4, l.t, '8px', '#8b949e', 'middle'));
-  });
-  svg.appendChild(textEl(W / 2, H - 4, '↓', '8px', '#3fb950', 'middle'));
-
-  // Begin animation loop
-  if (!window._archAnimating) {
-    window._archAnimating = true;
-    requestAnimationFrame(archAnimFrame);
-  }
-}
-
-function el(tag, attrs) {
-  const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
-  for (const k in attrs) e.setAttribute(k, attrs[k]);
-  return e;
-}
-function textEl(x, y, t, size, color, anchor = 'start') {
-  const e = el('text', {
-    x, y, fill: color, 'font-size': size, 'text-anchor': anchor,
-    'font-family': 'system-ui, sans-serif',
-  });
-  e.textContent = t;
-  return e;
-}
-let _t0 = performance.now();
-function archAnimFrame(now) {
-  const t = (now - _t0) / 1000;
-  // Pulse attention heads with sin wave
-  for (let h = 0; h < ARCH.attnHeads; h++) {
-    const head = document.getElementById(`attn-${h}`);
-    if (!head) continue;
-    const phase = (t * 1.5 + h * Math.PI) % (Math.PI * 2);
-    const intensity = (Math.sin(phase) + 1) / 2; // 0..1
-    head.setAttribute('opacity', 0.3 + intensity * 0.7);
-    head.setAttribute('r', 12 + intensity * 4);
-  }
-  // Flowing data along input→pos→attn edges
-  document.querySelectorAll('.pe-wave').forEach((p, i) => {
-    const offset = (t * 30 + i * 10) % 30;
-    p.setAttribute('stroke-dasharray', '3 6');
-    p.setAttribute('stroke-dashoffset', -offset);
-    p.setAttribute('opacity', 0.3 + Math.sin(t * 2 + i) * 0.3);
-  });
-  // FFN nodes flicker based on input activity
-  for (let i = 0; i < ARCH.hiddenN; i++) {
-    const n = document.getElementById(`ffn-${i}`);
-    if (!n) continue;
-    const phase = (t * 0.8 + i * 0.3) % (Math.PI * 2);
-    const intensity = (Math.sin(phase) + 1) / 2;
-    n.setAttribute('opacity', 0.2 + intensity * 0.7);
-    n.setAttribute('r', 2.5 + intensity * 2);
-  }
-  // Output nodes pulse + glow during forward pass
-  for (let i = 0; i < ARCH.outN; i++) {
-    const n = document.getElementById(`out-${i}`);
-    if (!n) continue;
-    const phase = (t * 1.2 + i * 0.5) % (Math.PI * 2);
-    const intensity = (Math.sin(phase) + 1) / 2;
-    n.setAttribute('opacity', 0.3 + intensity * 0.6);
-    n.setAttribute('r', 8 + intensity * 4);
-  }
-  // Attention lines flicker
-  document.querySelectorAll('.attn-line').forEach((line, i) => {
-    const intensity = 0.1 + 0.4 * (Math.sin(t * 2 + i * 0.1) + 1) / 2;
-    line.setAttribute('opacity', intensity);
-  });
-
-  requestAnimationFrame(archAnimFrame);
-}
-
+// ─── SYSTEM TAB: PREDICTOR SUMMARY ─────────────────────────────────────────
 async function pollLearn() {
   try {
     const s = await fetch('/api/learn/status').then(r => r.json());
-    lastLearnPayload = s;
     const el = document.getElementById('learnInline');
     if (!el) return;
     el.innerHTML = `
@@ -2816,98 +2518,6 @@ async function pollLearn() {
   } catch (e) { console.error('[pollLearn]', e); }
 }
 
-let _routePollInFlight = false;
-let _lastRoutePoll = 0;
-async function maybeRoutePoll() {
-  if (_routePollInFlight || Date.now() - _lastRoutePoll < 5000) return;
-  _routePollInFlight = true;
-  _lastRoutePoll = Date.now();
-  try { await renderRouteResiduals(); } finally { _routePollInFlight = false; }
-}
-
-function animatePulse() {
-  const fill = document.getElementById('pulseFill');
-  if (!fill) return;
-  fill.style.width = '0%';
-  document.getElementById('pulseStop').textContent = pulseStopName;
-  document.getElementById('pulsePred').textContent = pulsePredValue;
-  // Animate to 100%
-  requestAnimationFrame(() => { fill.style.width = '100%'; });
-  setTimeout(() => { fill.style.width = '0%'; }, 1400);
-}
-
-function drawLossChart() {
-  const c = document.getElementById('lossCanvas');
-  if (!c || lossHistory.length < 2) return;
-  const ctx = c.getContext('2d');
-  const w = c.width, h = c.height;
-  ctx.clearRect(0, 0, w, h);
-  // Background grid
-  ctx.strokeStyle = '#21262d'; ctx.lineWidth = 0.5;
-  for (let i = 1; i < 4; i++) {
-    ctx.beginPath(); ctx.moveTo(0, (h * i) / 4); ctx.lineTo(w, (h * i) / 4); ctx.stroke();
-  }
-  // Loss line
-  const max = Math.max(...lossHistory, 0.01);
-  ctx.strokeStyle = '#58a6ff'; ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  lossHistory.forEach((v, i) => {
-    const x = (i / Math.max(1, lossHistory.length - 1)) * w;
-    const y = h - (v / max) * h * 0.9 - 2;
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  });
-  ctx.stroke();
-  // Fill gradient
-  const grad = ctx.createLinearGradient(0, 0, 0, h);
-  grad.addColorStop(0, 'rgba(88,166,255,.3)');
-  grad.addColorStop(1, 'rgba(88,166,255,0)');
-  ctx.fillStyle = grad;
-  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
-
-  // Pulse on latest point
-  const last = lossHistory[lossHistory.length - 1];
-  const lx = w - 2;
-  const ly = h - (last / max) * h * 0.9 - 2;
-  ctx.fillStyle = '#3fb950';
-  ctx.beginPath(); ctx.arc(lx, ly, 3, 0, Math.PI * 2); ctx.fill();
-}
-
-async function renderRouteResiduals() {
-  const container = document.getElementById('routeResiduals');
-  if (!container) return;
-  if (!allVehicles.length) return;
-  // Sample one vehicle per route
-  const seen = new Set();
-  const samples = [];
-  for (const v of allVehicles) {
-    if (seen.has(v.routeShort)) continue;
-    seen.add(v.routeShort);
-    samples.push(v);
-    if (samples.length >= 8) break;
-  }
-  const data = await Promise.all(samples.map(async v => {
-    try {
-      const d = await fetch(`/api/stopline?vehicle_id=${v.id}`).then(r => r.json());
-      const corr = d.stops?.[0]?.seqCorrection ?? 0;
-      const eta = d.stops?.[0]?.etaMinSeq ?? 0;
-      return { name: v.routeShort, color: v.routeColor, corr, eta };
-    } catch { return null; }
-  })).then(arr => arr.filter(Boolean));
-
-  container.innerHTML = data.map(d => {
-    const pct = Math.min(100, Math.abs(d.corr) * 30);
-    const isPositive = d.corr >= 0;
-    const barColor = Math.abs(d.corr) < 0.5 ? '#3fb950' : isPositive ? '#d29922' : '#58a6ff';
-    return `<div style="display:grid;grid-template-columns:40px 1fr 60px;gap:6px;align-items:center;font-size:11px;">
-      <span style="font-weight:600;color:${d.color};">${d.name}</span>
-      <div style="height:8px;background:var(--panel2);border-radius:4px;position:relative;overflow:hidden;">
-        <div style="position:absolute;${isPositive ? 'left:50%' : 'right:50%'};top:0;bottom:0;width:${pct}%;background:${barColor};border-radius:4px;transition:width .3s;"></div>
-        <div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:#30363d;"></div>
-      </div>
-      <span style="font-variant-numeric:tabular-nums;text-align:right;color:${barColor};font-weight:600;">${d.corr >= 0 ? '+' : ''}${d.corr.toFixed(2)}m</span>
-    </div>`;
-  }).join('');
-}
 initMap();
 // Kick off all data fetches in parallel — fastest possible load
 Promise.all([
