@@ -932,6 +932,11 @@ async function pollVehiclePositions() {
 // makes a bus vanish from the page (the rider in the rain keeps seeing it, just
 // aging). Kept until the GPS itself goes stale (VEHICLE_STALE_MS).
 const lastGoodVehicle = {}; // vehicleId -> built vehicle object
+// Remember each bus's last KNOWN route (from a real per-route endpoint) so the
+// roster fallback doesn't flip a bus onto a wrong nearest-shape guess when it
+// briefly drops out of its route list. vehicleId -> { routeId, ts }.
+const lastKnownRoute = {};
+const ROUTE_MEMORY_MS = 6 * 60 * 60 * 1000; // trust a remembered route for 6 h
 
 async function pollFleet() {
   const ts = Date.now();
@@ -960,6 +965,9 @@ async function pollFleet() {
       if (!prev || luMs > prev._luMs || (luMs === prev._luMs && (raw.speed || 0) > (prev.speed || 0))) {
         byId[raw.id] = Object.assign({}, raw, { _routeId: r.rid, _luMs: luMs });
       }
+      // Remember this real route assignment (only from fresh readings) so the
+      // roster fallback won't flip the bus onto a nearest-shape guess later.
+      if ((ts - luMs) < VEHICLE_STALE_MS) lastKnownRoute[raw.id] = { routeId: r.rid, ts };
     });
     dbRun(`INSERT INTO poll_log(ts,route_id,status,latency,count) VALUES(?,?,?,?,?)`,
       [ts, r.rid, r.status, r.latency || 0, list.length]);
@@ -977,7 +985,13 @@ async function pollFleet() {
       if (raw.lat < BBOX.minLat || raw.lat > BBOX.maxLat || raw.lon < BBOX.minLon || raw.lon > BBOX.maxLon) return;
       const luMs = raw.lastUpdated ? parseFleetTs(raw.lastUpdated) : ts;
       if ((ts - luMs) > VEHICLE_RETAIN_MS) return;
-      byId[raw.id] = Object.assign({}, raw, { _routeId: inferRouteByShape(raw.lat, raw.lon), _luMs: luMs, _unassigned: true });
+      // Prefer the bus's last KNOWN route (so it doesn't flip routes when it
+      // briefly drops out of its per-route list); only guess from geometry if we
+      // have no recent memory of where it belongs.
+      const mem = lastKnownRoute[raw.id];
+      const known = mem && (ts - mem.ts) < ROUTE_MEMORY_MS ? mem.routeId : null;
+      const routeId = known != null ? known : inferRouteByShape(raw.lat, raw.lon);
+      byId[raw.id] = Object.assign({}, raw, { _routeId: routeId, _luMs: luMs, _unassigned: !known });
     });
   } catch {}
 
