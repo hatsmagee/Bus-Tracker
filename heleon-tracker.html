@@ -978,8 +978,7 @@ function computeRouteOffsets(routeCoordMap) {
 
   // Build groups of significantly overlapping routes (>20 shared cells)
   const OVERLAP_THRESH = 20;
-  const assigned = {}; // routeId -> offsetPx
-  const LINE_SPACING = 6; // px between parallel lines (visible even zoomed out)
+  const assigned = {}; // routeId -> signed slot index (centered on 0)
 
   // For each route, get its overlap peers sorted by routeId for stable ordering
   for (const rid of Object.keys(routeCoordMap)) {
@@ -993,10 +992,46 @@ function computeRouteOffsets(routeCoordMap) {
     const group = [...new Set([rid, ...peers])].sort((a, b) => Number(a) - Number(b));
     const idx = group.indexOf(rid);
     const center = (group.length - 1) / 2;
-    assigned[rid] = (idx - center) * LINE_SPACING;
+    assigned[rid] = idx - center; // slot index; multiplied by metric spacing at draw time
   }
 
   return assigned;
+}
+
+// Offset a [lon,lat] polyline laterally by `meters` (signed; +right of travel).
+// Each vertex is shifted along the average of its adjacent segment normals
+// (a miter join), so corners re-close cleanly instead of overshooting the way
+// MapLibre's paint line-offset does on sharp turns.
+function offsetLineMeters(coords, meters) {
+  if (coords.length < 2 || !meters) return coords;
+  const out = [];
+  const mPerDegLat = 111320;
+  for (let i = 0; i < coords.length; i++) {
+    const lat = coords[i][1];
+    const mPerDegLon = mPerDegLat * Math.cos(lat * Math.PI / 180) || 1e-6;
+    // Normal of the incoming and outgoing segments (unit, in degree space scaled
+    // to metres), averaged so the vertex offset bisects the corner.
+    let nx = 0, ny = 0, count = 0;
+    const seg = (a, b) => {
+      const dx = (b[0] - a[0]) * mPerDegLon, dy = (b[1] - a[1]) * mPerDegLat;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-6) return;
+      // right-hand normal of direction (dx,dy) is (dy,-dx)
+      nx += dy / len; ny += -dx / len; count++;
+    };
+    if (i > 0) seg(coords[i - 1], coords[i]);
+    if (i < coords.length - 1) seg(coords[i], coords[i + 1]);
+    if (!count) { out.push(coords[i]); continue; }
+    // Use the averaged normal as a UNIT vector (no miter compensation). Skipping
+    // the 1/mag miter scale is what avoids fat/spiky corners on sharp turns — the
+    // perpendicular distance dips a hair at tight corners, which `line-join:round`
+    // smooths over, instead of ballooning into a spike.
+    const mag = Math.hypot(nx, ny) || 1;
+    const ox = (nx / mag) * meters;
+    const oy = (ny / mag) * meters;
+    out.push([coords[i][0] + ox / mPerDegLon, coords[i][1] + oy / mPerDegLat]);
+  }
+  return out;
 }
 
 let routeLayerIds = [];  // MapLibre layer IDs
@@ -1097,32 +1132,31 @@ function renderRouteShapes() {
 
   if (!showRouteShapes) return;
 
-  // Add one source+layer per route with its computed offset
+  // Add one source+layer per route. We offset the actual GEOMETRY by a fixed
+  // real-world distance (metres) rather than using MapLibre's paint
+  // `line-offset`. Paint-offset overshoots and self-intersects at sharp corners
+  // (the spikes/loops you saw); offsetting coordinates with proper per-vertex
+  // normals re-joins corners cleanly. A metric offset also separates overlapping
+  // routes into parallel ribbons at every zoom and converges honestly when the
+  // map is zoomed far out.
+  const SPACING_M = 9; // metres between adjacent parallel routes
   for (const [rid, coords] of Object.entries(routeCoords)) {
     const { color } = routeMeta[rid];
-    const offset = offsets[rid] || 0;
+    const offsetSlots = offsets[rid] || 0; // signed slot index from grouping
+    const drawCoords = offsetSlots ? offsetLineMeters(coords, offsetSlots * SPACING_M) : coords;
     const srcId = `route-${rid}`;
     const layId = `route-line-${rid}`;
 
     map.addSource(srcId, {
       type: 'geojson',
-      data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} }
+      data: { type: 'Feature', geometry: { type: 'LineString', coordinates: drawCoords }, properties: {} }
     });
     map.addLayer({
       id: layId, type: 'line', source: srcId,
       paint: {
         'line-color': color,
-        // Thin when zoomed out (so overlapping routes don't smear into a blob),
-        // thicker as you zoom in for tappability.
         'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.2, 11, 2, 14, 3.5, 17, 5],
-        'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 12, 0.92],
-        // Keep routes that share a road separated as distinct parallel ribbons
-        // at EVERY zoom — never collapse to one line, or several routes on the
-        // same street look like a single route. Offset is in line-widths, so it
-        // scales with the line; we keep a meaningful fraction when zoomed out and
-        // open it up further as you zoom in.
-        'line-offset': ['interpolate', ['linear'], ['zoom'],
-          8, offset * 0.6, 11, offset * 0.8, 14, offset, 17, offset * 1.5]
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 12, 0.92]
       },
       layout: { 'line-join': 'round', 'line-cap': 'round' }
     }, 'stops-circle'); // insert below stops layer
