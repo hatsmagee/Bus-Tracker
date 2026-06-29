@@ -2154,37 +2154,41 @@ function renderMarkers() {
     const heading = v.headingDegrees;
     const fix = [v.lon, v.lat];
     const nowT = performance.now();
+    // Route polyline for snap-to-road motion (may be absent for unmapped routes).
+    const shapeCoords = routeShapeCoords[v.routeId];
+    const rc = (shapeCoords && shapeCoords.length > 1) ? routeCum(v.routeId, shapeCoords) : null;
+    // Snap the fix to the route to get its distance-along-route. If the bus is
+    // far off any route shape (>120 m), we can't trust route motion — fall back
+    // to just sitting at the fix (no animated movement).
+    let snap = rc ? snapToRoute(rc, fix) : null;
+    const onRoute = snap && snap.offRoute < 120;
+
     if (markers[v.id]) {
       const m = markers[v.id];
-      // ── Velocity-tracking loop with learned over/undershoot correction ──
-      // Measured velocity from the last two fixes self-corrects for the reported
-      // speed being wrong (bus slowed/turned): we use what actually happened.
-      const dt = Math.max(0.001, (nowT - m.fixTime) / 1000);            // s since last fix
-      const measVel = displacementMps(m.fix, fix, dt);                  // {vx,vy} m/s east/north
-      // Learn a gain that nudges our projection toward reality. When the last
-      // interval's prediction overshot the true fix, error<0 → shrink gain;
-      // undershot → grow it. This is the integral/feedback term of the loop.
-      if (m.predicted) {
-        const predErr = signedAlong(m.predicted, fix, m.fix);          // +: we fell short, -: overshot
-        const travelled = haversineKm(m.fix[1], m.fix[0], fix[1], fix[0]) * 1000 || 1;
-        m.gain = clamp(m.gain + 0.4 * (predErr / travelled), 0.4, 1.6); // bounded adaptation
+      const dt = Math.max(0.1, (nowT - m.fixTime) / 1000); // s since last fix
+      if (onRoute && m.onRoute && m.rc === rc) {
+        // Distance actually travelled ALONG THE ROAD since the last fix. Forward
+        // only — if the snap went backward (GPS jitter / a loop), treat as 0 so a
+        // parked or jittering bus never creeps or reverses.
+        const fwd = snap.dist - m.targetDist;
+        m.alongSpeed = fwd > 1 ? fwd / dt : 0;   // m/s along route; <1 m of drift = stopped
+        m.targetDist = Math.max(m.targetDist, snap.dist); // setpoint only moves forward
+      } else if (onRoute) {
+        // First time on this route (or route changed): jump state to the fix,
+        // no implied motion yet.
+        m.rc = rc; m.curDist = snap.dist; m.targetDist = snap.dist; m.alongSpeed = 0;
+      } else {
+        // Off-route bus: no route motion. Just hold at the fix.
+        m.rc = null; m.alongSpeed = 0;
       }
-      // The marker is wherever it was rendered; from here it converges to the
-      // moving setpoint — never snaps.
-      const cur = m.marker.getLngLat();
-      m.renderPos = [cur.lng, cur.lat];
+      m.onRoute = onRoute;
       m.fix = fix;
       m.fixTime = nowT;
-      m.vel = measVel;
-      m.interval = m.lastFixTime ? clamp((nowT - m.lastFixTime), 4000, 30000) : 15000;
-      m.lastFixTime = nowT;
       m.heading = heading;
-      // Where we now predict the bus will be at the next fix (for the next
-      // round's error measurement): fix + corrected velocity over one interval.
-      m.predicted = stepLatLon(fix, measVel, m.gain * m.interval / 1000);
       m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather, v.name);
       applyAgeOpacity(m.el, v);
       wire(m.el, v);
+      if (!onRoute) m.marker.setLngLat(fix); // off-route: place directly
     } else {
       const el = document.createElement('div');
       el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather, v.name);
@@ -2192,9 +2196,9 @@ function renderMarkers() {
       wire(el, v);
       const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(fix).addTo(map);
       markers[v.id] = {
-        marker, el, heading,
-        fix, fixTime: nowT, lastFixTime: 0, renderPos: fix.slice(),
-        vel: { vx: 0, vy: 0 }, gain: 1, interval: 15000, predicted: null,
+        marker, el, heading, fix, fixTime: nowT,
+        rc: onRoute ? rc : null, onRoute,
+        curDist: onRoute ? snap.dist : 0, targetDist: onRoute ? snap.dist : 0, alongSpeed: 0,
       };
     }
   });
@@ -2249,6 +2253,58 @@ function signedAlong(pred, truth, origin) {
 }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
+// ── Route-snapped motion helpers ──
+// Metres between two [lon,lat] points (local flat approximation).
+function metersBetween(a, b) {
+  const mPerDegLat = 111320, mPerDegLon = mPerDegLat * Math.cos(((a[1] + b[1]) / 2) * Math.PI / 180);
+  const dx = (b[0] - a[0]) * mPerDegLon, dy = (b[1] - a[1]) * mPerDegLat;
+  return Math.hypot(dx, dy);
+}
+// Build (and cache) a cumulative-distance table for a route polyline so we can
+// map distance↔position. coords: [[lon,lat],…].
+const _routeCumCache = {};
+function routeCum(routeId, coords) {
+  const c = _routeCumCache[routeId];
+  if (c && c.coords === coords) return c;
+  const cum = [0];
+  for (let i = 1; i < coords.length; i++) cum[i] = cum[i - 1] + metersBetween(coords[i - 1], coords[i]);
+  const entry = { coords, cum, total: cum[cum.length - 1] || 0 };
+  _routeCumCache[routeId] = entry;
+  return entry;
+}
+// Snap a [lon,lat] point to the polyline; return its distance-along-route (m).
+// Searches near a hint distance first (cheap) then falls back to full scan.
+function snapToRoute(rc, pt) {
+  const { coords, cum } = rc;
+  let bestD = Infinity, bestDist = 0;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const a = coords[i], b = coords[i + 1];
+    const mPerDegLat = 111320, mPerDegLon = mPerDegLat * Math.cos(a[1] * Math.PI / 180);
+    const ax = a[0] * mPerDegLon, ay = a[1] * mPerDegLat;
+    const bx = b[0] * mPerDegLon, by = b[1] * mPerDegLat;
+    const px = pt[0] * mPerDegLon, py = pt[1] * mPerDegLat;
+    const dx = bx - ax, dy = by - ay, segLen2 = dx * dx + dy * dy || 1;
+    let t = ((px - ax) * dx + (py - ay) * dy) / segLen2;
+    t = clamp(t, 0, 1);
+    const cx = ax + dx * t, cy = ay + dy * t;
+    const d2 = (px - cx) ** 2 + (py - cy) ** 2;
+    if (d2 < bestD) { bestD = d2; bestDist = cum[i] + Math.sqrt(segLen2) * t; }
+  }
+  return { dist: bestDist, offRoute: Math.sqrt(bestD) };
+}
+// Position [lon,lat] at a given distance-along-route (m).
+function posAtDist(rc, dist) {
+  const { coords, cum, total } = rc;
+  dist = clamp(dist, 0, total);
+  // binary search the segment
+  let lo = 0, hi = cum.length - 1;
+  while (lo < hi - 1) { const mid = (lo + hi) >> 1; if (cum[mid] <= dist) lo = mid; else hi = mid; }
+  const segLen = cum[hi] - cum[lo] || 1;
+  const t = (dist - cum[lo]) / segLen;
+  return [coords[lo][0] + (coords[hi][0] - coords[lo][0]) * t,
+          coords[lo][1] + (coords[hi][1] - coords[lo][1]) * t];
+}
+
 // Normalize occupancy to a 0..1 fraction regardless of whether the feed gives
 // a raw passenger count + capacity or an already-normalized load.
 function loadFraction(v) {
@@ -2258,40 +2314,33 @@ function loadFraction(v) {
   return Math.max(0, Math.min(1, v.passengerLoad || 0));
 }
 
-// requestAnimationFrame loop that eases each marker from its last position to
-// the latest fix. Runs only while at least one marker is mid-transition, then
-// stops itself to save battery.
+// Route-snapped motion: each marker slides FORWARD along its road polyline at
+// the pace the real bus moved last interval. It never reverses, never jumps off
+// the road, and a stopped bus (alongSpeed ≈ 0) doesn't move at all. The marker's
+// distance-along-route eases toward the latest fix's distance and stops there
+// until the next fix advances it — so it tracks the real bus without overshoot.
 let markerAnimRAF = null;
 let markerLastFrame = 0;
-const FOLLOW = 6;          // tracking stiffness (per second) — higher = snappier convergence
 function startMarkerAnim() {
   if (markerAnimRAF) return;
   const tick = (now) => {
-    const frameDt = markerLastFrame ? Math.min(0.1, (now - markerLastFrame) / 1000) : 0.016;
+    const frameDt = markerLastFrame ? Math.min(0.25, (now - markerLastFrame) / 1000) : 0.016;
     markerLastFrame = now;
     let anyMoving = false;
     for (const id in markers) {
       const m = markers[id];
       if (!m.fix) continue;
-      // ── Setpoint: the corrected dead-reckoned position the bus SHOULD be at
-      // right now. Velocity is what the bus actually did last interval, scaled by
-      // the learned gain (over/undershoot correction). Capped at one interval so
-      // a missing update doesn't fling the marker past the next real fix.
-      const since = Math.min((now - m.fixTime) / 1000, m.interval / 1000);
-      const target = stepLatLon(m.fix, m.vel, m.gain * since);
-      // ── Critically-damped follow: ease the rendered position toward the moving
-      // target. Exponential smoothing with frame-rate-independent alpha gives a
-      // smooth glide that always converges — no snap, no overshoot of its own.
-      const a = 1 - Math.exp(-FOLLOW * frameDt);
-      const lng = m.renderPos[0] + (target[0] - m.renderPos[0]) * a;
-      const lat = m.renderPos[1] + (target[1] - m.renderPos[1]) * a;
-      m.renderPos = [lng, lat];
-      m.marker.setLngLat([lng, lat]);
-      // Keep running while still converging or while the bus is moving within
-      // the current interval window.
-      const err = haversineKm(lat, lng, target[1], target[0]) * 1000;
-      const speed = Math.hypot(m.vel.vx, m.vel.vy);
-      if (err > 0.5 || (speed > 0.3 && since < m.interval / 1000)) anyMoving = true;
+      if (!m.rc) continue; // off-route bus already placed at its fix; no animation
+      const remaining = m.targetDist - m.curDist;
+      if (remaining > 0.3) {
+        // Advance forward at the measured along-route speed. Cap the step so we
+        // never blow past the setpoint (no jump-forward). If alongSpeed is ~0 the
+        // bus is stopped → step is ~0 → it holds position.
+        const step = Math.min(remaining, Math.max(m.alongSpeed, remaining / 6) * frameDt);
+        m.curDist += step;
+        m.marker.setLngLat(posAtDist(m.rc, m.curDist));
+        anyMoving = true;
+      }
     }
     if (anyMoving && !document.hidden) { markerAnimRAF = requestAnimationFrame(tick); }
     else { markerAnimRAF = null; markerLastFrame = 0; }

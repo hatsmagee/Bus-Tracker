@@ -1375,10 +1375,26 @@ async function handleApi(url, res) {
        FROM pings WHERE ts>=? ORDER BY vehicle_id, ts ASC`, [since]);
     const byV = {};
     rows.forEach(r => {
-      if (!byV[r.vehicle_id]) byV[r.vehicle_id] = { vehicle_id: r.vehicle_id, name: r.vehicle_name, route_id: r.route_id, points: [] };
-      byV[r.vehicle_id].points.push([r.lon, r.lat, r.ts, r.speed, r.heading_deg]);
+      if (!byV[r.vehicle_id]) byV[r.vehicle_id] = { vehicle_id: r.vehicle_id, name: r.vehicle_name, route_id: r.route_id, _pts: [] };
+      byV[r.vehicle_id]._pts.push([r.lon, r.lat, r.ts, r.speed, r.heading_deg]);
     });
-    return json(res, Object.values(byV));
+    // De-spaghetti: a parked bus jitters a few metres every poll, which draws a
+    // tangled scribble. Keep a point only when the bus has actually moved >25 m
+    // from the last kept point, so stationary buses collapse to a single dot and
+    // only real travel forms a line.
+    const out = Object.values(byV).map(v => {
+      const pts = [];
+      for (const p of v._pts) {
+        if (!pts.length) { pts.push(p); continue; }
+        const last = pts[pts.length - 1];
+        if (haversineKm(last[1], last[0], p[1], p[0]) * 1000 >= 25) pts.push(p);
+      }
+      // Always include the most recent fix so the trail reaches the live marker.
+      const lastRaw = v._pts[v._pts.length - 1];
+      if (lastRaw && pts[pts.length - 1] !== lastRaw) pts.push(lastRaw);
+      return { vehicle_id: v.vehicle_id, name: v.name, route_id: v.route_id, points: pts };
+    });
+    return json(res, out);
   }
 
   if (p === '/api/shapes') {
