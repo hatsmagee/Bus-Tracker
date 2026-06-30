@@ -1955,6 +1955,16 @@ function renderRouteShapes(force) {
 
   const srcId = 'route-shapes';
   const layId = 'route-shapes-line';
+  // Defensive: update in place if a stale source/layer survived (e.g. a re-entrant
+  // render call before the removal above landed) instead of throwing on addSource.
+  const existingSrc = map.getSource(srcId);
+  if (existingSrc) {
+    existingSrc.setData({ type: 'FeatureCollection', features });
+    routeLayerIds.push(layId);
+    routeSourceIds.push(srcId);
+    renderAheadArrows();
+    return;
+  }
   map.addSource(srcId, { type: 'geojson', data: { type: 'FeatureCollection', features } });
   map.addLayer({
     id: layId, type: 'line', source: srcId,
