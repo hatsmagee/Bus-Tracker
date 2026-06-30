@@ -700,9 +700,14 @@ function initMap() {
 }
 
 function initMapLayers() {
-  // Route shape layer
-  // Route shapes: one source, layers added dynamically per route in renderRouteShapes()
-  map.addSource('route-shapes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  // Route shapes' source AND layer are both created lazily inside
+  // renderRouteShapes() itself (it needs the feature list up front to size the
+  // GeoJSON, and re-uses the same source/layer ID across renders via setData).
+  // Do NOT pre-create the source here — renderRouteShapes() checks
+  // map.getSource('route-shapes') to decide whether to addSource+addLayer or
+  // just setData, and a source with no matching layer (like this pre-created
+  // one used to be) made it take the setData branch forever, so the line
+  // layer never got created on the very first render — routes never drew.
 
   // Trail layer
   map.addSource('trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
@@ -1963,17 +1968,30 @@ function renderRouteShapes(force) {
 
   const srcId = 'route-shapes';
   const layId = 'route-shapes-line';
-  // Defensive: update in place if a stale source/layer survived (e.g. a re-entrant
+  // Defensive: update in place if a stale source survived (e.g. a re-entrant
   // render call before the removal above landed) instead of throwing on addSource.
+  // If the source exists but its line layer somehow doesn't (the bug this once
+  // was: a source with no layer would silently never draw, forever), still add
+  // the layer — only the duplicate addSource call needs avoiding.
   const existingSrc = map.getSource(srcId);
   if (existingSrc) {
     existingSrc.setData({ type: 'FeatureCollection', features });
+    if (!map.getLayer(layId)) {
+      addRouteLineLayer(srcId, layId, SLOT_PX);
+    }
     routeLayerIds.push(layId);
     routeSourceIds.push(srcId);
     renderAheadArrows();
     return;
   }
   map.addSource(srcId, { type: 'geojson', data: { type: 'FeatureCollection', features } });
+  addRouteLineLayer(srcId, layId, SLOT_PX);
+  routeLayerIds.push(layId);
+  routeSourceIds.push(srcId);
+  renderAheadArrows();
+}
+
+function addRouteLineLayer(srcId, layId, SLOT_PX) {
   map.addLayer({
     id: layId, type: 'line', source: srcId,
     paint: {
@@ -1995,12 +2013,6 @@ function renderRouteShapes(force) {
       <span style="width:10px;height:10px;border-radius:50%;background:${p.color};flex-shrink:0;border:1px solid rgba(255,255,255,.5);"></span>
       <span style="font-weight:600;">${escapeHtml(p.routeName)}</span>
     </div>`);
-
-  routeLayerIds.push(layId);
-  routeSourceIds.push(srcId);
-
-  // Golden path arrows ahead of each bus
-  renderAheadArrows();
 }
 
 // ─── RENDER TRAILS ────────────────────────────────────────────────────────────
