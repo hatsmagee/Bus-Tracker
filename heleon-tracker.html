@@ -886,7 +886,7 @@ function initMapLayers() {
         <div><span style="color:var(--muted);">Altitude:</span> ${altFt}</div>
         <div><span style="color:var(--muted);">Speed:</span> ${speedKt}</div>
         <div><span style="color:var(--muted);">Heading:</span> ${Math.round(p.heading)}°</div>
-        <div><span style="color:var(--muted);">Status:</span> ${p.onGround === 'true' ? 'On ground' : 'Airborne'}</div>
+        <div><span style="color:var(--muted);">Status:</span> ${(p.onGround === true || p.onGround === 'true') ? 'On ground' : 'Airborne'}</div>
       </div>
       <div style="font-family:monospace;font-size:10px;color:var(--muted);margin-top:6px;">${(+p.lat).toFixed(4)}, ${(+p.lon).toFixed(4)}</div>
     </div>`;
@@ -1402,7 +1402,7 @@ function renderAircraftMarkers() {
         altM: a.altM != null ? a.altM : '',
         velMs: a.velMs != null ? a.velMs : '',
         heading: a.headingDeg || 0,
-        onGround: a.onGround ? 'true' : 'false',
+        onGround: !!a.onGround,
         lat: a.lat, lon: a.lon,
       }
     }))
@@ -3786,6 +3786,17 @@ setInterval(() => { if (!document.hidden) fetchVessels(); }, 30000);
 // Slower than the server poll is fine — the visible difference between
 // snapshots a few seconds apart is negligible.
 setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
+
+// Fast initial catch-up: on a fresh page load the server's first OpenSky/AIS poll
+// may not have completed yet, so the startup fetch returns 0 and the map looks
+// empty for up to 30 s. Re-poll a few times in the first half-minute so planes
+// (and any boats) appear within seconds, not after the first 30 s interval.
+let _earlyPolls = 0;
+const _earlyTimer = setInterval(() => {
+  if (document.hidden) return;
+  fetchAircraft(); fetchVessels();
+  if (++_earlyPolls >= 6) clearInterval(_earlyTimer); // ~6×5s = first 30s
+}, 5000);
 
 // Tick live clocks in all open stop lists every second
 setInterval(() => {
