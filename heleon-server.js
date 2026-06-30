@@ -52,6 +52,11 @@ function loadReference() {
 }
 loadReference();
 
+// Server-side road-snapping (Valhalla map-matching, cached + auto-refreshing).
+const { matchShape } = require('./map-match');
+const matchCrypto = require('crypto');
+const shapeHash = s => matchCrypto.createHash('sha1').update(s || '').digest('hex').slice(0, 16);
+
 // Durable off-box DB backup (free; restores history on boot so it survives
 // ephemeral hosts like Render's free tier wiping /tmp on each deploy).
 const backup = require('./backup');
@@ -151,6 +156,20 @@ async function openDb() {
     color       TEXT,
     shape       TEXT,
     fetched_at  INTEGER
+  )`);
+
+  // Road-snapped route geometry, cached so each pattern is map-matched ONCE (via
+  // the public Valhalla API) and then served from here. Keyed by the raw shape's
+  // hash so a shape change auto-invalidates and re-snaps. Persists with the DB
+  // (and its backup), so on Render we don't re-match on every reboot.
+  db.run(`CREATE TABLE IF NOT EXISTS route_shapes_matched (
+    pattern_id  INTEGER PRIMARY KEY,
+    route_id    INTEGER,
+    src_hash    TEXT,
+    shape       TEXT,
+    is_raw      INTEGER,
+    note        TEXT,
+    matched_at  INTEGER
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS poll_log (
@@ -1488,6 +1507,72 @@ async function fetchShapes() {
   console.log('\n[shapes] Done.');
 }
 
+// ─── ROAD-SNAP ALL ROUTE SHAPES (Valhalla map-matching, cached) ────────────────
+// Snap every route PATTERN's GTFS shape onto real roads, ONCE, caching the result
+// keyed by the raw shape's hash. Bad snaps are rejected by map-match.js (we keep
+// raw for those). Runs in the background so it never blocks boot; the map upgrades
+// to road-following lines as each pattern finishes. Cached in the DB → backed up →
+// survives Render reboots, and only re-snaps a pattern whose shape actually changed.
+let matchingInProgress = false;
+async function matchAllShapes() {
+  if (matchingInProgress) return;
+  matchingInProgress = true;
+  try {
+    const rows = dbAll(`SELECT pattern_id, route_id, shape FROM route_shapes WHERE shape IS NOT NULL`);
+    let snapped = 0, kept = 0, skipped = 0;
+    const RETRY_RAW_MS = 24 * 60 * 60 * 1000; // re-attempt a kept-raw pattern after a day
+    for (const row of rows) {
+      const h = shapeHash(row.shape);
+      const cached = dbGet(`SELECT src_hash, is_raw, matched_at FROM route_shapes_matched WHERE pattern_id=?`, [row.pattern_id]);
+      if (cached && cached.src_hash === h) {
+        // A clean snap is cached forever (until the shape changes). A kept-raw
+        // result is RETRIED periodically — Valhalla / OSM may have been having a
+        // transient problem, so we self-heal rather than stay raw forever.
+        if (!cached.is_raw) { skipped++; continue; }
+        if (Date.now() - (cached.matched_at || 0) < RETRY_RAW_MS) { skipped++; continue; }
+      }
+
+      let result;
+      try { result = await matchShape(row.shape); }
+      catch (e) { console.error(`[match] pattern ${row.pattern_id} (route ${row.route_id}) error: ${e.message}`); continue; }
+
+      dbRun(`INSERT OR REPLACE INTO route_shapes_matched(pattern_id,route_id,src_hash,shape,is_raw,note,matched_at)
+             VALUES(?,?,?,?,?,?,?)`,
+        [row.pattern_id, row.route_id, h, result.encoded, result.raw ? 1 : 0, result.reason || '', Date.now()]);
+      if (result.raw) { kept++; }
+      else { snapped++; }
+      saveDb();
+      await new Promise(r => setTimeout(r, 500)); // polite to the public Valhalla server
+    }
+    if (snapped + kept > 0) console.log(`[match] done — ${snapped} snapped to roads, ${kept} kept raw, ${skipped} cached`);
+  } finally {
+    matchingInProgress = false;
+  }
+}
+
+// Self-healing scheduler: keep retrying until every pattern has a snap result,
+// then settle to a daily refresh. If Valhalla was down at boot, this recovers on
+// its own within the hour instead of waiting a full day — zero manual steps.
+function scheduleMatching() {
+  const tick = async () => {
+    await matchAllShapes().catch(e => console.error('[match] run:', e.message));
+    const total = (dbGet(`SELECT COUNT(*) n FROM route_shapes WHERE shape IS NOT NULL`) || {}).n || 0;
+    const done = (dbGet(`SELECT COUNT(*) n FROM route_shapes_matched`) || {}).n || 0;
+    // Not everything attempted yet (e.g. Valhalla flaky) → retry in 30 min.
+    // Otherwise everything has a result → relax to a daily refresh.
+    const next = done < total ? 30 * 60 * 1000 : 24 * 60 * 60 * 1000;
+    setTimeout(tick, next);
+  };
+  setTimeout(tick, 3000); // first run shortly after boot (non-blocking)
+}
+
+// Best geometry for a pattern: road-snapped (DB) when clean, else the raw shape.
+function bestPatternShape(patternId, rawShape) {
+  const m = dbGet(`SELECT shape, is_raw FROM route_shapes_matched WHERE pattern_id=?`, [patternId]);
+  if (m && m.shape && !m.is_raw) return m.shape;
+  return rawShape;
+}
+
 // Run the schedule-PDF scraper as a child process, weekly. Kept out-of-process
 // so its network work (and any hang behind the agency's Akamai protection) can't
 // stall the main server. Logs are streamed to our console.
@@ -1816,12 +1901,16 @@ async function handleApi(url, res) {
 
   if (p === '/api/shapes') {
     const rows = dbAll(`SELECT route_id, pattern_id, name, direction, color, shape FROM route_shapes ORDER BY route_id, pattern_id`);
-    // Serve the agency's own GTFS shapes (which already lie on the roads), with
-    // our curated dark/distinct palette instead of the upstream pattern colors
-    // (those include pale pastels and #FFFFFF that vanish on the map). No
-    // map-matching: the raw shapes are the cleanest source — matching against an
-    // external engine introduced wrong-road artifacts. Smoothing is done client-side.
-    rows.forEach(r => { if (ROUTE_MAP[r.route_id]) r.color = ROUTE_MAP[r.route_id].color; });
+    rows.forEach(r => {
+      // Curated dark/distinct palette over the upstream pattern colors (those
+      // include pale pastels and #FFFFFF that vanish on the map).
+      if (ROUTE_MAP[r.route_id]) r.color = ROUTE_MAP[r.route_id].color;
+      // Prefer the ROAD-SNAPPED geometry (Valhalla map-matched, cached) so the
+      // line follows the streets; falls back to the raw GTFS shape if the snap
+      // was rejected as off-corridor or hasn't been computed yet.
+      const snapped = bestPatternShape(r.pattern_id, r.shape);
+      if (snapped !== r.shape) { r.shape = snapped; r.matched = true; }
+    });
     return json(res, rows);
   }
 
@@ -2659,6 +2748,9 @@ const server = http.createServer((req, res) => {
   // Build the authoritative route registry (unions every source) and log any
   // route still missing geometry, so gaps surface immediately, never silently.
   try { buildRouteRegistry(); } catch (e) { console.error('[registry]', e.message); }
+  // Road-snap all route shapes (background, self-healing). Cached → quick no-op
+  // once done; retries until complete if Valhalla is flaky, then refreshes daily.
+  scheduleMatching();
   buildTripIndex();
   // Train learning model on past stop_arrivals history
   try { await trainFromHistory(); } catch(e) { console.error('[learn] train error:', e.message); }
@@ -2698,6 +2790,7 @@ const server = http.createServer((req, res) => {
   // Rebuild the authoritative registry every 10 min so newly-seen live routes and
   // freshly-loaded shapes are reflected (and any gap re-surfaces in the log).
   setInterval(() => { try { buildRouteRegistry(); } catch {} }, 10 * 60 * 1000);
+  // (Road re-snapping is handled by scheduleMatching()'s self-healing loop above.)
   // Weekly: mirror the agency's human-readable schedule PDFs (runs the scraper
   // as a child process; non-fatal if the agency site blocks us — GTFS is the
   // machine-readable source of truth and refreshes separately). First run ~1 min
