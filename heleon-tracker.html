@@ -1687,25 +1687,34 @@ function gridKey(lon, lat) { return `${Math.round(lat * 3000)},${Math.round(lon 
 // breaking the current piece so we don't draw a line back to it. Result: the route
 // is a single clean line, not 2-3 stacked copies that blob at shared streets.
 function dedupeRouteGeometry(pieces) {
-  const seen = new Set();
-  const segKey = (a, b) => {
-    const k1 = `${Math.round(a[1]*9000)},${Math.round(a[0]*9000)}`; // ~12m
-    const k2 = `${Math.round(b[1]*9000)},${Math.round(b[0]*9000)}`;
-    return k1 < k2 ? k1 + '|' + k2 : k2 + '|' + k1; // undirected
+  // Coverage grid: ~18m cells. A point whose cell (or a neighbor) is already
+  // covered by this route is "redundant" — the route already runs there (the other
+  // direction / a loop). We keep a run going only through NEW cells, so each street
+  // a route uses is drawn once, not as 2-3 near-parallel retraced scribbles.
+  const GZ = 5500; // ~18m cells
+  const covered = new Set();
+  const cellsOf = (lon, lat) => {
+    const gx = Math.round(lon * GZ), gy = Math.round(lat * GZ);
+    return { self: gx + ',' + gy, gx, gy };
+  };
+  const isCovered = (gx, gy) => {
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++)
+      if (covered.has((gx + dx) + ',' + (gy + dy))) return true;
+    return false;
   };
   const out = [];
   for (const piece of pieces) {
     let cur = [];
-    for (let i = 0; i < piece.length; i++) {
-      if (i === 0) { cur = [piece[i]]; continue; }
-      const key = segKey(piece[i - 1], piece[i]);
-      if (seen.has(key)) {
-        // This segment is already drawn for the route → end the current run.
+    for (const p of piece) {
+      const { self, gx, gy } = cellsOf(p[1], p[0]);
+      if (isCovered(gx, gy) && cur.length) {
+        // Entering already-drawn territory → close the run, mark, move on.
         if (cur.length > 1) out.push(cur);
-        cur = [piece[i]];
+        cur = [];
+        covered.add(self);
       } else {
-        seen.add(key);
-        cur.push(piece[i]);
+        covered.add(self);
+        cur.push(p);
       }
     }
     if (cur.length > 1) out.push(cur);
@@ -1987,7 +1996,7 @@ function renderRouteShapes(force) {
 
   // Slot spacing must clear the line width so lanes never overlap. We compute the
   // offset (in px) per route as a zoom expression: slot × per-zoom spacing.
-  const widthExpr = ['interpolate', ['linear'], ['zoom'], 8, 1.2, 11, 1.8, 13, 2.4, 15, 3.2, 18, 4.4];
+  const widthExpr = ['interpolate', ['linear'], ['zoom'], 8, 1, 11, 1.5, 13, 2.2, 15, 3.2, 18, 4.4];
   // Spacing must exceed line width so adjacent lanes never merge into a blob,
   // especially where many routes converge (terminals). Wider than the line at every zoom.
   const spacingAt = z => z <= 11 ? 3.5 : z >= 16 ? 9 : 3.5 + (z - 11) * (5.5 / 5);
@@ -2013,11 +2022,12 @@ function renderRouteShapes(force) {
       id: layId, type: 'line', source: `route-${rid}`,
       paint: {
         'line-color': '#ffffff',
-        // Thin casing — just enough to separate a colored line from the basemap and
-        // from adjacent lanes, NOT a fat halo that merges crossing routes into blobs.
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 11, 2.6, 13, 3.2, 15, 4.2, 18, 5.6],
-        'line-opacity': 0.9,
-        'line-gap-width': 0,
+        // Thin casing — separates a colored line from the basemap and from adjacent
+        // lanes. Faded out at low zoom: when zoomed way out the casings of many
+        // converging routes would merge into a white blob, so below ~z13 we drop the
+        // casing and just show the colored lines (which read fine at that scale).
+        'line-width': ['interpolate', ['linear'], ['zoom'], 11, 2.4, 13, 3.2, 15, 4.2, 18, 5.6],
+        'line-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0, 12.5, 0.25, 14, 0.85, 16, 0.9],
         'line-offset': offsetExpr(slot),
       },
       layout: { 'line-join': 'round', 'line-cap': 'round' },
