@@ -21,14 +21,18 @@ entirely on your own machine — no cloud dependency, no API hammering.
   road, route-colored, pointing the way it's about to go
 - **Official bus stops** + **learned "observed" stops** — places buses repeatedly
   dwell that aren't published (recurrence-filtered, not red lights / yards)
-- **GPS-derived congestion glow** — where a bus crawls below the typical speed
-  for that spot (our honest "traffic" signal; no public signal feed exists)
 - **Microclimate weather** symbol over each bus (Open-Meteo, free, no API key)
 - **Occupancy bar** on each bus icon
 - **Fleet tab** — every vehicle the agency knows (live / idle / dormant) with
   full telemetry and a derived status explaining why each is/isn't on the map
-- **Transformer ETA correction model** (12-token self-attention) retrained
-  server-side on every recorded stop arrival
+- **Boats tab** — live vessel positions via [aisstream.io](https://aisstream.io)
+  AIS stream (opt-in via `AISSTREAM_API_KEY`; no fabricated data when off)
+- **Aircraft tab** — live ADS-B positions via [OpenSky Network](https://opensky-network.org)
+  free anonymous tier — no API key needed
+- **Transformer ETA correction model** (12-token self-attention, per-rank
+  output heads) retrained server-side on every recorded stop arrival
+- **Long-term arrival patterns** — 7×24 day-of-week × hour-of-day matrix per
+  stop, served from 1 year of stop_arrivals history
 - Desktop + mobile (bottom-sheet) responsive UI; polling pauses when hidden
 
 ## Architecture
