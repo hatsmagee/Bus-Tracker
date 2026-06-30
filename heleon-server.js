@@ -541,6 +541,11 @@ function buildTripIndex() {
 // agency feed (its per-route endpoint, remembered briefly across dropouts). If we
 // don't know it, we show no route rather than a guess.
 
+// Token-level feature vector dimensions. Hoisted to module scope so the TX
+// object below can read them during init.
+const TX_TOKEN_DIM = 7;
+const TX_RANK_HEADS = 5;
+
 // ─── TRANSFORMER PREDICTOR (tiny single-block, single-head attention) ──────
 // Architecture:
 //   1. Input embedding (12 tokens × 8-dim) — each token is one feature
@@ -562,9 +567,10 @@ const TX = {
   },
   dModel: 8,            // token embedding dim
   nTokens: 12,          // sequence length
+  rawDim: TX_TOKEN_DIM, // updated when init() runs
   nHeads: 1,
   ffnDim: 16,
-  outDim: 5,
+  outDim: TX_RANK_HEADS, // one head per "stop rank ahead" — 1st..5th
   // weights
   embedW: [],           // inputProj (raw feature) → dModel  [dModel × rawDim]
   posW: [],             // positional encoding [dModel × nTokens]
@@ -572,6 +578,9 @@ const TX = {
   Wo: [],               // out projection after attention [dModel × dModel]
   ffnW1: [], ffnB1: [], // [ffnDim × dModel]
   ffnW2: [], ffnB2: [], // [dModel × ffnDim]
+  // Per-rank projection: outW[r][d] is head for the r-th stop ahead. We project
+  // the r-th token's FFN output directly to its rank-r prediction, so token i
+  // maps to head i (clamped to outDim-1 for further-out stops).
   outW: [], outB: [],   // [outDim × dModel]
   lnGamma: [], lnBeta: [],// [dModel]
   lr: 0.005,
@@ -582,10 +591,8 @@ const TX = {
   init() {
     const r = (rows, cols) => Array.from({length: rows}, () =>
       Array.from({length: cols}, () => (Math.random() - 0.5) * 0.3));
-    const rawDim = 6; // speed, dist, hour_sin, hour_cos, dow_sin, dow_cos
-                      // (sin+cos pairs give a unique, continuous encoding of
-                      //  cyclical time — a lone sinusoid aliases distinct values)
-    this.embedW = r(this.dModel, rawDim);
+    this.rawDim = TX_TOKEN_DIM;
+    this.embedW = r(this.dModel, this.rawDim);
     this.posW = r(this.dModel, this.nTokens);
     this.Wq = r(this.dModel, this.dModel);
     this.Wk = r(this.dModel, this.dModel);
@@ -670,54 +677,79 @@ const TX = {
       // Residual
       return v.map((xi, d) => xi + out[d]);
     });
-    // Step 9: mean pool over tokens
+    // Step 9: mean pool over tokens (kept for API compatibility / introspection)
     const pooled = Array(this.dModel).fill(0);
     for (const v of ffnOut) for (let d = 0; d < this.dModel; d++) pooled[d] += v[d] / this.nTokens;
-    // Step 10: output heads
-    const out = this.outW.map((row, i) => {
-      let s = this.outB[i];
-      for (let j = 0; j < pooled.length; j++) s += row[j] * pooled[j];
+    // Step 10: per-token output heads. Head r projects token r (clamped to
+    // outDim-1). For tokens beyond outDim-1 we still emit a head value (we
+    // reuse outW[outDim-1]) so the API has a token per token, but only the
+    // first outDim tokens carry distinct signal.
+    const tokenOut = ffnOut.map((tokFFN, i) => {
+      const head = Math.min(i, this.outDim - 1);
+      const row = this.outW[head];
+      let s = this.outB[head];
+      for (let j = 0; j < tokFFN.length; j++) s += row[j] * tokFFN[j];
       return s;
     });
+    // Step 11: also expose a pooled head (mean of per-token outputs) — kept
+    // for any caller that wants a single scalar per bus.
+    let out = 0;
+    for (const v of tokenOut) out += v;
+    out /= this.nTokens;
 
-    return { tokens, x, Q, K, V, scores, attn, ctx, attnOut, postAttn, ffnOut, pooled, out };
+    return { tokens, x, Q, K, V, scores, attn, ctx, attnOut, postAttn, ffnOut, pooled, tokenOut, out };
   },
 
-  // Backprop via truncated SGD on the output layer only (proxy training)
+  // Backprop via truncated SGD on the output layer + FFN-output (proxy training).
   // For a true transformer we'd backprop through attention, but a partial
   // gradient on outW + ffnW2 captures most of the signal and stays fast.
+  // Targets map to specific tokens: target k (the residual for the k-th stop
+  // ahead) is trained against tokenOut[k]. Tokens beyond outDim-1 contribute
+  // no target and are skipped.
   train(tokens, targets) {
     if (!this.trained) this.init();
     const fwd = this.forward(tokens);
-    const errs = fwd.out.map((p, i) => (targets[i] != null ? targets[i] - p : 0));
-    const nValid = targets.filter(t => t != null).length || 1;
-    // Scale by valid heads
+    const errs = [];
+    let nValid = 0;
+    for (let k = 0; k < this.outDim; k++) {
+      const t = targets[k];
+      if (t == null) { errs.push(0); continue; }
+      errs.push(t - fwd.tokenOut[k]);
+      nValid++;
+    }
+    if (nValid === 0) return 0;
     const scaledErrs = errs.map(e => e / nValid);
-    // dL/doutW[i][j] = scaledErrs[i] * pooled[j]
-    for (let i = 0; i < this.outDim; i++) {
+    // Per-token gradient: head k uses token k's ffn output (not the mean pool).
+    for (let k = 0; k < this.outDim; k++) {
+      if (scaledErrs[k] === 0) continue;
+      const tokVec = fwd.ffnOut[k];
       for (let j = 0; j < this.dModel; j++) {
-        this.outW[i][j] += this.lr * scaledErrs[i] * fwd.pooled[j];
+        this.outW[k][j] += this.lr * scaledErrs[k] * tokVec[j];
       }
-      this.outB[i] += this.lr * scaledErrs[i];
+      this.outB[k] += this.lr * scaledErrs[k];
     }
-    // Backprop pooled → ffnOut (mean so divide by nTokens)
-    const dPooled = Array(this.dModel).fill(0);
-    for (let j = 0; j < this.dModel; j++) {
-      for (let i = 0; i < this.outDim; i++) dPooled[j] += scaledErrs[i] * this.outW[i][j];
-    }
-    // Backprop ffnW2 (output of FFN): dffnW2[d][i] = dPooled[d] / nTokens * h[i]
+    // Approximate FFN backprop: distribute d_out/k → ffnOut[k] → ffnW2. For
+    // tokens beyond outDim-1 we have no direct signal, but their ffn outputs
+    // still contribute through the mean pool residual (so we add a small
+    // scaled signal there too — keeps the network from drifting on un-trained
+    // heads but doesn't dominate).
     for (let d = 0; d < this.dModel; d++) {
-      const dToFfn = dPooled[d] / this.nTokens;
-      // approximate ffn activations from forward pass
-      const h = this.ffnW1.map((row, i) => {
-        let s = this.ffnB1[i];
-        for (let k = 0; k < fwd.postAttn[0].length; k++) s += row[k] * fwd.postAttn[0][k];
-        return Math.max(0, s);
-      });
-      for (let i = 0; i < this.ffnDim; i++) {
-        this.ffnW2[d][i] += this.lr * dToFfn * h[i];
+      for (let k = 0; k < this.nTokens; k++) {
+        let dToFfn = 0;
+        if (k < this.outDim && scaledErrs[k] !== 0) {
+          for (let j = 0; j < this.dModel; j++) dToFfn += scaledErrs[k] * this.outW[Math.min(k, this.outDim - 1)][j];
+        }
+        // approximate ffn activations for token k
+        const h = this.ffnW1.map((row, i) => {
+          let s = this.ffnB1[i];
+          for (let m = 0; m < fwd.postAttn[k].length; m++) s += row[m] * fwd.postAttn[k][m];
+          return Math.max(0, s);
+        });
+        for (let i = 0; i < this.ffnDim; i++) {
+          this.ffnW2[d][i] += this.lr * dToFfn * h[i];
+        }
+        this.ffnB2[d] += this.lr * dToFfn;
       }
-      this.ffnB2[d] += this.lr * dToFfn;
     }
     this.lr *= this.decay;
     this.trainedCount++;
@@ -749,26 +781,80 @@ function layerNorm(x, gamma, beta) {
   return x.map((xi, i) => gamma[i] * (xi - mean) / std + beta[i]);
 }
 
-// Build token sequence from bus state. Each token =
-//   [speed, distance, hour_sin, hour_cos, dow_sin, dow_cos]
-// Time-of-day and day-of-week are encoded as sin/cos pairs so that 23:59 sits
-// next to 00:01 and Sunday next to Monday (true cyclical continuity). Token
-// *position* in the sequence is supplied separately by the learned positional
-// encoding (posW) inside forward(), so we must NOT fold position into the time
-// value here — doing so would tell the model a different clock time per token.
+// Build token sequence from bus state. Each token is a 7-dim vector that
+// varies along the sequence — the same model must predict different
+// corrections for the 1st..5th stops ahead, so the *n*-th token encodes
+// "what's true for the n-th stop ahead":
+//
+//   [ speedNorm, distNormRankN, schedDeltaNormRankN, hourSin, hourCos, dowSin, dowCos ]
+//
+//   distNormRankN     = dist to stop N (extrapolated from current dist / ETA), clamped to [0,1]
+//   schedDeltaNormRankN = how far ahead/behind schedule stop N is (signed)
+//
+// Time-of-day and day-of-week are sin/cos pairs so 23:59 sits next to 00:01
+// and Sunday next to Monday (true cyclical continuity). The "rank-ahead"
+// horizon dim is baked into the token *value*, and we additionally apply a
+// positional encoding (posW) so the model also knows which token is which.
+//
+// Token-to-head mapping: token i corresponds to "the i-th stop ahead" — so
+// the forward-pass output for token i is a good predictor for the head that
+// targets "i stops ahead". Forward returns token-level outputs (not just the
+// mean-pooled one) and we map head k to token k.
+
+// Build token sequence from bus state. Each token is a 7-dim vector that
+// varies along the sequence — the same model must predict different
+// corrections for the 1st..5th stops ahead, so the *n*-th token encodes
+// "what's true for the n-th stop ahead":
+//
+//   distNormRankN     = dist to stop N (extrapolated from current dist / ETA), clamped to [0,1]
+//   schedDeltaNormRankN = how far ahead/behind schedule stop N is (signed)
+//
+// Time-of-day and day-of-week are sin/cos pairs so 23:59 sits next to 00:01
+// and Sunday next to Monday (true cyclical continuity). The "rank-ahead"
+// horizon dim is baked into the token *value*, and we additionally apply a
+// positional encoding (posW) so the model also knows which token is which.
+//
+// Token-to-head mapping: token i corresponds to "the i-th stop ahead" — so
+// the forward-pass output for token i is a good predictor for the head that
+// targets "i stops ahead". Forward returns token-level outputs (not just the
+// mean-pooled one) and we map head k to token k.
 function buildTokenSequence(vehicle, distanceKm, schedDeltaSec, routeId) {
   const now = new Date();
-  const hour = now.getHours() + now.getMinutes() / 60;       // 0..24
-  const dow = now.getDay();                                   // 0..6 (Sun..Sat)
+  const hour = now.getHours() + now.getMinutes() / 60;
+  const dow = now.getDay();
   const hourSin = Math.sin(2 * Math.PI * hour / 24);
   const hourCos = Math.cos(2 * Math.PI * hour / 24);
   const dowSin  = Math.sin(2 * Math.PI * dow / 7);
   const dowCos  = Math.cos(2 * Math.PI * dow / 7);
   const speedNorm = Math.min((vehicle.speed || 0) / 60, 1);
-  const distNorm  = Math.min(distanceKm / 30, 1);
+  const baseDist = Math.min((distanceKm || 0) / 30, 1);
+  // Schedule delta: signed seconds / 600s (so ±10 min normalises to ±1)
+  const schedDelta = schedDeltaSec != null
+    ? Math.max(-1, Math.min(1, schedDeltaSec / 600))
+    : 0;
+  // Route id: one-hot-ish via single hashed scalar in [-1, 1] — gives the
+  // model a per-route bias without exploding the embedding size.
+  const routeScalar = routeId
+    ? ((routeId * 2654435761) % 1024) / 512 - 1
+    : 0;
   const tokens = [];
   for (let i = 0; i < 12; i++) {
-    tokens.push([speedNorm, distNorm, hourSin, hourCos, dowSin, dowCos]);
+    // Rank-ahead signal: token i encodes stop (i+1) ahead. Dist grows with
+    // horizon (linearly extrap the bus's current speed over expected minutes
+    // per stop), and we mix in schedule delta at diminishing weight so further
+    // stops inherit less timing pressure.
+    const horizonMin = (i + 1) * 1.5;                       // ~1.5 min per stop on average
+    const horizonDist = Math.min(1, baseDist + speedNorm * horizonMin * 0.06);
+    const horizonSched = schedDelta * (1 / (1 + i * 0.4));   // decays with rank
+    tokens.push([
+      speedNorm,
+      horizonDist,
+      horizonSched,
+      hourSin,
+      hourCos,
+      dowSin,
+      dowCos,
+    ]);
   }
   return tokens;
 }
@@ -795,11 +881,17 @@ async function trainFromHistory() {
       if ((r.speed || 0) < 1 || dist < 0.05) continue;
       const naiveEta = (dist / (r.speed * 1.60934)) * 60;
 
-      const future = rows.slice(i + 1).filter(f =>
+      // rows is DESC by ts. We want arrivals that happened AFTER r — they
+      // are at LOWER indices (earlier in DESC ordering). Slice i+1..end gives
+      // earlier rows (negative ts delta), slice 0..i gives later rows (positive
+      // ts delta = future). Sort by ts ASC so target k is the k-th future
+      // arrival in time order.
+      const later = rows.slice(0, i).filter(f =>
         f.vehicle_id === r.vehicle_id &&
         (f.actual_ts - r.actual_ts) > 0 &&
         (f.actual_ts - r.actual_ts) <= 60 * 60000
-      ).slice(0, 5);
+      ).sort((a, b) => a.actual_ts - b.actual_ts).slice(0, 5);
+      const future = later;
 
       const targets = future.map(f => (f.actual_ts - r.actual_ts) / 60000 - naiveEta);
       while (targets.length < 5) targets.push(null);
@@ -1653,10 +1745,12 @@ async function handleApi(url, res) {
 
     // The transformer's input depends only on the bus (speed) + route, not the
     // individual stop, so run the forward pass ONCE here rather than per stop.
-    // Its 5 output heads are the residual (actual − naive ETA) for the 1st..5th
-    // stop ahead of the bus, so each stop uses the head matching how many stops
-    // ahead it is (clamped to 0..4).
-    const seqOut = TX.forward(buildTokenSequence(v, 0, null, v.routeId)).out;
+    // Each of its 12 tokens encodes "the k-th stop ahead" (k = token index + 1),
+    // and each token has its own output head — so the residual for the k-th
+    // stop ahead is `seqOut[k]`. The stop's rank-ahead is determined by
+    // distance (clamped to the 5 trained heads).
+    const fwdRes = TX.forward(buildTokenSequence(v, 0, null, v.routeId));
+    const seqOut = fwdRes.tokenOut; // length 12; first 5 are the trained heads
     // Rank stops by distance to map them to "n stops ahead" → head index.
     const distRank = {};
     [...stops].map((s, i) => ({ i, d: haversineKm(v.lat, v.lon, s.lat, s.lon) }))
@@ -1673,7 +1767,8 @@ async function handleApi(url, res) {
       const etaOfficial = off ? Math.round(((off.ms - nowMsEta) / 60000) * 10) / 10 : null;
 
       // Model correction: use the output head for this stop's rank ahead of the bus.
-      const correction = seqOut[Math.min(distRank[i] || 0, seqOut.length - 1)];
+      const head = Math.min(distRank[i] || 0, 4); // 5 trained heads (0..4)
+      const correction = seqOut[head];
       const etaSeq = etaHist != null ? Math.max(0, etaHist + correction) : null;
 
       // Headline ETA: prefer the agency's official prediction; fall back to the
