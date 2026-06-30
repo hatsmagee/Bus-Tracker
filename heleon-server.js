@@ -34,6 +34,10 @@ const IS_RENDER = !!process.env.RENDER;
 const DATA_DIR = IS_RENDER ? '/tmp' : __dirname;
 const DB_PATH = path.join(DATA_DIR, IS_RENDER ? 'heleon.db' : 'heleon.db');
 const GTFS_ZIP_PATH = path.join(DATA_DIR, 'heleon-gtfs.zip');
+// Bundled "seed" GTFS in the repo — used as a geometry fallback for routes the
+// live feed has dropped but the agency still runs (401/301/204 in Puna/Waimea/
+// S. Kona). path is fixed to __dirname so it works on ephemeral hosts too.
+const SEED_GTFS_PATH = path.join(__dirname, 'Sources', 'General Transit Feed Specifications (GTFS) 2026.zip');
 const HTML_PATH = path.join(__dirname, 'heleon-tracker.html');
 // Reference data the System Map PDF carries but GTFS does NOT: route class
 // (Express/Local/Neighborhood/Flex), transit-hub connections, Park-and-Ride /
@@ -82,13 +86,16 @@ const ROUTES = [
   { id: 5821, name: '12 VOLCANO TO OCEANVIEW',  short: '12',  color: '#D11A4B' }, // crimson-pink
   { id: 5824, name: '203 NORTH KAILUA-KONA',    short: '203', color: '#7A4A12' }, // coffee
   { id: 5982, name: '504 KEALAKEKUA KONA TRIPPER',short:'504',color: '#4A6B1E' }, // moss
-  // 502 (Waikoloa Village Tripper) runs in the CURRENT feed but the live RTPI
-  // patterns API returns [] for it — no live shape. So we use its real upstream
-  // id (5981) and load geometry from GTFS shapes.txt (loadGtfsShapesForMissing).
-  // (Routes 204/301/401 from the 2022 printed map are NOT in the current 2026
-  // GTFS or RTPI feed — they were discontinued/restructured — so we don't list
-  // them; the map reflects the system as it runs today.)
-  { id: 5981, name: '502 WAIKOLOA VILLAGE TRIPPER',      short: '502', color: '#6B5B00', scheduleOnly: true }, // dark yellow
+  // Schedule-only routes: on the printed System Map and in the GTFS feed, but the
+  // live RTPI API serves no live shape for them (reduced / call-ahead service with
+  // no GPS-tracked vehicles). We load their geometry from GTFS shapes.txt — see
+  // loadGtfsShapesForMissing(), which falls back to the bundled seed GTFS for the
+  // routes (401/301/204) the CURRENT live feed has dropped but still operates.
+  // App id = GTFS short number (1–504 never collide with the 5600+ live ids).
+  { id: 5981, name: '502 WAIKOLOA VILLAGE TRIPPER',          short: '502', color: '#6B5B00', scheduleOnly: true }, // dark yellow
+  { id: 401,  name: '401 HAWAIIAN BEACHES NANAWALE KALAPANA', short: '401', color: '#B02A8F', scheduleOnly: true }, // orchid
+  { id: 301,  name: '301 WAIMEA SHUTTLE',                     short: '301', color: '#0B6E99', scheduleOnly: true }, // cyan-blue
+  { id: 204,  name: '204 SOUTH KONA CAPTAIN COOK',            short: '204', color: '#7A2E8E', scheduleOnly: true }, // grape
 ];
 const ROUTE_MAP = Object.fromEntries(ROUTES.map(r => [r.id, r]));
 
@@ -382,26 +389,22 @@ function encodePolyline(coords) {
   return out;
 }
 
-// Load route geometry from GTFS shapes.txt for routes the live upstream API does
-// NOT serve (the schedule-only Neighborhood/Flex/shuttle routes — 401, 301, 204,
-// 502 — that are on the printed map but have no live GPS feed). For each such
-// route we pick its longest GTFS shape (the most complete variant) and store it
-// in route_shapes so /api/shapes — and therefore the map — includes it. Routes
-// the upstream already provides are left untouched (upstream shapes are richer).
-function loadGtfsShapesForMissing() {
+// Load route geometry from a GTFS zip's shapes.txt for routes that have no shape
+// yet (schedule-only Neighborhood/Flex/shuttle routes the live API doesn't serve).
+// `shortToApp` maps a GTFS route_id (short number) to the app id we store under.
+// Returns count added. Used twice: the LIVE zip, then the bundled SEED zip — the
+// seed still carries 401/301/204 geometry that the current live feed dropped.
+function loadShapesFromZip(zipPath, shortToApp) {
   let shapesText, tripsText;
   try {
-    // shapes.txt is ~2MB — raise maxBuffer well above the 1MB default.
-    const opts = { maxBuffer: 64 * 1024 * 1024 };
-    shapesText = execSync(`unzip -p "${GTFS_ZIP_PATH}" shapes.txt`, opts).toString();
-    tripsText = execSync(`unzip -p "${GTFS_ZIP_PATH}" trips.txt`, opts).toString();
-  } catch (e) { console.error('[gtfs-shapes] read error:', e.message); return; }
+    const opts = { maxBuffer: 64 * 1024 * 1024 }; // shapes.txt ~2MB
+    shapesText = execSync(`unzip -p "${zipPath}" shapes.txt`, opts).toString();
+    tripsText  = execSync(`unzip -p "${zipPath}" trips.txt`,  opts).toString();
+  } catch (e) { console.error(`[gtfs-shapes] read error (${path.basename(zipPath)}):`, e.message); return 0; }
 
-  // shape_id -> route_id (via trips.txt)
   const shapeToRoute = {};
   parseCsv(tripsText).forEach(t => { if (t.shape_id) shapeToRoute[t.shape_id] = String(t.route_id); });
 
-  // Gather points per shape_id, ordered by shape_pt_sequence.
   const byShape = {};
   parseCsv(shapesText).forEach(r => {
     const sid = r.shape_id; if (!sid) return;
@@ -418,33 +421,38 @@ function loadGtfsShapesForMissing() {
     if (!bestByRoute[rid] || pts.length > bestByRoute[rid].len) bestByRoute[rid] = { sid, len: pts.length };
   }
 
-  // Which routes does the live upstream already cover? (don't override those)
-  const liveRouteIds = new Set(ROUTES.filter(r => !r.scheduleOnly).map(r => String(r.id)));
-  // Map GTFS route_id (short number) to our app route — for schedule-only routes
-  // the app id IS the GTFS route_id; for live routes it's the 5600+ id.
-  const shortToAppId = {};
-  ROUTES.forEach(r => { shortToAppId[String(r.short)] = r.id; });
-
   let added = 0;
   for (const [gtfsRid, best] of Object.entries(bestByRoute)) {
-    const appId = shortToAppId[gtfsRid] != null ? shortToAppId[gtfsRid] : parseInt(gtfsRid);
-    // Skip if this route already has shapes from the live upstream feed.
-    if (liveRouteIds.has(String(appId))) continue;
+    const appId = shortToApp[gtfsRid] != null ? shortToApp[gtfsRid] : parseInt(gtfsRid);
     const existing = dbGet(`SELECT COUNT(*) as n FROM route_shapes WHERE route_id=?`, [appId]);
-    if (existing && existing.n > 0) continue; // already have a shape (e.g. prior GTFS load)
+    if (existing && existing.n > 0) continue; // already have a shape (upstream or prior load)
 
     const pts = byShape[best.sid].sort((a, b) => a[0] - b[0]).map(p => [p[1], p[2]]);
     if (pts.length < 2) continue;
-    const encoded = encodePolyline(pts);
     const meta = ROUTE_MAP[appId] || {};
     dbRun(`INSERT OR REPLACE INTO route_shapes(route_id,pattern_id,name,direction,color,shape,fetched_at)
            VALUES(?,?,?,?,?,?,?)`,
-      [appId, appId /* synthetic pattern id */, meta.name || `Route ${gtfsRid}`, 0,
-       meta.color || '#888', encoded, Date.now()]);
+      [appId, appId, meta.name || `Route ${gtfsRid}`, 0, meta.color || '#888', encodePolyline(pts), Date.now()]);
     added++;
-    console.log(`[gtfs-shapes] route ${gtfsRid} (app id ${appId}) shape loaded from GTFS (${pts.length} pts)`);
+    console.log(`[gtfs-shapes] route ${gtfsRid} (app id ${appId}) loaded from ${path.basename(zipPath)} (${pts.length} pts)`);
   }
-  if (added) { saveDb(); console.log(`[gtfs-shapes] added ${added} schedule-only route shapes from GTFS`); }
+  return added;
+}
+
+// Fill in geometry for every schedule-only route that still has no drawn shape.
+function loadGtfsShapesForMissing() {
+  // App ids for schedule-only routes are their GTFS short number; live routes
+  // keep their 5600+ id. Build the short→app map so both zips store consistently.
+  const shortToApp = {};
+  ROUTES.forEach(r => { shortToApp[String(r.short)] = r.id; });
+
+  let added = 0;
+  // 1) The live feed first (current, authoritative for routes it carries).
+  if (fs.existsSync(GTFS_ZIP_PATH)) added += loadShapesFromZip(GTFS_ZIP_PATH, shortToApp);
+  // 2) The bundled seed feed for routes the live one dropped (401/301/204) but
+  //    that the agency still operates (e.g. you can watch a bus drive the 401 loop).
+  if (fs.existsSync(SEED_GTFS_PATH)) added += loadShapesFromZip(SEED_GTFS_PATH, shortToApp);
+  if (added) { saveDb(); console.log(`[gtfs-shapes] added ${added} schedule-only route shapes`); }
 }
 
 async function loadGtfs(forceRefresh = false) {
