@@ -1636,7 +1636,21 @@ function buildRouteMetaFromVehicles() {
 // cells (i.e. run the same corridor), group them, and give each a centered slot.
 // `routeCoordMap`: routeId -> [ [[lon,lat]…], … ] (one or more pattern polylines).
 function gridKey(lon, lat) { return `${Math.round(lat * 3000)},${Math.round(lon * 3000)}`; } // ~37m cells
-function computeRouteOffsets(routeCoordMap) {
+// Hue (0-360) of a #rrggbb color, for spacing similar colors apart in a lane group.
+function hueOf(hex) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+  if (!m) return 0;
+  const r = parseInt(m[1],16)/255, g = parseInt(m[2],16)/255, b = parseInt(m[3],16)/255;
+  const mx = Math.max(r,g,b), mn = Math.min(r,g,b), d = mx - mn;
+  if (!d) return 0;
+  let h; if (mx===r) h=((g-b)/d)%6; else if (mx===g) h=(b-r)/d+2; else h=(r-g)/d+4;
+  return (h*60+360)%360;
+}
+// Assign each route a lateral slot so routes sharing a road draw as parallel lanes.
+// A route only separates from DIFFERENT routes — a route looping back on itself
+// stays on one line (the chevrons show direction), because the grid de-dups per
+// route id. `colorOf` lets us order lanes so similar hues aren't adjacent.
+function computeRouteOffsets(routeCoordMap, colorOf) {
   const grid = {}; // cell -> Set(routeId)
   for (const [rid, parts] of Object.entries(routeCoordMap)) {
     for (const coords of parts) for (const [lon, lat] of coords) {
@@ -1644,7 +1658,6 @@ function computeRouteOffsets(routeCoordMap) {
       (grid[k] = grid[k] || new Set()).add(rid);
     }
   }
-  // Co-occurrence counts between routes (how many cells they share).
   const co = {};
   for (const rid of Object.keys(routeCoordMap)) co[rid] = {};
   for (const peers of Object.values(grid)) {
@@ -1652,14 +1665,14 @@ function computeRouteOffsets(routeCoordMap) {
     const arr = [...peers];
     for (const a of arr) for (const b of arr) if (a !== b) co[a][b] = (co[a][b] || 0) + 1;
   }
-  // A route shares a corridor with peers it co-occurs with in ≥ THRESH cells.
-  const THRESH = 8; // ~300m of shared road
+  const THRESH = 6; // ~220m of shared road counts as a shared corridor
   const assigned = {};
   for (const rid of Object.keys(routeCoordMap)) {
     const peers = Object.keys(co[rid]).filter(b => co[rid][b] >= THRESH);
-    // Group = this route + its corridor peers, ordered stably by route number so
-    // the lane order is consistent everywhere they run together.
-    const group = [...new Set([rid, ...peers])].sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
+    let group = [...new Set([rid, ...peers])];
+    // Order lanes by HUE so adjacent parallel lines are clearly different colors
+    // (no two browns/oranges side by side); ties broken by route number for stability.
+    group.sort((a, b) => (hueOf(colorOf(a)) - hueOf(colorOf(b))) || ((parseInt(a)||0) - (parseInt(b)||0)));
     const idx = group.indexOf(rid);
     const center = (group.length - 1) / 2;
     assigned[rid] = { slot: idx - center, groupSize: group.length };
@@ -1849,24 +1862,24 @@ function renderRouteShapes(force) {
   routeShapes.forEach(s => {
     if (!s.shape) return;
     if (routeVisible[s.route_id] === false) return;
-    let coords;
+    // A road-snapped shape may be MULTI-PART (';'-separated polylines) — the
+    // server breaks a route into continuous on-road pieces rather than bridging
+    // an unmatched gap with a diagonal. Decode every piece and draw each.
+    let pieces;
     try {
-      coords = decodePolyline(s.shape);
-      if (coords.length < 2) return;
-      // Light Douglas–Peucker simplify to drop near-duplicate GTFS vertices.
-      // These are the agency's own on-road shapes, so a gentle ~3 m tolerance
-      // cleans redundant points without cutting corners. No map-matching, no
-      // offset, no heavy smoothing — we just draw the road geometry itself.
-      coords = simplifyPath(coords, 0.00003);
+      pieces = s.shape.split(';').map(seg => decodePolyline(seg)).filter(c => c.length >= 2);
+      if (!pieces.length) return;
+      // Gentle simplify to drop near-duplicate vertices (cheap; geometry already smooth).
+      pieces = pieces.map(c => simplifyPath(c, 0.00002));
     } catch(e) { return; }
-    // Keep EVERY pattern's polyline. We draw ALL of them (a route like 401 has a
-    // northern and a southern loop — drawing only the first drops half the route)
-    // and also use them for motion/chevron snapping.
-    (allPatternCoords[s.route_id] = allPatternCoords[s.route_id] || []).push(coords);
-    (routeMultiCoords[s.route_id] = routeMultiCoords[s.route_id] || []).push(coords);
+    // Keep EVERY piece for drawing; the longest piece feeds chevron/motion snapping.
+    pieces.forEach(c => {
+      (allPatternCoords[s.route_id] = allPatternCoords[s.route_id] || []).push(c);
+      (routeMultiCoords[s.route_id] = routeMultiCoords[s.route_id] || []).push(c);
+    });
     if (!seen.has(s.route_id)) {
       seen.add(s.route_id);
-      routeShapeCoords[s.route_id] = coords; // first pattern — used for the ahead-arrows
+      routeShapeCoords[s.route_id] = pieces.reduce((a, b) => b.length > a.length ? b : a, pieces[0]);
     }
     // Always prefer our curated route colors over the API pattern colors (which can be #FFFFFF etc.)
     routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || normalizeColor(s.color) || '#888', name: s.name };
@@ -1885,8 +1898,10 @@ function renderRouteShapes(force) {
   // visible and you can see which routes run together and which way they go. Each
   // route gets a slot within its shared-road group (centered on 0), and we offset
   // by that slot. Solo routes get slot 0 (no offset), so they sit right on the road.
-  const offsets = computeRouteOffsets(routeMultiCoords);
-  const SLOT_PX = 2.2; // px between adjacent parallel routes (per zoom step below)
+  const offsets = computeRouteOffsets(routeMultiCoords, rid => (routeMeta[rid] && routeMeta[rid].color) || '#888');
+  // Lanes are offset by slot × spacing. Spacing tracks the (now fatter) line width
+  // so adjacent lanes sit edge-to-edge without overlapping or gapping.
+  const SLOT_PX = 3.2;
   for (const [rid, parts] of Object.entries(routeMultiCoords)) {
     const { color } = routeMeta[rid];
     const slot = (offsets[rid] && offsets[rid].slot) || 0;
@@ -1903,15 +1918,14 @@ function renderRouteShapes(force) {
       id: layId, type: 'line', source: srcId,
       paint: {
         'line-color': color,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.4, 12, 2.2, 15, 3, 18, 4],
-        'line-opacity': 0.92,
-        // Parallel separation, scaled by zoom so the lines stay adjacent (not
-        // fanned) — small at low zoom, a touch wider when zoomed in. Slot is
-        // centered, so a 3-route group renders at -1/0/+1 → three clean lanes.
+        // Fatter, easier to see.
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 12, 3.2, 15, 4.5, 18, 6],
+        'line-opacity': 0.95,
+        // Parallel separation, scaled with zoom so lanes stay adjacent (not fanned).
         'line-offset': ['interpolate', ['linear'], ['zoom'],
           10, slot * SLOT_PX * 0.6,
           13, slot * SLOT_PX,
-          16, slot * SLOT_PX * 1.6]
+          16, slot * SLOT_PX * 1.7]
       },
       layout: { 'line-join': 'round', 'line-cap': 'round' }
     }, 'stops-circle'); // insert below stops layer

@@ -72,9 +72,9 @@ const ROUTES = [
   { id: 5600, name: '10 KAU HILO',              short: '10',  color: '#B5460F' }, // burnt orange
   { id: 5602, name: '102 INTRA HILO KAUMANA',   short: '102', color: '#5B2C8D' }, // deep violet
   { id: 5603, name: '103 INTRA HILO WAIAKEA UKA',short:'103', color: '#0E7C86' }, // teal
-  { id: 5604, name: '101 INTRA HILO KEAUKAHA',  short: '101', color: '#9C27B0' }, // magenta-purple
+  { id: 5604, name: '101 INTRA HILO KEAUKAHA',  short: '101', color: '#C2148C' }, // magenta-pink
   { id: 5606, name: '70 NORTH KOHALA S. KOHALA', short: '70', color: '#3E7A1E' }, // forest green
-  { id: 5613, name: '1 HILO KONA',               short: '1',  color: '#8A5A00' }, // bronze
+  { id: 5613, name: '1 HILO KONA',               short: '1',  color: '#2E7D32' }, // green (was bronze — too close to 10/104 in Hilo)
   { id: 5615, name: '201 KONA TROLLEY',          short: '201',color: '#C2148C' }, // dark pink
   { id: 5704, name: '2 BLUELINE HILO KONA',      short: '2',  color: '#1539C4' }, // strong blue
   { id: 5709, name: '11 REDLINE HILO VOLCANO',   short: '11', color: '#C81E1E' }, // strong red
@@ -84,7 +84,7 @@ const ROUTES = [
   { id: 5729, name: '76 GREENLINE HONOKAA KONA', short: '76', color: '#1B7A3D' }, // green
   { id: 5730, name: '80 HILO S. KOHALA RESORTS', short: '80', color: '#A11D5B' }, // raspberry
   { id: 5745, name: '90 PAHALA S. KOHALA RESORTS',short:'90', color: '#8E3B1E' }, // brick
-  { id: 5748, name: '104 INTRA HILO MOHOULI',   short: '104', color: '#9E7A00' }, // dark gold
+  { id: 5748, name: '104 INTRA HILO MOHOULI',   short: '104', color: '#B8860B' }, // dark goldenrod
   { id: 5750, name: '202 CENTRAL KAILUA-KONA',  short: '202', color: '#C75A00' }, // pumpkin
   { id: 5756, name: '402 HAWAIIAN PARADISE PARK',short:'402', color: '#1C6E9E' }, // ocean blue
   { id: 5759, name: '403 FERN ACRES',           short: '403', color: '#3F51B5' }, // indigo
@@ -1544,10 +1544,46 @@ async function matchAllShapes() {
       saveDb();
       await new Promise(r => setTimeout(r, 500)); // polite to the public Valhalla server
     }
-    if (snapped + kept > 0) console.log(`[match] done — ${snapped} snapped to roads, ${kept} kept raw, ${skipped} cached`);
+    if (snapped + kept > 0) { console.log(`[match] done — ${snapped} snapped to roads, ${kept} kept raw, ${skipped} cached`); exportMatchedShapes(); }
   } finally {
     matchingInProgress = false;
   }
+}
+
+// Vendor the matched shapes to a repo file so a FRESH deploy (e.g. Render with no
+// DB backup yet) loads pre-computed road geometry instantly instead of re-running
+// Valhalla. Written after each matching pass; committed to the repo. "Run once,
+// reuse forever" — even across cold reboots with no persistent disk.
+const MATCHED_VENDOR_PATH = path.join(__dirname, 'data', 'route-shapes-matched.json');
+function exportMatchedShapes() {
+  try {
+    const rows = dbAll(`SELECT pattern_id, route_id, src_hash, shape, is_raw FROM route_shapes_matched WHERE is_raw=0`);
+    if (!rows.length) return;
+    const out = {};
+    for (const r of rows) out[r.pattern_id] = { route_id: r.route_id, src_hash: r.src_hash, shape: r.shape };
+    fs.writeFileSync(MATCHED_VENDOR_PATH, JSON.stringify(out));
+    console.log(`[match] vendored ${rows.length} matched shapes → ${path.basename(MATCHED_VENDOR_PATH)}`);
+  } catch (e) { console.error('[match] vendor export:', e.message); }
+}
+// On boot, seed the matched cache from the vendored file for any pattern whose raw
+// shape hash still matches — so road geometry is present immediately, before (or
+// without) a Valhalla run.
+function seedMatchedFromVendor() {
+  let vendor;
+  try { vendor = JSON.parse(fs.readFileSync(MATCHED_VENDOR_PATH, 'utf8')); } catch { return; }
+  let seeded = 0;
+  for (const [patternId, v] of Object.entries(vendor)) {
+    if (!v || !v.shape) continue;
+    const existing = dbGet(`SELECT src_hash FROM route_shapes_matched WHERE pattern_id=?`, [patternId]);
+    if (existing) continue; // DB already has it (from backup/restore)
+    // Only trust the vendored geometry if the current raw shape hash matches.
+    const rawRow = dbGet(`SELECT shape FROM route_shapes WHERE pattern_id=?`, [patternId]);
+    if (rawRow && shapeHash(rawRow.shape) !== v.src_hash) continue; // route changed → re-match
+    dbRun(`INSERT OR REPLACE INTO route_shapes_matched(pattern_id,route_id,src_hash,shape,is_raw,note,matched_at)
+           VALUES(?,?,?,?,0,'vendored',?)`, [patternId, v.route_id, v.src_hash, v.shape, Date.now()]);
+    seeded++;
+  }
+  if (seeded) { console.log(`[match] seeded ${seeded} matched shapes from vendored file`); saveDb(); }
 }
 
 // Self-healing scheduler: keep retrying until every pattern has a snap result,
@@ -2748,8 +2784,10 @@ const server = http.createServer((req, res) => {
   // Build the authoritative route registry (unions every source) and log any
   // route still missing geometry, so gaps surface immediately, never silently.
   try { buildRouteRegistry(); } catch (e) { console.error('[registry]', e.message); }
-  // Road-snap all route shapes (background, self-healing). Cached → quick no-op
-  // once done; retries until complete if Valhalla is flaky, then refreshes daily.
+  // Seed road geometry from the vendored file so a fresh deploy has snapped lines
+  // INSTANTLY (no waiting for Valhalla). Then the self-healing matcher fills any
+  // gaps / changed routes in the background and re-vendors. "Match once, reuse forever."
+  try { seedMatchedFromVendor(); } catch (e) { console.error('[match] seed:', e.message); }
   scheduleMatching();
   buildTripIndex();
   // Train learning model on past stop_arrivals history
