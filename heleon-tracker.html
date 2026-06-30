@@ -1340,9 +1340,17 @@ function updateAircraftStatus(data) {
   const el = document.getElementById('aircraftStatus');
   if (!el) return;
   if (!data) { el.className = 'vessel-status err'; el.innerHTML = '<span class="vessel-dot"></span><span>Connection error</span>'; return; }
+  // A transient OpenSky hiccup (rate limit / timeout) shouldn't read as broken
+  // while we still have aircraft on screen — keep showing them, note the staleness
+  // quietly. Only surface the error when we genuinely have nothing to show.
+  if (data.lastError && data.count > 0) {
+    el.className = 'vessel-status live';
+    el.innerHTML = `<span class="vessel-dot"></span><span title="${escapeHtml(data.lastError)}">${data.count} aircraft (reconnecting…)</span>`;
+    return;
+  }
   if (data.lastError) {
     el.className = 'vessel-status err';
-    el.innerHTML = `<span class="vessel-dot"></span><span title="${escapeHtml(data.lastError)}">Upstream error</span>`;
+    el.innerHTML = `<span class="vessel-dot"></span><span title="${escapeHtml(data.lastError)}">OpenSky unavailable — retrying</span>`;
     return;
   }
   if (data.count > 0) {

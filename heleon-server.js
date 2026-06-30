@@ -2495,14 +2495,35 @@ let aircraftCache = [];               // [{ icao24, callsign, country, lat, lon,
 let aircraftLastPollTs = null;
 let aircraftLastError = null;
 
+// OpenSky's anonymous tier is rate-limited and frequently slow/throttled. Fetch
+// with a generous timeout and an explicit HTTP-status check (a 429/503 returns an
+// HTML body that would otherwise blow up JSON.parse and look like a hard error).
+// On ANY failure we keep the last good aircraft on screen (cache untouched) so a
+// transient timeout doesn't blank the map — we only note the error.
+function fetchOpenSky(reqPath) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({ hostname: 'opensky-network.org', path: reqPath, method: 'GET',
+      headers: { 'User-Agent': 'heleon-tracker', 'Accept': 'application/json' }, timeout: 20000 }, res => {
+      let b = ''; res.on('data', d => b += d);
+      res.on('end', () => {
+        if (res.statusCode === 429) return reject(new Error('rate limited (429) — backing off'));
+        if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`));
+        try { resolve(JSON.parse(b)); } catch { reject(new Error('bad JSON from OpenSky')); }
+      });
+    });
+    req.on('error', e => reject(new Error(e.code || e.message)));
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.end();
+  });
+}
+
 async function pollAircraft() {
   const params = new URLSearchParams(HAWAII_AIR_BBOX).toString();
-  const url = `${OPENSKY_URL}?${params}`;
   try {
-    const res = await fetchJson('opensky-network.org', `/api/states/all?${params}`);
+    const res = await fetchOpenSky(`/api/states/all?${params}`);
     if (!res || !Array.isArray(res.states)) {
       aircraftLastError = 'unexpected response shape';
-      return;
+      return; // keep last cache
     }
     const now = Date.now();
     const next = [];
@@ -2591,12 +2612,13 @@ const server = http.createServer((req, res) => {
   } else {
     console.log('[boats] AISSTREAM_API_KEY not set — boats layer disabled (set env var to enable)');
   }
-  // Airplanes layer — OpenSky Network's anonymous tier, no key needed. Poll
-  // every 12s (under the 10s anonymous rate limit, with margin). Bounding box
-  // is wide enough to catch approach/departure traffic around all major
-  // Hawaiian island airports.
+  // Airplanes layer — OpenSky Network's anonymous tier, no key needed. The
+  // anonymous tier is rate-limited (a 12s poll on a wide bbox gets throttled,
+  // which is what caused the "OpenSky timeout / upstream error"). Poll every 30s
+  // — gentle enough to stay under the limits while still feeling live (planes
+  // move slowly relative to the map). On error the last fix stays on screen.
   pollAircraft();
-  setInterval(pollAircraft, 12000);
+  setInterval(pollAircraft, 30000);
   setTimeout(pruneDb, 30000);                // full prune+VACUUM shortly after boot
   setInterval(pruneDb, 24 * 60 * 60 * 1000); // and daily thereafter
   // poll_log grows ~88 rows/cycle (22 routes × 4/min) but /api/stats only reads
