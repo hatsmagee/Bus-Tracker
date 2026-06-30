@@ -1,34 +1,49 @@
 'use strict';
 /**
- * Snaps every GTFS route shape onto the real local road network (road-graph.js +
- * data/osm/bigisland-roads.json), producing route lines that are LITERALLY composed
- * of real road segments — not independently-traced polylines that can diverge from
- * the basemap. This replaces the Valhalla-based map-matching pipeline (map-match.js)
- * as the primary source of vendored route geometry: same local data already used by
- * scripts/validate-route-roads.js, no external service dependency, deterministic.
+ * Colors real roads for each route — no snapping math, no stitching, no
+ * synthesized coordinates. For each route's GTFS shape, find which real OSM
+ * road edges (road-graph.js) it actually runs along, and draw THOSE EDGES'
+ * OWN, UNMODIFIED coordinate arrays. An edge's coords are already a verbatim
+ * slice of the source OSM way (see road-graph.js's buildGraph — splitting at
+ * junctions never interpolates a new point), so nothing here ever invents a
+ * coordinate: every point on the map came directly from data/osm/bigisland-roads.json.
+ *
+ * This replaces an earlier point-snap-and-shortest-path-stitch approach. That
+ * approach span up real edge geometry between snap points (the right idea),
+ * but a leftover from extending two points "along the same edge" connected
+ * the two SNAPPED points with a straight line instead of the edge's own
+ * intermediate vertices — which on a sparse, curving OSM way reintroduced the
+ * exact diagonal-cutting bug the whole rewrite was meant to eliminate, and
+ * the multi-node shortest-path stitching could pick non-obvious detours.
+ * Whole-edge selection sidesteps all of it: there is no chord, ever, because
+ * nothing is ever sliced mid-edge or stitched node-to-node — an edge is
+ * either fully included (real road, start to finish) or not.
  *
  * Algorithm per shape:
- *   1. Downsample the raw shape to ~40m spacing (keeps the snap-point count sane).
- *   2. Snap each point onto the nearest road-graph edge within a search radius.
- *      Points that don't snap (radius exceeded — e.g. a parking lot, a gap in OSM
- *      coverage) are dropped; consecutive runs of unsnapped points break the path
- *      into separate segments rather than bridging with a straight line.
- *   3. Between consecutive snapped points, walk the shortest path along the graph
- *      (bounded search radius) and emit its real edge geometry. If no path is found
- *      within range (a genuine gap, or the points snapped to disconnected
- *      components), that gap is skipped rather than bridged — same "honest gap over
- *      a wrong line" principle as map-match.js's quality gate.
- *   4. The final coordinate list is the concatenation of real edge geometry only:
- *      every point in the output came from an actual OSM road way.
+ *   1. Downsample the raw GTFS shape to ~8m spacing (dense — a coarser spacing
+ *      regularly skips clean over a short real edge between two samples).
+ *   2. For each point, find the nearest road-graph edge within a search radius.
+ *   3. Collapse consecutive duplicate edge matches, then fold short runs that
+ *      are bookended by the SAME edge back into it — covers both unsnapped
+ *      gaps (sparse highway vertices) and brief mismatches to a nearby
+ *      driveway/connector. Never invents geometry: folding only relabels
+ *      which already-real edge a run belongs to.
+ *   4. Walk the cleaned edge list and append each edge's FULL coordinate
+ *      array, oriented by shared node identity with the path's current last
+ *      point. Where two matched edges don't directly touch, try a short
+ *      real bridge path (still only whole real edges); otherwise it's an
+ *      honest gap — start a new segment rather than bridge with anything
+ *      synthesized.
+ *   5. Final safety net: collapse any exact-point revisit within a segment
+ *      (an out-and-back through already-drawn real road) — pure deletion of
+ *      duplicate points, never an addition or move.
  *
- * Usage: node scripts/snap-routes-to-roads.js
- * Writes data/route-shapes-road-snapped.json: pattern_id -> { route_id, shape (encoded) }
+ * Usage: node scripts/snap-routes-to-roads.js <path-to-extracted-gtfs-dir>
+ * Writes data/route-shapes-road-snapped.json: pattern_id -> { route_id, segments: [encoded,...] }
  */
 const fs = require('fs');
 const path = require('path');
-const {
-  loadRoadGraph, buildEdgeIndex, nearestPointOnGraph, shortestPath, edgeCoordsFrom,
-} = require('../road-graph.js');
+const { loadRoadGraph, buildEdgeIndex, nearestPointOnGraph, shortestPath, nodeKey } = require('../road-graph.js');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -75,98 +90,209 @@ function downsample(coords, spacingM) {
   return out;
 }
 
-const SNAP_RADIUS_M = 40;       // tight radius first — keeps urban snaps precise
-const SNAP_RADIUS_FALLBACK_M = 150; // retried only for points the tight pass missed —
-                                     // rural highways have sparser OSM node spacing and
-                                     // sparser GTFS shape points, so a 40m radius alone
-                                     // fragmented long routes (5745, 5600) into 30+ broken
-                                     // segments even though the road was right there, just
-                                     // slightly further from the (also sparse) shape point.
-const PATH_SEARCH_MAX_M = 2500;  // how far Dijkstra will search to connect two consecutive snaps
+const SNAP_RADIUS_M = 40;
+const SNAP_RADIUS_FALLBACK_M = 150; // rural OSM ways / GTFS points are sparser
 
-function snapShapeToRoads(graph, edgeIndex, rawCoords) {
-  const pts = downsample(rawCoords, 40);
+// Color the real roads a route travels: which edges, in what order, oriented
+// which way — never inventing a coordinate. Sample EVERY ~8m so consecutive
+// samples are always on the same edge or an immediately adjacent one — a
+// coarser sample (e.g. 25m+) regularly skips clean over a short real edge
+// between two samples, which then looks like a "gap" even though the route
+// is fully continuous on real roads; this is about matching density, not
+// inventing geometry, so it doesn't reintroduce any synthesized point.
+function colorRoadsForShape(graph, edgeIndex, rawCoords) {
+  const pts = downsample(rawCoords, 8);
   const snaps = pts.map(p =>
     nearestPointOnGraph(graph, edgeIndex, p, SNAP_RADIUS_M) ||
     nearestPointOnGraph(graph, edgeIndex, p, SNAP_RADIUS_FALLBACK_M));
 
-  const segments = []; // each: array of [lon,lat]
+  // Collapse consecutive duplicate edge matches (many shape points land on
+  // the same edge as the bus travels along one road). `raw` may still
+  // contain `null` for unsnapped samples.
+  function collapseConsecutive(arr) {
+    const out = [];
+    for (const x of arr) {
+      if (out.length && out[out.length - 1] === x) continue;
+      out.push(x);
+    }
+    return out;
+  }
+  let edgeSeq = collapseConsecutive(snaps.map(s => s ? s.edgeIdx : null));
+
+  // Fold a short run that's bookended by the SAME edge on both sides back
+  // into that edge — whether the run is unsnapped (null) samples (long,
+  // sparsely-vertexed OSM ways have GTFS points occasionally fall just
+  // outside the snap radius) or a different, briefly-matched edge (snap
+  // noise from a nearby driveway/connector). The bus never actually left the
+  // bookending edge in either case; treating the run as real causes the path
+  // to "leave" and "re-enter" later, which looks like a gap requiring a
+  // re-walk of the same edge — a visible retrace. This NEVER invents
+  // geometry: folding only relabels which already-real edge a run belongs
+  // to, it doesn't change any edge's own coordinates.
+  const MAX_FOLD_RUN = 8;
+  for (let pass = 0; pass < 5; pass++) {
+    let changed = false;
+    for (let i = 1; i < edgeSeq.length - 1; i++) {
+      if (edgeSeq[i] === edgeSeq[i - 1]) continue; // already same as before, nothing to fold
+      let j = i;
+      while (j < edgeSeq.length && edgeSeq[j] !== edgeSeq[i - 1]) j++;
+      const runLen = j - i;
+      if (j < edgeSeq.length && runLen <= MAX_FOLD_RUN) {
+        for (let k = i; k < j; k++) edgeSeq[k] = edgeSeq[i - 1];
+        changed = true;
+      }
+    }
+    edgeSeq = collapseConsecutive(edgeSeq);
+    if (!changed) break;
+  }
+
+  // Append one real edge's FULL coordinate array to `current`, oriented so it
+  // continues from whichever end touches the path's current last point
+  // (matched by NODE IDENTITY, not by tracked "cursor" state — recomputing
+  // this fresh from current's actual last point each time, instead of
+  // threading a separate cursorNode variable through every branch, is what
+  // eliminates the reversed-retrace bug: there is no stale-cursor case left
+  // to get out of sync with what was actually emitted).
+  // current's endpoints are always exact edge endpoints (every edge we add
+  // ends in graph.nodes by construction), so an exact key lookup is valid.
+  const nodeOfPoint = (pt) => nodeKey(pt[0], pt[1]);
+  const appendEdge = (edgeIdx) => {
+    const e = graph.edges[edgeIdx];
+    if (!current.length) { current.push(...e.coords); return; }
+    const lastNode = nodeOfPoint(current[current.length - 1]);
+    const coords = lastNode === e.b ? e.coords.slice().reverse() : e.coords; // lastNode===e.a, or first edge
+    current.push(...coords.slice(1));
+  };
+  const lastNodeOf = () => current.length ? nodeOfPoint(current[current.length - 1]) : null;
+
+  const segments = [];
   let current = [];
 
-  for (let i = 0; i < snaps.length; i++) {
-    const s = snaps[i];
-    if (!s) {
+  for (const edgeIdx of edgeSeq) {
+    if (edgeIdx == null) {
       if (current.length > 1) segments.push(current);
       current = [];
       continue;
     }
-    if (!current.length) { current.push(s.point); continue; }
-
-    const prevSnap = snaps[i - 1];
-    if (!prevSnap) { current.push(s.point); continue; }
-
-    if (s.edgeIdx === prevSnap.edgeIdx) {
-      // Same edge — just extend toward the new point along it (already a real road).
-      current.push(s.point);
+    const e = graph.edges[edgeIdx];
+    const cursorNode = lastNodeOf();
+    if (cursorNode == null || e.a === cursorNode || e.b === cursorNode) {
+      appendEdge(edgeIdx);
       continue;
     }
-
-    // Different edges — connect via the real road graph between their nearer nodes.
-    const e1 = graph.edges[prevSnap.edgeIdx], e2 = graph.edges[s.edgeIdx];
-    // Try all 4 node-pair combinations, take the shortest real path.
-    let bestPath = null, bestNodes = null, bestLen = Infinity;
-    for (const n1 of [e1.a, e1.b]) {
-      for (const n2 of [e2.a, e2.b]) {
-        const p = shortestPath(graph, n1, n2, PATH_SEARCH_MAX_M);
-        if (p) {
-          const len = p.reduce((s, ei) => s + graph.edges[ei].lengthM, 0);
-          if (len < bestLen) { bestLen = len; bestPath = p; bestNodes = [n1, n2]; }
-        }
-      }
-    }
-    if (!bestPath) {
-      // No connection found within range — honest gap, start a new segment.
+    // This matched edge doesn't directly touch where the path currently
+    // ends. Before treating it as a real gap, check whether a short real
+    // connecting edge exists that the sparse GTFS sample skipped past (very
+    // common — e.g. a short connector between two named-street segments).
+    // Every edge the path returns is appended in FULL, exactly as it is in
+    // road-graph.js — this only sequences which real edges to draw.
+    let bridgePath = shortestPath(graph, cursorNode, e.a, 600);
+    if (bridgePath === null) bridgePath = shortestPath(graph, cursorNode, e.b, 600);
+    if (bridgePath !== null && bridgePath.length <= 8) {
+      for (const bi of bridgePath) appendEdge(bi);
+      appendEdge(edgeIdx);
+    } else {
+      // No short real connection found — an honest gap (sparse shape points
+      // skipped something farther than a couple of short connector edges, or
+      // real OSM coverage has a hole here). Never bridge it with anything
+      // synthesized; start a fresh segment instead.
       if (current.length > 1) segments.push(current);
-      current = [s.point];
-      continue;
+      current = [...e.coords];
     }
-    let cursor = bestNodes[0];
-    for (const ei of bestPath) {
-      const coords = edgeCoordsFrom(graph, ei, cursor);
-      current.push(...coords.slice(1)); // skip first point — already have it (or it's the snap point)
-      cursor = graph.edges[ei].a === cursor ? graph.edges[ei].b : graph.edges[ei].a;
-    }
-    current.push(s.point);
   }
   if (current.length > 1) segments.push(current);
-  return segments;
+  return segments
+    .map(seg => seg.filter(p => Array.isArray(p) && p.length === 2 && Number.isFinite(p[0]) && Number.isFinite(p[1])))
+    .map(removeRetraces)
+    .filter(seg => seg.length >= 2);
 }
 
-module.exports = { snapShapeToRoads, decode, encode, downsample };
+// Final safety net: walk an assembled coordinate list and cut out any
+// "go to point P, then immediately come straight back through the same
+// points" pattern — a route doubling onto itself and back, however it got
+// there upstream (the edge-matching above has several legitimate paths to
+// occasionally revisit one long, sparse edge non-consecutively, and not
+// every such case is worth chasing individually). Detected purely
+// geometrically: if position i and position j (j > i) are the SAME point and
+// the path from i to j is short relative to a direct jump elsewhere, drop
+// the out-and-back in between, since those points are already covered by
+// the rest of the path. This only ever DELETES points that are exact
+// duplicates of points already in the list — it never adds or moves one.
+function removeRetraces(coords) {
+  const keyOf = (p) => `${p[0].toFixed(6)},${p[1].toFixed(6)}`;
+  const lastSeenAt = new Map();
+  const out = [];
+  for (let i = 0; i < coords.length; i++) {
+    const k = keyOf(coords[i]);
+    if (lastSeenAt.has(k)) {
+      // Rewind: drop everything emitted since the previous visit to this
+      // exact point — that span was an out-and-back through already-real
+      // road geometry, now redundant. Any OTHER point's recorded index that
+      // falls past the new (shorter) length is now stale and must be purged,
+      // or a later match against it would try to "rewind" to an index past
+      // the current end — `Array.length = N` for N > out.length doesn't
+      // truncate, it pads with holes, which is exactly how a `null`/empty
+      // slot was sneaking into the final coordinate list.
+      const newLen = lastSeenAt.get(k) + 1;
+      out.length = newLen;
+      for (const [key, idx] of lastSeenAt) if (idx >= newLen) lastSeenAt.delete(key);
+    } else {
+      out.push(coords[i]);
+      lastSeenAt.set(k, out.length - 1);
+    }
+  }
+  return out;
+}
+
+module.exports = { colorRoadsForShape, decode, encode, downsample };
+
+// Bring in route_id + raw GTFS shape pairing from a downloaded GTFS zip's
+// shapes.txt/trips.txt, NOT from a previously-matched/densified file — the
+// whole point is to color real roads starting from the agency's actual
+// (sparse) shape points, the same input every other matching approach in
+// this repo has had to handle.
+function loadRawGtfsShapes(gtfsDir) {
+  const shapesText = fs.readFileSync(path.join(gtfsDir, 'shapes.txt'), 'utf8');
+  const tripsText = fs.readFileSync(path.join(gtfsDir, 'trips.txt'), 'utf8');
+  const parseCsv = (text) => {
+    const lines = text.trim().split('\n');
+    const headers = lines[0].split(',').map(h => h.trim());
+    return lines.slice(1).map(line => {
+      // naive CSV split is fine here — these files don't quote-escape commas in numeric fields
+      const cells = line.split(',');
+      const row = {};
+      headers.forEach((h, i) => row[h] = cells[i]);
+      return row;
+    });
+  };
+  const shapeRows = parseCsv(shapesText);
+  const tripRows = parseCsv(tripsText);
+  const shapeToRoute = {};
+  for (const t of tripRows) if (t.shape_id) shapeToRoute[t.shape_id] = parseInt(t.route_id);
+
+  const byShape = {};
+  for (const r of shapeRows) {
+    const sid = r.shape_id;
+    if (!byShape[sid]) byShape[sid] = [];
+    byShape[sid].push({ seq: parseInt(r.shape_pt_sequence), lat: parseFloat(r.shape_pt_lat), lon: parseFloat(r.shape_pt_lon) });
+  }
+  const out = {};
+  for (const sid of Object.keys(byShape)) {
+    const pts = byShape[sid].sort((a, b) => a.seq - b.seq);
+    out[sid] = { route_id: shapeToRoute[sid] ?? null, coords: pts.map(p => [p.lon, p.lat]) };
+  }
+  return out;
+}
 
 async function loadSourceShapes() {
-  // Prefer the live server's /api/shapes (every pattern the agency currently
-  // serves, including ones added after the vendored file was last built —
-  // exactly the gap that left newer patterns stuck unsnapped indefinitely).
-  // Falls back to the vendored file (already-matched geometry) if no server
-  // arg is given, so this still works offline / in CI.
-  const serverUrl = process.argv[2]; // e.g. https://bus-tracker-a36o.onrender.com
-  if (serverUrl) {
-    console.log(`Fetching live shapes from ${serverUrl}/api/shapes …`);
-    const https = require('https'), http = require('http');
-    const lib = serverUrl.startsWith('https') ? https : http;
-    const body = await new Promise((resolve, reject) => {
-      lib.get(`${serverUrl}/api/shapes`, res => {
-        let b = ''; res.on('data', d => b += d); res.on('end', () => resolve(b));
-      }).on('error', reject);
-    });
-    const shapes = JSON.parse(body);
-    const out = {};
-    for (const s of shapes) out[String(s.pattern_id)] = { route_id: s.route_id, shape: s.shape };
-    return out;
+  const gtfsDir = process.argv[2];
+  if (!gtfsDir) {
+    console.error('Usage: node scripts/snap-routes-to-roads.js <path-to-extracted-gtfs-dir>');
+    console.error('  (the directory must contain shapes.txt and trips.txt)');
+    process.exit(1);
   }
-  console.log('No server URL given — using data/route-shapes-matched.json as source.');
-  return JSON.parse(fs.readFileSync(path.join(ROOT, 'data/route-shapes-matched.json')));
+  console.log(`Loading raw GTFS shapes from ${gtfsDir} …`);
+  return loadRawGtfsShapes(gtfsDir);
 }
 
 async function main() {
@@ -182,23 +308,23 @@ async function main() {
   let snappedCount = 0, failedCount = 0;
   for (const key of Object.keys(sourceShapes)) {
     const entry = sourceShapes[key];
-    if (!entry.shape) continue;
-    const rawCoords = decode(entry.shape);
-    if (rawCoords.length < 2) continue;
-    const segments = snapShapeToRoads(graph, edgeIndex, rawCoords);
+    if (!entry.coords || entry.coords.length < 2) continue;
+    const rawCoords = entry.coords;
+    let segments;
+    try {
+      segments = colorRoadsForShape(graph, edgeIndex, rawCoords);
+    } catch (e) {
+      console.error(`  pattern ${key} (route ${entry.route_id}) failed: ${e.message}`);
+      failedCount++;
+      continue;
+    }
     const totalPts = segments.reduce((s, seg) => s + seg.length, 0);
     if (totalPts < 2) { failedCount++; continue; }
-    // Encode as a single shape by concatenating segments with a tiny gap marker
-    // removed — store segments separately so the renderer can draw each as its
-    // own LineString (a MultiLineString) instead of bridging real gaps.
-    out[key] = {
-      route_id: entry.route_id,
-      segments: segments.map(seg => encode(seg)),
-    };
+    out[key] = { route_id: entry.route_id, segments: segments.map(seg => encode(seg)) };
     snappedCount++;
-    if (snappedCount % 20 === 0) console.log(`  ...${snappedCount} patterns snapped`);
+    if (snappedCount % 20 === 0) console.log(`  ...${snappedCount} patterns colored`);
   }
-  console.log(`Snapped ${snappedCount} patterns (${failedCount} produced no usable road path)`);
+  console.log(`Colored ${snappedCount} patterns (${failedCount} produced no usable road path)`);
   fs.writeFileSync(path.join(ROOT, 'data/route-shapes-road-snapped.json'), JSON.stringify(out));
   console.log('Wrote data/route-shapes-road-snapped.json');
 }
