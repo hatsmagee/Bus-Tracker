@@ -205,7 +205,7 @@ function saveDb() {
 // history and short-term training. Long-term signal lives in stop_arrivals,
 // which we keep. Prunes then VACUUMs to actually reclaim disk.
 const PINGS_RETAIN_MS    = 14 * 86400000; // 2 weeks of raw GPS
-const POLLLOG_RETAIN_MS  = 2 * 86400000;  // 2 days of poll telemetry
+const POLLLOG_RETAIN_MS  = 6 * 3600000;   // 6h of poll telemetry (/api/stats only reads the last 1h)
 const ARRIVALS_RETAIN_MS = 90 * 86400000; // 90 days of arrivals for typical patterns
 function pruneDb() {
   if (!db) return;
@@ -2045,8 +2045,15 @@ const server = http.createServer((req, res) => {
   try { await trainFromHistory(); } catch(e) { console.error('[learn] train error:', e.message); }
   await pollAll();
   setInterval(pollAll, POLL_INTERVAL);
-  setTimeout(pruneDb, 30000);                // prune shortly after boot
+  setTimeout(pruneDb, 30000);                // full prune+VACUUM shortly after boot
   setInterval(pruneDb, 24 * 60 * 60 * 1000); // and daily thereafter
+  // poll_log grows ~88 rows/cycle (22 routes × 4/min) but /api/stats only reads
+  // the last hour — trim it hourly (cheap DELETE, no VACUUM) so it stays small
+  // between the daily full prunes.
+  setInterval(() => {
+    if (!db) return;
+    try { db.run(`DELETE FROM poll_log WHERE ts < ?`, [Date.now() - POLLLOG_RETAIN_MS]); } catch {}
+  }, 60 * 60 * 1000);
   setInterval(fetchShapes, 24 * 60 * 60 * 1000);
   setInterval(fetchAllStops, 24 * 60 * 60 * 1000);
   setInterval(discoverNewRoutes, 10 * 60 * 1000); // check for new routes every 10 min
