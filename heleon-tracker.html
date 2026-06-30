@@ -1116,6 +1116,75 @@ async function fetchShapes() {
 
 let gtfsStopMap = {}; // stop_id -> { stop_name, stop_code, wheelchair }
 
+// Reference data (route class, hubs, P&R/terminals) — what GTFS can't express.
+let REFERENCE = {};
+async function fetchReference() {
+  try { REFERENCE = await (await fetch('/api/reference')).json(); }
+  catch (e) { console.error('[fetchReference]', e); REFERENCE = {}; }
+}
+// Route classification badge ({label,color}) for a route short name, or null.
+function routeClass(short) {
+  const k = REFERENCE.routeClass && REFERENCE.routeClass[String(short)];
+  if (!k) return null;
+  const t = REFERENCE.routeTypes && REFERENCE.routeTypes[k];
+  return t ? { key: k, label: t.label, desc: t.desc, color: t.color } : null;
+}
+
+// Draw transit hubs / terminals / Park-and-Ride from the reference data as
+// labelled markers, so riders can see the connection points the printed map
+// shows (and which routes meet there). One source, added once.
+let hubMarkersDone = false;
+function renderHubMarkers() {
+  if (!mapReady || hubMarkersDone) return;
+  const feats = [];
+  (REFERENCE.hubs || []).forEach(h => feats.push({
+    type: 'Feature', geometry: { type: 'Point', coordinates: [h.lon, h.lat] },
+    properties: { kind: 'hub', name: h.name, routes: (h.routes || []).join(', '),
+                  pnr: h.parkAndRide ? 1 : 0 }
+  }));
+  (REFERENCE.parkAndRide || []).forEach(pr => feats.push({
+    type: 'Feature', geometry: { type: 'Point', coordinates: [pr.lon, pr.lat] },
+    properties: { kind: 'pnr', name: pr.name, routes: '' }
+  }));
+  if (!feats.length) return;
+  if (!map.getSource('hubs')) {
+    map.addSource('hubs', { type: 'geojson', data: { type: 'FeatureCollection', features: feats } });
+    map.addLayer({
+      id: 'hubs-marker', type: 'circle', source: 'hubs',
+      minzoom: 8,
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 4, 13, 7],
+        'circle-color': ['case', ['==', ['get', 'kind'], 'hub'], '#1f6feb', '#2ea043'],
+        'circle-stroke-width': 2, 'circle-stroke-color': '#fff', 'circle-opacity': 0.95
+      }
+    });
+    map.addLayer({
+      id: 'hubs-label', type: 'symbol', source: 'hubs', minzoom: 10,
+      layout: { 'text-field': ['get', 'name'], 'text-size': 11, 'text-offset': [0, 1.2],
+                'text-anchor': 'top', 'text-font': ['Noto Sans Bold'] },
+      paint: { 'text-color': '#0d1117', 'text-halo-color': '#fff', 'text-halo-width': 1.5 }
+    });
+    // Click → popup listing the routes that meet at this hub.
+    map.on('click', 'hubs-marker', e => {
+      const p = e.features[0].properties;
+      const isHub = p.kind === 'hub';
+      new maplibregl.Popup({ closeButton: true })
+        .setLngLat(e.features[0].geometry.coordinates)
+        .setHTML(`<div style="padding:8px 10px;min-width:180px;">
+          <div style="font-weight:700;font-size:13px;">${p.name}</div>
+          <div style="color:#8b949e;font-size:10px;margin:2px 0 6px;">
+            ${isHub ? 'Transit hub' : 'Park & Ride'}${p.pnr === '1' ? ' · Park & Ride' : ''}</div>
+          ${p.routes ? `<div style="font-size:11px;"><span style="color:#8b949e;">Routes:</span> ${p.routes}</div>` : ''}
+        </div>`).addTo(map);
+    });
+    map.on('mouseenter', 'hubs-marker', () => map.getCanvas().style.cursor = 'pointer');
+    map.on('mouseleave', 'hubs-marker', () => map.getCanvas().style.cursor = '');
+  } else {
+    map.getSource('hubs').setData({ type: 'FeatureCollection', features: feats });
+  }
+  hubMarkersDone = true;
+}
+
 async function fetchGtfsStops() {
   try {
     const res = await fetch('/api/gtfs/stops');
@@ -1446,6 +1515,12 @@ function buildStopPopupHtml(p, arrData) {
       </div>`;
   }
 
+  // ── Arrivals-by-hour chart (from persisted long-term history) ─────────────
+  // A small bar chart of how many arrivals we've logged at this stop in each
+  // hour of the day — so you can see this stop's busy windows at a glance. Built
+  // from stop_arrivals history, which is durable across refreshes/redeploys.
+  const chartHtml = hourlyArrivalChart(arrData.typicalByHour, color);
+
   // ── Headway / last seen ───────────────────────────────────────────────────
   let headwayHtml = '';
   if (arrData.minutesSinceLast != null || arrData.avgGapMin != null) {
@@ -1465,8 +1540,40 @@ function buildStopPopupHtml(p, arrData) {
     ${approachHtml}
     ${headwayHtml}
     ${typicalHtml}
+    ${chartHtml}
   </div>`;
 }
+
+// Compact arrivals-by-hour bar chart built from the durable stop_arrivals
+// history (typicalByHour[h].n = number of logged arrivals in that hour). Returns
+// '' until there's enough data to be meaningful, so empty stops stay clean.
+function hourlyArrivalChart(typicalByHour, color) {
+  if (!typicalByHour) return '';
+  const counts = [];
+  let total = 0;
+  for (let h = 0; h < 24; h++) { const n = (typicalByHour[h] && typicalByHour[h].n) || 0; counts.push(n); total += n; }
+  if (total < 8) return ''; // too sparse to graph honestly
+  const max = Math.max(...counts);
+  const W = 268, H = 46, pad = 12, bw = (W - pad) / 24;
+  const nowH = new Date().getHours();
+  const bars = counts.map((n, h) => {
+    const bh = max ? Math.max(n ? 2 : 0, (n / max) * (H - pad)) : 0;
+    const x = (h * bw).toFixed(1), y = (H - pad - bh).toFixed(1);
+    const fill = h === nowH ? '#e6edf3' : color;
+    const op = n ? (h === nowH ? 1 : 0.85) : 0.12;
+    return `<rect x="${x}" y="${y}" width="${(bw - 1).toFixed(1)}" height="${bh.toFixed(1)}" rx="1" fill="${fill}" opacity="${op}"><title>${labelHour(h)}: ${n} arrival${n!==1?'s':''}</title></rect>`;
+  }).join('');
+  // Light hour ticks at 0/6/12/18.
+  const ticks = [0,6,12,18].map(h => `<text x="${(h*bw).toFixed(1)}" y="${H-2}" fill="#6e7681" font-size="7">${h===0?'12a':h===6?'6a':h===12?'12p':'6p'}</text>`).join('');
+  return `
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid #21262d;">
+      <div style="font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Arrivals by hour (${total} logged)</div>
+      <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;">
+        ${bars}${ticks}
+      </svg>
+    </div>`;
+}
+function labelHour(h) { const ampm = h < 12 ? 'AM':'PM'; const hh = h % 12 || 12; return `${hh}${ampm}`; }
 
 function renderStopMarkers() {
   if (!mapReady) return;
@@ -1638,6 +1745,21 @@ function bearingDeg(a, b) {
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 
+// Road bearing (deg) of the route centerline at distance `d` along rc. This is
+// the direction the road runs where the bus is, so the bus icon can be oriented
+// along the road (in the direction of travel) rather than to the noisy raw GPS
+// heading. Buses drive ON roads and never sideways, so this is what we want.
+function roadBearingAt(rc, d) {
+  if (!rc) return null;
+  const ahead = Math.min(rc.total, d + 8);
+  const back  = Math.max(0, d - 8);
+  // Use a small window straddling the point; fall back to a forward step at the
+  // very start/end where there's no room behind/ahead.
+  const a = posAtDist(rc, back), b = posAtDist(rc, ahead);
+  if (!a || !b || (a[0] === b[0] && a[1] === b[1])) return null;
+  return bearingDeg(a, b);
+}
+
 // How far ahead to draw chevrons, stopping early if the route folds back near a
 // stretch already covered (so we don't draw both directions on the same road).
 // Returns the cap distance; opens back up once the bus passes the fold.
@@ -1745,14 +1867,18 @@ function renderRouteShapes(force) {
       // already snapped to roads server-side (Valhalla), so use a gentle
       // tolerance (~3 m) that cleans redundant points without cutting corners.
       coords = simplifyPath(coords, 0.00003);
+      // Drop hairpin spikes left by map-matching (the doubling-back artifacts).
+      coords = despike(coords);
     } catch(e) { return; }
     // Keep EVERY pattern's polyline for motion/chevron snapping — a bus on
     // pattern 2/3 is far from pattern 1, so snapping to all patterns keeps it
-    // on-route. The drawn route LINE still uses just the first pattern.
+    // on-route. Snapping uses the ACCURATE (despiked) centerline, not the
+    // smoothed draw line, so bus positions stay precise.
     (allPatternCoords[s.route_id] = allPatternCoords[s.route_id] || []).push(coords);
     if (seen.has(s.route_id)) return;
     seen.add(s.route_id);
-    routeCoords[s.route_id] = coords;
+    // The DRAWN line is smoothed into curves; snapping keeps the raw centerline.
+    routeCoords[s.route_id] = smoothLine(coords, 2);
     routeShapeCoords[s.route_id] = coords;
     // Always prefer our curated route colors over the API pattern colors (which can be #FFFFFF etc.)
     routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || normalizeColor(s.color) || '#888', name: s.name };
@@ -1905,6 +2031,51 @@ function simplifyPath(pts, tol) {
     }
   }
   return pts.filter((_, i) => keep[i]);
+}
+
+// Remove "spikes": single vertices where the line darts out and back (a near-
+// 180° turn over a very short hop). These are the doubling-back / parallel-street
+// artifacts left over from map-matching. We drop the offending vertex so the line
+// passes straight through instead of drawing a hairpin.
+function despike(pts) {
+  if (pts.length < 3) return pts;
+  const mLat = 111320;
+  const mAt = lat => mLat * Math.cos(lat * Math.PI / 180);
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = out[out.length - 1], b = pts[i], c = pts[i + 1];
+    const mLon = mAt(b[1]);
+    const ax = a[0]*mLon, ay = a[1]*mLat, bx = b[0]*mLon, by = b[1]*mLat, cx = c[0]*mLon, cy = c[1]*mLat;
+    const v1x = bx-ax, v1y = by-ay, v2x = cx-bx, v2y = cy-by;
+    const l1 = Math.hypot(v1x,v1y), l2 = Math.hypot(v2x,v2y);
+    if (l1 > 0 && l2 > 0) {
+      const cos = (v1x*v2x + v1y*v2y) / (l1*l2);
+      // Sharp reversal (>150°) on a short limb (<25 m) ⇒ spike: skip vertex b.
+      if (cos < -0.87 && Math.min(l1, l2) < 25) continue;
+    }
+    out.push(b);
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+
+// Chaikin corner-cutting: replaces each interior vertex with two points 1/4 and
+// 3/4 along its adjacent edges, rounding sharp polyline corners into smooth
+// curves that still hug the road. Two iterations give the flowing look of the
+// printed map without the "fan-out" that line-offset causes on raw corners.
+function smoothLine(pts, iterations = 2) {
+  let cur = pts;
+  for (let it = 0; it < iterations && cur.length > 2; it++) {
+    const next = [cur[0]];
+    for (let i = 0; i < cur.length - 1; i++) {
+      const p = cur[i], q = cur[i + 1];
+      next.push([p[0] + 0.25 * (q[0] - p[0]), p[1] + 0.25 * (q[1] - p[1])]);
+      next.push([p[0] + 0.75 * (q[0] - p[0]), p[1] + 0.75 * (q[1] - p[1])]);
+    }
+    next.push(cur[cur.length - 1]);
+    cur = next;
+  }
+  return cur;
 }
 
 function decodePolyline(encoded) {
@@ -2069,7 +2240,10 @@ function renderVehicleList() {
         <div class="vc-badge" style="background:${color};color:${tc}">${v.routeShort}</div>
         <div class="vc-info">
           <div class="vc-name">Bus #${v.name}</div>
-          <div class="vc-route">${v.routeName}</div>
+          <div class="vc-route">${v.routeName}${(() => {
+            const rc = routeClass(v.routeShort);
+            return rc ? ` <span title="${rc.desc}" style="display:inline-block;vertical-align:middle;margin-left:4px;padding:0 5px;border-radius:6px;font-size:9px;font-weight:700;line-height:14px;color:#fff;background:${rc.color};">${rc.label}</span>` : '';
+          })()}</div>
         </div>
         ${onTimeHtml(sl)}
         <div class="vc-freshness ${age}">${stalenessLabel(v)}</div>
@@ -2766,17 +2940,18 @@ function renderMarkers() {
       inner.onclick = () => selectVehicle(vdata.id);
       inner.onmouseenter = e => {
         showBusTooltip(vdata, e.clientX, e.clientY);
-        inner.style.transform = `rotate(${vdata.headingDegrees}deg) scale(1.25)`;
+        const h = (markers[vdata.id] && markers[vdata.id].heading) ?? vdata.headingDegrees ?? 0;
+        inner.style.transform = `rotate(${h}deg) scale(1.25)`;
       };
       inner.onmousemove = e => positionTooltip(e.clientX, e.clientY);
       inner.onmouseleave = () => {
         hideBusTooltip();
-        inner.style.transform = `rotate(${vdata.headingDegrees}deg) scale(1)`;
+        const h = (markers[vdata.id] && markers[vdata.id].heading) ?? vdata.headingDegrees ?? 0;
+        inner.style.transform = `rotate(${h}deg) scale(1)`;
       };
     }
 
     const loadFrac = loadFraction(v);
-    const heading = v.headingDegrees;
     const fix = [v.lon, v.lat];
     const nowT = performance.now();
     // Snap to whichever of the route's PATTERNS the bus is nearest (a bus on
@@ -2784,6 +2959,15 @@ function renderMarkers() {
     // we trust route-snapped motion, else the bus glides straight to its fix.
     const { rc, snap } = nearestPatternSnap(v.routeId, fix, v.headingDegrees);
     const onRoute = snap && snap.offRoute < 120;
+    // Orient the bus ALONG THE ROAD it's driving on, in the direction of travel.
+    // Buses don't drive sideways, so we ignore the noisy raw GPS heading when the
+    // bus is on a known route and instead use the centerline bearing at its
+    // snapped position (snap.dist is already on the correct travel direction
+    // because nearestPatternSnap used the GPS heading to disambiguate patterns).
+    // Off-route buses fall back to the raw GPS heading.
+    const roadBrg = onRoute ? roadBearingAt(rc, snap.dist) : null;
+    const heading = roadBrg != null ? roadBrg
+                  : (v.headingDegrees != null ? v.headingDegrees : 0);
 
     if (markers[v.id]) {
       const m = markers[v.id];
@@ -2822,7 +3006,11 @@ function renderMarkers() {
       m.fix = fix;
       m.fixTime = nowT;
       m.heading = heading;
-      m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, heading, loadFrac, v.weather, v.name);
+      // Reconcile the continuous (unwrapped) angle to this new heading via the
+      // shortest path, so re-rendering the icon doesn't spin it the long way.
+      const prevU = m.headingUnwrapped ?? heading;
+      m.headingUnwrapped = prevU + (((heading - (prevU % 360)) + 540) % 360 - 180);
+      m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, m.headingUnwrapped, loadFrac, v.weather, v.name);
       applyAgeOpacity(m.el, v);
       wire(m.el, v);
     } else {
@@ -2832,7 +3020,7 @@ function renderMarkers() {
       wire(el, v);
       const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(fix).addTo(map);
       markers[v.id] = {
-        marker, el, heading, fix, fixTime: nowT,
+        marker, el, heading, headingUnwrapped: heading, fix, fixTime: nowT,
         rc: onRoute ? rc : null, onRoute,
         curDist: onRoute ? snap.dist : 0,
         anchorDist: onRoute ? snap.dist : 0, prevAnchorDist: onRoute ? snap.dist : 0,
@@ -3080,6 +3268,19 @@ function startMarkerAnim() {
         const speed = (m.pace || 0) + Math.min(diff, 30) * 0.6;
         m.curDist = Math.min(want, m.curDist + speed * frameDt);
         m.marker.setLngLat(posAtDist(m.rc, m.curDist));
+        // Keep the bus pointed along the road as it rounds curves between fixes.
+        const rb = roadBearingAt(m.rc, m.curDist);
+        if (rb != null) {
+          // Unwrap so a 359°→1° crossing rotates the short way, not a full spin.
+          const prev = m.headingUnwrapped ?? rb;
+          let delta = ((rb - (prev % 360)) + 540) % 360 - 180;
+          const next = prev + delta;
+          if (Math.abs(next - prev) > 0.5) {
+            m.headingUnwrapped = next; m.heading = rb;
+            const inner = m.el && (m.el.querySelector('.bus-rot') || m.el.firstChild);
+            if (inner) inner.style.transform = `rotate(${next}deg)`;
+          }
+        }
       }
       // Keep the loop alive while this bus is still moving (pace>0) and hasn't
       // hit its lead cap or the route end — so it glides continuously between
@@ -3663,6 +3864,7 @@ async function pollLearn() {
 initMap();
 // Kick off all data fetches in parallel — fastest possible load
 Promise.all([
+  fetchReference(),
   fetchShapes(),
   fetchAll(),
   fetchAllStops(),
@@ -3671,7 +3873,7 @@ Promise.all([
   fetchTrails(),
   fetchVessels(),
   fetchAircraft(),
-]).then(() => fetchStoplines());
+]).then(() => { renderHubMarkers(); fetchStoplines(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
 setInterval(() => { if (activeTab === 'system' && !document.hidden) { pollLearn(); fetchApiStats(); } }, 5000);

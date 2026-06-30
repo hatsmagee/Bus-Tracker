@@ -13,5 +13,8 @@ heleon-gtfs.zip
 node_modules/
 public/
 
+# Scraped schedule PDFs (refreshed weekly by scripts/scrape-schedules.js)
+data/schedules/
+
 # Logs
 *.log

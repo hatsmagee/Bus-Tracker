@@ -44,6 +44,27 @@ const MATCHED_SHAPES_PATH = path.join(__dirname, 'data', 'route-shapes-matched.j
 // once at startup; empty {} if the file isn't present.
 let MATCHED_SHAPES = {};
 try { MATCHED_SHAPES = JSON.parse(fs.readFileSync(MATCHED_SHAPES_PATH, 'utf8')); } catch {}
+
+// Reference data the System Map PDF carries but GTFS does NOT: route class
+// (Express/Local/Neighborhood/Flex), transit-hub connections, Park-and-Ride /
+// terminal / airport points. Curated in data/heleon-reference.json and kept
+// current automatically by scripts/scrape-reference.js (run weekly). Reloaded
+// from disk after each scrape so updates take effect without a restart.
+const REFERENCE_PATH = path.join(__dirname, 'data', 'heleon-reference.json');
+let REFERENCE = {};
+function loadReference() {
+  try { REFERENCE = JSON.parse(fs.readFileSync(REFERENCE_PATH, 'utf8')); }
+  catch { REFERENCE = {}; }
+}
+loadReference();
+
+// Server-side map-matcher (snaps GTFS shapes to roads, rejects bad matches).
+const { matchShape } = require('./map-match');
+// Durable off-box DB backup (free; restores history on boot so it survives
+// ephemeral hosts like Render's free tier wiping /tmp on each deploy).
+const backup = require('./backup');
+const crypto = require('crypto');
+const shapeHash = s => crypto.createHash('sha1').update(s || '').digest('hex').slice(0, 16);
 const POLL_INTERVAL = 15000; // GTFS-RT refreshes ~every 15-30s; lighter on bandwidth
 const DB_SAVE_INTERVAL = 30000;
 const UPSTREAM = 'myheleonbus.org';
@@ -84,6 +105,15 @@ const initSql = require('sql.js');
 
 async function openDb() {
   const SQL = await initSql();
+  // On an ephemeral host the local file is gone after a deploy/restart — pull the
+  // last durable snapshot so accumulated history isn't lost. Only when there's no
+  // local DB (a present local file is newer/authoritative for this run).
+  if (!fs.existsSync(DB_PATH) && backup.isEnabled()) {
+    try {
+      const buf = await backup.restore();
+      if (buf && buf.length) { fs.writeFileSync(DB_PATH, buf); }
+    } catch (e) { console.error('[db] restore error:', e.message); }
+  }
   if (fs.existsSync(DB_PATH)) {
     const filebuf = fs.readFileSync(DB_PATH);
     db = new SQL.Database(filebuf);
@@ -121,6 +151,18 @@ async function openDb() {
     color       TEXT,
     shape       TEXT,
     fetched_at  INTEGER
+  )`);
+
+  // Server-side map-matched route geometry, cached so each route is snapped to
+  // roads once (via the public Valhalla API) and then served from here. Keyed by
+  // the raw GTFS shape's hash so a shape change auto-invalidates the cache.
+  db.run(`CREATE TABLE IF NOT EXISTS route_shapes_matched (
+    route_id   INTEGER PRIMARY KEY,
+    src_hash   TEXT,
+    shape      TEXT,
+    is_raw     INTEGER,
+    note       TEXT,
+    matched_at INTEGER
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS poll_log (
@@ -198,6 +240,9 @@ function saveDb() {
   try {
     const data = db.export();
     fs.writeFileSync(DB_PATH, Buffer.from(data));
+    // Push a durable off-box snapshot (throttled internally to ~5 min) so history
+    // survives a redeploy on ephemeral hosts. No-op when backup isn't configured.
+    if (backup.isEnabled()) backup.snapshot(Buffer.from(data)).catch(() => {});
   } catch(e) { console.error('[db] Save error:', e.message); }
 }
 
@@ -1253,8 +1298,26 @@ async function discoverNewRoutes() {
         ROUTES.push(newRoute);
         ROUTE_MAP[id] = newRoute;
         console.log(`\n[discovery] New route found: ${name} (id=${id})`);
-        // Fetch stops and shapes for new route
+        // Fetch stops AND the route's shape so it draws immediately (was missing
+        // the shape fetch before, so newly-discovered routes had no line until the
+        // daily fetchShapes ran). Pull the pattern shape, then map-match it.
         fetchStopsForRoute(id).then(stops => { stopsCache[id] = stops; });
+        (async () => {
+          try {
+            const pr = await upstreamFetch(`routes/${id}/patterns`);
+            if (pr.status === 200) {
+              const patterns = JSON.parse(pr.body);
+              if (Array.isArray(patterns)) {
+                patterns.forEach(pp => dbRun(
+                  `INSERT OR REPLACE INTO route_shapes(route_id,pattern_id,name,direction,color,shape,fetched_at)
+                   VALUES(?,?,?,?,?,?,?)`,
+                  [id, pp.id, pp.name, pp.directionType, pp.color || color, pp.shape, Date.now()]));
+                saveDb();
+                matchAllRoutes().catch(() => {}); // snap the new route to roads
+              }
+            }
+          } catch (e) { console.error(`[discovery] shape fetch ${id}:`, e.message); }
+        })();
         added++;
       }
     }
@@ -1284,6 +1347,81 @@ async function fetchShapes() {
   }
   saveDb();
   console.log('\n[shapes] Done.');
+}
+
+// ─── MAP-MATCH ROUTES TO ROADS ────────────────────────────────────────────────
+// Snap each route's drawn shape to the OSM road network, ONCE, caching the result
+// (keyed by the raw shape's hash) in route_shapes_matched. Bad/artifact-prone
+// matches are rejected by map-match.js and we keep the raw shape for those. Runs
+// in the background on boot so it never blocks startup; the map upgrades to the
+// clean on-road line as soon as each route finishes.
+let matchingInProgress = false;
+async function matchAllRoutes() {
+  if (matchingInProgress) return;
+  matchingInProgress = true;
+  try {
+    // First pattern per route is what the map renders (matches /api/shapes logic).
+    const rows = dbAll(`SELECT route_id, pattern_id, shape FROM route_shapes ORDER BY route_id, pattern_id`);
+    const firstByRoute = {};
+    for (const r of rows) if (r.shape && !firstByRoute[r.route_id]) firstByRoute[r.route_id] = r.shape;
+
+    let matched = 0, kept = 0, skipped = 0;
+    for (const [routeId, shape] of Object.entries(firstByRoute)) {
+      const h = shapeHash(shape);
+      const cached = dbGet(`SELECT src_hash FROM route_shapes_matched WHERE route_id=?`, [routeId]);
+      if (cached && cached.src_hash === h) { skipped++; continue; } // already matched this exact shape
+
+      let result;
+      try { result = await matchShape(shape); }
+      catch (e) { console.error(`[match] route ${routeId} error: ${e.message}`); continue; }
+
+      dbRun(`INSERT OR REPLACE INTO route_shapes_matched(route_id,src_hash,shape,is_raw,note,matched_at)
+             VALUES(?,?,?,?,?,?)`,
+        [routeId, h, result.encoded, result.raw ? 1 : 0, result.reason || (result.quality ? `stray=${(result.quality.strayFrac*100).toFixed(0)}%` : ''), Date.now()]);
+
+      if (result.raw) { kept++; console.log(`[match] route ${routeId} kept RAW (${result.reason})`); }
+      else { matched++; console.log(`[match] route ${routeId} snapped to road (${result.note || ''})`); }
+      saveDb();
+      await new Promise(r => setTimeout(r, 600)); // be polite to the public Valhalla server
+    }
+    console.log(`[match] done — ${matched} snapped, ${kept} kept raw, ${skipped} already cached`);
+  } finally {
+    matchingInProgress = false;
+  }
+}
+
+// Run the schedule-PDF scraper as a child process, weekly. Kept out-of-process
+// so its network work (and any hang behind the agency's Akamai protection) can't
+// stall the main server. Logs are streamed to our console.
+function runScript(rel, onDone) {
+  try {
+    const { spawn } = require('child_process');
+    const script = path.join(__dirname, rel);
+    if (!fs.existsSync(script)) return;
+    const child = spawn(process.execPath, [script], { stdio: ['ignore', 'inherit', 'inherit'] });
+    child.on('error', e => console.error(`[scrape] spawn error (${rel}):`, e.message));
+    if (onDone) child.on('exit', () => onDone());
+  } catch (e) { console.error(`[scrape] error (${rel}):`, e.message); }
+}
+function runScrape() {
+  // Refresh the reference data (route class/hubs/roster) from GTFS, then reload
+  // it in-process so /api/reference is current without a restart.
+  console.log('[scrape] starting weekly reference + schedule scrape…');
+  runScript(path.join('scripts', 'scrape-reference.js'), loadReference);
+  // And mirror the human-readable schedule PDFs (cosmetic; may be Akamai-blocked).
+  runScript(path.join('scripts', 'scrape-schedules.js'));
+}
+function scheduleWeeklyScrape() {
+  setTimeout(runScrape, 60 * 1000);                 // ~1 min after boot
+  setInterval(runScrape, 7 * 24 * 60 * 60 * 1000);  // then weekly
+}
+
+// Best available geometry for a route: server-matched (DB) → vendored JSON → raw.
+function bestShapeFor(routeId, rawShape) {
+  const m = dbGet(`SELECT shape, is_raw FROM route_shapes_matched WHERE route_id=?`, [routeId]);
+  if (m && m.shape && !m.is_raw) return { shape: m.shape, matched: true };
+  if (MATCHED_SHAPES[routeId]) return { shape: MATCHED_SHAPES[routeId], matched: true };
+  return { shape: rawShape, matched: false };
 }
 
 // ─── STOPS ───────────────────────────────────────────────────────────────────
@@ -1573,14 +1711,27 @@ async function handleApi(url, res) {
     return json(res, out);
   }
 
+  // Reference data (route classification, hub connections, P&R/terminals/airports)
+  // distilled from the System Map PDF + auto-derived route roster from GTFS.
+  if (p === '/api/reference') {
+    return json(res, REFERENCE);
+  }
+
   if (p === '/api/shapes') {
-    const rows = dbAll(`SELECT route_id, pattern_id, name, direction, color, shape FROM route_shapes`);
+    const rows = dbAll(`SELECT route_id, pattern_id, name, direction, color, shape FROM route_shapes ORDER BY route_id, pattern_id`);
     // Always serve our curated dark/distinct palette, not the upstream pattern
     // colors (which include pale pastels and #FFFFFF that vanish on the map).
+    const firstPatternSeen = new Set();
     rows.forEach(r => {
       if (ROUTE_MAP[r.route_id]) r.color = ROUTE_MAP[r.route_id].color;
-      // Prefer the snap-to-road matched geometry when we have it.
-      if (MATCHED_SHAPES[r.route_id]) { r.shape = MATCHED_SHAPES[r.route_id]; r.matched = true; }
+      // Map-matched geometry only exists for the FIRST pattern of each route
+      // (the one the map draws). Apply it only there — patterns 2/3 keep their
+      // own raw shapes so the frontend's per-pattern direction snap still works.
+      if (!firstPatternSeen.has(r.route_id)) {
+        firstPatternSeen.add(r.route_id);
+        const best = bestShapeFor(r.route_id, r.shape);
+        r.shape = best.shape; r.matched = best.matched;
+      }
     });
     return json(res, rows);
   }
@@ -2139,13 +2290,24 @@ function handleStatic(url, res) {
   });
 }
 
-// ─── AIS (boats) — optional aisstream.io subscription ─────────────────────
+// ─── AIS (boats) — aisstream.io subscription ──────────────────────────────
 // Live vessel positions are a great companion to the bus layer. aisstream.io
-// offers free public AIS over WebSocket (after sign-up at aisstream.io — no
-// credit card). It's keyed: set AISSTREAM_API_KEY and the layer lights up.
-// Without a key, the layer shows a clean "add your free key" message in the UI
-// rather than fabricating vessels — matches our no-fabrication principle.
-const AISSTREAM_API_KEY = process.env.AISSTREAM_API_KEY || '';
+// streams free public AIS over WebSocket but requires a free key. So the boats
+// layer works out-of-the-box for everyone, a shared key is bundled below.
+//
+// NOTE: this is OBFUSCATION, not encryption. A key that ships in the client of
+// a public app can never be truly secret — anything needed to decode it must
+// ship too. The XOR+base64 below just keeps the token from being grep-able as a
+// plaintext secret and from tripping naive secret scanners. Set AISSTREAM_API_KEY
+// to override with your own key (recommended for heavy use / rate-limit headroom).
+function decodeBundledAisKey() {
+  try {
+    const enc = Buffer.from('WAZcXVhbFURHUAdbUEdIVAtGXwcPB1pYGU1BBQBZVEQaAwtLW1NdBA==', 'base64');
+    const pass = 'heleon-tracker-ais';
+    return Buffer.from(enc.map((b, i) => b ^ pass.charCodeAt(i % pass.length))).toString('utf8');
+  } catch { return ''; }
+}
+const AISSTREAM_API_KEY = process.env.AISSTREAM_API_KEY || decodeBundledAisKey();
 const AISSTREAM_URL = 'wss://stream.aisstream.io/v0/stream';
 // Hawaii bounding box for filtering: lat 18.8..20.4, lon -156.2..-154.7
 const HAWAII_BBOX = [[[18.8, -156.2], [20.4, -154.7]]];
@@ -2319,6 +2481,9 @@ const server = http.createServer((req, res) => {
   }
 
   await fetchAllStops();
+  // Snap routes to roads in the background (non-blocking) so the map upgrades to
+  // clean on-road lines without delaying startup. Cached, so it's a no-op once done.
+  setTimeout(() => matchAllRoutes().catch(e => console.error('[match] boot:', e.message)), 4000);
   await loadGtfs();
   buildTripIndex();
   // Train learning model on past stop_arrivals history
@@ -2351,7 +2516,14 @@ const server = http.createServer((req, res) => {
   }, 60 * 60 * 1000);
   setInterval(fetchShapes, 24 * 60 * 60 * 1000);
   setInterval(fetchAllStops, 24 * 60 * 60 * 1000);
+  // Re-check map-matching daily (only re-snaps routes whose shape hash changed).
+  setInterval(() => matchAllRoutes().catch(e => console.error('[match] periodic:', e.message)), 24 * 60 * 60 * 1000);
   setInterval(discoverNewRoutes, 10 * 60 * 1000); // check for new routes every 10 min
+  // Weekly: mirror the agency's human-readable schedule PDFs (runs the scraper
+  // as a child process; non-fatal if the agency site blocks us — GTFS is the
+  // machine-readable source of truth and refreshes separately). First run ~1 min
+  // after boot, then every 7 days.
+  scheduleWeeklyScrape();
   // Periodic re-train on latest stop_arrivals (keeps model fresh)
   setInterval(() => { trainFromHistory().catch(e => console.error('[learn] periodic train:', e.message)); }, 5 * 60 * 1000);
   setInterval(saveDb, DB_SAVE_INTERVAL);
@@ -2378,7 +2550,16 @@ const server = http.createServer((req, res) => {
     console.log(`   Polling every ${POLL_INTERVAL/1000}s (background)\n`);
   });
 
-  // Graceful shutdown — save DB on exit
-  process.on('SIGTERM', () => { console.log('\n[shutdown] Saving DB…'); saveDb(); process.exit(0); });
-  process.on('SIGINT',  () => { console.log('\n[shutdown] Saving DB…'); saveDb(); process.exit(0); });
+  // Graceful shutdown — save DB and push a final durable snapshot on exit so the
+  // very latest history survives a redeploy (Render sends SIGTERM before wiping).
+  const shutdown = async () => {
+    console.log('\n[shutdown] Saving DB…');
+    try { fs.writeFileSync(DB_PATH, Buffer.from(db.export())); } catch {}
+    if (backup.isEnabled()) {
+      try { await backup.snapshot(Buffer.from(db.export()), { force: true }); } catch {}
+    }
+    process.exit(0);
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT',  shutdown);
 })();

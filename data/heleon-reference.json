@@ -1,0 +1,356 @@
+{
+  "_comment": "Curated reference data distilled from the HeleOn System Map PDF (Sources/HeleOn System Ma.pdf). Captures what GTFS does NOT carry: route classification (GTFS marks every route as generic type 3), transit-hub connections, and Park-and-Ride / terminal / airport points. Auto-validated weekly against live GTFS by scripts/scrape-reference.js, which updates `routes` and flags drift. The classification/hubs/landmarks change ~yearly (map 'Effective Sunday, August 28, 2022'); update them here if the agency reissues the map.",
+  "effective": "2022-08-28",
+  "source": "Sources/HeleOn System Ma.pdf",
+  "updatedAt": "2026-06-30T08:23:47.790Z",
+  "routeTypes": {
+    "express": {
+      "label": "Express",
+      "desc": "Morning and afternoon service",
+      "color": "#D32F2F"
+    },
+    "local": {
+      "label": "Local",
+      "desc": "Town connectors",
+      "color": "#111111"
+    },
+    "neighborhood": {
+      "label": "Neighborhood",
+      "desc": "Neighborhood to town service",
+      "color": "#7B1FA2"
+    },
+    "flex": {
+      "label": "Flex",
+      "desc": "Call for door-to-door service",
+      "color": "#E5C100"
+    }
+  },
+  "routeClass": {
+    "1": "local",
+    "2": "local",
+    "10": "local",
+    "11": "express",
+    "12": "flex",
+    "40": "local",
+    "60": "flex",
+    "70": "local",
+    "75": "flex",
+    "76": "local",
+    "80": "local",
+    "90": "local",
+    "101": "neighborhood",
+    "102": "neighborhood",
+    "103": "neighborhood",
+    "104": "neighborhood",
+    "201": "neighborhood",
+    "202": "neighborhood",
+    "203": "neighborhood",
+    "204": "neighborhood",
+    "301": "flex",
+    "401": "neighborhood",
+    "402": "neighborhood",
+    "403": "flex",
+    "502": "neighborhood",
+    "504": "neighborhood"
+  },
+  "hubs": [
+    {
+      "name": "Waimea",
+      "lat": 20.0211,
+      "lon": -155.67,
+      "terminal": true,
+      "routes": [
+        "1",
+        "60",
+        "75",
+        "76",
+        "80",
+        "301"
+      ]
+    },
+    {
+      "name": "Kailua-Kona",
+      "lat": 19.6406,
+      "lon": -155.9959,
+      "terminal": true,
+      "routes": [
+        "2",
+        "70",
+        "75",
+        "76",
+        "80",
+        "90",
+        "201",
+        "202",
+        "203",
+        "204"
+      ]
+    },
+    {
+      "name": "Honoka'a",
+      "lat": 20.079,
+      "lon": -155.467,
+      "terminal": true,
+      "routes": [
+        "1",
+        "60",
+        "76",
+        "80"
+      ]
+    },
+    {
+      "name": "Hilo (Mo'oheau)",
+      "lat": 19.7269,
+      "lon": -155.089,
+      "terminal": true,
+      "parkAndRide": true,
+      "routes": [
+        "1",
+        "2",
+        "10",
+        "11",
+        "40",
+        "60",
+        "80",
+        "101",
+        "102",
+        "103",
+        "104"
+      ]
+    },
+    {
+      "name": "Prince Kūhiō Plaza",
+      "lat": 19.7016,
+      "lon": -155.084,
+      "terminal": true,
+      "routes": [
+        "10",
+        "11",
+        "40",
+        "101",
+        "103"
+      ]
+    },
+    {
+      "name": "Kea'au",
+      "lat": 19.623,
+      "lon": -155.037,
+      "terminal": true,
+      "routes": [
+        "10",
+        "11",
+        "40",
+        "402",
+        "403"
+      ]
+    },
+    {
+      "name": "Pāhoa",
+      "lat": 19.494,
+      "lon": -154.946,
+      "terminal": true,
+      "routes": [
+        "40",
+        "401",
+        "402"
+      ]
+    }
+  ],
+  "parkAndRide": [
+    {
+      "name": "Mo'oheau Bus Terminal (Hilo)",
+      "lat": 19.7269,
+      "lon": -155.089
+    },
+    {
+      "name": "Prince Kūhiō Plaza (Hilo)",
+      "lat": 19.7016,
+      "lon": -155.084
+    },
+    {
+      "name": "Kilauea Visitor Center",
+      "lat": 19.43,
+      "lon": -155.257
+    },
+    {
+      "name": "Kona (Kealakekua area)",
+      "lat": 19.521,
+      "lon": -155.923
+    }
+  ],
+  "airports": [
+    {
+      "name": "Hilo International (ITO)",
+      "lat": 19.7203,
+      "lon": -155.0485
+    },
+    {
+      "name": "Ellison Onizuka Kona (KOA)",
+      "lat": 19.7388,
+      "lon": -156.0456
+    },
+    {
+      "name": "Waimea-Kohala (MUE)",
+      "lat": 20.0013,
+      "lon": -155.668
+    }
+  ],
+  "routes": {
+    "1": {
+      "name": "1 HILO KONA",
+      "color": "#FFCC99",
+      "url": "http://www.heleonbus.org/sandbox/Route 1.pdf",
+      "gtfsId": "5613"
+    },
+    "2": {
+      "name": "2 BLUELINE HILO KONA",
+      "color": "#0000FF",
+      "url": "http://www.heleonbus.org/sandbox/Route 2.pdf",
+      "gtfsId": "5704"
+    },
+    "10": {
+      "name": "10 KAU HILO",
+      "color": "#E36C09",
+      "url": "http://www.heleonbus.org/sandbox/Route 10.pdf",
+      "gtfsId": "5600"
+    },
+    "11": {
+      "name": "11 REDLINE HILO VOLCANO",
+      "color": "#FF0000",
+      "url": "http://www.heleonbus.org/sandbox/Route 11.pdf",
+      "gtfsId": "5709"
+    },
+    "12": {
+      "name": "12 VOLCANO TO OCEANVIEW",
+      "color": "#FCD5B4",
+      "url": null,
+      "gtfsId": "5821"
+    },
+    "40": {
+      "name": "40 PAHOA",
+      "color": "#548DD4",
+      "url": "http://www.heleonbus.org/sandbox/Route 40.pdf",
+      "gtfsId": "5724"
+    },
+    "60": {
+      "name": "60 HILO WAIMEA",
+      "color": "#00CCFF",
+      "url": "http://www.heleonbus.org/sandbox/Route 60.pdf",
+      "gtfsId": "5725"
+    },
+    "70": {
+      "name": "70 NORTH KOHALA SOUTH KOHALA RESORTS",
+      "color": "#E5B8B7",
+      "url": "http://www.heleonbus.org/sandbox/Route 70.pdf",
+      "gtfsId": "5606"
+    },
+    "75": {
+      "name": "75 NORTH KOHALA WAIKOLOA VILLAGE KONA",
+      "color": "#C2D69B",
+      "url": "http://www.heleonbus.org/sandbox/Route 75.pdf",
+      "gtfsId": "5728"
+    },
+    "76": {
+      "name": "76 GREENLINE HONOKAA KONA",
+      "color": "#008000",
+      "url": "http://www.heleonbus.org/sandbox/Route 76.pdf",
+      "gtfsId": "5729"
+    },
+    "80": {
+      "name": "80 HILO SOUTH KOHALA RESORTS",
+      "color": "#FFFF00",
+      "url": "http://www.heleonbus.org/sandbox/Route 80.pdf",
+      "gtfsId": "5730"
+    },
+    "90": {
+      "name": "90 PAHALA SOUTH KOHALA RESORTS",
+      "color": "#8064A2",
+      "url": "http://www.heleonbus.org/sandbox/Route 90.pdf",
+      "gtfsId": "5745"
+    },
+    "101": {
+      "name": "101 INTRA HILO KEAUKAHA",
+      "color": "#CCC0D9",
+      "url": "http://www.heleonbus.org/sandbox/Route 101.pdf",
+      "gtfsId": "5604"
+    },
+    "102": {
+      "name": "102 INTRA HILO KAUMANA",
+      "color": "#5F497A",
+      "url": "http://www.heleonbus.org/sandbox/Route 102.pdf",
+      "gtfsId": "5602"
+    },
+    "103": {
+      "name": "103 INTRA HILO WAIAKEA UKA",
+      "color": "#8064A2",
+      "url": "http://www.heleonbus.org/sandbox/Route 103.pdf",
+      "gtfsId": "5603"
+    },
+    "104": {
+      "name": "104 INTRA HILO MOHOULI",
+      "color": "#E5DFEC",
+      "url": "http://www.heleonbus.org/sandbox/Route 104.pdf",
+      "gtfsId": "5748"
+    },
+    "201": {
+      "name": "201 KONA TROLLEY",
+      "color": "#FF00FF",
+      "url": "http://www.heleonbus.org/sandbox/Route 201.pdf",
+      "gtfsId": "5615"
+    },
+    "202": {
+      "name": "202 CENTRAL KAILUA-KONA",
+      "color": "#FF00FF",
+      "url": "http://www.heleonbus.org/sandbox/Route 202.pdf",
+      "gtfsId": "5750"
+    },
+    "203": {
+      "name": "203 NORTH KAILUA-KONA",
+      "color": "#E6B8B7",
+      "url": null,
+      "gtfsId": "5824"
+    },
+    "204": {
+      "name": "South Kona/Captain Cook",
+      "color": "#993366",
+      "url": "http://www.heleonbus.org/sandbox/Route%20204.pdf",
+      "gtfsId": "204"
+    },
+    "301": {
+      "name": "Waimea Shuttle",
+      "color": "#3366FF",
+      "url": "http://www.heleonbus.org/sandbox/Route%20301.pdf",
+      "gtfsId": "301"
+    },
+    "401": {
+      "name": "Hawaiian Beaches Nanawale Kalapana",
+      "color": "#800080",
+      "url": "http://www.heleonbus.org/sandbox/Route%20401.pdf",
+      "gtfsId": "401"
+    },
+    "402": {
+      "name": "402 HAWAIIAN PARADISE PARK ORCHIDLAND HAWAIIAN ACRES AINALOA",
+      "color": "#E5B8B7",
+      "url": "http://www.heleonbus.org/sandbox/Route 402.pdf",
+      "gtfsId": "5756"
+    },
+    "403": {
+      "name": "403 FERN ACRES",
+      "color": "#C0504D",
+      "url": "http://www.heleonbus.org/sandbox/Route 403.pdf",
+      "gtfsId": "5759"
+    },
+    "502": {
+      "name": "502 WAIKOLA VILLAGE TRIPPER",
+      "color": "#FFC000",
+      "url": null,
+      "gtfsId": "5981"
+    },
+    "504": {
+      "name": "504 KEALAKEKUA TO KONA TRIPPER",
+      "color": "#FFC000",
+      "url": null,
+      "gtfsId": "5982"
+    }
+  }
+}

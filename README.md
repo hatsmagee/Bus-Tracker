@@ -102,9 +102,17 @@ Render automatically sets `PORT=10000` and `RENDER=1`. The server reads
 those, binds to `0.0.0.0:10000`, and writes its SQLite DB + GTFS zip to
 `/tmp` (the only writable spot on Render's ephemeral filesystem).
 
+**Persistent history (free):** the ephemeral `/tmp` is wiped on every
+redeploy, so to keep accumulated history set up a free durable backup
+(`backup.js`). Easiest is a GitHub repo — create a fine-grained PAT with
+contents read/write and set in the Render dashboard:
+- `BACKUP_GITHUB_TOKEN` and `BACKUP_GITHUB_REPO` (`owner/repo`)
+
+The DB is then snapshotted off-box and restored on boot. (Alternatively set
+the `BACKUP_S3_*` vars for a Backblaze B2 / Cloudflare R2 bucket.) With none
+set the app still runs; history just resets on each deploy.
+
 **Caveats:**
-- DB and GTFS feed are reset on every redeploy (ephemeral disk).
-  Fine for a demo; for persistent history add a Render Disk (paid).
 - Free tier spins down after 15 min of no traffic. Set up the local
   keep-alive timer below to prevent that.
 
@@ -159,9 +167,18 @@ If Render assigned a different hostname, edit
 - `heleon-server.js` — main backend (GTFS-RT polling, DB, GTFS, transformer, weather)
 - `gtfs-rt.js` — dependency-free GTFS-realtime protobuf decoder
 - `heleon-tracker.html` — single-file dashboard
-- `scripts/match-routes.js` — one-time build step that snaps route shapes to the
-  road network (Valhalla map-matching) → `data/route-shapes-matched.json`
-- `data/route-shapes-matched.json` — vendored snap-to-road route geometry
+- `map-match.js` — **server-side** map-matcher: snaps each route's GTFS shape to
+  OSM roads via the public Valhalla API, rejects artifact-prone matches (keeps the
+  raw shape instead), caches results in the DB. Runs in the background on boot;
+  no local Valhalla/Docker needed. The drawn lines are then Chaikin-smoothed and
+  de-spiked client-side into even, parallel, road-following curves.
+- `backup.js` — free durable DB backup (GitHub repo or S3-compatible store). Lets
+  history survive ephemeral hosts (e.g. Render free tier wiping `/tmp` on deploy):
+  restores the latest snapshot on boot, snapshots periodically + on shutdown.
+- `scripts/scrape-schedules.js` — weekly scraper for the agency's schedule PDFs
+  (timetables/stops/names) from heleonbus.hawaiicounty.gov → `data/schedules/`.
+- `scripts/match-routes.js` — legacy offline matcher (superseded by `map-match.js`)
+- `data/route-shapes-matched.json` — vendored snap-to-road geometry (fallback)
 - `scripts/keepalive.sh` — bash script that pings the Render URL
 - `render.yaml` — Render Blueprint (web service only)
 - `systemd/heleon-tracker.service` — local tracker systemd unit
