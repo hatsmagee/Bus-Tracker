@@ -65,6 +65,33 @@ function hav(a, b) {
 }
 function lineLen(pts) { let s = 0; for (let i = 1; i < pts.length; i++) s += hav(pts[i - 1], pts[i]); return s; }
 
+// Chaikin corner-cutting: each pass replaces every segment with points at 1/4 and
+// 3/4 along it, converging to a quadratic B-spline. A sparse multi-segment bend
+// becomes a genuinely curved polyline so MapLibre's round join reads as a smooth
+// sweep, not a hard kink. The curve stays INSIDE the convex hull of the original
+// points (it can only cut toward the inside of a corner, never overshoot), and a
+// drift guard falls back to the segment midpoint if a cut point would bulge more
+// than maxDrift metres off the original straight segment — so the smoothed line
+// can never wander off the road. Endpoints are pinned. Points are [lat, lon].
+function chaikinSmooth(coords, iterations = 2, maxDrift = 2) {
+  if (!coords || coords.length < 3) return coords;
+  let result = coords;
+  for (let it = 0; it < iterations; it++) {
+    const out = [result[0]];
+    for (let i = 0; i < result.length - 1; i++) {
+      const p0 = result[i], p1 = result[i + 1];
+      const q = [p0[0] + 0.25 * (p1[0] - p0[0]), p0[1] + 0.25 * (p1[1] - p0[1])];
+      const r = [p0[0] + 0.75 * (p1[0] - p0[0]), p0[1] + 0.75 * (p1[1] - p0[1])];
+      const mid = [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2];
+      if (hav(q, mid) > maxDrift) out.push(mid, mid);
+      else out.push(q, r);
+    }
+    out.push(result[result.length - 1]);
+    result = out;
+  }
+  return result;
+}
+
 // Perpendicular distance (m) of p from segment a→b, in local metres.
 function perpDist(p, a, b) {
   const mLat = 111320, mLon = mLat * Math.cos(a[0] * Math.PI / 180);
@@ -176,7 +203,10 @@ async function matchShape(encodedShape) {
     const q = best.q;
     return { encoded: encodedShape, raw: true, reason: `drift=${(q.lenDrift*100).toFixed(0)}% stray=${(q.strayFrac*100).toFixed(0)}% max=${q.strayMax.toFixed(0)}m` };
   }
-  return { encoded: encode(best.matched, 1e5), raw: false, quality: best.q };
+  // Smooth the accepted road-snapped line so corners render as curves, not kinks.
+  // Done here (server-side) so the vendored geometry is curved before it ships.
+  const smoothed = chaikinSmooth(best.matched, 2, 2);
+  return { encoded: encode(smoothed, 1e5), raw: false, quality: best.q };
 }
 
 module.exports = { matchShape, decode, encode };

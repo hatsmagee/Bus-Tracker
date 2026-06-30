@@ -1869,11 +1869,13 @@ function renderRouteShapes(force) {
     try {
       coords = decodePolyline(s.shape);
       if (coords.length < 2) return;
-      // Light Douglas–Peucker simplify to drop near-duplicate GTFS vertices.
-      // These are the agency's own on-road shapes, so a gentle ~3 m tolerance
-      // cleans redundant points without cutting corners. No map-matching, no
-      // offset, no heavy smoothing — we just draw the road geometry itself.
-      coords = simplifyPath(coords, 0.00003);
+      // Draw the road geometry EXACTLY as-is — no client-side simplification or
+      // smoothing. The vendored geometry is already road-snapped (Valhalla) AND
+      // Chaikin-smoothed server-side in map-match.js, so corners are curved before
+      // they ever reach the browser. A Douglas–Peucker pass here used to delete ~70%
+      // of vertices — the very points that make a curve read as a curve — collapsing
+      // gentle bends into hard kinks that line-join:round (which only rounds a corner
+      // by half the line width) cannot rescue. We feed the full polyline straight in.
     } catch(e) { return; }
     // Keep EVERY pattern's polyline for motion/chevron snapping (a bus can run
     // either direction along the same road, and the chevrons need both).
