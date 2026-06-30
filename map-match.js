@@ -13,7 +13,11 @@
 const https = require('https');
 const http = require('http');
 
-const VALHALLA = process.env.VALHALLA_URL || 'https://valhalla1.openstreetmap.de/trace_route';
+// Prefer a LOCAL Valhalla (Docker container, ~80ms/req, no rate limits) when
+// available; fall back to the public FOSSGIS server. Set VALHALLA_URL to override.
+const VALHALLA = process.env.VALHALLA_URL || 'http://localhost:8002/trace_route';
+const VALHALLA_FALLBACK = 'https://valhalla1.openstreetmap.de/trace_route';
+const LOCAL = VALHALLA.includes('localhost') || VALHALLA.includes('127.0.0.1');
 
 function postJson(url, body, timeoutMs = 25000) {
   const lib = url.startsWith('https') ? https : http;
@@ -116,7 +120,12 @@ async function traceRoute(pts, spacing, costing) {
     trace_options: { search_radius: 30, gps_accuracy: 8, turn_penalty_factor: 1, breakage_distance: 2000 },
     directions_options: { units: 'kilometers' },
   };
-  const r = await postJson(VALHALLA, body);
+  let r;
+  try { r = await postJson(VALHALLA, body); }
+  catch (e) {
+    if (!LOCAL) throw e;
+    r = await postJson(VALHALLA_FALLBACK, body); // local container down → public server
+  }
   if (r.status !== 200) throw new Error(`valhalla ${r.status}`);
   const trip = JSON.parse(r.body).trip;
   if (!trip || !trip.legs || !trip.legs.length) throw new Error('no legs');
@@ -146,7 +155,7 @@ async function traceChunkedParts(raw) {
     if (win.length < 2) break;
     let seg = null;
     try { seg = await traceRoute(win, 1, 'bus'); } catch { seg = null; }
-    await new Promise(r => setTimeout(r, 150));
+    if (!LOCAL) await new Promise(r => setTimeout(r, 150)); // throttle only the public server
     if (!seg || seg.length < 2) {
       // Window unmatchable → close the current piece; the next good window starts a new one.
       if (cur.length > 1) parts.push(cur);
@@ -154,10 +163,13 @@ async function traceChunkedParts(raw) {
       continue;
     }
     if (!cur.length) { cur = seg; continue; }
-    // Weld: if the new piece starts near where the current one ends (the overlap),
-    // splice them on the road. If it starts far away (a real gap), break the line.
+    // Weld windows into ONE continuous line. If the new piece overlaps the current
+    // (≤60m), splice on the road. If there's a modest gap (≤300m) we bridge it so
+    // the route stays a single unbroken line (a short stretch following the road
+    // closely). Only a LARGE gap (>300m, e.g. a real data break) splits the line.
     const gap = hav(cur[cur.length - 1], seg[0]);
     if (gap <= 60) { while (seg.length && hav(cur[cur.length - 1], seg[0]) < 15) seg.shift(); cur = cur.concat(seg); }
+    else if (gap <= 300) { cur = cur.concat(seg); } // bridge — keeps the line continuous
     else { if (cur.length > 1) parts.push(cur); cur = seg; }
   }
   if (cur.length > 1) parts.push(cur);
@@ -229,7 +241,9 @@ async function matchShape(encodedShape) {
     // Long / gappy route → match in overlapping windows, each piece continuous.
     try {
       const chunkParts = await traceChunkedParts(raw);
-      const good = chunkParts.flatMap(p => splitAtGaps(p, 200)).filter(p => p.length > 1);
+      // 320m so the ≤300m bridges built during welding survive (stay continuous),
+      // while genuine large jumps are still cut.
+      const good = chunkParts.flatMap(p => splitAtGaps(p, 320)).filter(p => p.length > 1);
       if (good.length) parts = good;
     } catch { /* fall through */ }
     // If chunking gave nothing usable but we had a single best, salvage its clean pieces.
@@ -247,4 +261,4 @@ async function matchShape(encodedShape) {
   return { encoded, raw: false, parts: parts.length };
 }
 
-module.exports = { matchShape, decode, encode };
+module.exports = { matchShape, decode, encode, isLocal: LOCAL };

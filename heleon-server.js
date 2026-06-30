@@ -53,7 +53,7 @@ function loadReference() {
 loadReference();
 
 // Server-side road-snapping (Valhalla map-matching, cached + auto-refreshing).
-const { matchShape } = require('./map-match');
+const { matchShape, isLocal: VALHALLA_LOCAL } = require('./map-match');
 const matchCrypto = require('crypto');
 const shapeHash = s => matchCrypto.createHash('sha1').update(s || '').digest('hex').slice(0, 16);
 
@@ -69,28 +69,32 @@ const UPSTREAM = 'myheleonbus.org';
 // of pale pastels (lavender, peach, pale green/blue) that vanished on the map
 // and several near-duplicates. These are a hand-tuned dark categorical set.
 const ROUTES = [
-  { id: 5600, name: '10 KAU HILO',              short: '10',  color: '#B5460F' }, // burnt orange
-  { id: 5602, name: '102 INTRA HILO KAUMANA',   short: '102', color: '#5B2C8D' }, // deep violet
-  { id: 5603, name: '103 INTRA HILO WAIAKEA UKA',short:'103', color: '#0E7C86' }, // teal
-  { id: 5604, name: '101 INTRA HILO KEAUKAHA',  short: '101', color: '#C2148C' }, // magenta-pink
-  { id: 5606, name: '70 NORTH KOHALA S. KOHALA', short: '70', color: '#3E7A1E' }, // forest green
-  { id: 5613, name: '1 HILO KONA',               short: '1',  color: '#2E7D32' }, // green (was bronze — too close to 10/104 in Hilo)
-  { id: 5615, name: '201 KONA TROLLEY',          short: '201',color: '#C2148C' }, // dark pink
-  { id: 5704, name: '2 BLUELINE HILO KONA',      short: '2',  color: '#1539C4' }, // strong blue
-  { id: 5709, name: '11 REDLINE HILO VOLCANO',   short: '11', color: '#C81E1E' }, // strong red
-  { id: 5724, name: '40 PAHOA',                  short: '40', color: '#2563A8' }, // steel blue
-  { id: 5725, name: '60 HILO WAIMEA',            short: '60', color: '#5E7A0F' }, // olive
-  { id: 5728, name: '75 N. KOHALA WAIKOLOA KONA',short: '75', color: '#0F8A6B' }, // sea green
-  { id: 5729, name: '76 GREENLINE HONOKAA KONA', short: '76', color: '#1B7A3D' }, // green
-  { id: 5730, name: '80 HILO S. KOHALA RESORTS', short: '80', color: '#A11D5B' }, // raspberry
-  { id: 5745, name: '90 PAHALA S. KOHALA RESORTS',short:'90', color: '#8E3B1E' }, // brick
-  { id: 5748, name: '104 INTRA HILO MOHOULI',   short: '104', color: '#B8860B' }, // dark goldenrod
-  { id: 5750, name: '202 CENTRAL KAILUA-KONA',  short: '202', color: '#C75A00' }, // pumpkin
-  { id: 5756, name: '402 HAWAIIAN PARADISE PARK',short:'402', color: '#1C6E9E' }, // ocean blue
-  { id: 5759, name: '403 FERN ACRES',           short: '403', color: '#3F51B5' }, // indigo
-  { id: 5821, name: '12 VOLCANO TO OCEANVIEW',  short: '12',  color: '#D11A4B' }, // crimson-pink
-  { id: 5824, name: '203 NORTH KAILUA-KONA',    short: '203', color: '#7A4A12' }, // coffee
-  { id: 5982, name: '504 KEALAKEKUA KONA TRIPPER',short:'504',color: '#4A6B1E' }, // moss
+  // Hand-tuned categorical palette spread around the color wheel. Routes that
+  // overlap in the SAME town are given maximally-different hues so parallel lanes
+  // read clearly. Hilo cluster (1,2,10,11,12,40,80,90,101-104) + Kona cluster
+  // (70,75,76,201-204,502,504) each span the wheel; no two share a hue.
+  { id: 5600, name: '10 KAU HILO',              short: '10',  color: '#E8731C' }, // orange
+  { id: 5602, name: '102 INTRA HILO KAUMANA',   short: '102', color: '#7B2FBE' }, // violet
+  { id: 5603, name: '103 INTRA HILO WAIAKEA UKA',short:'103', color: '#0E9E9E' }, // teal
+  { id: 5604, name: '101 INTRA HILO KEAUKAHA',  short: '101', color: '#D81B8C' }, // magenta
+  { id: 5606, name: '70 NORTH KOHALA S. KOHALA', short: '70', color: '#2E7D32' }, // green
+  { id: 5613, name: '1 HILO KONA',               short: '1',  color: '#1565C0' }, // blue
+  { id: 5615, name: '201 KONA TROLLEY',          short: '201',color: '#D81B8C' }, // magenta (Kona — no Hilo overlap)
+  { id: 5704, name: '2 BLUELINE HILO KONA',      short: '2',  color: '#0B3DCB' }, // deep blue
+  { id: 5709, name: '11 REDLINE HILO VOLCANO',   short: '11', color: '#E11D1D' }, // red
+  { id: 5724, name: '40 PAHOA',                  short: '40', color: '#00897B' }, // teal-green
+  { id: 5725, name: '60 HILO WAIMEA',            short: '60', color: '#8D6E00' }, // dark gold
+  { id: 5728, name: '75 N. KOHALA WAIKOLOA KONA',short: '75', color: '#00838F' }, // cyan
+  { id: 5729, name: '76 GREENLINE HONOKAA KONA', short: '76', color: '#2E7D32' }, // green (Kona)
+  { id: 5730, name: '80 HILO S. KOHALA RESORTS', short: '80', color: '#5D4037' }, // brown
+  { id: 5745, name: '90 PAHALA S. KOHALA RESORTS',short:'90', color: '#AD1457' }, // raspberry
+  { id: 5748, name: '104 INTRA HILO MOHOULI',   short: '104', color: '#C0A000' }, // goldenrod
+  { id: 5750, name: '202 CENTRAL KAILUA-KONA',  short: '202', color: '#E8731C' }, // orange (Kona)
+  { id: 5756, name: '402 HAWAIIAN PARADISE PARK',short:'402', color: '#1565C0' }, // blue (Puna)
+  { id: 5759, name: '403 FERN ACRES',           short: '403', color: '#5E35B1' }, // indigo (Puna)
+  { id: 5821, name: '12 VOLCANO TO OCEANVIEW',  short: '12',  color: '#C2185B' }, // pink-red
+  { id: 5824, name: '203 NORTH KAILUA-KONA',    short: '203', color: '#6D4C41' }, // brown (Kona)
+  { id: 5982, name: '504 KEALAKEKUA KONA TRIPPER',short:'504',color: '#558B2F' }, // olive-green (Kona)
   // Schedule-only routes: on the printed System Map and in the GTFS feed, but the
   // live RTPI API serves no live shape for them (reduced / call-ahead service with
   // no GPS-tracked vehicles). We load their geometry from GTFS shapes.txt — see
@@ -1542,7 +1546,7 @@ async function matchAllShapes() {
       if (result.raw) { kept++; }
       else { snapped++; }
       saveDb();
-      await new Promise(r => setTimeout(r, 500)); // polite to the public Valhalla server
+      if (!VALHALLA_LOCAL) await new Promise(r => setTimeout(r, 500)); // throttle only the public server
     }
     if (snapped + kept > 0) { console.log(`[match] done — ${snapped} snapped to roads, ${kept} kept raw, ${skipped} cached`); exportMatchedShapes(); }
   } finally {

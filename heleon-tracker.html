@@ -973,6 +973,50 @@ function makeStopIcon() {
 // icon-color can tint it to each route's colour. Drawn with its APEX pointing UP
 // (north); each chevron's icon-rotate is set to the road bearing so the apex
 // points along the direction of travel.
+// Route-number "pill" badge (like NYC M15 / Richmond route circles): a rounded
+// colored rect with the route number, white-outlined so it pops on any basemap.
+// Cached per (label+color) and registered as a map image; returns the image id.
+const _routePillIds = new Set();
+function ensureRoutePill(label, color) {
+  const id = `pill-${label}-${color}`.replace(/[^a-zA-Z0-9-]/g, '');
+  if (_routePillIds.has(id)) return id;
+  const dpr = 2, fs = 22, padX = 9, h = 30;
+  const meas = document.createElement('canvas').getContext('2d');
+  meas.font = `700 ${fs}px -apple-system, Segoe UI, Roboto, sans-serif`;
+  const txtW = Math.ceil(meas.measureText(label).width);
+  const w = Math.max(h, txtW + padX * 2);
+  const c = document.createElement('canvas');
+  c.width = w * dpr; c.height = h * dpr;
+  const x = c.getContext('2d');
+  x.scale(dpr, dpr);
+  const r = h / 2;
+  // white outline
+  x.fillStyle = '#ffffff';
+  roundRect(x, 0, 0, w, h, r); x.fill();
+  // colored fill (inset for the white ring)
+  x.fillStyle = color;
+  roundRect(x, 1.5, 1.5, w - 3, h - 3, r - 1.5); x.fill();
+  // label
+  x.fillStyle = isLight(color) ? '#111' : '#fff';
+  x.font = `700 ${fs}px -apple-system, Segoe UI, Roboto, sans-serif`;
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(label, w / 2, h / 2 + 1);
+  const img = x.getImageData(0, 0, c.width, c.height);
+  if (map.hasImage(id)) map.removeImage(id);
+  map.addImage(id, img, { pixelRatio: dpr });
+  _routePillIds.add(id);
+  return id;
+}
+function roundRect(x, X, Y, W, H, R) {
+  x.beginPath();
+  x.moveTo(X + R, Y);
+  x.arcTo(X + W, Y, X + W, Y + H, R);
+  x.arcTo(X + W, Y + H, X, Y + H, R);
+  x.arcTo(X, Y + H, X, Y, R);
+  x.arcTo(X, Y, X + W, Y, R);
+  x.closePath();
+}
+
 function makeChevronIcon() {
   const s = 48, c = document.createElement('canvas');
   c.width = s; c.height = s;
@@ -1636,6 +1680,38 @@ function buildRouteMetaFromVehicles() {
 // cells (i.e. run the same corridor), group them, and give each a centered slot.
 // `routeCoordMap`: routeId -> [ [[lon,lat]…], … ] (one or more pattern polylines).
 function gridKey(lon, lat) { return `${Math.round(lat * 3000)},${Math.round(lon * 3000)}`; } // ~37m cells
+
+// Collapse a route's pattern pieces (which retrace the same streets inbound/
+// outbound/loop) into unique road coverage drawn ONCE. We mark each ~12m segment
+// by a direction-agnostic key; a segment already seen for this route is skipped,
+// breaking the current piece so we don't draw a line back to it. Result: the route
+// is a single clean line, not 2-3 stacked copies that blob at shared streets.
+function dedupeRouteGeometry(pieces) {
+  const seen = new Set();
+  const segKey = (a, b) => {
+    const k1 = `${Math.round(a[1]*9000)},${Math.round(a[0]*9000)}`; // ~12m
+    const k2 = `${Math.round(b[1]*9000)},${Math.round(b[0]*9000)}`;
+    return k1 < k2 ? k1 + '|' + k2 : k2 + '|' + k1; // undirected
+  };
+  const out = [];
+  for (const piece of pieces) {
+    let cur = [];
+    for (let i = 0; i < piece.length; i++) {
+      if (i === 0) { cur = [piece[i]]; continue; }
+      const key = segKey(piece[i - 1], piece[i]);
+      if (seen.has(key)) {
+        // This segment is already drawn for the route → end the current run.
+        if (cur.length > 1) out.push(cur);
+        cur = [piece[i]];
+      } else {
+        seen.add(key);
+        cur.push(piece[i]);
+      }
+    }
+    if (cur.length > 1) out.push(cur);
+  }
+  return out.length ? out : pieces;
+}
 // Hue (0-360) of a #rrggbb color, for spacing similar colors apart in a lane group.
 function hueOf(hex) {
   const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
@@ -1872,7 +1948,10 @@ function renderRouteShapes(force) {
       // Gentle simplify to drop near-duplicate vertices (cheap; geometry already smooth).
       pieces = pieces.map(c => simplifyPath(c, 0.00002));
     } catch(e) { return; }
-    // Keep EVERY piece for drawing; the longest piece feeds chevron/motion snapping.
+    // allPatternCoords keeps every pattern (needed for bus motion/chevron snapping
+    // per direction). routeMultiCoords is for DRAWING — collected raw here, then
+    // de-duplicated per route below so one route occupies ONE lane (its inbound/
+    // outbound/loop patterns that retrace the same street aren't stacked 3×).
     pieces.forEach(c => {
       (allPatternCoords[s.route_id] = allPatternCoords[s.route_id] || []).push(c);
       (routeMultiCoords[s.route_id] = routeMultiCoords[s.route_id] || []).push(c);
@@ -1885,6 +1964,14 @@ function renderRouteShapes(force) {
     routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || normalizeColor(s.color) || '#888', name: s.name };
   });
 
+  // De-duplicate each route's drawn geometry: a route's patterns often retrace the
+  // same streets (inbound + outbound + loop), which stacks 3+ identical lines and
+  // makes downtown a blob. Rasterize the route's segments to a fine grid and keep
+  // each unique road segment only ONCE — so the route reads as a single clean line.
+  for (const rid of Object.keys(routeMultiCoords)) {
+    routeMultiCoords[rid] = dedupeRouteGeometry(routeMultiCoords[rid]);
+  }
+
   // Remove old per-route layers then sources
   routeLayerIds.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
   routeSourceIds.forEach(id => { if (map.getSource(id)) map.removeSource(id); });
@@ -1893,45 +1980,97 @@ function renderRouteShapes(force) {
 
   if (!showRouteShapes) return;
 
-  // Where routes share a road, draw them as PARALLEL lines side by side — a double
-  // line for two routes, triple for three, etc. — so every route's color stays
-  // visible and you can see which routes run together and which way they go. Each
-  // route gets a slot within its shared-road group (centered on 0), and we offset
-  // by that slot. Solo routes get slot 0 (no offset), so they sit right on the road.
+  // Where routes share a road, draw them as PARALLEL lanes side by side — every
+  // route's color stays visible and you can read which routes run together. Each
+  // route gets a centered slot in its shared-road group; solo routes sit on the road.
   const offsets = computeRouteOffsets(routeMultiCoords, rid => (routeMeta[rid] && routeMeta[rid].color) || '#888');
-  // Lanes are offset by slot × spacing. Spacing tracks the (now fatter) line width
-  // so adjacent lanes sit edge-to-edge without overlapping or gapping.
-  const SLOT_PX = 3.2;
-  for (const [rid, parts] of Object.entries(routeMultiCoords)) {
+
+  // Slot spacing must clear the line width so lanes never overlap. We compute the
+  // offset (in px) per route as a zoom expression: slot × per-zoom spacing.
+  const widthExpr = ['interpolate', ['linear'], ['zoom'], 8, 1.2, 11, 1.8, 13, 2.4, 15, 3.2, 18, 4.4];
+  // Spacing must exceed line width so adjacent lanes never merge into a blob,
+  // especially where many routes converge (terminals). Wider than the line at every zoom.
+  const spacingAt = z => z <= 11 ? 3.5 : z >= 16 ? 9 : 3.5 + (z - 11) * (5.5 / 5);
+  const offsetExpr = slot => slot === 0 ? 0 : ['interpolate', ['linear'], ['zoom'],
+    10, slot * spacingAt(10), 13, slot * spacingAt(13), 16, slot * spacingAt(16), 18, slot * spacingAt(16) * 1.15];
+
+  const entries = Object.entries(routeMultiCoords);
+
+  // One source per route (a MultiLineString of all its patterns/pieces).
+  for (const [rid, parts] of entries) {
+    const srcId = `route-${rid}`;
+    map.addSource(srcId, { type: 'geojson',
+      data: { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: parts }, properties: {} } });
+    routeSourceIds.push(srcId);
+  }
+
+  // PASS 1 — white casing under every route (the crisp "game map" outline). Drawn
+  // first so all casings sit beneath all colored lines.
+  for (const [rid] of entries) {
+    const slot = (offsets[rid] && offsets[rid].slot) || 0;
+    const layId = `route-casing-${rid}`;
+    map.addLayer({
+      id: layId, type: 'line', source: `route-${rid}`,
+      paint: {
+        'line-color': '#ffffff',
+        // Thin casing — just enough to separate a colored line from the basemap and
+        // from adjacent lanes, NOT a fat halo that merges crossing routes into blobs.
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 11, 2.6, 13, 3.2, 15, 4.2, 18, 5.6],
+        'line-opacity': 0.9,
+        'line-gap-width': 0,
+        'line-offset': offsetExpr(slot),
+      },
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+    }, 'stops-circle');
+    routeLayerIds.push(layId);
+  }
+  // PASS 2 — the colored line on top of the casings.
+  for (const [rid] of entries) {
     const { color } = routeMeta[rid];
     const slot = (offsets[rid] && offsets[rid].slot) || 0;
-    const srcId = `route-${rid}`;
     const layId = `route-line-${rid}`;
-
-    // Draw ALL of a route's patterns as one MultiLineString so multi-loop routes
-    // (e.g. 401's north + south loops) appear in full, not just the first leg.
-    map.addSource(srcId, {
-      type: 'geojson',
-      data: { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: parts }, properties: {} }
-    });
     map.addLayer({
-      id: layId, type: 'line', source: srcId,
+      id: layId, type: 'line', source: `route-${rid}`,
       paint: {
         'line-color': color,
-        // Fatter, easier to see.
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 12, 3.2, 15, 4.5, 18, 6],
-        'line-opacity': 0.95,
-        // Parallel separation, scaled with zoom so lanes stay adjacent (not fanned).
-        'line-offset': ['interpolate', ['linear'], ['zoom'],
-          10, slot * SLOT_PX * 0.6,
-          13, slot * SLOT_PX,
-          16, slot * SLOT_PX * 1.7]
+        'line-width': widthExpr,
+        'line-opacity': 1,
+        'line-offset': offsetExpr(slot),
       },
-      layout: { 'line-join': 'round', 'line-cap': 'round' }
-    }, 'stops-circle'); // insert below stops layer
-
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+    }, 'stops-circle');
     routeLayerIds.push(layId);
-    routeSourceIds.push(srcId);
+  }
+
+  // PASS 3 — route-number badges along each line (like the NYC/Richmond bus maps):
+  // a colored rounded pill with the route number, repeated down the route so you
+  // can always tell which line is which. Pills are pre-rendered icons (one per
+  // route color+number), placed along the line and spaced out by zoom.
+  for (const [rid] of entries) {
+    const meta = routeMeta[rid] || {};
+    // Route number for the badge: prefer the known short name; else the leading
+    // number of the route name ("104 MOHOULI LOOP…" → "104"); never the internal id.
+    let short = (ROUTES_META[rid] && ROUTES_META[rid].short) || meta.short;
+    if (!short || short === String(rid)) {
+      const m = /^\s*(\d+[A-Za-z]?)\b/.exec(meta.name || (ROUTES_META[rid] && ROUTES_META[rid].name) || '');
+      short = m ? m[1] : (short || String(rid));
+    }
+    const iconId = ensureRoutePill(short, meta.color || '#444');
+    const layId = `route-badge-${rid}`;
+    map.addLayer({
+      id: layId, type: 'symbol', source: `route-${rid}`,
+      minzoom: 11,
+      layout: {
+        'symbol-placement': 'line',
+        'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 11, 160, 14, 240, 17, 340],
+        'icon-image': iconId,
+        'icon-rotation-alignment': 'viewport',
+        'icon-allow-overlap': false,
+        'icon-ignore-placement': false,
+        'icon-padding': 4,
+      },
+    }, 'stops-circle');
+    routeLayerIds.push(layId);
   }
 
   // Golden path arrows ahead of each bus

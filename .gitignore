@@ -21,3 +21,5 @@ Sources/credentials.json
 
 # Logs
 *.log
+# Local Valhalla Docker data (OSM extract + built tiles — large, regenerable)
+valhalla/
