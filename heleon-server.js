@@ -1343,47 +1343,8 @@ function learnCorridor(routeId) {
   return cells;
 }
 
-// ── GPS-derived congestion (the honest "traffic" layer) ────────────────────
-// We can't get public traffic-signal status anywhere, so instead we infer slow
-// zones from our own buses: where a bus is RIGHT NOW moving well below the
-// historical typical speed for that spot, that's real congestion / a long light.
-// Typical speed per ~150 m cell is cached and refreshed lazily.
 // Short-lived memo for the heavy /api/stopline computation (see handler).
 const stoplineMemo = new Map();
-let trafficTypical = null, trafficTypicalTs = 0;
-const TRAFFIC_CELL = 700;          // ~150 m grid (lat*700 rounding)
-const TRAFFIC_TYPICAL_TTL = 30 * 60 * 1000;
-function trafficCellKey(lat, lon) { return Math.round(lat * TRAFFIC_CELL) + ',' + Math.round(lon * TRAFFIC_CELL); }
-function buildTrafficTypical() {
-  const since = Date.now() - PINGS_RETAIN_MS;
-  const rows = dbAll(`SELECT lat, lon, speed FROM pings WHERE speed > 3 AND ts > ?`, [since]);
-  const cells = {};
-  rows.forEach(r => { (cells[trafficCellKey(r.lat, r.lon)] ||= []).push(r.speed); });
-  const typ = {};
-  for (const k in cells) {
-    const a = cells[k];
-    if (a.length < 10) continue;               // need enough history to trust it
-    a.sort((x, y) => x - y);
-    typ[k] = a[Math.floor(a.length / 2)];      // median typical speed (mph)
-  }
-  trafficTypical = typ; trafficTypicalTs = Date.now();
-}
-function getTraffic() {
-  if (!trafficTypical || Date.now() - trafficTypicalTs > TRAFFIC_TYPICAL_TTL) buildTrafficTypical();
-  const out = [];
-  latestVehicles.forEach(v => {
-    if (v.stale || v.speed == null || v.lat == null) return;
-    const typ = trafficTypical[trafficCellKey(v.lat, v.lon)];
-    if (typ == null || typ < 12) return;        // only flag where buses normally move well
-    // Slow if current speed is well under typical for this spot.
-    if (v.speed < typ * 0.55 && v.speed < typ - 8) {
-      const ratio = v.speed / typ;
-      out.push({ lat: v.lat, lon: v.lon, speed: Math.round(v.speed), typical: Math.round(typ),
-                 severity: ratio < 0.3 ? 'heavy' : 'moderate', vehicle: v.name, route: v.routeShort });
-    }
-  });
-  return out;
-}
 
 // ─── HTTP SERVER ──────────────────────────────────────────────────────────────
 const MIME = { '.html':'text/html', '.js':'application/javascript', '.css':'text/css', '.ico':'image/x-icon', '.svg':'image/svg+xml', '.png':'image/png', '.json':'application/json' };
@@ -1488,11 +1449,6 @@ async function handleApi(url, res) {
   // The frontend uses this to aim the direction chevrons the way buses really go.
   if (p === '/api/learned-path') {
     return json(res, learnCorridor(q.get('route_id') ? parseInt(q.get('route_id')) : null));
-  }
-  // GPS-derived congestion: buses currently moving well below the typical speed
-  // for where they are. Our best honest "traffic" signal (no public feed exists).
-  if (p === '/api/traffic') {
-    return json(res, getTraffic());
   }
 
   if (p === '/api/trails') {

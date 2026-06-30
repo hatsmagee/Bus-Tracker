@@ -435,10 +435,6 @@
           of each bus along the road, showing where it's about to go. A
           <strong style="color:#e6edf3">weather symbol</strong> above each bus
           shows live conditions there, and the colored bar shows how full it is.
-          A soft <strong style="color:#d29922">amber/red glow</strong> marks
-          congestion — where a bus is crawling well below the normal speed for
-          that spot (inferred from our own GPS history, since no public
-          traffic-signal feed exists anywhere).
           The <strong style="color:#e6edf3">Fleet</strong> tab lists every bus the
           agency knows — live, idle, or dormant — with full telemetry.
         </div>
@@ -662,17 +658,6 @@ function initMapLayers() {
     paint: { 'text-color': '#e6edf3', 'text-halo-color': '#0d1117', 'text-halo-width': 1.8 }
   });
 
-  // Congestion (GPS-derived): a soft glow where a bus is crawling well below the
-  // typical speed for that spot. Our honest "traffic" signal — no public feed.
-  map.addSource('traffic', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-  map.addLayer({ id: 'traffic-glow', type: 'circle', source: 'traffic',
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 10, 14, 22, 17, 38],
-      'circle-color': ['match', ['get', 'severity'], 'heavy', '#f85149', '#d29922'],
-      'circle-opacity': 0.22, 'circle-blur': 0.8
-    }
-  });
-
   // Learned (observed) stops — places buses repeatedly dwell that aren't an
   // official stop. Distinct HOLLOW marker so it's clearly "observed, not
   // published". Drawn under the official stops.
@@ -821,7 +806,6 @@ async function fetchAll() {
     renderStatus();
     renderMarkers();
     renderRouteShapes();
-    fetchTraffic();
     resetCountdown();
   } catch (e) {
     console.error('[fetchAll]', e);
@@ -890,17 +874,6 @@ async function fetchAllStops() {
     const res = await fetch('/api/stops/all');
     allStops = await res.json();
     renderStopMarkers();
-  } catch(e) {}
-}
-
-// GPS-derived congestion glow.
-async function fetchTraffic() {
-  try {
-    const t = await (await fetch('/api/traffic')).json();
-    const src = map.getSource('traffic');
-    if (src) src.setData({ type: 'FeatureCollection',
-      features: t.map(c => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [c.lon, c.lat] },
-        properties: { severity: c.severity } })) });
   } catch(e) {}
 }
 
@@ -1328,7 +1301,7 @@ function renderRouteShapes(force) {
   // geometry (which runs along the real roads). A small pixel offset nudges
   // routes that share a road apart so they don't perfectly overlap; round joins
   // keep corners clean. No dashes — just colored roads.
-  const LINE_SPACING = 3; // px between adjacent parallel routes (small total width)
+  const LINE_SPACING = 5; // px between adjacent parallel routes (clear separation)
   for (const [rid, coords] of Object.entries(routeCoords)) {
     const { color } = routeMeta[rid];
     const og = offsets[rid] || { slot: 0 };
@@ -1344,11 +1317,13 @@ function renderRouteShapes(force) {
       id: layId, type: 'line', source: srcId,
       paint: {
         'line-color': color,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.4, 11, 2.2, 14, 3, 17, 4],
+        // Slightly thinner lines so adjacent parallel routes have room to read.
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.2, 11, 1.8, 14, 2.6, 17, 3.4],
         'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.85, 12, 0.95],
-        // Keep the offset modest at all zooms — large offsets are what make
-        // MapLibre's line-offset overshoot at corners.
-        'line-offset': ['interpolate', ['linear'], ['zoom'], 10, offset * 0.6, 14, offset, 17, offset * 1.2]
+        // Separate overlapping routes earlier (from z11) and wider when zoomed in
+        // so shared-corridor routes (e.g. blue + purple on the highway) are clearly
+        // side by side, not stacked. Bounded to avoid line-offset corner overshoot.
+        'line-offset': ['interpolate', ['linear'], ['zoom'], 11, offset * 0.7, 14, offset * 1.4, 17, offset * 2.2]
       },
       layout: { 'line-join': 'round', 'line-cap': 'round', 'line-round-limit': 1.05 }
     }, 'stops-circle'); // insert below stops layer
@@ -2335,7 +2310,7 @@ function renderMarkers() {
     // Snap to whichever of the route's PATTERNS the bus is nearest (a bus on
     // pattern 2/3 is far from pattern 1). Pick the closest; if it's within 120 m
     // we trust route-snapped motion, else the bus glides straight to its fix.
-    const { rc, snap } = nearestPatternSnap(v.routeId, fix);
+    const { rc, snap } = nearestPatternSnap(v.routeId, fix, v.headingDegrees);
     const onRoute = snap && snap.offRoute < 120;
 
     if (markers[v.id]) {
@@ -2497,14 +2472,27 @@ function routeCum(routeId, coords) {
 }
 // Of all a route's pattern polylines, return the cumulative table + snap for the
 // one the point is nearest to. Falls back to the first-pattern shape.
-function nearestPatternSnap(routeId, pt) {
+function nearestPatternSnap(routeId, pt, heading) {
   const pats = allPatternCoords[routeId] || (routeShapeCoords[routeId] ? [routeShapeCoords[routeId]] : []);
-  let best = null;
+  let best = null, bestScore = Infinity;
   for (const coords of pats) {
     if (!coords || coords.length < 2) continue;
     const rc = routeCum(routeId, coords);
     const snap = snapToRoute(rc, pt);
-    if (!best || snap.offRoute < best.snap.offRoute) best = { rc, snap };
+    // Score = perpendicular distance, penalized when the pattern's FORWARD
+    // direction at the snap point disagrees with the bus heading. This stops the
+    // chevrons snapping to a geometrically-near pattern that heads the wrong way
+    // (e.g. a side-road leg) when the bus is actually travelling along the main
+    // corridor in a different direction.
+    let score = snap.offRoute;
+    if (heading != null) {
+      const a = posAtDist(rc, snap.dist);
+      const b = posAtDist(rc, Math.min(rc.total, snap.dist + 30));
+      const segBearing = bearingDeg(a, b);
+      const diff = Math.abs(((segBearing - heading + 540) % 360) - 180); // 0=aligned,180=opposite
+      score += diff * 1.2; // ~1.2 m penalty per degree of misalignment
+    }
+    if (score < bestScore) { bestScore = score; best = { rc, snap }; }
   }
   return best || { rc: null, snap: null };
 }
