@@ -148,6 +148,61 @@
   /* ─── STOP ICONS ON MAP (clickable, larger) ──────────────────────── */
   .maplibregl-canvas-container { cursor: grab; }
 
+  /* ─── BOATS (vessels) tab ─────────────────────────────────────────── */
+  .vessel-status {
+    font-size: 10px; color: var(--muted); margin-left: auto;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .vessel-status .vessel-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted);
+  }
+  .vessel-status.live .vessel-dot { background: var(--green); animation: pulse 1.5s ease-in-out infinite; }
+  .vessel-status.err .vessel-dot { background: var(--red); }
+  .vessel-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+    cursor: pointer; transition: background .1s;
+  }
+  .vessel-row:hover { background: var(--panel2); }
+  .vessel-icon {
+    width: 22px; height: 22px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .vessel-info { flex: 1; min-width: 0; }
+  .vessel-name {
+    font-size: 12px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .vessel-meta {
+    font-size: 10px; color: var(--muted);
+    display: flex; gap: 8px; margin-top: 2px;
+  }
+  .vessel-coord {
+    font-size: 10px; color: var(--muted); flex-shrink: 0;
+    font-family: monospace;
+  }
+  /* Map vessel marker — small white-circled chevron with dark navy fill */
+  .vessel-marker {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #0a2540; border: 2px solid #ffffff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.4);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 9px; font-weight: 700;
+    cursor: pointer;
+  }
+  .vessel-key-hint {
+    background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px; margin: 12px;
+    font-size: 11px; color: var(--text); line-height: 1.6;
+  }
+  .vessel-key-hint code {
+    background: var(--bg); padding: 1px 5px; border-radius: 3px;
+    color: #58a6ff; font-size: 10px;
+  }
+  .vessel-key-hint a { color: #58a6ff; }
+
   header { height:var(--header-h); background:var(--panel); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; padding:0 16px; flex-shrink:0; z-index:10; }
   header img { height:32px; }
   header h1 { font-size:15px; font-weight:600; }
@@ -344,6 +399,7 @@
       <div class="tab active" data-tab="vehicles">🚌 Buses</div>
       <div class="tab" data-tab="fleet">🚍 Fleet</div>
       <div class="tab" data-tab="routes">🗺️ Routes</div>
+      <div class="tab" data-tab="boats" id="boatsTab">⛵ Boats</div>
       <div class="tab" data-tab="system">📊 System</div>
       <div class="tab" data-tab="docs">📚 Docs</div>
     </div>
@@ -404,6 +460,14 @@
 
       <div class="section-header" style="margin-top:4px;">📡 Upstream API Polling</div>
       <div class="api-section" id="apiLog"></div>
+    </div>
+
+    <div class="tab-content" id="tab-boats">
+      <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
+        <label><input type="checkbox" id="showBoats" onchange="toggleBoats()" checked> Show on map</label>
+        <span class="vessel-status" id="vesselStatus"></span>
+      </div>
+      <div id="vesselList"><div class="empty"><div class="empty-icon">⛵</div>Loading…</div></div>
     </div>
 
     <div class="tab-content" id="tab-docs">
@@ -673,6 +737,62 @@ function initMapLayers() {
     }
   }, 'stops-circle');
 
+  // ─── VESSEL (boats) layer ──────────────────────────────────────────────────
+  // Plain circle layer so a vessel is always locatable at low zoom; the
+  // heading chevron is layered on top via a second symbol layer that rotates
+  // per-feature. Same pattern as the bus-ahead chevrons.
+  map.addSource('vessels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'vessels-circle', type: 'circle', source: 'vessels',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 3, 12, 5, 15, 7],
+      'circle-color': '#0a2540',
+      'circle-stroke-width': 1.5,
+      'circle-stroke-color': '#ffffff',
+      'circle-opacity': 0.9,
+    }
+  });
+  // Add a vessel-heading chevron symbol on top, rotated per-feature
+  if (!map.hasImage('vessel-chevron')) {
+    map.addImage('vessel-chevron', makeVesselChevronIcon(), { pixelRatio: 2, sdf: true });
+  }
+  map.addLayer({
+    id: 'vessels-heading', type: 'symbol', source: 'vessels',
+    layout: {
+      'icon-image': 'vessel-chevron',
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.6, 12, 0.85, 15, 1.1],
+      'icon-rotate': ['get', 'heading'],
+      'icon-rotation-alignment': 'map',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+    },
+    paint: {
+      'icon-color': '#ffffff',
+      'icon-opacity': 0.95,
+      'icon-halo-color': '#0a2540',
+      'icon-halo-width': 0.5,
+    }
+  });
+  // Tooltip for vessel clicks
+  let vesselPopup = null;
+  map.on('click', 'vessels-circle', e => {
+    const p = e.features[0].properties;
+    const html = `<div style="font-family:system-ui;font-size:12px;color:#e6edf3;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">⛵ ${escapeHtml(p.name) || 'Unknown vessel'}</div>
+      <div style="color:var(--muted);font-size:10px;margin-bottom:6px;">MMSI ${p.mmsi}${p.shipType ? ' · type ' + p.shipType : ''}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;">
+        <div><span style="color:var(--muted);">Speed:</span> ${p.speedKts} kts</div>
+        <div><span style="color:var(--muted);">Heading:</span> ${Math.round(p.heading)}°</div>
+      </div>
+      <div style="font-family:monospace;font-size:10px;color:var(--muted);margin-top:6px;">${(+p.lat).toFixed(4)}, ${(+p.lon).toFixed(4)}</div>
+    </div>`;
+    if (vesselPopup) vesselPopup.remove();
+    vesselPopup = new maplibregl.Popup({ offset: 12, maxWidth: '260px' })
+      .setLngLat(e.lngLat).setHTML(html).addTo(map);
+  });
+  map.on('mouseenter', 'vessels-circle', () => map.getCanvas().style.cursor = 'pointer');
+  map.on('mouseleave', 'vessels-circle', () => map.getCanvas().style.cursor = '');
+
   // Stop hover + click tooltip — hover for desktop, click/tap for mobile.
   let stopHoverPopup = null;
   let stopTapLockUntil = 0;
@@ -757,6 +877,19 @@ function makeChevronIcon() {
   // apex at top (y=14), arms down at y=33 → points UP (rotate=0 ⇒ north)
   x.strokeStyle = '#ffffff'; x.lineWidth = 9;
   x.beginPath(); x.moveTo(9, 33); x.lineTo(24, 14); x.lineTo(39, 33); x.stroke();
+  return x.getImageData(0, 0, s, s);
+}
+
+// Vessel heading chevron — same shape, larger and visible against the
+// navy circle fill. White SDF so icon-halo gives it a navy rim that pops
+// against the white-stroked circle.
+function makeVesselChevronIcon() {
+  const s = 48, c = document.createElement('canvas');
+  c.width = s; c.height = s;
+  const x = c.getContext('2d');
+  x.lineCap = 'round'; x.lineJoin = 'round';
+  x.strokeStyle = '#ffffff'; x.lineWidth = 11;
+  x.beginPath(); x.moveTo(11, 33); x.lineTo(24, 14); x.lineTo(37, 33); x.stroke();
   return x.getImageData(0, 0, s, s);
 }
 
@@ -875,6 +1008,118 @@ async function fetchAllStops() {
     allStops = await res.json();
     renderStopMarkers();
   } catch(e) {}
+}
+
+// ─── VESSELS (boats) ──────────────────────────────────────────────────────
+// Live AIS via the server (aisstream.io). The server keeps a rolling cache
+// and we refresh the /api/vessels endpoint every 30s. We honour the user
+// toggle via `boatsVisible` (default true) — layer hides/shows on the map
+// and the tab list refreshes either way.
+let allVessels = [];
+let boatsVisible = true;
+let vesselError = null;
+async function fetchVessels() {
+  try {
+    const res = await fetch('/api/vessels');
+    const data = await res.json();
+    allVessels = data.vessels || [];
+    vesselError = data.keyConfigured ? data.lastError : 'AISSTREAM_API_KEY not configured on server';
+    renderVesselList();
+    renderVesselMarkers();
+    updateVesselStatus(data);
+  } catch (e) {
+    vesselError = e.message;
+    updateVesselStatus(null);
+  }
+}
+function updateVesselStatus(data) {
+  const el = document.getElementById('vesselStatus');
+  if (!el) return;
+  if (!data) { el.className = 'vessel-status err'; el.innerHTML = '<span class="vessel-dot"></span><span>Connection error</span>'; return; }
+  if (!data.keyConfigured) {
+    el.className = 'vessel-status err';
+    el.innerHTML = '<span class="vessel-dot"></span><span>API key not configured</span>';
+    return;
+  }
+  if (data.lastError) {
+    el.className = 'vessel-status err';
+    el.innerHTML = `<span class="vessel-dot"></span><span title="${escapeHtml(data.lastError)}">Stream disconnected</span>`;
+    return;
+  }
+  if (data.count > 0) {
+    el.className = 'vessel-status live';
+    el.innerHTML = `<span class="vessel-dot"></span><span>${data.count} ${data.count === 1 ? 'vessel' : 'vessels'} live</span>`;
+  } else {
+    el.className = 'vessel-status';
+    el.innerHTML = '<span class="vessel-dot"></span><span>Listening… (no traffic yet)</span>';
+  }
+}
+function renderVesselList() {
+  const el = document.getElementById('vesselList');
+  if (!el) return;
+  if (vesselError === 'AISSTREAM_API_KEY not configured on server') {
+    el.innerHTML = `<div class="vessel-key-hint">
+      <div style="font-weight:700;margin-bottom:6px;">⛵ Add your free AIS feed key</div>
+      <p>The Boats tab is wired up and ready — but it needs a free
+      <a href="https://aisstream.io" target="_blank">aisstream.io</a> API key on the server to
+      show live vessel positions around the Hawaiian islands.</p>
+      <p style="margin-top:6px;">Sign up free at <a href="https://aisstream.io" target="_blank">aisstream.io</a>,
+      generate a key, then set <code>AISSTREAM_API_KEY</code> on the server and restart.</p>
+      <p style="margin-top:6px;color:var(--muted);font-size:10px;">Per the no-fabrication principle,
+      we don't show guessed/seeded vessels when the feed is off.</p>
+    </div>`;
+    return;
+  }
+  if (!allVessels.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">⛵</div>No vessels broadcasting near Hawaiʻi right now.<div style="color:var(--muted);font-size:10px;margin-top:6px;">${vesselError ? escapeHtml(vesselError) : ''}</div></div>`;
+    return;
+  }
+  // Sort by speed desc so the active vessels are at the top
+  const sorted = [...allVessels].sort((a, b) => (b.speedKts || 0) - (a.speedKts || 0));
+  el.innerHTML = sorted.slice(0, 100).map(v => {
+    const name = v.name || `Vessel ${v.mmsi}`;
+    const speed = v.speedKts != null ? `${v.speedKts.toFixed(1)} kts` : '—';
+    const heading = v.headingDeg != null ? `${Math.round(v.headingDeg)}°` : '—';
+    return `<div class="vessel-row" onclick="focusVessel(${v.mmsi})">
+      <div class="vessel-icon">⛵</div>
+      <div class="vessel-info">
+        <div class="vessel-name">${escapeHtml(name)}</div>
+        <div class="vessel-meta">
+          <span>${speed}</span><span>${heading}</span>
+          ${v.shipType != null ? `<span>type ${v.shipType}</span>` : ''}
+          <span>MMSI ${v.mmsi}</span>
+        </div>
+      </div>
+      <div class="vessel-coord">${(+v.lat).toFixed(3)}, ${(+v.lon).toFixed(3)}</div>
+    </div>`;
+  }).join('');
+}
+function renderVesselMarkers() {
+  if (!mapReady || !map.getSource('vessels')) return;
+  const src = map.getSource('vessels');
+  if (!boatsVisible) { src.setData({ type: 'FeatureCollection', features: [] }); return; }
+  src.setData({
+    type: 'FeatureCollection',
+    features: allVessels.map(v => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [v.lon, v.lat] },
+      properties: {
+        mmsi: v.mmsi, name: v.name || '',
+        speedKts: v.speedKts != null ? v.speedKts.toFixed(1) : '—',
+        heading: v.headingDeg || 0,
+        shipType: v.shipType, lat: v.lat, lon: v.lon,
+      }
+    }))
+  });
+}
+function toggleBoats() {
+  boatsVisible = document.getElementById('showBoats').checked;
+  renderVesselMarkers();
+}
+function focusVessel(mmsi) {
+  const v = allVessels.find(x => String(x.mmsi) === String(mmsi));
+  if (!v || !mapReady) return;
+  map.flyTo({ center: [v.lon, v.lat], zoom: 13 });
 }
 
 // Learned/observed stops (places buses repeatedly dwell that aren't official).
@@ -2737,6 +2982,7 @@ function switchTab(name) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.id === `tab-${name}`));
   if (name === 'system') { fetchApiStats(); pollLearn(); }
   if (name === 'fleet') fetchFleet();
+  if (name === 'boats') fetchVessels();
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
 
@@ -2980,6 +3226,13 @@ function setupSidebarDrag() {
 }
 setupSidebarDrag();
 
+// HTML escape helper used for user-supplied strings (vessel names, errors, etc.)
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 // ─── GEOLOCATE ("Where am I?") ───────────────────────────────────────────────
 let locateMarkerSrc = null;
 let locateAccuracySrc = null;
@@ -3188,6 +3441,7 @@ Promise.all([
   fetchLearnedStops(),
   fetchGtfsStops(),
   fetchTrails(),
+  fetchVessels(),
 ]).then(() => fetchStoplines());
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
@@ -3199,6 +3453,10 @@ setInterval(() => { if (activeTab === 'fleet' && !document.hidden) fetchFleet();
 // Trail + ETA refresh on their own cadence — skipped while the tab is hidden.
 setInterval(() => { if (!document.hidden) fetchTrails(); }, TRAIL_UPDATE_INTERVAL);
 setInterval(() => { if (!document.hidden) fetchStoplines(); }, 30000); // refresh ETAs every 30s
+
+// Vessel refresh — 30 s is plenty; the AIS stream on the server updates in
+// near real time. Skip while tab is hidden to save mobile data.
+setInterval(() => { if (!document.hidden) fetchVessels(); }, 30000);
 
 // Tick live clocks in all open stop lists every second
 setInterval(() => {

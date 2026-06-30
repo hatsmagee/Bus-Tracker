@@ -15,6 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execSync } = require('child_process');
+const WebSocket = require('ws');
 const { parseFeedMessage } = require('./gtfs-rt');
 
 // Big Island bounding box — fleet feed includes parked/relocated buses
@@ -2054,6 +2055,27 @@ async function handleApi(url, res) {
     return;
   }
 
+  // ── BOATS layer (live AIS via aisstream.io, opt-in by env var) ────────────
+  // Endpoint serves the in-memory vessel cache. Without AISSTREAM_API_KEY the
+  // cache stays empty and the UI shows a clear "add your free key" hint rather
+  // than fabricating fake boats. We never fall back to guessed data.
+  if (p === '/api/vessels') {
+    const now = Date.now();
+    const list = [];
+    for (const [mmsi, v] of vesselCache) {
+      if ((now - v.lastTs) > VESSEL_STALE_MS) continue;
+      list.push(v);
+    }
+    return json(res, {
+      ts: now,
+      keyConfigured: !!AISSTREAM_API_KEY,
+      lastConnectTs: vesselLastConnectTs,
+      lastError: vesselLastError,
+      count: list.length,
+      vessels: list,
+    });
+  }
+
   res.writeHead(404); res.end('Not found');
 }
 
@@ -2064,6 +2086,95 @@ function handleStatic(url, res) {
     res.writeHead(200, { 'Content-Type': MIME[path.extname(fp)] || 'text/plain' });
     res.end(data);
   });
+}
+
+// ─── AIS (boats) — optional aisstream.io subscription ─────────────────────
+// Live vessel positions are a great companion to the bus layer. aisstream.io
+// offers free public AIS over WebSocket (after sign-up at aisstream.io — no
+// credit card). It's keyed: set AISSTREAM_API_KEY and the layer lights up.
+// Without a key, the layer shows a clean "add your free key" message in the UI
+// rather than fabricating vessels — matches our no-fabrication principle.
+const AISSTREAM_API_KEY = process.env.AISSTREAM_API_KEY || '';
+const AISSTREAM_URL = 'wss://stream.aisstream.io/v0/stream';
+// Hawaii bounding box for filtering: lat 18.8..20.4, lon -156.2..-154.7
+const HAWAII_BBOX = [[[18.8, -156.2], [20.4, -154.7]]];
+const VESSEL_STALE_MS = 10 * 60 * 1000; // drop unseen vessels after 10 min
+const vesselCache = new Map(); // mmsi -> { mmsi, name, lat, lon, speedKts, headingDeg, lastTs, shipType }
+let vesselLastConnectTs = null;
+let vesselLastError = null;
+let aisSocket = null;
+let aisReconnectTimer = null;
+
+function setVesselFromMsg(msg) {
+  if (!msg || !msg.Message) return;
+  // aisstream.io wraps each PositionReport / ShipStaticData. Combine them
+  // (StaticData updates ShipName + ShipType; PositionReport updates lat/lon).
+  const { Message } = msg;
+  const mmsi = Message.MMSI != null ? String(Message.MMSI) : null;
+  if (!mmsi) return;
+  let v = vesselCache.get(mmsi) || { mmsi, name: '', lat: null, lon: null, speedKts: 0, headingDeg: 0, lastTs: 0, shipType: null };
+  if (Message.PositionReport) {
+    const p = Message.PositionReport;
+    // Coarse bbox filter (server also subscribes with bbox — defence in depth)
+    if (p.Latitude < 18.5 || p.Latitude > 20.7 || p.Longitude < -156.5 || p.Longitude > -154.5) return;
+    v.lat = p.Latitude;
+    v.lon = p.Longitude;
+    v.speedKts = p.Sog != null ? p.Sog : v.speedKts;
+    v.headingDeg = p.TrueHeading != null && p.TrueHeading <= 359 ? p.TrueHeading : (p.Cog != null ? p.Cog : v.headingDeg);
+    v.lastTs = Date.now();
+  }
+  if (Message.ShipStaticData) {
+    const s = Message.ShipStaticData;
+    if (s.Name && s.Name.trim()) v.name = s.Name.trim();
+    if (s.Type != null) v.shipType = s.Type;
+    v.lastTs = Date.now();
+  }
+  // Drop low-quality positions outside the bbox or with no position yet
+  if (v.lat == null || v.lon == null) return;
+  vesselCache.set(mmsi, v);
+}
+
+function connectAisStream() {
+  if (!AISSTREAM_API_KEY) {
+    vesselLastError = 'AISSTREAM_API_KEY not set — boats layer disabled. Sign up free at aisstream.io to enable.';
+    return;
+  }
+  if (aisSocket && (aisSocket.readyState === WebSocket.OPEN || aisSocket.readyState === WebSocket.CONNECTING)) return;
+  try {
+    aisSocket = new WebSocket(AISSTREAM_URL);
+  } catch (e) {
+    vesselLastError = 'WS construct failed: ' + e.message;
+    scheduleAisReconnect();
+    return;
+  }
+  aisSocket.on('open', () => {
+    vesselLastConnectTs = Date.now();
+    vesselLastError = null;
+    try {
+      aisSocket.send(JSON.stringify({
+        APIKey: AISSTREAM_API_KEY,
+        BoundingBoxes: HAWAII_BBOX,
+        FilterMessageTypes: ['PositionReport', 'ShipStaticData'],
+      }));
+    } catch (e) {
+      vesselLastError = 'send failed: ' + e.message;
+    }
+  });
+  aisSocket.on('message', raw => {
+    try {
+      const msg = JSON.parse(raw.toString());
+      setVesselFromMsg(msg);
+    } catch { /* drop malformed */ }
+  });
+  aisSocket.on('close', () => { vesselLastError = 'connection closed'; scheduleAisReconnect(); });
+  aisSocket.on('error', e => { vesselLastError = (e && e.message) || 'unknown WS error'; });
+}
+
+function scheduleAisReconnect() {
+  if (aisReconnectTimer) return;
+  // Backoff capped at 60s
+  const delay = Math.min(60000, 5000 * Math.pow(1.5, (vesselCache.size === 0 ? 1 : 0)));
+  aisReconnectTimer = setTimeout(() => { aisReconnectTimer = null; connectAisStream(); }, delay);
 }
 
 const server = http.createServer((req, res) => {
@@ -2106,6 +2217,15 @@ const server = http.createServer((req, res) => {
   try { await trainFromHistory(); } catch(e) { console.error('[learn] train error:', e.message); }
   await pollAll();
   setInterval(pollAll, POLL_INTERVAL);
+  // Boats layer — only connects if AISSTREAM_API_KEY is set. With no key, the
+  // /api/vessels endpoint returns keyConfigured:false so the UI can show a
+  // clean "add your free key" hint instead of faking data.
+  if (AISSTREAM_API_KEY) {
+    console.log('[boats] AISSTREAM_API_KEY detected — connecting to aisstream.io');
+    connectAisStream();
+  } else {
+    console.log('[boats] AISSTREAM_API_KEY not set — boats layer disabled (set env var to enable)');
+  }
   setTimeout(pruneDb, 30000);                // full prune+VACUUM shortly after boot
   setInterval(pruneDb, 24 * 60 * 60 * 1000); // and daily thereafter
   // poll_log grows ~88 rows/cycle (22 routes × 4/min) but /api/stats only reads
