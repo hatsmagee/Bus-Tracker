@@ -1526,6 +1526,9 @@ async function matchAllShapes() {
     let snapped = 0, kept = 0, skipped = 0;
     const RETRY_RAW_MS = 24 * 60 * 60 * 1000; // re-attempt a kept-raw pattern after a day
     for (const row of rows) {
+      // Vendored geometry is authoritative — never re-match a pattern we already
+      // have a committed clean shape for (avoids any runtime Valhalla dependency).
+      if (VENDORED_SHAPES[String(row.pattern_id)]) { skipped++; continue; }
       const h = shapeHash(row.shape);
       const cached = dbGet(`SELECT src_hash, is_raw, matched_at FROM route_shapes_matched WHERE pattern_id=?`, [row.pattern_id]);
       if (cached && cached.src_hash === h) {
@@ -1569,26 +1572,20 @@ function exportMatchedShapes() {
     console.log(`[match] vendored ${rows.length} matched shapes → ${path.basename(MATCHED_VENDOR_PATH)}`);
   } catch (e) { console.error('[match] vendor export:', e.message); }
 }
-// On boot, seed the matched cache from the vendored file for any pattern whose raw
-// shape hash still matches — so road geometry is present immediately, before (or
-// without) a Valhalla run.
-function seedMatchedFromVendor() {
-  let vendor;
-  try { vendor = JSON.parse(fs.readFileSync(MATCHED_VENDOR_PATH, 'utf8')); } catch { return; }
-  let seeded = 0;
-  for (const [patternId, v] of Object.entries(vendor)) {
-    if (!v || !v.shape) continue;
-    const existing = dbGet(`SELECT src_hash FROM route_shapes_matched WHERE pattern_id=?`, [patternId]);
-    if (existing) continue; // DB already has it (from backup/restore)
-    // Only trust the vendored geometry if the current raw shape hash matches.
-    const rawRow = dbGet(`SELECT shape FROM route_shapes WHERE pattern_id=?`, [patternId]);
-    if (rawRow && shapeHash(rawRow.shape) !== v.src_hash) continue; // route changed → re-match
-    dbRun(`INSERT OR REPLACE INTO route_shapes_matched(pattern_id,route_id,src_hash,shape,is_raw,note,matched_at)
-           VALUES(?,?,?,?,0,'vendored',?)`, [patternId, v.route_id, v.src_hash, v.shape, Date.now()]);
-    seeded++;
-  }
-  if (seeded) { console.log(`[match] seeded ${seeded} matched shapes from vendored file`); saveDb(); }
+// Vendored road-snapped geometry is AUTHORITATIVE. It's the committed result of
+// map-matching every route, so we serve it directly and UNCONDITIONALLY — no hash
+// gate, no fallback to raw, no dependency on Valhalla at runtime. This is what
+// guarantees the deployed site (Render) shows the clean road-following lines that
+// were matched locally — exactly, every time. Loaded once at boot.
+//   pattern_id (string) -> { route_id, shape }
+let VENDORED_SHAPES = {};
+function loadVendoredShapes() {
+  try {
+    VENDORED_SHAPES = JSON.parse(fs.readFileSync(MATCHED_VENDOR_PATH, 'utf8')) || {};
+    console.log(`[match] loaded ${Object.keys(VENDORED_SHAPES).length} vendored road-snapped shapes (authoritative)`);
+  } catch { VENDORED_SHAPES = {}; console.warn('[match] no vendored shapes file — run matching once to generate it'); }
 }
+function seedMatchedFromVendor() { loadVendoredShapes(); }
 
 // Self-healing scheduler: keep retrying until every pattern has a snap result,
 // then settle to a daily refresh. If Valhalla was down at boot, this recovers on
@@ -1606,8 +1603,13 @@ function scheduleMatching() {
   setTimeout(tick, 3000); // first run shortly after boot (non-blocking)
 }
 
-// Best geometry for a pattern: road-snapped (DB) when clean, else the raw shape.
+// Geometry for a pattern. VENDORED road-snapped geometry wins, unconditionally —
+// no fallback to raw, so the deployed site always shows the clean matched lines.
+// (A freshly-matched DB result is used only for a pattern with no vendored entry,
+// e.g. a brand-new route discovered after the vendored file was generated.)
 function bestPatternShape(patternId, rawShape) {
+  const v = VENDORED_SHAPES[String(patternId)];
+  if (v && v.shape) return v.shape;
   const m = dbGet(`SELECT shape, is_raw FROM route_shapes_matched WHERE pattern_id=?`, [patternId]);
   if (m && m.shape && !m.is_raw) return m.shape;
   return rawShape;
