@@ -176,6 +176,30 @@ async function traceChunkedParts(raw) {
   return parts;
 }
 
+// Remove hairpin spurs: a short out-and-back detour (Valhalla darts up a driveway/
+// dead-end and returns), which draws a sharp "Λ" spike across a block. We detect a
+// vertex where the path reverses ~180° and the spur is short (<120m out), and drop
+// the spur vertices so the line passes straight through.
+function despikeHairpins(pts) {
+  if (pts.length < 5) return pts;
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = out[out.length - 1], b = pts[i], c = pts[i + 1];
+    const mLat = 111320, mLon = mLat * Math.cos(b[0] * Math.PI / 180);
+    const v1x = (b[1]-a[1])*mLon, v1y = (b[0]-a[0])*mLat;
+    const v2x = (c[1]-b[1])*mLon, v2y = (c[0]-b[0])*mLat;
+    const l1 = Math.hypot(v1x,v1y), l2 = Math.hypot(v2x,v2y);
+    if (l1 > 0 && l2 > 0) {
+      const cos = (v1x*v2x + v1y*v2y) / (l1*l2);
+      // Sharp reversal (>155°) on a short limb (<120 m) ⇒ spike: skip vertex b.
+      if (cos < -0.9 && Math.min(l1, l2) < 120) continue;
+    }
+    out.push(b);
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+
 // Split a matched polyline at any segment longer than `maxGap` (a diagonal bridge
 // across un-matched terrain). Returns continuous on-road pieces — we draw those and
 // simply don't draw the bridge, so no line ever cuts across blocks.
@@ -252,8 +276,10 @@ async function matchShape(encodedShape) {
 
   if (!parts || !parts.length) return { encoded: encodedShape, raw: true, reason: 'no-match' };
 
-  // 3) Smooth each piece into gradual curves, then encode pieces joined by ';'.
+  // 3) Despike hairpins (Valhalla occasionally darts up a driveway and back, drawing
+  // a sharp "Λ" across a block), then smooth into gradual curves, then encode.
   const encoded = parts
+    .map(p => despikeHairpins(p))
     .map(p => smoothCatmullRom(p, 6))
     .filter(p => p.length > 1)
     .map(p => encode(p, 1e5))
