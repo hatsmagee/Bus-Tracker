@@ -1633,6 +1633,23 @@ function loadVendoredShapes() {
 }
 function seedMatchedFromVendor() { loadVendoredShapes(); }
 
+// Road-graph-snapped geometry (scripts/snap-routes-to-roads.js) — every point is
+// drawn from a real local OSM road segment by construction, so it can't drift,
+// diagonal-cut across blocks, or visually diverge the way an independently-traced
+// (and possibly Valhalla-rejected) polyline can. Where present for a pattern,
+// this is preferred over VENDORED_SHAPES; routes without a snapped result yet
+// fall back the same way the old pipeline did. Stored as { route_id, segments }
+// (segments, not a single shape, because honest gaps in OSM coverage are kept
+// as real breaks rather than bridged with a straight line).
+const ROAD_SNAPPED_PATH = path.join(__dirname, 'data', 'route-shapes-road-snapped.json');
+let ROAD_SNAPPED = {};
+function loadRoadSnappedShapes() {
+  try {
+    ROAD_SNAPPED = JSON.parse(fs.readFileSync(ROAD_SNAPPED_PATH, 'utf8')) || {};
+    console.log(`[road-snap] loaded ${Object.keys(ROAD_SNAPPED).length} road-graph-snapped patterns`);
+  } catch { ROAD_SNAPPED = {}; }
+}
+
 // Self-healing scheduler: keep retrying until every pattern has a snap result,
 // then settle to a daily refresh. If Valhalla was down at boot, this recovers on
 // its own within the hour instead of waiting a full day — zero manual steps.
@@ -1649,16 +1666,22 @@ function scheduleMatching() {
   setTimeout(tick, 3000); // first run shortly after boot (non-blocking)
 }
 
-// Geometry for a pattern. VENDORED road-snapped geometry wins, unconditionally —
-// no fallback to raw, so the deployed site always shows the clean matched lines.
-// (A freshly-matched DB result is used only for a pattern with no vendored entry,
-// e.g. a brand-new route discovered after the vendored file was generated.)
+// Geometry for a pattern, in priority order:
+//   1. Road-graph-snapped segments (every point is real OSM road geometry by
+//      construction — see ROAD_SNAPPED above). Returns { segments } when present.
+//   2. Vendored Valhalla-matched single shape (older pipeline, still authoritative
+//      where a route hasn't been re-run through the road-graph snapper yet).
+//   3. A freshly-matched DB result for a pattern with no vendored entry at all
+//      (e.g. a brand-new route discovered after the vendored file was generated).
+//   4. Raw GTFS shape as the final fallback — an honest sparse line, never bridged.
 function bestPatternShape(patternId, rawShape) {
+  const rs = ROAD_SNAPPED[String(patternId)];
+  if (rs && rs.segments && rs.segments.length) return { segments: rs.segments };
   const v = VENDORED_SHAPES[String(patternId)];
-  if (v && v.shape) return v.shape;
+  if (v && v.shape) return { shape: v.shape };
   const m = dbGet(`SELECT shape, is_raw FROM route_shapes_matched WHERE pattern_id=?`, [patternId]);
-  if (m && m.shape && !m.is_raw) return m.shape;
-  return rawShape;
+  if (m && m.shape && !m.is_raw) return { shape: m.shape };
+  return { shape: rawShape };
 }
 
 // Run the schedule-PDF scraper as a child process, weekly. Kept out-of-process
@@ -1993,11 +2016,15 @@ async function handleApi(url, res) {
       // Curated dark/distinct palette over the upstream pattern colors (those
       // include pale pastels and #FFFFFF that vanish on the map).
       if (ROUTE_MAP[r.route_id]) r.color = ROUTE_MAP[r.route_id].color;
-      // Prefer the ROAD-SNAPPED geometry (Valhalla map-matched, cached) so the
-      // line follows the streets; falls back to the raw GTFS shape if the snap
-      // was rejected as off-corridor or hasn't been computed yet.
-      const snapped = bestPatternShape(r.pattern_id, r.shape);
-      if (snapped !== r.shape) { r.shape = snapped; r.matched = true; }
+      // Prefer road-graph-snapped geometry — see bestPatternShape(). A pattern
+      // either gets `segments` (multiple real-road polylines, gaps kept honest)
+      // or a single `shape` (older Valhalla-matched or raw GTFS fallback); the
+      // client handles both. Drop the raw `shape` key when we're returning
+      // segments instead, so old client code can't accidentally draw the raw
+      // unsnapped line on top of the snapped one.
+      const best = bestPatternShape(r.pattern_id, r.shape);
+      if (best.segments) { delete r.shape; r.segments = best.segments; r.matched = true; }
+      else if (best.shape !== r.shape) { r.shape = best.shape; r.matched = true; }
     });
     return json(res, rows);
   }
@@ -2862,6 +2889,10 @@ const server = http.createServer((req, res) => {
   // INSTANTLY (no waiting for Valhalla). Then the self-healing matcher fills any
   // gaps / changed routes in the background and re-vendors. "Match once, reuse forever."
   try { seedMatchedFromVendor(); } catch (e) { console.error('[match] seed:', e.message); }
+  // Road-graph-snapped geometry (preferred over the Valhalla-matched vendor file
+  // — see bestPatternShape) is a static, pre-generated file too: run
+  // scripts/snap-routes-to-roads.js to (re)build it when new GTFS patterns appear.
+  try { loadRoadSnappedShapes(); } catch (e) { console.error('[road-snap] seed:', e.message); }
   scheduleMatching();
   buildTripIndex();
   // Train learning model on past stop_arrivals history

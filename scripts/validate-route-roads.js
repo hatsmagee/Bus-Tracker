@@ -8,7 +8,13 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const roads = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/osm/bigisland-roads.json')));
-const routeData = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/route-shapes-matched.json')));
+// Prefer the road-snapped output (every point is drawn from real OSM road
+// geometry by construction — see snap-routes-to-roads.js) when present; falls
+// back to the older Valhalla-matched file otherwise.
+const SNAPPED_PATH = path.join(ROOT, 'data/route-shapes-road-snapped.json');
+const useSnapped = fs.existsSync(SNAPPED_PATH);
+const routeData = JSON.parse(fs.readFileSync(useSnapped ? SNAPPED_PATH : path.join(ROOT, 'data/route-shapes-matched.json')));
+console.log('validating against:', useSnapped ? 'route-shapes-road-snapped.json (multi-segment)' : 'route-shapes-matched.json (single shape)');
 
 function decode(str, factor = 1e5) {
   let index = 0, lat = 0, lng = 0; const coords = [];
@@ -83,12 +89,22 @@ function nearestRoadDist(pt) {
   return { dist: best, name: bestName };
 }
 
-// Validate every route's longest pattern
+// Validate every route's longest pattern. The snapped format stores a route as
+// several segment polylines (real gaps are kept honest, not bridged) — flatten
+// them into one coordinate list for sampling purposes.
+function patternCoords(e) {
+  if (e.segments) {
+    let all = [];
+    for (const seg of e.segments) { try { all = all.concat(decode(seg)); } catch {} }
+    return all;
+  }
+  try { return decode(e.shape); } catch { return []; }
+}
+
 const routeLongest = {};
 for (const key of Object.keys(routeData)) {
   const e = routeData[key];
-  let coords;
-  try { coords = decode(e.shape); } catch { continue; }
+  const coords = patternCoords(e);
   if (!coords.length) continue;
   if (!routeLongest[e.route_id] || coords.length > routeLongest[e.route_id].length) {
     routeLongest[e.route_id] = coords;

@@ -1897,34 +1897,46 @@ function renderRouteShapes(force) {
   allPatternCoords = {};
 
   routeShapes.forEach(s => {
-    if (!s.shape) return;
+    if (!s.shape && !s.segments) return;
     if (routeVisible[s.route_id] === false) return;
-    let coords;
+    // A pattern is either ONE polyline (`shape` — older Valhalla-matched or raw
+    // GTFS fallback) or SEVERAL (`segments` — road-graph-snapped, real OSM road
+    // geometry; multiple pieces because honest OSM-coverage gaps are kept as
+    // real breaks rather than bridged with a straight line). Normalize to a
+    // list of coordinate arrays either way so the rest of the pipeline
+    // (dedup/offset-slicing/chevrons) doesn't need to care which it got.
+    let patternCoordsList;
     try {
-      coords = decodePolyline(s.shape);
-      if (coords.length < 2) return;
+      patternCoordsList = s.segments
+        ? s.segments.map(decodePolyline).filter(c => c.length >= 2)
+        : [decodePolyline(s.shape)].filter(c => c.length >= 2);
+      if (!patternCoordsList.length) return;
       // Draw the road geometry EXACTLY as-is — no client-side simplification or
-      // smoothing. The vendored geometry is already road-snapped (Valhalla) AND
-      // Chaikin-smoothed server-side in map-match.js, so corners are curved before
-      // they ever reach the browser. A Douglas–Peucker pass here used to delete ~70%
-      // of vertices — the very points that make a curve read as a curve — collapsing
-      // gentle bends into hard kinks that line-join:round (which only rounds a corner
-      // by half the line width) cannot rescue. We feed the full polyline straight in.
+      // smoothing. It's already road-snapped (and Chaikin-smoothed server-side
+      // for the Valhalla-matched path) before it ever reaches the browser. A
+      // Douglas–Peucker pass here used to delete ~70% of vertices — the very
+      // points that make a curve read as a curve — collapsing gentle bends into
+      // hard kinks that line-join:round (which only rounds by half the line
+      // width) cannot rescue. We feed the full polyline(s) straight in.
     } catch(e) { return; }
-    // Keep EVERY pattern's polyline for motion/chevron snapping (a bus can run
-    // either direction along the same road, and the chevrons need both).
-    (allPatternCoords[s.route_id] = allPatternCoords[s.route_id] || []).push(coords);
-    // For DRAWING, dedupe within the route: the outbound and inbound patterns of a
-    // route usually trace the SAME road, so drawing both stacks two identical lines
-    // ("double route"). Direction is shown by the chevrons, not a second line — so
-    // we only add a pattern if it covers road the kept patterns don't already cover.
-    // Genuinely distinct legs (e.g. 401's separate north + south loops) survive
-    // because their coverage is new.
-    const kept = (routeMultiCoords[s.route_id] = routeMultiCoords[s.route_id] || []);
-    if (!coverageAlreadyDrawn(coords, kept)) kept.push(coords);
+    for (const coords of patternCoordsList) {
+      // Keep EVERY pattern's polyline for motion/chevron snapping (a bus can run
+      // either direction along the same road, and the chevrons need both).
+      (allPatternCoords[s.route_id] = allPatternCoords[s.route_id] || []).push(coords);
+      // For DRAWING, dedupe within the route: the outbound and inbound patterns of a
+      // route usually trace the SAME road, so drawing both stacks two identical lines
+      // ("double route"). Direction is shown by the chevrons, not a second line — so
+      // we only add a pattern if it covers road the kept patterns don't already cover.
+      // Genuinely distinct legs (e.g. 401's separate north + south loops, or two
+      // segments either side of an OSM coverage gap) survive because their
+      // coverage is new.
+      const kept = (routeMultiCoords[s.route_id] = routeMultiCoords[s.route_id] || []);
+      if (!coverageAlreadyDrawn(coords, kept)) kept.push(coords);
+    }
+    const coords = patternCoordsList[0];
     if (!seen.has(s.route_id)) {
       seen.add(s.route_id);
-      routeShapeCoords[s.route_id] = coords; // first pattern — used for the ahead-arrows
+      routeShapeCoords[s.route_id] = coords; // first pattern's first segment — used for the ahead-arrows
     }
     // Always prefer our curated route colors over the API pattern colors (which can be #FFFFFF etc.)
     routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || normalizeColor(s.color) || '#888', name: s.name };
