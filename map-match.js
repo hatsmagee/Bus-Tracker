@@ -14,7 +14,17 @@ const https = require('https');
 const http = require('http');
 
 // Local Valhalla (Docker) when available for fast matching; public fallback.
-const VALHALLA = process.env.VALHALLA_URL || 'http://localhost:8002/trace_route';
+// The "public fallback" used to be aspirational only — VALHALLA_URL defaulted
+// straight to localhost:8002 with nothing actually listening there in
+// production (Render has no local Valhalla), so every self-healing match
+// attempt for a pattern not already in the vendored file failed silently
+// (connection refused) and that pattern stayed unsnapped forever, redrawing
+// as a raw straight-line diagonal across blocks. FOSSGIS hosts a free public
+// Valhalla instance for exactly this kind of use — use it when no local one
+// is configured.
+const PUBLIC_VALHALLA = 'https://valhalla1.openstreetmap.de/trace_route';
+const VALHALLA = process.env.VALHALLA_URL || PUBLIC_VALHALLA;
+const isLocal = !!process.env.VALHALLA_URL && process.env.VALHALLA_URL.includes('localhost');
 
 function postJson(url, body, timeoutMs = 25000) {
   const lib = url.startsWith('https') ? https : http;
@@ -209,4 +219,4 @@ async function matchShape(encodedShape) {
   return { encoded: encode(smoothed, 1e5), raw: false, quality: best.q };
 }
 
-module.exports = { matchShape, decode, encode };
+module.exports = { matchShape, decode, encode, isLocal };
