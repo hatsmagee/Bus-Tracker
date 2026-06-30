@@ -35,16 +35,6 @@ const DATA_DIR = IS_RENDER ? '/tmp' : __dirname;
 const DB_PATH = path.join(DATA_DIR, IS_RENDER ? 'heleon.db' : 'heleon.db');
 const GTFS_ZIP_PATH = path.join(DATA_DIR, 'heleon-gtfs.zip');
 const HTML_PATH = path.join(__dirname, 'heleon-tracker.html');
-const MATCHED_SHAPES_PATH = path.join(__dirname, 'data', 'route-shapes-matched.json');
-
-// Snap-to-road route geometry, produced offline by scripts/match-routes.js
-// (Valhalla map-matching) and vendored into the repo. routeId -> encoded
-// polyline that follows the actual roads. We prefer these over the raw GTFS
-// shapes when drawing routes, so lines are smooth and lie on the road. Loaded
-// once at startup; empty {} if the file isn't present.
-let MATCHED_SHAPES = {};
-try { MATCHED_SHAPES = JSON.parse(fs.readFileSync(MATCHED_SHAPES_PATH, 'utf8')); } catch {}
-
 // Reference data the System Map PDF carries but GTFS does NOT: route class
 // (Express/Local/Neighborhood/Flex), transit-hub connections, Park-and-Ride /
 // terminal / airport points. Curated in data/heleon-reference.json and kept
@@ -58,13 +48,9 @@ function loadReference() {
 }
 loadReference();
 
-// Server-side map-matcher (snaps GTFS shapes to roads, rejects bad matches).
-const { matchShape } = require('./map-match');
 // Durable off-box DB backup (free; restores history on boot so it survives
 // ephemeral hosts like Render's free tier wiping /tmp on each deploy).
 const backup = require('./backup');
-const crypto = require('crypto');
-const shapeHash = s => crypto.createHash('sha1').update(s || '').digest('hex').slice(0, 16);
 const POLL_INTERVAL = 15000; // GTFS-RT refreshes ~every 15-30s; lighter on bandwidth
 const DB_SAVE_INTERVAL = 30000;
 const UPSTREAM = 'myheleonbus.org';
@@ -151,18 +137,6 @@ async function openDb() {
     color       TEXT,
     shape       TEXT,
     fetched_at  INTEGER
-  )`);
-
-  // Server-side map-matched route geometry, cached so each route is snapped to
-  // roads once (via the public Valhalla API) and then served from here. Keyed by
-  // the raw GTFS shape's hash so a shape change auto-invalidates the cache.
-  db.run(`CREATE TABLE IF NOT EXISTS route_shapes_matched (
-    route_id   INTEGER PRIMARY KEY,
-    src_hash   TEXT,
-    shape      TEXT,
-    is_raw     INTEGER,
-    note       TEXT,
-    matched_at INTEGER
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS poll_log (
@@ -1300,7 +1274,7 @@ async function discoverNewRoutes() {
         console.log(`\n[discovery] New route found: ${name} (id=${id})`);
         // Fetch stops AND the route's shape so it draws immediately (was missing
         // the shape fetch before, so newly-discovered routes had no line until the
-        // daily fetchShapes ran). Pull the pattern shape, then map-match it.
+        // daily fetchShapes ran).
         fetchStopsForRoute(id).then(stops => { stopsCache[id] = stops; });
         (async () => {
           try {
@@ -1313,7 +1287,6 @@ async function discoverNewRoutes() {
                    VALUES(?,?,?,?,?,?,?)`,
                   [id, pp.id, pp.name, pp.directionType, pp.color || color, pp.shape, Date.now()]));
                 saveDb();
-                matchAllRoutes().catch(() => {}); // snap the new route to roads
               }
             }
           } catch (e) { console.error(`[discovery] shape fetch ${id}:`, e.message); }
@@ -1349,47 +1322,6 @@ async function fetchShapes() {
   console.log('\n[shapes] Done.');
 }
 
-// ─── MAP-MATCH ROUTES TO ROADS ────────────────────────────────────────────────
-// Snap each route's drawn shape to the OSM road network, ONCE, caching the result
-// (keyed by the raw shape's hash) in route_shapes_matched. Bad/artifact-prone
-// matches are rejected by map-match.js and we keep the raw shape for those. Runs
-// in the background on boot so it never blocks startup; the map upgrades to the
-// clean on-road line as soon as each route finishes.
-let matchingInProgress = false;
-async function matchAllRoutes() {
-  if (matchingInProgress) return;
-  matchingInProgress = true;
-  try {
-    // First pattern per route is what the map renders (matches /api/shapes logic).
-    const rows = dbAll(`SELECT route_id, pattern_id, shape FROM route_shapes ORDER BY route_id, pattern_id`);
-    const firstByRoute = {};
-    for (const r of rows) if (r.shape && !firstByRoute[r.route_id]) firstByRoute[r.route_id] = r.shape;
-
-    let matched = 0, kept = 0, skipped = 0;
-    for (const [routeId, shape] of Object.entries(firstByRoute)) {
-      const h = shapeHash(shape);
-      const cached = dbGet(`SELECT src_hash FROM route_shapes_matched WHERE route_id=?`, [routeId]);
-      if (cached && cached.src_hash === h) { skipped++; continue; } // already matched this exact shape
-
-      let result;
-      try { result = await matchShape(shape); }
-      catch (e) { console.error(`[match] route ${routeId} error: ${e.message}`); continue; }
-
-      dbRun(`INSERT OR REPLACE INTO route_shapes_matched(route_id,src_hash,shape,is_raw,note,matched_at)
-             VALUES(?,?,?,?,?,?)`,
-        [routeId, h, result.encoded, result.raw ? 1 : 0, result.reason || (result.quality ? `stray=${(result.quality.strayFrac*100).toFixed(0)}%` : ''), Date.now()]);
-
-      if (result.raw) { kept++; console.log(`[match] route ${routeId} kept RAW (${result.reason})`); }
-      else { matched++; console.log(`[match] route ${routeId} snapped to road (${result.note || ''})`); }
-      saveDb();
-      await new Promise(r => setTimeout(r, 600)); // be polite to the public Valhalla server
-    }
-    console.log(`[match] done — ${matched} snapped, ${kept} kept raw, ${skipped} already cached`);
-  } finally {
-    matchingInProgress = false;
-  }
-}
-
 // Run the schedule-PDF scraper as a child process, weekly. Kept out-of-process
 // so its network work (and any hang behind the agency's Akamai protection) can't
 // stall the main server. Logs are streamed to our console.
@@ -1414,14 +1346,6 @@ function runScrape() {
 function scheduleWeeklyScrape() {
   setTimeout(runScrape, 60 * 1000);                 // ~1 min after boot
   setInterval(runScrape, 7 * 24 * 60 * 60 * 1000);  // then weekly
-}
-
-// Best available geometry for a route: server-matched (DB) → vendored JSON → raw.
-function bestShapeFor(routeId, rawShape) {
-  const m = dbGet(`SELECT shape, is_raw FROM route_shapes_matched WHERE route_id=?`, [routeId]);
-  if (m && m.shape && !m.is_raw) return { shape: m.shape, matched: true };
-  if (MATCHED_SHAPES[routeId]) return { shape: MATCHED_SHAPES[routeId], matched: true };
-  return { shape: rawShape, matched: false };
 }
 
 // ─── STOPS ───────────────────────────────────────────────────────────────────
@@ -1719,20 +1643,12 @@ async function handleApi(url, res) {
 
   if (p === '/api/shapes') {
     const rows = dbAll(`SELECT route_id, pattern_id, name, direction, color, shape FROM route_shapes ORDER BY route_id, pattern_id`);
-    // Always serve our curated dark/distinct palette, not the upstream pattern
-    // colors (which include pale pastels and #FFFFFF that vanish on the map).
-    const firstPatternSeen = new Set();
-    rows.forEach(r => {
-      if (ROUTE_MAP[r.route_id]) r.color = ROUTE_MAP[r.route_id].color;
-      // Map-matched geometry only exists for the FIRST pattern of each route
-      // (the one the map draws). Apply it only there — patterns 2/3 keep their
-      // own raw shapes so the frontend's per-pattern direction snap still works.
-      if (!firstPatternSeen.has(r.route_id)) {
-        firstPatternSeen.add(r.route_id);
-        const best = bestShapeFor(r.route_id, r.shape);
-        r.shape = best.shape; r.matched = best.matched;
-      }
-    });
+    // Serve the agency's own GTFS shapes (which already lie on the roads), with
+    // our curated dark/distinct palette instead of the upstream pattern colors
+    // (those include pale pastels and #FFFFFF that vanish on the map). No
+    // map-matching: the raw shapes are the cleanest source — matching against an
+    // external engine introduced wrong-road artifacts. Smoothing is done client-side.
+    rows.forEach(r => { if (ROUTE_MAP[r.route_id]) r.color = ROUTE_MAP[r.route_id].color; });
     return json(res, rows);
   }
 
@@ -2481,9 +2397,6 @@ const server = http.createServer((req, res) => {
   }
 
   await fetchAllStops();
-  // Snap routes to roads in the background (non-blocking) so the map upgrades to
-  // clean on-road lines without delaying startup. Cached, so it's a no-op once done.
-  setTimeout(() => matchAllRoutes().catch(e => console.error('[match] boot:', e.message)), 4000);
   await loadGtfs();
   buildTripIndex();
   // Train learning model on past stop_arrivals history
@@ -2516,8 +2429,6 @@ const server = http.createServer((req, res) => {
   }, 60 * 60 * 1000);
   setInterval(fetchShapes, 24 * 60 * 60 * 1000);
   setInterval(fetchAllStops, 24 * 60 * 60 * 1000);
-  // Re-check map-matching daily (only re-snaps routes whose shape hash changed).
-  setInterval(() => matchAllRoutes().catch(e => console.error('[match] periodic:', e.message)), 24 * 60 * 60 * 1000);
   setInterval(discoverNewRoutes, 10 * 60 * 1000); // check for new routes every 10 min
   // Weekly: mirror the agency's human-readable schedule PDFs (runs the scraper
   // as a child process; non-fatal if the agency site blocks us — GTFS is the

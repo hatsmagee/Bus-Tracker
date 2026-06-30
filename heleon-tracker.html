@@ -1622,60 +1622,6 @@ function buildRouteMetaFromVehicles() {
   });
 }
 
-// ─── ROUTE OFFSET COMPUTATION ─────────────────────────────────────────────────
-// Snap a coordinate to a ~25m grid cell key for overlap detection
-function gridKey(lon, lat) {
-  return `${Math.round(lat * 4000)},${Math.round(lon * 4000)}`;
-}
-
-function computeRouteOffsets(routeCoordMap) {
-  // routeCoordMap: { routeId -> [[lon,lat],...] }
-  // Returns: { routeId -> offsetPx }
-
-  // Build grid: cell -> Set of routeIds passing through
-  const grid = {};
-  for (const [rid, coords] of Object.entries(routeCoordMap)) {
-    for (const [lon, lat] of coords) {
-      const k = gridKey(lon, lat);
-      if (!grid[k]) grid[k] = new Set();
-      grid[k].add(rid);
-    }
-  }
-
-  // For each route, find all routes it shares cells with and build co-occurrence counts
-  const coOccur = {}; // routeId -> Map<otherRouteId, sharedCellCount>
-  for (const [rid] of Object.entries(routeCoordMap)) coOccur[rid] = new Map();
-
-  for (const peers of Object.values(grid)) {
-    if (peers.size < 2) continue;
-    const arr = [...peers];
-    for (const a of arr) for (const b of arr) {
-      if (a !== b) coOccur[a].set(b, (coOccur[a].get(b) || 0) + 1);
-    }
-  }
-
-  // Build groups of significantly overlapping routes (>20 shared cells)
-  const OVERLAP_THRESH = 20;
-  const assigned = {}; // routeId -> { slot, groupSize } (slot centered on 0)
-
-  // For each route, get its overlap peers sorted by routeId for stable ordering
-  for (const rid of Object.keys(routeCoordMap)) {
-    const peers = [...coOccur[rid].entries()]
-      .filter(([, n]) => n >= OVERLAP_THRESH)
-      .map(([id]) => id);
-
-    if (!peers.length) { assigned[rid] = { slot: 0, groupSize: 1 }; continue; }
-
-    // All routes in this overlap group — sort stably by routeId number
-    const group = [...new Set([rid, ...peers])].sort((a, b) => Number(a) - Number(b));
-    const idx = group.indexOf(rid);
-    const center = (group.length - 1) / 2;
-    assigned[rid] = { slot: idx - center, groupSize: group.length };
-  }
-
-  return assigned;
-}
-
 let routeLayerIds = [];  // MapLibre layer IDs
 let routeSourceIds = []; // MapLibre source IDs
 
@@ -1862,30 +1808,23 @@ function renderRouteShapes(force) {
     try {
       coords = decodePolyline(s.shape);
       if (coords.length < 2) return;
-      // Light Douglas–Peucker simplify to drop near-duplicate vertices (those
-      // micro-segments make line-offset fan out at corners). The shapes are
-      // already snapped to roads server-side (Valhalla), so use a gentle
-      // tolerance (~3 m) that cleans redundant points without cutting corners.
+      // Light Douglas–Peucker simplify to drop near-duplicate GTFS vertices.
+      // These are the agency's own on-road shapes, so a gentle ~3 m tolerance
+      // cleans redundant points without cutting corners. No map-matching, no
+      // offset, no heavy smoothing — we just draw the road geometry itself.
       coords = simplifyPath(coords, 0.00003);
-      // Drop hairpin spikes left by map-matching (the doubling-back artifacts).
-      coords = despike(coords);
     } catch(e) { return; }
     // Keep EVERY pattern's polyline for motion/chevron snapping — a bus on
     // pattern 2/3 is far from pattern 1, so snapping to all patterns keeps it
-    // on-route. Snapping uses the ACCURATE (despiked) centerline, not the
-    // smoothed draw line, so bus positions stay precise.
+    // on-route.
     (allPatternCoords[s.route_id] = allPatternCoords[s.route_id] || []).push(coords);
     if (seen.has(s.route_id)) return;
     seen.add(s.route_id);
-    // The DRAWN line is smoothed into curves; snapping keeps the raw centerline.
-    routeCoords[s.route_id] = smoothLine(coords, 2);
+    routeCoords[s.route_id] = coords;
     routeShapeCoords[s.route_id] = coords;
     // Always prefer our curated route colors over the API pattern colors (which can be #FFFFFF etc.)
     routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || normalizeColor(s.color) || '#888', name: s.name };
   });
-
-  // Compute lateral offsets to separate overlapping routes
-  const offsets = computeRouteOffsets(routeCoords);
 
   // Remove old per-route layers then sources
   routeLayerIds.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
@@ -1899,11 +1838,13 @@ function renderRouteShapes(force) {
   // geometry (which runs along the real roads). A small pixel offset nudges
   // routes that share a road apart so they don't perfectly overlap; round joins
   // keep corners clean. No dashes — just colored roads.
-  const LINE_SPACING = 5; // px between adjacent parallel routes (clear separation)
+  // Draw each route as a thin colored line that lies right on top of its road —
+  // the goal is "the roadway, tinted in the route's color", not a fat ribbon
+  // floating beside it. So: NO line-offset (offset fans out at corners and turns
+  // shared corridors into blobs), thin width, round joins. Where routes share a
+  // road they layer on the same line — like the printed system map.
   for (const [rid, coords] of Object.entries(routeCoords)) {
     const { color } = routeMeta[rid];
-    const og = offsets[rid] || { slot: 0 };
-    const offset = (og.slot || 0) * LINE_SPACING;
     const srcId = `route-${rid}`;
     const layId = `route-line-${rid}`;
 
@@ -1915,15 +1856,10 @@ function renderRouteShapes(force) {
       id: layId, type: 'line', source: srcId,
       paint: {
         'line-color': color,
-        // Slightly thinner lines so adjacent parallel routes have room to read.
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.2, 11, 1.8, 14, 2.6, 17, 3.4],
-        'line-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.85, 12, 0.95],
-        // Separate overlapping routes earlier (from z11) and wider when zoomed in
-        // so shared-corridor routes (e.g. blue + purple on the highway) are clearly
-        // side by side, not stacked. Bounded to avoid line-offset corner overshoot.
-        'line-offset': ['interpolate', ['linear'], ['zoom'], 11, offset * 0.7, 14, offset * 1.4, 17, offset * 2.2]
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.5, 12, 2.5, 15, 3.5, 18, 5],
+        'line-opacity': 0.9
       },
-      layout: { 'line-join': 'round', 'line-cap': 'round', 'line-round-limit': 1.05 }
+      layout: { 'line-join': 'round', 'line-cap': 'round' }
     }, 'stops-circle'); // insert below stops layer
 
     routeLayerIds.push(layId);
@@ -2031,51 +1967,6 @@ function simplifyPath(pts, tol) {
     }
   }
   return pts.filter((_, i) => keep[i]);
-}
-
-// Remove "spikes": single vertices where the line darts out and back (a near-
-// 180° turn over a very short hop). These are the doubling-back / parallel-street
-// artifacts left over from map-matching. We drop the offending vertex so the line
-// passes straight through instead of drawing a hairpin.
-function despike(pts) {
-  if (pts.length < 3) return pts;
-  const mLat = 111320;
-  const mAt = lat => mLat * Math.cos(lat * Math.PI / 180);
-  const out = [pts[0]];
-  for (let i = 1; i < pts.length - 1; i++) {
-    const a = out[out.length - 1], b = pts[i], c = pts[i + 1];
-    const mLon = mAt(b[1]);
-    const ax = a[0]*mLon, ay = a[1]*mLat, bx = b[0]*mLon, by = b[1]*mLat, cx = c[0]*mLon, cy = c[1]*mLat;
-    const v1x = bx-ax, v1y = by-ay, v2x = cx-bx, v2y = cy-by;
-    const l1 = Math.hypot(v1x,v1y), l2 = Math.hypot(v2x,v2y);
-    if (l1 > 0 && l2 > 0) {
-      const cos = (v1x*v2x + v1y*v2y) / (l1*l2);
-      // Sharp reversal (>150°) on a short limb (<25 m) ⇒ spike: skip vertex b.
-      if (cos < -0.87 && Math.min(l1, l2) < 25) continue;
-    }
-    out.push(b);
-  }
-  out.push(pts[pts.length - 1]);
-  return out;
-}
-
-// Chaikin corner-cutting: replaces each interior vertex with two points 1/4 and
-// 3/4 along its adjacent edges, rounding sharp polyline corners into smooth
-// curves that still hug the road. Two iterations give the flowing look of the
-// printed map without the "fan-out" that line-offset causes on raw corners.
-function smoothLine(pts, iterations = 2) {
-  let cur = pts;
-  for (let it = 0; it < iterations && cur.length > 2; it++) {
-    const next = [cur[0]];
-    for (let i = 0; i < cur.length - 1; i++) {
-      const p = cur[i], q = cur[i + 1];
-      next.push([p[0] + 0.25 * (q[0] - p[0]), p[1] + 0.25 * (q[1] - p[1])]);
-      next.push([p[0] + 0.75 * (q[0] - p[0]), p[1] + 0.75 * (q[1] - p[1])]);
-    }
-    next.push(cur[cur.length - 1]);
-    cur = next;
-  }
-  return cur;
 }
 
 function decodePolyline(encoded) {

@@ -14,9 +14,9 @@ entirely on your own machine — no cloud dependency, no API hammering.
 - **Official predicted arrivals** from the GTFS-realtime TripUpdates feed as the
   headline ETA, with a transformer learning a correction on top
 - **Schedule adherence** (ahead/behind) with a sanity guard against bad matches
-- **Snap-to-road route shapes** — route geometry is map-matched to the real road
-  network (Valhalla) offline and vendored in; parallel-line offset keeps
-  overlapping routes readable
+- **Colored-roadway route lines** — each route is drawn as a thin colored line
+  directly on the agency's own GTFS road geometry (no external map-matching, no
+  offset), so shared corridors layer cleanly like the printed system map
 - **Animated direction chevrons** streaming ahead of each bus along the real
   road, route-colored, pointing the way it's about to go
 - **Official bus stops** + **learned "observed" stops** — places buses repeatedly
@@ -167,18 +167,16 @@ If Render assigned a different hostname, edit
 - `heleon-server.js` — main backend (GTFS-RT polling, DB, GTFS, transformer, weather)
 - `gtfs-rt.js` — dependency-free GTFS-realtime protobuf decoder
 - `heleon-tracker.html` — single-file dashboard
-- `map-match.js` — **server-side** map-matcher: snaps each route's GTFS shape to
-  OSM roads via the public Valhalla API, rejects artifact-prone matches (keeps the
-  raw shape instead), caches results in the DB. Runs in the background on boot;
-  no local Valhalla/Docker needed. The drawn lines are then Chaikin-smoothed and
-  de-spiked client-side into even, parallel, road-following curves.
 - `backup.js` — free durable DB backup (GitHub repo or S3-compatible store). Lets
   history survive ephemeral hosts (e.g. Render free tier wiping `/tmp` on deploy):
   restores the latest snapshot on boot, snapshots periodically + on shutdown.
+- `data/heleon-reference.json` — route classification (Express/Local/Neighborhood/
+  Flex), transit-hub connections, Park-and-Ride/terminals/airports — the data the
+  System Map PDF carries but GTFS doesn't. Auto-validated weekly against GTFS.
+- `scripts/scrape-reference.js` — weekly: refreshes the reference file's route
+  roster/names/colors from live GTFS, preserves curated classification, flags drift.
 - `scripts/scrape-schedules.js` — weekly scraper for the agency's schedule PDFs
   (timetables/stops/names) from heleonbus.hawaiicounty.gov → `data/schedules/`.
-- `scripts/match-routes.js` — legacy offline matcher (superseded by `map-match.js`)
-- `data/route-shapes-matched.json` — vendored snap-to-road geometry (fallback)
 - `scripts/keepalive.sh` — bash script that pings the Render URL
 - `render.yaml` — Render Blueprint (web service only)
 - `systemd/heleon-tracker.service` — local tracker systemd unit
