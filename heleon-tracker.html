@@ -89,12 +89,25 @@
     .sidebar.collapsed .refresh-bar { display: none; }
     /* Tighten the header so the title + badges don't collide on a phone. The
        logo is enough branding; hide the long wordmark. */
-    header { gap: 8px; padding: 0 10px; }
-    header img { height: 26px; }
+    header { gap: 6px; padding: 0 8px; }
+    header img { height: 24px; }
     header h1 { display: none; }
-    .header-badges { gap: 5px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .header-badges { gap: 4px; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .header-badges::-webkit-scrollbar { display: none; }
     .badge { padding: 3px 7px; font-size: 10px; white-space: nowrap; flex-shrink: 0; }
     #lastUpdate { display: none; }              /* shown in the sheet instead */
+    /* On the smallest phones, condense badges — the "Last-known shown" label
+       becomes a compact pill; full wording is in the tooltip on tap. */
+    @media (max-width: 360px) {
+      #staleBadge #staleText { display: none; }
+      #locateBadge #locateText { display: none; }
+      #vehicleCountText { display: none; }
+    }
+    /* Tab bar is tight on 320px — drop the emoji prefix on smallest screens
+       so the route names stay visible. */
+    @media (max-width: 360px) {
+      .tab { font-size: 10px; padding: 10px 2px; }
+    }
   }
 
   /* ─── GOLDEN PATH ARROWS (animated dashed line ahead of each bus) ── */
