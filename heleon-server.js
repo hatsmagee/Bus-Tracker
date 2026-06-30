@@ -190,8 +190,7 @@ async function openDb() {
     headsign    TEXT
   )`);
 
-  // Persist DB to disk periodically
-  setInterval(saveDb, DB_SAVE_INTERVAL);
+  // Persist DB to disk periodically (the actual interval is set in boot)
 }
 
 function saveDb() {
