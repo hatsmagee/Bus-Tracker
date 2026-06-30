@@ -2503,8 +2503,19 @@ let aircraftLastError = null;
 // Set OPENSKY_CLIENT_ID + OPENSKY_CLIENT_SECRET to enable; we fetch & cache an
 // OAuth2 token (client_credentials grant) and send it as a Bearer header. With no
 // credentials we fall back to anonymous (still works, just polled more slowly).
-const OPENSKY_CLIENT_ID = process.env.OPENSKY_CLIENT_ID || '';
-const OPENSKY_CLIENT_SECRET = process.env.OPENSKY_CLIENT_SECRET || '';
+// Credentials come from env vars (preferred — set these on Render) or, for local
+// dev convenience, a gitignored Sources/credentials.json ({clientId, clientSecret}).
+function loadOpenSkyCreds() {
+  let id = process.env.OPENSKY_CLIENT_ID || '', secret = process.env.OPENSKY_CLIENT_SECRET || '';
+  if (!id || !secret) {
+    try {
+      const c = JSON.parse(fs.readFileSync(path.join(__dirname, 'Sources', 'credentials.json'), 'utf8'));
+      id = id || c.clientId || ''; secret = secret || c.clientSecret || '';
+    } catch { /* no file — anonymous */ }
+  }
+  return { id, secret };
+}
+const { id: OPENSKY_CLIENT_ID, secret: OPENSKY_CLIENT_SECRET } = loadOpenSkyCreds();
 const OPENSKY_TOKEN_URL = 'https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token';
 const openskyAuthed = () => !!(OPENSKY_CLIENT_ID && OPENSKY_CLIENT_SECRET);
 let openskyToken = null, openskyTokenExp = 0;

@@ -16,5 +16,8 @@ public/
 # Scraped schedule PDFs (refreshed weekly by scripts/scrape-schedules.js)
 data/schedules/
 
+# Secrets — OpenSky OAuth2 client creds (never commit; use Render env vars in prod)
+Sources/credentials.json
+
 # Logs
 *.log
