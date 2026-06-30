@@ -207,7 +207,7 @@ function saveDb() {
 // which we keep. Prunes then VACUUMs to actually reclaim disk.
 const PINGS_RETAIN_MS    = 14 * 86400000; // 2 weeks of raw GPS
 const POLLLOG_RETAIN_MS  = 6 * 3600000;   // 6h of poll telemetry (/api/stats only reads the last 1h)
-const ARRIVALS_RETAIN_MS = 90 * 86400000; // 90 days of arrivals for typical patterns
+const ARRIVALS_RETAIN_MS = 365 * 86400000; // 1 year of arrivals — long enough to surface weekly/seasonal patterns, small in absolute terms (~1k rows/active stop)
 function pruneDb() {
   if (!db) return;
   try {
@@ -1706,6 +1706,45 @@ async function handleApi(url, res) {
       totalArrivals: allArrivals.length,
       typicalNow,   // { mean, stddev, n } — typical minute-of-hour arrivals at this stop
       typicalByHour // all hours for sparkline
+    });
+  }
+
+  // Long-term arrival pattern by (day-of-week, hour-of-day). Answers
+  // "what time does this bus usually stop here on a Tuesday afternoon?"
+  // Returns a 7×24 matrix of { mean, stddev, n } keyed by dow/hod so the
+  // UI can render a heatmap. We use the long retention window so weekly
+  // patterns are visible (commute peaks, weekend lulls, etc).
+  if (p === '/api/stop_patterns') {
+    const stopId = parseInt(q.get('stop_id'));
+    const routeId = parseInt(q.get('route_id'));
+    if (!stopId || !routeId) return json(res, { error: 'stop_id and route_id required' }, 400);
+    // Pull up to 5000 recent arrivals (well within the 90-day retention
+    // for busy stops; for quiet stops we get all of them).
+    const rows = dbAll(
+      `SELECT ts FROM stop_arrivals WHERE stop_id=? AND route_id=? ORDER BY ts DESC LIMIT 5000`,
+      [stopId, routeId]
+    );
+    // Bucket: bucket[dow][hod] = [minutes-of-day list]
+    const bucket = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => []));
+    rows.forEach(r => {
+      const d = new Date(r.ts);
+      bucket[d.getDay()][d.getHours()].push(d.getMinutes() + d.getSeconds() / 60);
+    });
+    // Reduce to { mean, stddev, n } per cell. Skip cells with too few samples
+    // to avoid noise; we report n so the UI can show confidence.
+    const matrix = bucket.map((dayBuckets, dow) =>
+      dayBuckets.map((mins, hod) => {
+        if (mins.length < 2) return { mean: null, stddev: null, n: mins.length };
+        const mean = mins.reduce((a, b) => a + b, 0) / mins.length;
+        const variance = mins.reduce((a, b) => a + (b - mean) ** 2, 0) / mins.length;
+        return { mean: Math.round(mean * 10) / 10, stddev: Math.round(Math.sqrt(variance) * 10) / 10, n: mins.length };
+      })
+    );
+    return json(res, {
+      stopId, routeId,
+      totalArrivals: rows.length,
+      daysCovered: 90,
+      matrix, // matrix[dow][hod] = { mean (minute of hour), stddev, n }
     });
   }
 
