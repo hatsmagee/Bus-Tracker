@@ -1636,6 +1636,22 @@ function buildRouteMetaFromVehicles() {
 // cells (i.e. run the same corridor), group them, and give each a centered slot.
 // `routeCoordMap`: routeId -> [ [[lon,lat]…], … ] (one or more pattern polylines).
 function gridKey(lon, lat) { return `${Math.round(lat * 3000)},${Math.round(lon * 3000)}`; } // ~37m cells
+
+// Is this pattern's road already drawn by patterns we're keeping for the same
+// route? Direction-agnostic (a grid cell doesn't care which way the bus goes), so
+// the reverse-direction twin of a road comes back ≈fully covered and is dropped.
+// A pattern with a meaningful stretch of NEW road (a different loop/branch) is
+// kept. Threshold 0.7: <30% new coverage ⇒ it's effectively the same line.
+function coverageAlreadyDrawn(coords, keptParts) {
+  if (!keptParts.length) return false;
+  const have = new Set();
+  for (const part of keptParts) for (const [lon, lat] of part) have.add(gridKey(lon, lat));
+  let covered = 0, total = 0;
+  const own = new Set();
+  for (const [lon, lat] of coords) own.add(gridKey(lon, lat));
+  for (const k of own) { total++; if (have.has(k)) covered++; }
+  return total > 0 && covered / total >= 0.7;
+}
 function computeRouteOffsets(routeCoordMap) {
   const grid = {}; // cell -> Set(routeId)
   for (const [rid, parts] of Object.entries(routeCoordMap)) {
@@ -1859,11 +1875,17 @@ function renderRouteShapes(force) {
       // offset, no heavy smoothing — we just draw the road geometry itself.
       coords = simplifyPath(coords, 0.00003);
     } catch(e) { return; }
-    // Keep EVERY pattern's polyline. We draw ALL of them (a route like 401 has a
-    // northern and a southern loop — drawing only the first drops half the route)
-    // and also use them for motion/chevron snapping.
+    // Keep EVERY pattern's polyline for motion/chevron snapping (a bus can run
+    // either direction along the same road, and the chevrons need both).
     (allPatternCoords[s.route_id] = allPatternCoords[s.route_id] || []).push(coords);
-    (routeMultiCoords[s.route_id] = routeMultiCoords[s.route_id] || []).push(coords);
+    // For DRAWING, dedupe within the route: the outbound and inbound patterns of a
+    // route usually trace the SAME road, so drawing both stacks two identical lines
+    // ("double route"). Direction is shown by the chevrons, not a second line — so
+    // we only add a pattern if it covers road the kept patterns don't already cover.
+    // Genuinely distinct legs (e.g. 401's separate north + south loops) survive
+    // because their coverage is new.
+    const kept = (routeMultiCoords[s.route_id] = routeMultiCoords[s.route_id] || []);
+    if (!coverageAlreadyDrawn(coords, kept)) kept.push(coords);
     if (!seen.has(s.route_id)) {
       seen.add(s.route_id);
       routeShapeCoords[s.route_id] = coords; // first pattern — used for the ahead-arrows
