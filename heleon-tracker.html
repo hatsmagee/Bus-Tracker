@@ -2317,16 +2317,25 @@ function renderMarkers() {
       const m = markers[v.id];
       const dt = Math.max(0.1, (nowT - m.fixTime) / 1000); // s since last fix
       if (onRoute && m.onRoute && m.rc === rc) {
-        // Distance actually travelled ALONG THE ROAD since the last fix. Forward
-        // only — if the snap went backward (GPS jitter / a loop), treat as 0 so a
-        // parked or jittering bus never creeps or reverses.
-        const fwd = snap.dist - m.targetDist;
-        m.alongSpeed = fwd > 1 ? fwd / dt : 0;   // m/s along route; <1 m of drift = stopped
-        m.targetDist = Math.max(m.targetDist, snap.dist); // setpoint only moves forward
+        // Measured pace between the last two fixes (forward-only).
+        const measured = (snap.dist - (m.prevAnchorDist ?? snap.dist)) / Math.max(dt, 1);
+        // Anchor the glide. The marker has been gliding ahead of GPS on purpose
+        // (showing where the bus should be). If the new fix is AHEAD of the
+        // rendered position, the marker fell behind — anchor forward to the fix.
+        // If the fix is BEHIND (marker over-glided), keep the rendered position as
+        // the anchor so motion stays smooth and forward — the fix just recalibrates
+        // pace, it doesn't yank the bus backward.
+        m.anchorDist = Math.max(m.curDist ?? snap.dist, snap.dist);
+        m.anchorTime = nowT;
+        // Expected pace: prefer the agency's prediction (dist-to-next-stop ÷ ETA);
+        // fall back to measured. This keeps the bus gliding smoothly between fixes.
+        m.pace = paceFromEta(v) ?? (measured > 0 ? measured : 0);
+        if (!(m.pace >= 0)) m.pace = 0;
+        m.prevAnchorDist = snap.dist;
       } else if (onRoute) {
-        // First time on this route (or route changed): jump state to the fix,
-        // no implied motion yet.
-        m.rc = rc; m.curDist = snap.dist; m.targetDist = snap.dist; m.alongSpeed = 0;
+        // First time on this route (or route changed): start at the fix.
+        m.rc = rc; m.curDist = snap.dist; m.anchorDist = snap.dist; m.prevAnchorDist = snap.dist;
+        m.anchorTime = nowT; m.pace = paceFromEta(v) ?? 0;
       } else {
         // Off-route bus (too far from its shape to trust route motion): glide
         // smoothly in a straight line from where it's rendered to the new fix
@@ -2353,7 +2362,9 @@ function renderMarkers() {
       markers[v.id] = {
         marker, el, heading, fix, fixTime: nowT,
         rc: onRoute ? rc : null, onRoute,
-        curDist: onRoute ? snap.dist : 0, targetDist: onRoute ? snap.dist : 0, alongSpeed: 0,
+        curDist: onRoute ? snap.dist : 0,
+        anchorDist: onRoute ? snap.dist : 0, prevAnchorDist: onRoute ? snap.dist : 0,
+        anchorTime: nowT, pace: onRoute ? (paceFromEta(v) ?? 0) : 0,
       };
     }
   });
@@ -2538,17 +2549,35 @@ function loadFraction(v) {
   return Math.max(0, Math.min(1, v.passengerLoad || 0));
 }
 
-// Route-snapped motion: each marker slides FORWARD along its road polyline at
-// the pace the real bus moved last interval. It never reverses, never jumps off
-// the road, and a stopped bus (alongSpeed ≈ 0) doesn't move at all. The marker's
-// distance-along-route eases toward the latest fix's distance and stops there
-// until the next fix advances it — so it tracks the real bus without overshoot.
+// Expected pace (m/s along the route) from the agency's own prediction: distance
+// to the next stop ÷ its predicted ETA. This is a better "how fast is it going"
+// signal than raw GPS-to-GPS speed, and it keeps the bus gliding between fixes.
+// Returns null if we don't have a usable ETA (caller falls back to measured speed).
+function paceFromEta(v) {
+  const sl = stoplineCache[v.id];
+  if (!sl || !sl.next_stop) return null;
+  const ns = sl.next_stop;
+  const etaMin = ns.etaMin;
+  if (etaMin == null || etaMin <= 0.2) return null;     // at/just-leaving a stop → no implied pace
+  const distM = (ns.distKm || 0) * 1000;
+  if (distM < 20) return null;
+  const pace = distM / (etaMin * 60);                    // m/s
+  return pace > 0.3 && pace < 35 ? pace : null;          // sanity bound (≈0.7–78 mph)
+}
+
+// Route-snapped motion (a PACING model, not a control loop): the marker glides
+// FORWARD along its road polyline at the expected pace, continuing smoothly
+// between GPS fixes instead of freezing at the last one. Each fix re-anchors the
+// distance; the marker keeps moving at `pace` from that anchor, capped so it
+// can't run more than a little past where the next fix could plausibly be. A bus
+// that's actually stopped (pace ≈ 0, e.g. dwelling at a stop) holds position.
 let markerAnimRAF = null;
 let markerLastFrame = 0;
+const PACE_LEAD_CAP_M = 250; // don't glide more than this past the last fix's anchor
 function startMarkerAnim() {
   if (markerAnimRAF) return;
   const tick = (now) => {
-    const frameDt = markerLastFrame ? Math.min(0.25, (now - markerLastFrame) / 1000) : 0.016;
+    const markerLastFramePrev = markerLastFrame;
     markerLastFrame = now;
     let anyMoving = false;
     for (const id in markers) {
@@ -2566,16 +2595,26 @@ function startMarkerAnim() {
         }
         continue;
       }
-      const remaining = m.targetDist - m.curDist;
-      if (remaining > 0.3) {
-        // Advance forward at the measured along-route speed. Cap the step so we
-        // never blow past the setpoint (no jump-forward). If alongSpeed is ~0 the
-        // bus is stopped → step is ~0 → it holds position.
-        const step = Math.min(remaining, Math.max(m.alongSpeed, remaining / 6) * frameDt);
-        m.curDist += step;
+      // Where the bus SHOULD be now: anchor distance + pace × time since anchor,
+      // capped so a missing update doesn't fling it too far ahead.
+      const sinceAnchor = (now - (m.anchorTime || now)) / 1000;
+      const want = m.anchorDist + Math.min((m.pace || 0) * sinceAnchor, PACE_LEAD_CAP_M);
+      const frameDt = markerLastFramePrev ? Math.min(0.1, (now - markerLastFramePrev) / 1000) : 0.016;
+      const diff = want - m.curDist;
+      if (diff > 0.05) {
+        // Glide at the bus's pace for smooth continuous motion. Add a gentle
+        // catch-up proportional to how far behind we are (e.g. just after a new
+        // fix), so we converge without a visible jump and never overshoot.
+        const speed = (m.pace || 0) + Math.min(diff, 30) * 0.6;
+        m.curDist = Math.min(want, m.curDist + speed * frameDt);
         m.marker.setLngLat(posAtDist(m.rc, m.curDist));
-        anyMoving = true;
       }
+      // Keep the loop alive while this bus is still moving (pace>0) and hasn't
+      // hit its lead cap or the route end — so it glides continuously between
+      // fixes rather than freezing once it catches the current frame's target.
+      if ((m.pace || 0) > 0.3 && m.curDist < m.rc.total - 1 &&
+          (m.curDist - m.anchorDist) < PACE_LEAD_CAP_M) anyMoving = true;
+      else if (diff > 0.2) anyMoving = true;
     }
     if (anyMoving && !document.hidden) { markerAnimRAF = requestAnimationFrame(tick); }
     else { markerAnimRAF = null; markerLastFrame = 0; }
