@@ -1685,6 +1685,18 @@ async function handleApi(url, res) {
     const officialStops = (v.tripId && tripUpdateIndex[v.tripId]) || {};
     const nowMsEta = Date.now();
 
+    // The transformer's input depends only on the bus (speed) + route, not the
+    // individual stop, so run the forward pass ONCE here rather than per stop.
+    // Its 5 output heads are the residual (actual − naive ETA) for the 1st..5th
+    // stop ahead of the bus, so each stop uses the head matching how many stops
+    // ahead it is (clamped to 0..4).
+    const seqOut = TX.forward(buildTokenSequence(v, 0, null, v.routeId)).out;
+    // Rank stops by distance to map them to "n stops ahead" → head index.
+    const distRank = {};
+    [...stops].map((s, i) => ({ i, d: haversineKm(v.lat, v.lon, s.lat, s.lon) }))
+              .sort((a, b) => a.d - b.d)
+              .forEach((e, rank) => { distRank[e.i] = rank; });
+
     // Find closest stop to figure out which direction/sequence we're travelling
     const stopETAs = stops.map((stop, i) => {
       const distKm = haversineKm(v.lat, v.lon, stop.lat, stop.lon);
@@ -1694,15 +1706,8 @@ async function handleApi(url, res) {
       const off = officialStops[String(stop.id)] || officialStops[stop.id];
       const etaOfficial = off ? Math.round(((off.ms - nowMsEta) / 60000) * 10) / 10 : null;
 
-      // Sequence-model prediction: predicts residuals for next 5 stops
-      // Pass sched delta vs GTFS scheduled time (positive = bus behind schedule)
-      const schedDeltaSec = stop.scheduledMs ? (stop.scheduledMs - Date.now()) / 1000 : null;
-      const tokens = buildTokenSequence(v, distKm, schedDeltaSec, v.routeId);
-      const seqPred = TX.forward(tokens);
-      // For stop i+1 in route order, use head 0; for later stops use higher heads.
-      // Approximation: use head 0 for now since we don't have true position-in-sequence here.
-      // For more accurate per-stop predictions, we'd need to pass position info.
-      const correction = seqPred.out[0];
+      // Model correction: use the output head for this stop's rank ahead of the bus.
+      const correction = seqOut[Math.min(distRank[i] || 0, seqOut.length - 1)];
       const etaSeq = etaHist != null ? Math.max(0, etaHist + correction) : null;
 
       // Headline ETA: prefer the agency's official prediction; fall back to the
