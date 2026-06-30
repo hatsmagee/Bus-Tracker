@@ -846,8 +846,9 @@ function initMapLayers() {
     vesselPopup = new maplibregl.Popup({ offset: 12, maxWidth: '260px' })
       .setLngLat(e.lngLat).setHTML(html).addTo(map);
   });
-  map.on('mouseenter', 'vessels-circle', () => map.getCanvas().style.cursor = 'pointer');
-  map.on('mouseleave', 'vessels-circle', () => map.getCanvas().style.cursor = '');
+  wireLayerHover('vessels-circle', p => `
+    <div style="font-weight:600;">⛵ ${escapeHtml(p.name) || 'Unknown vessel'}</div>
+    <div style="color:var(--muted);font-size:11px;">${p.speedKts} kts · heading ${Math.round(p.heading)}°</div>`);
 
   // ─── AIRCRAFT layer ───────────────────────────────────────────────────────
   // Triangle symbol rotated per-feature to match the aircraft's true track.
@@ -894,8 +895,11 @@ function initMapLayers() {
     aircraftPopup = new maplibregl.Popup({ offset: 12, maxWidth: '280px' })
       .setLngLat(e.lngLat).setHTML(html).addTo(map);
   });
-  map.on('mouseenter', 'aircraft-triangles', () => map.getCanvas().style.cursor = 'pointer');
-  map.on('mouseleave', 'aircraft-triangles', () => map.getCanvas().style.cursor = '');
+  wireLayerHover('aircraft-triangles', p => {
+    const altFt = p.altM != null && p.altM !== '' ? Math.round(p.altM * 3.28084).toLocaleString() + ' ft' : '—';
+    return `<div style="font-weight:600;font-family:monospace;">✈️ ${escapeHtml(p.callsign) || p.icao24}</div>
+      <div style="color:var(--muted);font-size:11px;">${altFt} · ${(p.onGround === true || p.onGround === 'true') ? 'on ground' : 'airborne'}</div>`;
+  });
 
   // Stop hover + click tooltip — hover for desktop, click/tap for mobile.
   let stopHoverPopup = null;
@@ -1921,13 +1925,17 @@ function renderRouteShapes(force) {
     routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || normalizeColor(s.color) || '#888', name: s.name };
   });
 
-  // Remove old per-route layers then sources
-  routeLayerIds.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
-  routeSourceIds.forEach(id => { if (map.getSource(id)) map.removeSource(id); });
-  routeLayerIds = [];
-  routeSourceIds = [];
-
-  if (!showRouteShapes) return;
+  // Route lines now live in ONE shared source/layer (route-shapes /
+  // route-shapes-line) rather than one pair per route, so there's nothing to
+  // tear down between renders any more — we just update the single source's
+  // data in place below. Only remove them if shapes are toggled fully off.
+  if (!showRouteShapes) {
+    routeLayerIds.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+    routeSourceIds.forEach(id => { if (map.getSource(id)) map.removeSource(id); });
+    routeLayerIds = [];
+    routeSourceIds = [];
+    return;
+  }
 
   // Where routes share a road, draw them as PARALLEL lines side by side — a double
   // line for two routes, triple for three, etc. — so every route's color stays
@@ -1938,16 +1946,16 @@ function renderRouteShapes(force) {
   // centered slot among whichever routes are actually co-located there. Solo
   // runs get slot 0 and sit exactly on the road.
   const grid = buildShareGrid(routeMultiCoords);
-  const SLOT_PX = 2.2; // px between adjacent parallel routes (per zoom step below)
+  const SLOT_PX = 3.4; // px between adjacent parallel routes (per zoom step below)
   const features = [];
   for (const [rid, parts] of Object.entries(routeMultiCoords)) {
-    const { color } = routeMeta[rid];
+    const { color, name } = routeMeta[rid];
     for (const coords of parts) {
       for (const run of sliceRouteIntoOffsetRuns(rid, coords, grid)) {
         features.push({
           type: 'Feature',
           geometry: { type: 'LineString', coordinates: run.pts },
-          properties: { color, slot: run.slot }
+          properties: { color, slot: run.slot, routeId: rid, routeName: name || `Route ${rid}` }
         });
       }
     }
@@ -1970,7 +1978,7 @@ function renderRouteShapes(force) {
     id: layId, type: 'line', source: srcId,
     paint: {
       'line-color': ['get', 'color'],
-      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.4, 12, 2.2, 15, 3, 18, 4],
+      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2.2, 12, 3.4, 15, 4.6, 18, 6.2],
       'line-opacity': 0.92,
       // Parallel separation, scaled by zoom so the lines stay adjacent (not
       // fanned) — small at low zoom, a touch wider when zoomed in. Slot is
@@ -1982,6 +1990,11 @@ function renderRouteShapes(force) {
     },
     layout: { 'line-join': 'round', 'line-cap': 'round' }
   }, 'stops-circle'); // insert below stops layer
+  wireLayerHover(layId, p => `
+    <div style="display:flex;align-items:center;gap:6px;">
+      <span style="width:10px;height:10px;border-radius:50%;background:${p.color};flex-shrink:0;border:1px solid rgba(255,255,255,.5);"></span>
+      <span style="font-weight:600;">${escapeHtml(p.routeName)}</span>
+    </div>`);
 
   routeLayerIds.push(layId);
   routeSourceIds.push(srcId);
@@ -2024,9 +2037,41 @@ function renderTrails() {
     }
     if (seg.length >= 2) segments.push(seg);
 
-    const coords = segments.length > 0 ? segments[0].map(p => [p[0], p[1]]) : [];
+    // Snap each point onto the route's road polyline before drawing. Buses
+    // never actually leave the road network — only their scheduled ROUTE —
+    // so a trail that wanders off-line is GPS noise (urban canyon, multipath
+    // near buildings), not a real path the bus drove. Genuine excursions
+    // (depot visits, dead-end turnarounds far past the route's shape) stay
+    // as raw GPS, same 120 m trust threshold the live marker motion uses.
+    //
+    // Consecutive trail points are chronological and close together along the
+    // route, so after the first point we reuse its matched pattern + a tight
+    // window around its route-distance instead of a full re-scan — turns an
+    // O(points × route-length) cost into O(points × window), which matters
+    // since this runs over every vehicle's whole trail on every poll.
+    const ONROAD_TOL_M = 120;
+    let hintRc = null, hintDist = null;
+    const snapPt = (p) => {
+      let rc, snap;
+      if (hintRc) {
+        snap = snapToRouteNear(hintRc, [p[0], p[1]], hintDist, 400);
+        rc = hintRc;
+      } else {
+        ({ rc, snap } = nearestPatternSnap(t.route_id, [p[0], p[1]], null));
+      }
+      if (rc && snap && snap.offRoute < ONROAD_TOL_M) {
+        hintRc = rc; hintDist = snap.dist;
+        const onRoad = posAtDist(rc, snap.dist);
+        return [onRoad[0], onRoad[1], p[2], p[3]];
+      }
+      hintRc = null; hintDist = null; // lost the trail — re-search fully next point
+      return p;
+    };
+    const snappedSegments = segments.map(s => { hintRc = null; hintDist = null; return s.map(snapPt); });
+
+    const coords = snappedSegments.length > 0 ? snappedSegments[0].map(p => [p[0], p[1]]) : [];
     // Use MultiLineString so all segments render as one feature
-    const allCoords = segments.map(s => s.map(p => [p[0], p[1]]));
+    const allCoords = snappedSegments.map(s => s.map(p => [p[0], p[1]]));
 
     if (allCoords.length > 0) {
       lineFeatures.push({
@@ -2036,8 +2081,8 @@ function renderTrails() {
       });
     }
 
-    // Sparse dots from valid segments only
-    const validPoints = segments.flat();
+    // Sparse dots from valid segments only (road-snapped, same as the line)
+    const validPoints = snappedSegments.flat();
     const step = Math.max(1, Math.floor(validPoints.length / 20));
     validPoints.forEach((p, i) => {
       if (i % step === 0) {
@@ -2933,6 +2978,41 @@ function positionTooltip(x, y) {
 
 function hideBusTooltip() { if (hoverTooltip) hoverTooltip.style.display = 'none'; }
 
+// ─── GENERIC MAP-LAYER HOVER ────────────────────────────────────────────────
+// A small, fast "what is this" bubble for things rendered as MapLibre layers
+// rather than DOM markers (route lines, vessels, aircraft, stops) — hovering
+// shows it immediately instead of requiring a click. Reuses the same tooltip
+// element as the bus cards, just with compact HTML.
+let genericHoverLngLat = null;
+function showLayerHover(html, x, y) {
+  ensureTooltip();
+  hoverTooltip.innerHTML = html;
+  hoverTooltip.style.minWidth = '0';
+  hoverTooltip.style.maxWidth = '220px';
+  hoverTooltip.style.padding = '8px 10px';
+  positionTooltip(x, y);
+  hoverTooltip.style.display = 'block';
+}
+function hideLayerHover() {
+  hideBusTooltip();
+  hoverTooltip && (hoverTooltip.style.minWidth = '', hoverTooltip.style.maxWidth = '', hoverTooltip.style.padding = '');
+}
+
+// Wire hover-to-identify on a MapLibre layer: shows `buildHtml(feature.properties)`
+// while the pointer is over any feature in `layerId`, follows the cursor, hides on
+// leave. Also sets the pointer cursor so it reads as interactive.
+function wireLayerHover(layerId, buildHtml) {
+  map.on('mousemove', layerId, e => {
+    if (!e.features || !e.features.length) return;
+    map.getCanvas().style.cursor = 'pointer';
+    showLayerHover(buildHtml(e.features[0].properties), e.originalEvent.clientX, e.originalEvent.clientY);
+  });
+  map.on('mouseleave', layerId, () => {
+    map.getCanvas().style.cursor = '';
+    hideLayerHover();
+  });
+}
+
 // ─── RENDER MARKERS ───────────────────────────────────────────────────────────
 function renderMarkers() {
   if (!mapReady) return;
@@ -2996,13 +3076,13 @@ function renderMarkers() {
         m.anchorTime = nowT;
         // Expected pace: prefer the agency's prediction (dist-to-next-stop ÷ ETA);
         // fall back to measured. This keeps the bus gliding smoothly between fixes.
-        m.pace = paceFromEta(v) ?? (measured > 0 ? measured : 0);
+        m.pace = paceFromEta(v, m) ?? (measured > 0 ? measured : 0);
         if (!(m.pace >= 0)) m.pace = 0;
         m.prevAnchorDist = snap.dist;
       } else if (onRoute) {
         // First time on this route (or route changed): start at the fix.
         m.rc = rc; m.curDist = snap.dist; m.anchorDist = snap.dist; m.prevAnchorDist = snap.dist;
-        m.anchorTime = nowT; m.pace = paceFromEta(v) ?? 0;
+        m.anchorTime = nowT; m.pace = paceFromEta(v, m) ?? 0;
       } else {
         // Off-route bus (too far from its shape to trust route motion): glide
         // smoothly in a straight line from where it's rendered to the new fix
@@ -3018,10 +3098,25 @@ function renderMarkers() {
       m.fixTime = nowT;
       m.heading = heading;
       // Reconcile the continuous (unwrapped) angle to this new heading via the
-      // shortest path, so re-rendering the icon doesn't spin it the long way.
+      // shortest path. We do NOT repaint rotation here — the per-frame glide loop
+      // (startMarkerAnim) owns the live `transform: rotate(...)`, smoothly easing
+      // toward whatever m.headingUnwrapped is. Rebuilding the icon's innerHTML on
+      // every ~15s poll (as before) threw away the just-rendered rotation and
+      // re-painted a brand-new element at the fresh heading with no prior frame to
+      // transition from, so the CSS transition couldn't animate it — the bus
+      // visibly snapped/jerked to the new angle every single poll. Only the static
+      // bits (color/label/load/weather/number) need a fresh render on poll; the
+      // rotating div is reused as-is so its current visual angle carries forward.
       const prevU = m.headingUnwrapped ?? heading;
       m.headingUnwrapped = prevU + (((heading - (prevU % 360)) + 540) % 360 - 180);
+      const prevInner = m.el.querySelector('.bus-rot');
+      const prevTransform = prevInner ? prevInner.style.transform : null;
       m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, m.headingUnwrapped, loadFrac, v.weather, v.name);
+      const newInner = m.el.querySelector('.bus-rot');
+      // Restore the angle the bus was actually visually at a moment ago (instead of
+      // the just-baked m.headingUnwrapped) so there is no discontinuity; the rAF
+      // loop will then smoothly ease it the rest of the way on the next frame(s).
+      if (newInner && prevTransform) newInner.style.transform = prevTransform;
       applyAgeOpacity(m.el, v);
       wire(m.el, v);
     } else {
@@ -3179,11 +3274,33 @@ function nearestPatternSnap(routeId, pt, heading) {
   return best || { rc: null, snap: null };
 }
 // Snap a [lon,lat] point to the polyline; return its distance-along-route (m).
-// Searches near a hint distance first (cheap) then falls back to full scan.
+// Full scan over every segment — used where we don't already know roughly
+// where on the route the point is (first snap of a bus/trail).
 function snapToRoute(rc, pt) {
+  return snapSegmentRange(rc, pt, 0, rc.coords.length - 1);
+}
+// Same as snapToRoute but restricted to segments within `windowM` of a known
+// hint distance, found via binary search on the cumulative-distance table
+// instead of scanning from the start. Consecutive trail points are close
+// together along the route, so this turns an O(route length) scan into an
+// O(window) one — needed when snapping every point of every vehicle's trail
+// history on every poll, not just one point per vehicle.
+function snapToRouteNear(rc, pt, hintDist, windowM) {
+  const { cum } = rc;
+  const find = (d) => { let lo = 0, hi = cum.length - 1;
+    while (lo < hi - 1) { const mid = (lo + hi) >> 1; if (cum[mid] <= d) lo = mid; else hi = mid; }
+    return lo; };
+  const lo = find(Math.max(0, hintDist - windowM));
+  const hi = Math.min(cum.length - 1, find(hintDist + windowM) + 1);
+  const result = snapSegmentRange(rc, pt, lo, hi);
+  // If the windowed search came back implausibly far off-route, the bus may
+  // have jumped patterns or the hint is stale — fall back to a full scan.
+  return result.offRoute < 250 ? result : snapToRoute(rc, pt);
+}
+function snapSegmentRange(rc, pt, fromIdx, toIdx) {
   const { coords, cum } = rc;
   let bestD = Infinity, bestDist = 0;
-  for (let i = 0; i < coords.length - 1; i++) {
+  for (let i = fromIdx; i < toIdx; i++) {
     const a = coords[i], b = coords[i + 1];
     const mPerDegLat = 111320, mPerDegLon = mPerDegLat * Math.cos(a[1] * Math.PI / 180);
     const ax = a[0] * mPerDegLon, ay = a[1] * mPerDegLat;
@@ -3224,7 +3341,12 @@ function loadFraction(v) {
 // to the next stop ÷ its predicted ETA. This is a better "how fast is it going"
 // signal than raw GPS-to-GPS speed, and it keeps the bus gliding between fixes.
 // Returns null if we don't have a usable ETA (caller falls back to measured speed).
-function paceFromEta(v) {
+function smoothstep(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
+
+// Cruise pace from the agency's own ETA (distance ÷ time) — unchanged math, just
+// renamed since this is now the CRUISE speed that approach/departure easing
+// scales against, not the literal speed applied every frame.
+function cruisePaceFromEta(v) {
   const sl = stoplineCache[v.id];
   if (!sl || !sl.next_stop) return null;
   const ns = sl.next_stop;
@@ -3234,6 +3356,54 @@ function paceFromEta(v) {
   if (distM < 20) return null;
   const pace = distM / (etaMin * 60);                    // m/s
   return pace > 0.3 && pace < 35 ? pace : null;          // sanity bound (≈0.7–78 mph)
+}
+
+// Natural approach/departure easing: real buses decelerate into a stop and
+// accelerate away, they don't cruise at one speed and snap to 0. We don't have
+// a real accel/brake model (and don't need a learned one — this is geometry,
+// not something a neural net should infer), so apply a simple, cheap smoothstep
+// taper: ramp DOWN over the final DECEL_ZONE_M approaching the next stop, and
+// ramp UP over the first ACCEL_ZONE_M after leaving the previous one. The taper
+// is evaluated live every animation frame (see liveEasedPace below) against the
+// marker's actual glide position, not just once per ~15s poll, so the bus is
+// still smoothly slowing down or speeding up between polls, not just at them.
+const DECEL_ZONE_M = 70;
+const ACCEL_ZONE_M = 45;
+function paceFromEta(v, m) {
+  const cruise = cruisePaceFromEta(v);
+  if (cruise == null) return null;
+  const sl = stoplineCache[v.id];
+  const distToNext = (sl?.next_stop?.distKm || 0) * 1000;
+  // Record where (in route-distance space) the next stop is, anchored to the
+  // glide position we have *right now* — so liveEasedPace can recompute the
+  // remaining distance every frame as curDist advances, without needing the
+  // stop's own route-distance (which we don't have from the GPS-based ETA feed).
+  if (m) m.nextStopAtDist = (m.curDist ?? 0) + distToNext;
+  return cruise;
+}
+
+// Re-derive the eased pace every animation frame from the bus's current glide
+// position, so deceleration/acceleration is continuous rather than only
+// updating at poll time (~15s apart — too coarse for a 70 m braking zone).
+function liveEasedPace(m) {
+  const cruise = m.pace || 0;
+  if (cruise <= 0) return 0;
+  let factor = 1;
+  if (m.nextStopAtDist != null) {
+    const distToNext = m.nextStopAtDist - m.curDist;
+    if (distToNext < DECEL_ZONE_M) factor = smoothstep(Math.max(0, distToNext) / DECEL_ZONE_M);
+  }
+  // Track the moment we drop near-stationary so departure can ramp up from it;
+  // clear the mark once back near cruise speed.
+  const now = performance.now();
+  if (factor < 0.05) { if (m.lastStopAt == null) m.lastStopAt = now; }
+  else if (factor >= 0.95) { m.lastStopAt = null; }
+  if (m.lastStopAt != null) {
+    const sinceStop = (now - m.lastStopAt) / 1000;
+    const accelT = Math.min(1, (sinceStop * cruise) / ACCEL_ZONE_M);
+    factor = Math.min(factor, smoothstep(accelT));
+  }
+  return cruise * factor;
 }
 
 // Route-snapped motion (a PACING model, not a control loop): the marker glides
@@ -3267,16 +3437,21 @@ function startMarkerAnim() {
         continue;
       }
       // Where the bus SHOULD be now: anchor distance + pace × time since anchor,
-      // capped so a missing update doesn't fling it too far ahead.
+      // capped so a missing update doesn't fling it too far ahead. The cap uses
+      // the raw cruise pace (an upper bound); actual frame-by-frame motion below
+      // uses the eased pace so it decelerates/accelerates near stops instead of
+      // moving at one constant speed and snapping to 0.
       const sinceAnchor = (now - (m.anchorTime || now)) / 1000;
       const want = m.anchorDist + Math.min((m.pace || 0) * sinceAnchor, PACE_LEAD_CAP_M);
       const frameDt = markerLastFramePrev ? Math.min(0.1, (now - markerLastFramePrev) / 1000) : 0.016;
       const diff = want - m.curDist;
       if (diff > 0.05) {
-        // Glide at the bus's pace for smooth continuous motion. Add a gentle
-        // catch-up proportional to how far behind we are (e.g. just after a new
-        // fix), so we converge without a visible jump and never overshoot.
-        const speed = (m.pace || 0) + Math.min(diff, 30) * 0.6;
+        // Glide at the EASED pace (slows approaching the next stop, ramps up
+        // leaving the last one) for natural motion, plus a gentle catch-up
+        // proportional to how far behind we are, so we still converge to the
+        // fix without a visible jump or overshoot.
+        const eased = liveEasedPace(m);
+        const speed = eased + Math.min(diff, 30) * 0.6;
         m.curDist = Math.min(want, m.curDist + speed * frameDt);
         m.marker.setLngLat(posAtDist(m.rc, m.curDist));
         // Keep the bus pointed along the road as it rounds curves between fixes.
