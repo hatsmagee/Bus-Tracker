@@ -14,9 +14,13 @@ entirely on your own machine — no cloud dependency, no API hammering.
 - **Official predicted arrivals** from the GTFS-realtime TripUpdates feed as the
   headline ETA, with a transformer learning a correction on top
 - **Schedule adherence** (ahead/behind) with a sanity guard against bad matches
-- **Colored-roadway route lines** — each route is drawn as a thin colored line
-  directly on the agency's own GTFS road geometry (no external map-matching, no
-  offset), so shared corridors layer cleanly like the printed system map
+- **Colored-roadway route lines** — every route is snapped onto a routable
+  graph built from a local OpenStreetMap road extract for Hawai'i Island, then
+  stitched along real road segments via shortest-path, so a drawn line is
+  composed entirely of actual road geometry (it can't diagonal-cut across a
+  block — see `road-graph.js` / `scripts/snap-routes-to-roads.js`). Where
+  routes share a road, they draw as clean parallel lanes; honest gaps in OSM
+  coverage break the line rather than bridging it with a straight one.
 - **Animated direction chevrons** streaming ahead of each bus along the real
   road, route-colored, pointing the way it's about to go
 - **Official bus stops** + **learned "observed" stops** — places buses repeatedly
@@ -167,6 +171,14 @@ If Render assigned a different hostname, edit
 - `heleon-server.js` — main backend (GTFS-RT polling, DB, GTFS, transformer, weather)
 - `gtfs-rt.js` — dependency-free GTFS-realtime protobuf decoder
 - `heleon-tracker.html` — single-file dashboard
+- `road-graph.js` — builds a routable graph from `data/osm/bigisland-roads.json`
+  (junction nodes + real road-segment edges) and snaps points onto it
+- `scripts/build-osm-roads.js` — one-time: extracts Big Island road geometry from
+  a Geofabrik OSM PBF extract → `data/osm/bigisland-roads.json`
+- `scripts/snap-routes-to-roads.js` — snaps every GTFS route shape onto the road
+  graph → `data/route-shapes-road-snapped.json` (`npm run snap-routes [serverUrl]`)
+- `scripts/validate-route-roads.js` — checks route geometry against real OSM
+  roads, reports any drift (`npm run validate-routes`)
 - `backup.js` — free durable DB backup (GitHub repo or S3-compatible store). Lets
   history survive ephemeral hosts (e.g. Render free tier wiping `/tmp` on deploy):
   restores the latest snapshot on boot, snapshots periodically + on shutdown.

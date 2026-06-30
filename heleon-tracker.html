@@ -560,9 +560,28 @@
         </div>
         <div class="docs-grid">
           <div class="docs-stat"><div class="docs-stat-k">Refresh</div><div class="docs-stat-v">15 s</div></div>
-          <div class="docs-stat"><div class="docs-stat-k">Routes</div><div class="docs-stat-v">22</div></div>
+          <div class="docs-stat"><div class="docs-stat-k">Routes</div><div class="docs-stat-v">26</div></div>
           <div class="docs-stat"><div class="docs-stat-k">Backbone</div><div class="docs-stat-v">Node.js</div></div>
           <div class="docs-stat"><div class="docs-stat-k">Map</div><div class="docs-stat-v">MapLibre</div></div>
+        </div>
+      </div>
+
+      <div class="docs-section">
+        <div class="docs-h">🛣️ Route lines</div>
+        <div class="docs-p">
+          Route lines are snapped onto a routable graph built directly from a
+          local OpenStreetMap road extract for Hawai'i Island — every
+          intersection becomes a graph node, every block a graph edge. Each
+          GTFS route shape is snapped onto that graph and stitched together
+          via shortest-path along real road segments, so a drawn route line is
+          composed <em>entirely</em> of actual road geometry — it can't cut a
+          diagonal across a block, because there's no code path that draws
+          anything other than a real OSM way. Where local map data genuinely
+          has a gap (a few remote rural stretches), the line breaks honestly
+          rather than bridging with a straight line. Where two or more routes
+          share a road, they draw as clean parallel lanes scaled to the
+          number sharing it, offset only where the sharing actually happens
+          (not for the route's whole length).
         </div>
       </div>
 
