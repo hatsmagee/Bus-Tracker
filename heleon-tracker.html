@@ -1652,7 +1652,13 @@ function coverageAlreadyDrawn(coords, keptParts) {
   for (const k of own) { total++; if (have.has(k)) covered++; }
   return total > 0 && covered / total >= 0.7;
 }
-function computeRouteOffsets(routeCoordMap) {
+// Build a coarse grid of which routes pass through each cell. Used to find each
+// route's LOCAL neighbors at any given point along its line — a route's siblings
+// change as it travels (it may share a road with route A for a few blocks, then
+// run solo, then share with B and C elsewhere), so a single route-wide offset is
+// wrong: it either jitters where the local sharing differs from the global guess,
+// or pushes a solo stretch sideways off the road for no reason.
+function buildShareGrid(routeCoordMap) {
   const grid = {}; // cell -> Set(routeId)
   for (const [rid, parts] of Object.entries(routeCoordMap)) {
     for (const coords of parts) for (const [lon, lat] of coords) {
@@ -1660,27 +1666,46 @@ function computeRouteOffsets(routeCoordMap) {
       (grid[k] = grid[k] || new Set()).add(rid);
     }
   }
-  // Co-occurrence counts between routes (how many cells they share).
-  const co = {};
-  for (const rid of Object.keys(routeCoordMap)) co[rid] = {};
-  for (const peers of Object.values(grid)) {
-    if (peers.size < 2) continue;
-    const arr = [...peers];
-    for (const a of arr) for (const b of arr) if (a !== b) co[a][b] = (co[a][b] || 0) + 1;
+  return grid;
+}
+
+// Walk one route's polyline and cut it into runs of consecutive points that share
+// the same LOCAL group of co-located routes (checked in a 3x3 cell neighborhood so
+// a route doesn't flicker in/out of a shared lane between adjacent grid cells).
+// Each run gets a stable, centered slot within that local group — same idea as
+// before, just computed locally instead of once for the whole route.
+function sliceRouteIntoOffsetRuns(rid, coords, grid) {
+  const localGroupAt = (lon, lat) => {
+    const latCell = Math.round(lat * 3000), lonCell = Math.round(lon * 3000);
+    const peers = new Set([rid]);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const set = grid[`${latCell + dy},${lonCell + dx}`];
+      if (set) for (const p of set) peers.add(p);
+    }
+    return [...peers].sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
+  };
+
+  const runs = [];
+  let curGroupKey = null, curGroup = null, curPts = [];
+  for (const pt of coords) {
+    const group = localGroupAt(pt[0], pt[1]);
+    const key = group.join(',');
+    if (key !== curGroupKey) {
+      if (curPts.length > 1) runs.push({ group: curGroup, pts: curPts });
+      curGroupKey = key;
+      curGroup = group;
+      curPts = curPts.length ? [curPts[curPts.length - 1], pt] : [pt]; // 1-pt overlap so runs join seamlessly
+    } else {
+      curPts.push(pt);
+    }
   }
-  // A route shares a corridor with peers it co-occurs with in ≥ THRESH cells.
-  const THRESH = 8; // ~300m of shared road
-  const assigned = {};
-  for (const rid of Object.keys(routeCoordMap)) {
-    const peers = Object.keys(co[rid]).filter(b => co[rid][b] >= THRESH);
-    // Group = this route + its corridor peers, ordered stably by route number so
-    // the lane order is consistent everywhere they run together.
-    const group = [...new Set([rid, ...peers])].sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
-    const idx = group.indexOf(rid);
-    const center = (group.length - 1) / 2;
-    assigned[rid] = { slot: idx - center, groupSize: group.length };
-  }
-  return assigned;
+  if (curPts.length > 1) runs.push({ group: curGroup, pts: curPts });
+
+  return runs.map(r => {
+    const idx = r.group.indexOf(rid);
+    const center = (r.group.length - 1) / 2;
+    return { pts: r.pts, slot: idx - center };
+  });
 }
 
 let routeLayerIds = [];  // MapLibre layer IDs
@@ -1906,43 +1931,50 @@ function renderRouteShapes(force) {
 
   // Where routes share a road, draw them as PARALLEL lines side by side — a double
   // line for two routes, triple for three, etc. — so every route's color stays
-  // visible and you can see which routes run together and which way they go. Each
-  // route gets a slot within its shared-road group (centered on 0), and we offset
-  // by that slot. Solo routes get slot 0 (no offset), so they sit right on the road.
-  const offsets = computeRouteOffsets(routeMultiCoords);
+  // visible and you can see which routes run together and which way they go.
+  // Sharing is LOCAL: a route's neighbors change as it travels (shares a road
+  // with route A for a few blocks, runs solo elsewhere, shares with B and C
+  // further on) — so each route is cut into runs, and each run gets its own
+  // centered slot among whichever routes are actually co-located there. Solo
+  // runs get slot 0 and sit exactly on the road.
+  const grid = buildShareGrid(routeMultiCoords);
   const SLOT_PX = 2.2; // px between adjacent parallel routes (per zoom step below)
+  const features = [];
   for (const [rid, parts] of Object.entries(routeMultiCoords)) {
     const { color } = routeMeta[rid];
-    const slot = (offsets[rid] && offsets[rid].slot) || 0;
-    const srcId = `route-${rid}`;
-    const layId = `route-line-${rid}`;
-
-    // Draw ALL of a route's patterns as one MultiLineString so multi-loop routes
-    // (e.g. 401's north + south loops) appear in full, not just the first leg.
-    map.addSource(srcId, {
-      type: 'geojson',
-      data: { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: parts }, properties: {} }
-    });
-    map.addLayer({
-      id: layId, type: 'line', source: srcId,
-      paint: {
-        'line-color': color,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.4, 12, 2.2, 15, 3, 18, 4],
-        'line-opacity': 0.92,
-        // Parallel separation, scaled by zoom so the lines stay adjacent (not
-        // fanned) — small at low zoom, a touch wider when zoomed in. Slot is
-        // centered, so a 3-route group renders at -1/0/+1 → three clean lanes.
-        'line-offset': ['interpolate', ['linear'], ['zoom'],
-          10, slot * SLOT_PX * 0.6,
-          13, slot * SLOT_PX,
-          16, slot * SLOT_PX * 1.6]
-      },
-      layout: { 'line-join': 'round', 'line-cap': 'round' }
-    }, 'stops-circle'); // insert below stops layer
-
-    routeLayerIds.push(layId);
-    routeSourceIds.push(srcId);
+    for (const coords of parts) {
+      for (const run of sliceRouteIntoOffsetRuns(rid, coords, grid)) {
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates: run.pts },
+          properties: { color, slot: run.slot }
+        });
+      }
+    }
   }
+
+  const srcId = 'route-shapes';
+  const layId = 'route-shapes-line';
+  map.addSource(srcId, { type: 'geojson', data: { type: 'FeatureCollection', features } });
+  map.addLayer({
+    id: layId, type: 'line', source: srcId,
+    paint: {
+      'line-color': ['get', 'color'],
+      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.4, 12, 2.2, 15, 3, 18, 4],
+      'line-opacity': 0.92,
+      // Parallel separation, scaled by zoom so the lines stay adjacent (not
+      // fanned) — small at low zoom, a touch wider when zoomed in. Slot is
+      // centered, so a 3-route group renders at -1/0/+1 → three clean lanes.
+      'line-offset': ['interpolate', ['linear'], ['zoom'],
+        10, ['*', ['get', 'slot'], SLOT_PX * 0.6],
+        13, ['*', ['get', 'slot'], SLOT_PX],
+        16, ['*', ['get', 'slot'], SLOT_PX * 1.6]]
+    },
+    layout: { 'line-join': 'round', 'line-cap': 'round' }
+  }, 'stops-circle'); // insert below stops layer
+
+  routeLayerIds.push(layId);
+  routeSourceIds.push(srcId);
 
   // Golden path arrows ahead of each bus
   renderAheadArrows();

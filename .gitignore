@@ -23,3 +23,6 @@ Sources/credentials.json
 *.log
 # Local Valhalla Docker data (OSM extract + built tiles — large, regenerable)
 valhalla/
+data/osm/hawaii-latest.osm.pbf
+data/osm/.tmp-highways.jsonl
+data/osm/road-alignment-report.json
