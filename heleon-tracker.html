@@ -1630,6 +1630,43 @@ function buildRouteMetaFromVehicles() {
   });
 }
 
+// Assign each route a lateral "slot" so routes sharing a road draw as parallel
+// lines (2 routes → a double line, 3 → triple, etc.), centered on the road. We
+// snap every route's points to a coarse grid, find which routes co-occur in many
+// cells (i.e. run the same corridor), group them, and give each a centered slot.
+// `routeCoordMap`: routeId -> [ [[lon,lat]…], … ] (one or more pattern polylines).
+function gridKey(lon, lat) { return `${Math.round(lat * 3000)},${Math.round(lon * 3000)}`; } // ~37m cells
+function computeRouteOffsets(routeCoordMap) {
+  const grid = {}; // cell -> Set(routeId)
+  for (const [rid, parts] of Object.entries(routeCoordMap)) {
+    for (const coords of parts) for (const [lon, lat] of coords) {
+      const k = gridKey(lon, lat);
+      (grid[k] = grid[k] || new Set()).add(rid);
+    }
+  }
+  // Co-occurrence counts between routes (how many cells they share).
+  const co = {};
+  for (const rid of Object.keys(routeCoordMap)) co[rid] = {};
+  for (const peers of Object.values(grid)) {
+    if (peers.size < 2) continue;
+    const arr = [...peers];
+    for (const a of arr) for (const b of arr) if (a !== b) co[a][b] = (co[a][b] || 0) + 1;
+  }
+  // A route shares a corridor with peers it co-occurs with in ≥ THRESH cells.
+  const THRESH = 8; // ~300m of shared road
+  const assigned = {};
+  for (const rid of Object.keys(routeCoordMap)) {
+    const peers = Object.keys(co[rid]).filter(b => co[rid][b] >= THRESH);
+    // Group = this route + its corridor peers, ordered stably by route number so
+    // the lane order is consistent everywhere they run together.
+    const group = [...new Set([rid, ...peers])].sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
+    const idx = group.indexOf(rid);
+    const center = (group.length - 1) / 2;
+    assigned[rid] = { slot: idx - center, groupSize: group.length };
+  }
+  return assigned;
+}
+
 let routeLayerIds = [];  // MapLibre layer IDs
 let routeSourceIds = []; // MapLibre source IDs
 
@@ -1843,17 +1880,16 @@ function renderRouteShapes(force) {
 
   if (!showRouteShapes) return;
 
-  // One solid colored line per route, following the agency's actual route
-  // geometry (which runs along the real roads). A small pixel offset nudges
-  // routes that share a road apart so they don't perfectly overlap; round joins
-  // keep corners clean. No dashes — just colored roads.
-  // Draw each route as a thin colored line that lies right on top of its road —
-  // the goal is "the roadway, tinted in the route's color", not a fat ribbon
-  // floating beside it. So: NO line-offset (offset fans out at corners and turns
-  // shared corridors into blobs), thin width, round joins. Where routes share a
-  // road they layer on the same line — like the printed system map.
+  // Where routes share a road, draw them as PARALLEL lines side by side — a double
+  // line for two routes, triple for three, etc. — so every route's color stays
+  // visible and you can see which routes run together and which way they go. Each
+  // route gets a slot within its shared-road group (centered on 0), and we offset
+  // by that slot. Solo routes get slot 0 (no offset), so they sit right on the road.
+  const offsets = computeRouteOffsets(routeMultiCoords);
+  const SLOT_PX = 2.2; // px between adjacent parallel routes (per zoom step below)
   for (const [rid, parts] of Object.entries(routeMultiCoords)) {
     const { color } = routeMeta[rid];
+    const slot = (offsets[rid] && offsets[rid].slot) || 0;
     const srcId = `route-${rid}`;
     const layId = `route-line-${rid}`;
 
@@ -1867,8 +1903,15 @@ function renderRouteShapes(force) {
       id: layId, type: 'line', source: srcId,
       paint: {
         'line-color': color,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.5, 12, 2.5, 15, 3.5, 18, 5],
-        'line-opacity': 0.9
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.4, 12, 2.2, 15, 3, 18, 4],
+        'line-opacity': 0.92,
+        // Parallel separation, scaled by zoom so the lines stay adjacent (not
+        // fanned) — small at low zoom, a touch wider when zoomed in. Slot is
+        // centered, so a 3-route group renders at -1/0/+1 → three clean lanes.
+        'line-offset': ['interpolate', ['linear'], ['zoom'],
+          10, slot * SLOT_PX * 0.6,
+          13, slot * SLOT_PX,
+          16, slot * SLOT_PX * 1.6]
       },
       layout: { 'line-join': 'round', 'line-cap': 'round' }
     }, 'stops-circle'); // insert below stops layer
