@@ -526,6 +526,7 @@ let tripLastBuilt = 0;
 
 // Track last known closest-stop index per vehicle for arrival detection
 const vehicleLastStopIdx = {}; // vehicleId -> { stopIdx, stopId, ts }
+const vehicleRecentArrival = {}; // vehicleId -> { stopId, ts } — debounce dup arrivals
 
 function buildTripIndex() {
   const rows = dbAll(`SELECT trip_id, route_id, direction, shape_id, headsign FROM gtfs_trips`);
@@ -1058,6 +1059,14 @@ function detectArrivals(vehicle, routeId) {
   const prev = vehicleLastStopIdx[vehicle.id];
   const stop = stops[closestIdx];
 
+  // Debounce: don't re-record the same stop for this vehicle within 3 min. The
+  // nearest stop can briefly flip away and back when a bus lingers near the 200 m
+  // boundary (at a light / slow approach), which otherwise double-counts the
+  // arrival — corrupting the predictor's training pairs and learned-stop dwell
+  // counts. A genuine revisit on a loop takes far longer than 3 min.
+  const recent = vehicleRecentArrival[vehicle.id];
+  if (recent && recent.stopId === stop.id && (Date.now() - recent.ts) < 3 * 60000) return;
+
   // Record arrival if this is a new stop (advanced forward on route)
   if (!prev || prev.stopId !== stop.id) {
     const speedKmh = (vehicle.speed || 0) * 1.60934;
@@ -1110,6 +1119,7 @@ function detectArrivals(vehicle, routeId) {
     } catch (e) { /* skip live training errors */ }
 
     vehicleLastStopIdx[vehicle.id] = { stopId: stop.id, stopIdx: closestIdx, stopSeq: stop.seq, ts: Date.now() };
+    vehicleRecentArrival[vehicle.id] = { stopId: stop.id, ts: Date.now() };
   }
 }
 
