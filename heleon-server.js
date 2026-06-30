@@ -2076,6 +2076,19 @@ async function handleApi(url, res) {
     });
   }
 
+  // ── AIRCRAFT layer (OpenSky Network, no key) ──────────────────────────────
+  if (p === '/api/aircraft') {
+    const now = Date.now();
+    const list = aircraftCache.filter(a => (now - a.lastTs) < AIRCRAFT_STALE_MS);
+    return json(res, {
+      ts: now,
+      lastPollTs: aircraftLastPollTs,
+      lastError: aircraftLastError,
+      count: list.length,
+      aircraft: list,
+    });
+  }
+
   res.writeHead(404); res.end('Not found');
 }
 
@@ -2177,6 +2190,63 @@ function scheduleAisReconnect() {
   aisReconnectTimer = setTimeout(() => { aisReconnectTimer = null; connectAisStream(); }, delay);
 }
 
+// ─── AIRCRAFT (OpenSky Network) ────────────────────────────────────────────
+// Live ADS-B positions around the Hawaiian islands. Free, no API key required
+// for the anonymous tier (10s rate limit). We poll every 12s with a tight
+// Hawaii bbox so we never get more than ~30 aircraft per call.
+const OPENSKY_URL = 'https://opensky-network.org/api/states/all';
+// Hawaii bounding box, slightly widened from the bus fleet bbox to catch
+// aircraft on approach to / departure from the islands (HNL, KOA, OGG, ITO, LIH).
+const HAWAII_AIR_BBOX = {
+  lamin: 18.5, lomin: -161.0,    // include KOA airspace to the west
+  lamax: 22.5, lomax: -154.5,    // include northern Big Island
+};
+const AIRCRAFT_STALE_MS = 90 * 1000;  // 90s — OpenSky refreshes every 10s; anything older is unreliable
+let aircraftCache = [];               // [{ icao24, callsign, country, lat, lon, altM, velMs, headingDeg, onGround, lastTs }]
+let aircraftLastPollTs = null;
+let aircraftLastError = null;
+
+async function pollAircraft() {
+  const params = new URLSearchParams(HAWAII_AIR_BBOX).toString();
+  const url = `${OPENSKY_URL}?${params}`;
+  try {
+    const res = await fetchJson('opensky-network.org', `/api/states/all?${params}`);
+    if (!res || !Array.isArray(res.states)) {
+      aircraftLastError = 'unexpected response shape';
+      return;
+    }
+    const now = Date.now();
+    const next = [];
+    for (const s of res.states) {
+      // OpenSky returns a positional array (no keys). Indices per their schema:
+      // 0 icao24, 1 callsign, 2 origin_country, 3 time_position, 4 last_contact,
+      // 5 lon, 6 lat, 7 baro_altitude, 8 on_ground, 9 velocity, 10 true_track,
+      // 11 vertical_rate, 12-... sensors + spare
+      const lat = s[6], lon = s[5];
+      if (lat == null || lon == null) continue;
+      const cs = (s[1] || '').trim();
+      next.push({
+        icao24: s[0],
+        callsign: cs,
+        country: s[2],
+        lat, lon,
+        altM: s[7],
+        onGround: !!s[8],
+        velMs: s[9],                              // m/s
+        headingDeg: s[10] != null ? s[10] : 0,
+        verticalRateMs: s[11],
+        lastContact: s[4],
+        lastTs: now,
+      });
+    }
+    aircraftCache = next;
+    aircraftLastPollTs = now;
+    aircraftLastError = null;
+  } catch (e) {
+    aircraftLastError = (e && e.message) || 'unknown error';
+  }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin':'*' }); res.end(); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -2226,6 +2296,12 @@ const server = http.createServer((req, res) => {
   } else {
     console.log('[boats] AISSTREAM_API_KEY not set — boats layer disabled (set env var to enable)');
   }
+  // Airplanes layer — OpenSky Network's anonymous tier, no key needed. Poll
+  // every 12s (under the 10s anonymous rate limit, with margin). Bounding box
+  // is wide enough to catch approach/departure traffic around all major
+  // Hawaiian island airports.
+  pollAircraft();
+  setInterval(pollAircraft, 12000);
   setTimeout(pruneDb, 30000);                // full prune+VACUUM shortly after boot
   setInterval(pruneDb, 24 * 60 * 60 * 1000); // and daily thereafter
   // poll_log grows ~88 rows/cycle (22 routes × 4/min) but /api/stats only reads

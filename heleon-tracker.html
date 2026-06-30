@@ -203,6 +203,36 @@
   }
   .vessel-key-hint a { color: #58a6ff; }
 
+  /* ─── AIRCRAFT tab ─────────────────────────────────────────────── */
+  .aircraft-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+    cursor: pointer; transition: background .1s;
+  }
+  .aircraft-row:hover { background: var(--panel2); }
+  .aircraft-icon {
+    width: 22px; height: 22px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .aircraft-info { flex: 1; min-width: 0; }
+  .aircraft-callsign {
+    font-size: 12px; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-family: 'SF Mono', Menlo, monospace;
+  }
+  .aircraft-meta {
+    font-size: 10px; color: var(--muted);
+    display: flex; gap: 8px; margin-top: 2px;
+  }
+  .aircraft-coord {
+    font-size: 10px; color: var(--muted); flex-shrink: 0;
+    font-family: monospace;
+  }
+  .aircraft-row.ground { opacity: 0.55; }
+  /* Aircraft marker — small triangle pointing along the heading */
+  .aircraft-marker { cursor: pointer; }
+
   header { height:var(--header-h); background:var(--panel); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; padding:0 16px; flex-shrink:0; z-index:10; }
   header img { height:32px; }
   header h1 { font-size:15px; font-weight:600; }
@@ -400,6 +430,7 @@
       <div class="tab" data-tab="fleet">🚍 Fleet</div>
       <div class="tab" data-tab="routes">🗺️ Routes</div>
       <div class="tab" data-tab="boats" id="boatsTab">⛵ Boats</div>
+      <div class="tab" data-tab="aircraft" id="aircraftTab">✈️ Aircraft</div>
       <div class="tab" data-tab="system">📊 System</div>
       <div class="tab" data-tab="docs">📚 Docs</div>
     </div>
@@ -468,6 +499,14 @@
         <span class="vessel-status" id="vesselStatus"></span>
       </div>
       <div id="vesselList"><div class="empty"><div class="empty-icon">⛵</div>Loading…</div></div>
+    </div>
+
+    <div class="tab-content" id="tab-aircraft">
+      <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
+        <label><input type="checkbox" id="showAircraft" onchange="toggleAircraft()" checked> Show on map</label>
+        <span class="vessel-status" id="aircraftStatus"></span>
+      </div>
+      <div id="aircraftList"><div class="empty"><div class="empty-icon">✈️</div>Loading…</div></div>
     </div>
 
     <div class="tab-content" id="tab-docs">
@@ -793,6 +832,54 @@ function initMapLayers() {
   map.on('mouseenter', 'vessels-circle', () => map.getCanvas().style.cursor = 'pointer');
   map.on('mouseleave', 'vessels-circle', () => map.getCanvas().style.cursor = '');
 
+  // ─── AIRCRAFT layer ───────────────────────────────────────────────────────
+  // Triangle symbol rotated per-feature to match the aircraft's true track.
+  // Size scales with zoom so they're never lost in the basemap.
+  if (!map.hasImage('aircraft-triangle')) {
+    map.addImage('aircraft-triangle', makeAircraftIcon(), { pixelRatio: 2, sdf: true });
+  }
+  map.addSource('aircraft', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'aircraft-triangles', type: 'symbol', source: 'aircraft',
+    minzoom: 7,
+    layout: {
+      'icon-image': 'aircraft-triangle',
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.5, 10, 0.8, 14, 1.0],
+      'icon-rotate': ['get', 'heading'],
+      'icon-rotation-alignment': 'map',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+    },
+    paint: {
+      'icon-color': ['case', ['get', 'onGround'], '#7d8590', '#ffd33d'],
+      'icon-halo-color': '#000000',
+      'icon-halo-width': 1.2,
+    }
+  });
+  // Tooltip for aircraft clicks
+  let aircraftPopup = null;
+  map.on('click', 'aircraft-triangles', e => {
+    const p = e.features[0].properties;
+    const altFt = p.altM != null && p.altM !== '' ? Math.round(p.altM * 3.28084).toLocaleString() + ' ft' : '—';
+    const speedKt = p.velMs != null && p.velMs !== '' ? Math.round(p.velMs * 1.94384) + ' kts' : '—';
+    const html = `<div style="font-family:system-ui;font-size:12px;color:#e6edf3;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:2px;font-family:monospace;">✈️ ${escapeHtml(p.callsign) || p.icao24}</div>
+      <div style="color:var(--muted);font-size:10px;margin-bottom:6px;">${escapeHtml(p.country) || '?'} · ${p.icao24}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;">
+        <div><span style="color:var(--muted);">Altitude:</span> ${altFt}</div>
+        <div><span style="color:var(--muted);">Speed:</span> ${speedKt}</div>
+        <div><span style="color:var(--muted);">Heading:</span> ${Math.round(p.heading)}°</div>
+        <div><span style="color:var(--muted);">Status:</span> ${p.onGround === 'true' ? 'On ground' : 'Airborne'}</div>
+      </div>
+      <div style="font-family:monospace;font-size:10px;color:var(--muted);margin-top:6px;">${(+p.lat).toFixed(4)}, ${(+p.lon).toFixed(4)}</div>
+    </div>`;
+    if (aircraftPopup) aircraftPopup.remove();
+    aircraftPopup = new maplibregl.Popup({ offset: 12, maxWidth: '280px' })
+      .setLngLat(e.lngLat).setHTML(html).addTo(map);
+  });
+  map.on('mouseenter', 'aircraft-triangles', () => map.getCanvas().style.cursor = 'pointer');
+  map.on('mouseleave', 'aircraft-triangles', () => map.getCanvas().style.cursor = '');
+
   // Stop hover + click tooltip — hover for desktop, click/tap for mobile.
   let stopHoverPopup = null;
   let stopTapLockUntil = 0;
@@ -890,6 +977,25 @@ function makeVesselChevronIcon() {
   x.lineCap = 'round'; x.lineJoin = 'round';
   x.strokeStyle = '#ffffff'; x.lineWidth = 11;
   x.beginPath(); x.moveTo(11, 33); x.lineTo(24, 14); x.lineTo(37, 33); x.stroke();
+  return x.getImageData(0, 0, s, s);
+}
+
+// Aircraft triangle — points up (heading=0 = north). Filled triangle so it's
+// recognisably an aircraft silhouette and rotated to point along the true
+// track. White/yellow tinted by layer paint (icon-color).
+function makeAircraftIcon() {
+  const s = 48, c = document.createElement('canvas');
+  c.width = s; c.height = s;
+  const x = c.getContext('2d');
+  // Triangle: apex at top, slight tail
+  x.fillStyle = '#ffffff';
+  x.beginPath();
+  x.moveTo(24, 6);             // nose
+  x.lineTo(38, 42);            // right tail
+  x.lineTo(24, 34);            // tail center indent
+  x.lineTo(10, 42);            // left tail
+  x.closePath();
+  x.fill();
   return x.getImageData(0, 0, s, s);
 }
 
@@ -1120,6 +1226,110 @@ function focusVessel(mmsi) {
   const v = allVessels.find(x => String(x.mmsi) === String(mmsi));
   if (!v || !mapReady) return;
   map.flyTo({ center: [v.lon, v.lat], zoom: 13 });
+}
+
+// ─── AIRCRAFT (OpenSky) ───────────────────────────────────────────────────
+// Live ADS-B positions. Server polls every 12s (under OpenSky's anonymous
+// rate limit), we refresh the UI every 30s. We respect the user's toggle
+// via `aircraftVisible`. Triangle symbol on the map rotates to the true
+// track; ground aircraft are tinted grey so they're visibly "parked".
+let allAircraft = [];
+let aircraftVisible = true;
+let aircraftError = null;
+async function fetchAircraft() {
+  try {
+    const res = await fetch('/api/aircraft');
+    const data = await res.json();
+    allAircraft = data.aircraft || [];
+    aircraftError = data.lastError || null;
+    renderAircraftList();
+    renderAircraftMarkers();
+    updateAircraftStatus(data);
+  } catch (e) {
+    aircraftError = e.message;
+    updateAircraftStatus(null);
+  }
+}
+function updateAircraftStatus(data) {
+  const el = document.getElementById('aircraftStatus');
+  if (!el) return;
+  if (!data) { el.className = 'vessel-status err'; el.innerHTML = '<span class="vessel-dot"></span><span>Connection error</span>'; return; }
+  if (data.lastError) {
+    el.className = 'vessel-status err';
+    el.innerHTML = `<span class="vessel-dot"></span><span title="${escapeHtml(data.lastError)}">Upstream error</span>`;
+    return;
+  }
+  if (data.count > 0) {
+    el.className = 'vessel-status live';
+    el.innerHTML = `<span class="vessel-dot"></span><span>${data.count} ${data.count === 1 ? 'aircraft' : 'aircraft'} live</span>`;
+  } else {
+    el.className = 'vessel-status';
+    el.innerHTML = '<span class="vessel-dot"></span><span>No traffic in view…</span>';
+  }
+}
+function renderAircraftList() {
+  const el = document.getElementById('aircraftList');
+  if (!el) return;
+  if (aircraftError) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">✈️</div>Couldn't reach OpenSky Network.<div style="color:var(--muted);font-size:10px;margin-top:6px;">${escapeHtml(aircraftError)}</div></div>`;
+    return;
+  }
+  if (!allAircraft.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">✈️</div>No aircraft transiting Hawaiian airspace right now.</div>`;
+    return;
+  }
+  // Sort: airborne first (by altitude desc), then ground
+  const sorted = [...allAircraft].sort((a, b) => {
+    if (!!a.onGround !== !!b.onGround) return a.onGround ? 1 : -1;
+    return (b.altM || 0) - (a.altM || 0);
+  });
+  el.innerHTML = sorted.slice(0, 60).map(a => {
+    const cs = (a.callsign || a.icao24 || '').trim() || a.icao24;
+    const altFt = a.altM != null ? Math.round(a.altM * 3.28084).toLocaleString() + ' ft' : '—';
+    const speedKt = a.velMs != null ? Math.round(a.velMs * 1.94384) + ' kts' : '—';
+    const cls = a.onGround ? 'aircraft-row ground' : 'aircraft-row';
+    return `<div class="${cls}" onclick="focusAircraft('${a.icao24}')">
+      <div class="aircraft-icon">${a.onGround ? '🛬' : '✈️'}</div>
+      <div class="aircraft-info">
+        <div class="aircraft-callsign">${escapeHtml(cs)}</div>
+        <div class="aircraft-meta">
+          <span>${altFt}</span><span>${speedKt}</span>
+          <span>${Math.round(a.headingDeg || 0)}°</span>
+          <span>${escapeHtml(a.country || '')}</span>
+        </div>
+      </div>
+      <div class="aircraft-coord">${(+a.lat).toFixed(2)}, ${(+a.lon).toFixed(2)}</div>
+    </div>`;
+  }).join('');
+}
+function renderAircraftMarkers() {
+  if (!mapReady || !map.getSource('aircraft')) return;
+  const src = map.getSource('aircraft');
+  if (!aircraftVisible) { src.setData({ type: 'FeatureCollection', features: [] }); return; }
+  src.setData({
+    type: 'FeatureCollection',
+    features: allAircraft.map(a => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
+      properties: {
+        icao24: a.icao24, callsign: a.callsign || '', country: a.country || '',
+        altM: a.altM != null ? a.altM : '',
+        velMs: a.velMs != null ? a.velMs : '',
+        heading: a.headingDeg || 0,
+        onGround: a.onGround ? 'true' : 'false',
+        lat: a.lat, lon: a.lon,
+      }
+    }))
+  });
+}
+function toggleAircraft() {
+  aircraftVisible = document.getElementById('showAircraft').checked;
+  renderAircraftMarkers();
+}
+function focusAircraft(icao) {
+  const a = allAircraft.find(x => x.icao24 === icao);
+  if (!a || !mapReady) return;
+  map.flyTo({ center: [a.lon, a.lat], zoom: 9 });
 }
 
 // Learned/observed stops (places buses repeatedly dwell that aren't official).
@@ -2983,6 +3193,7 @@ function switchTab(name) {
   if (name === 'system') { fetchApiStats(); pollLearn(); }
   if (name === 'fleet') fetchFleet();
   if (name === 'boats') fetchVessels();
+  if (name === 'aircraft') fetchAircraft();
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
 
@@ -3442,6 +3653,7 @@ Promise.all([
   fetchGtfsStops(),
   fetchTrails(),
   fetchVessels(),
+  fetchAircraft(),
 ]).then(() => fetchStoplines());
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
@@ -3457,6 +3669,10 @@ setInterval(() => { if (!document.hidden) fetchStoplines(); }, 30000); // refres
 // Vessel refresh — 30 s is plenty; the AIS stream on the server updates in
 // near real time. Skip while tab is hidden to save mobile data.
 setInterval(() => { if (!document.hidden) fetchVessels(); }, 30000);
+// Aircraft refresh — server polls OpenSky every 12 s; UI refreshes at 30 s.
+// Slower than the server poll is fine — the visible difference between
+// snapshots a few seconds apart is negligible.
+setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 
 // Tick live clocks in all open stop lists every second
 setInterval(() => {
