@@ -82,6 +82,13 @@ const ROUTES = [
   { id: 5821, name: '12 VOLCANO TO OCEANVIEW',  short: '12',  color: '#D11A4B' }, // crimson-pink
   { id: 5824, name: '203 NORTH KAILUA-KONA',    short: '203', color: '#7A4A12' }, // coffee
   { id: 5982, name: '504 KEALAKEKUA KONA TRIPPER',short:'504',color: '#4A6B1E' }, // moss
+  // 502 (Waikoloa Village Tripper) runs in the CURRENT feed but the live RTPI
+  // patterns API returns [] for it — no live shape. So we use its real upstream
+  // id (5981) and load geometry from GTFS shapes.txt (loadGtfsShapesForMissing).
+  // (Routes 204/301/401 from the 2022 printed map are NOT in the current 2026
+  // GTFS or RTPI feed — they were discontinued/restructured — so we don't list
+  // them; the map reflects the system as it runs today.)
+  { id: 5981, name: '502 WAIKOLOA VILLAGE TRIPPER',      short: '502', color: '#6B5B00', scheduleOnly: true }, // dark yellow
 ];
 const ROUTE_MAP = Object.fromEntries(ROUTES.map(r => [r.id, r]));
 
@@ -361,6 +368,83 @@ function parseGtfsZip() {
   ]).filter(r => !isNaN(r[0]));
 
   return { stRows, stopRows, tripRows };
+}
+
+// Encode [[lat,lon],…] as a Google-format polyline (precision 1e5) — same format
+// the upstream pattern shapes use, so the frontend decodes both identically.
+function encodePolyline(coords) {
+  let last = [0, 0], out = '';
+  const enc = v => { v = v < 0 ? ~(v << 1) : (v << 1); let s = ''; while (v >= 0x20) { s += String.fromCharCode((0x20 | (v & 0x1f)) + 63); v >>= 5; } return s + String.fromCharCode(v + 63); };
+  for (const c of coords) {
+    const lat = Math.round(c[0] * 1e5), lng = Math.round(c[1] * 1e5);
+    out += enc(lat - last[0]) + enc(lng - last[1]); last = [lat, lng];
+  }
+  return out;
+}
+
+// Load route geometry from GTFS shapes.txt for routes the live upstream API does
+// NOT serve (the schedule-only Neighborhood/Flex/shuttle routes — 401, 301, 204,
+// 502 — that are on the printed map but have no live GPS feed). For each such
+// route we pick its longest GTFS shape (the most complete variant) and store it
+// in route_shapes so /api/shapes — and therefore the map — includes it. Routes
+// the upstream already provides are left untouched (upstream shapes are richer).
+function loadGtfsShapesForMissing() {
+  let shapesText, tripsText;
+  try {
+    // shapes.txt is ~2MB — raise maxBuffer well above the 1MB default.
+    const opts = { maxBuffer: 64 * 1024 * 1024 };
+    shapesText = execSync(`unzip -p "${GTFS_ZIP_PATH}" shapes.txt`, opts).toString();
+    tripsText = execSync(`unzip -p "${GTFS_ZIP_PATH}" trips.txt`, opts).toString();
+  } catch (e) { console.error('[gtfs-shapes] read error:', e.message); return; }
+
+  // shape_id -> route_id (via trips.txt)
+  const shapeToRoute = {};
+  parseCsv(tripsText).forEach(t => { if (t.shape_id) shapeToRoute[t.shape_id] = String(t.route_id); });
+
+  // Gather points per shape_id, ordered by shape_pt_sequence.
+  const byShape = {};
+  parseCsv(shapesText).forEach(r => {
+    const sid = r.shape_id; if (!sid) return;
+    const lat = parseFloat(r.shape_pt_lat), lon = parseFloat(r.shape_pt_lon);
+    const seq = parseInt(r.shape_pt_sequence) || 0;
+    if (isNaN(lat) || isNaN(lon)) return;
+    (byShape[sid] = byShape[sid] || []).push([seq, lat, lon]);
+  });
+
+  // route_id -> its longest shape (most points = most complete variant)
+  const bestByRoute = {};
+  for (const [sid, pts] of Object.entries(byShape)) {
+    const rid = shapeToRoute[sid]; if (!rid) continue;
+    if (!bestByRoute[rid] || pts.length > bestByRoute[rid].len) bestByRoute[rid] = { sid, len: pts.length };
+  }
+
+  // Which routes does the live upstream already cover? (don't override those)
+  const liveRouteIds = new Set(ROUTES.filter(r => !r.scheduleOnly).map(r => String(r.id)));
+  // Map GTFS route_id (short number) to our app route — for schedule-only routes
+  // the app id IS the GTFS route_id; for live routes it's the 5600+ id.
+  const shortToAppId = {};
+  ROUTES.forEach(r => { shortToAppId[String(r.short)] = r.id; });
+
+  let added = 0;
+  for (const [gtfsRid, best] of Object.entries(bestByRoute)) {
+    const appId = shortToAppId[gtfsRid] != null ? shortToAppId[gtfsRid] : parseInt(gtfsRid);
+    // Skip if this route already has shapes from the live upstream feed.
+    if (liveRouteIds.has(String(appId))) continue;
+    const existing = dbGet(`SELECT COUNT(*) as n FROM route_shapes WHERE route_id=?`, [appId]);
+    if (existing && existing.n > 0) continue; // already have a shape (e.g. prior GTFS load)
+
+    const pts = byShape[best.sid].sort((a, b) => a[0] - b[0]).map(p => [p[1], p[2]]);
+    if (pts.length < 2) continue;
+    const encoded = encodePolyline(pts);
+    const meta = ROUTE_MAP[appId] || {};
+    dbRun(`INSERT OR REPLACE INTO route_shapes(route_id,pattern_id,name,direction,color,shape,fetched_at)
+           VALUES(?,?,?,?,?,?,?)`,
+      [appId, appId /* synthetic pattern id */, meta.name || `Route ${gtfsRid}`, 0,
+       meta.color || '#888', encoded, Date.now()]);
+    added++;
+    console.log(`[gtfs-shapes] route ${gtfsRid} (app id ${appId}) shape loaded from GTFS (${pts.length} pts)`);
+  }
+  if (added) { saveDb(); console.log(`[gtfs-shapes] added ${added} schedule-only route shapes from GTFS`); }
 }
 
 async function loadGtfs(forceRefresh = false) {
@@ -2398,6 +2482,9 @@ const server = http.createServer((req, res) => {
 
   await fetchAllStops();
   await loadGtfs();
+  // Fill in geometry for schedule-only routes (401/301/204/502) that the live
+  // upstream API doesn't serve, using GTFS shapes.txt — so they appear on the map.
+  try { loadGtfsShapesForMissing(); } catch (e) { console.error('[gtfs-shapes]', e.message); }
   buildTripIndex();
   // Train learning model on past stop_arrivals history
   try { await trainFromHistory(); } catch(e) { console.error('[learn] train error:', e.message); }
