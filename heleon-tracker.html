@@ -753,24 +753,28 @@ function initMapLayers() {
   // Stop markers layer.
   map.addSource('stops', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   // Small base dot (route-coloured) so a stop is still locatable when zoomed out.
+  // Stops as small, tasteful dots (like a real transit map) — NOT big pins at
+  // every zoom. Tiny below z14, a touch bigger when zoomed in; the detailed pin
+  // icon only appears once you're zoomed right in (z15+). This declutters the
+  // city view so the colored route LINES are the star.
   map.addLayer({ id: 'stops-circle', type: 'circle', source: 'stops',
-    maxzoom: 13,
+    maxzoom: 15.5,
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 3, 11, 4.5, 13, 6],
-      'circle-color': ['get', 'routeColor'],
-      'circle-opacity': 0.9,
-      'circle-stroke-width': 1.5,
-      'circle-stroke-color': '#fff',
-      'circle-stroke-opacity': 0.85
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 1.6, 13, 2.4, 15, 3.4],
+      'circle-color': '#ffffff',
+      'circle-opacity': ['interpolate', ['linear'], ['zoom'], 11, 0.5, 13, 0.85, 14, 1],
+      'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 11, 1, 14, 1.6],
+      'circle-stroke-color': ['get', 'routeColor'],
+      'circle-stroke-opacity': 1
     }
   });
   // Bus-stop sign icons appear as you zoom in — the obvious, tappable indicator.
   map.addLayer({ id: 'stops-icon', type: 'symbol', source: 'stops',
-    minzoom: 12.5,
+    minzoom: 15.5,
     layout: {
       'icon-image': 'busstop',
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 12.5, 0.5, 15, 0.8, 17, 1.05],
-      'icon-allow-overlap': true,
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 15.5, 0.7, 17, 1.05],
+      'icon-allow-overlap': false,
       'icon-anchor': 'bottom',
       'text-field': ['get', 'stopCode'], 'text-size': 10, 'text-anchor': 'top', 'text-offset': [0, 0.3],
       'text-optional': true, 'text-allow-overlap': false
