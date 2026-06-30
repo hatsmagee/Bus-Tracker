@@ -1795,7 +1795,7 @@ function renderRouteShapes(force) {
   // We render ALL routes — not just ones with a live bus — so a rider in
   // Pepeʻekeo or on Saddle Road can see where the route goes even when no bus
   // is currently out. The Routes tab toggles control visibility per route.
-  const routeCoords = {}; // routeId -> coords (first pattern only)
+  const routeMultiCoords = {}; // routeId -> [ coords, … ] (ALL patterns, drawn)
   const routeMeta = {};   // routeId -> { color, name }
   const seen = new Set();
   routeShapeCoords = {};
@@ -1814,14 +1814,15 @@ function renderRouteShapes(force) {
       // offset, no heavy smoothing — we just draw the road geometry itself.
       coords = simplifyPath(coords, 0.00003);
     } catch(e) { return; }
-    // Keep EVERY pattern's polyline for motion/chevron snapping — a bus on
-    // pattern 2/3 is far from pattern 1, so snapping to all patterns keeps it
-    // on-route.
+    // Keep EVERY pattern's polyline. We draw ALL of them (a route like 401 has a
+    // northern and a southern loop — drawing only the first drops half the route)
+    // and also use them for motion/chevron snapping.
     (allPatternCoords[s.route_id] = allPatternCoords[s.route_id] || []).push(coords);
-    if (seen.has(s.route_id)) return;
-    seen.add(s.route_id);
-    routeCoords[s.route_id] = coords;
-    routeShapeCoords[s.route_id] = coords;
+    (routeMultiCoords[s.route_id] = routeMultiCoords[s.route_id] || []).push(coords);
+    if (!seen.has(s.route_id)) {
+      seen.add(s.route_id);
+      routeShapeCoords[s.route_id] = coords; // first pattern — used for the ahead-arrows
+    }
     // Always prefer our curated route colors over the API pattern colors (which can be #FFFFFF etc.)
     routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || normalizeColor(s.color) || '#888', name: s.name };
   });
@@ -1843,14 +1844,16 @@ function renderRouteShapes(force) {
   // floating beside it. So: NO line-offset (offset fans out at corners and turns
   // shared corridors into blobs), thin width, round joins. Where routes share a
   // road they layer on the same line — like the printed system map.
-  for (const [rid, coords] of Object.entries(routeCoords)) {
+  for (const [rid, parts] of Object.entries(routeMultiCoords)) {
     const { color } = routeMeta[rid];
     const srcId = `route-${rid}`;
     const layId = `route-line-${rid}`;
 
+    // Draw ALL of a route's patterns as one MultiLineString so multi-loop routes
+    // (e.g. 401's north + south loops) appear in full, not just the first leg.
     map.addSource(srcId, {
       type: 'geojson',
-      data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} }
+      data: { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: parts }, properties: {} }
     });
     map.addLayer({
       id: layId, type: 'line', source: srcId,

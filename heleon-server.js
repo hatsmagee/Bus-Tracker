@@ -414,29 +414,103 @@ function loadShapesFromZip(zipPath, shortToApp) {
     (byShape[sid] = byShape[sid] || []).push([seq, lat, lon]);
   });
 
-  // route_id -> its longest shape (most points = most complete variant)
-  const bestByRoute = {};
-  for (const [sid, pts] of Object.entries(byShape)) {
+  // Group shapes by route, keeping EVERY distinct variant (a route like 401 has
+  // a northern AND a southern loop — drawing only the longest one drops half the
+  // route). De-dup near-identical variants so we don't stack the same line twice.
+  const shapesByRoute = {};
+  for (const [sid, raw] of Object.entries(byShape)) {
     const rid = shapeToRoute[sid]; if (!rid) continue;
-    if (!bestByRoute[rid] || pts.length > bestByRoute[rid].len) bestByRoute[rid] = { sid, len: pts.length };
+    const pts = raw.sort((a, b) => a[0] - b[0]).map(p => [p[1], p[2]]);
+    if (pts.length < 2) continue;
+    (shapesByRoute[rid] = shapesByRoute[rid] || []).push({ sid, pts });
   }
 
   let added = 0;
-  for (const [gtfsRid, best] of Object.entries(bestByRoute)) {
+  for (const [gtfsRid, variants] of Object.entries(shapesByRoute)) {
     const appId = shortToApp[gtfsRid] != null ? shortToApp[gtfsRid] : parseInt(gtfsRid);
     const existing = dbGet(`SELECT COUNT(*) as n FROM route_shapes WHERE route_id=?`, [appId]);
-    if (existing && existing.n > 0) continue; // already have a shape (upstream or prior load)
-
-    const pts = byShape[best.sid].sort((a, b) => a[0] - b[0]).map(p => [p[1], p[2]]);
-    if (pts.length < 2) continue;
+    if (existing && existing.n > 0) continue; // already have shapes (upstream or prior load)
     const meta = ROUTE_MAP[appId] || {};
-    dbRun(`INSERT OR REPLACE INTO route_shapes(route_id,pattern_id,name,direction,color,shape,fetched_at)
-           VALUES(?,?,?,?,?,?,?)`,
-      [appId, appId, meta.name || `Route ${gtfsRid}`, 0, meta.color || '#888', encodePolyline(pts), Date.now()]);
-    added++;
-    console.log(`[gtfs-shapes] route ${gtfsRid} (app id ${appId}) loaded from ${path.basename(zipPath)} (${pts.length} pts)`);
+
+    // Keep distinct variants: drop one if its endpoints + length closely match an
+    // already-kept variant (same pattern, opposite direction or duplicate).
+    const kept = [];
+    variants.sort((a, b) => b.pts.length - a.pts.length); // longest first
+    for (const v of variants) {
+      const sig = `${v.pts[0].map(n=>n.toFixed(3))}|${v.pts[v.pts.length-1].map(n=>n.toFixed(3))}|${Math.round(v.pts.length/20)}`;
+      if (kept.some(k => k.sig === sig)) continue;
+      kept.push({ ...v, sig });
+    }
+
+    kept.forEach((v, i) => {
+      dbRun(`INSERT OR REPLACE INTO route_shapes(route_id,pattern_id,name,direction,color,shape,fetched_at)
+             VALUES(?,?,?,?,?,?,?)`,
+        // Synthetic pattern id per variant (appId, appId+1000*i) so all variants coexist.
+        [appId, appId + i * 100000, meta.name || `Route ${gtfsRid}`, i, meta.color || '#888', encodePolyline(v.pts), Date.now()]);
+      added++;
+    });
+    console.log(`[gtfs-shapes] route ${gtfsRid} (app id ${appId}) loaded ${kept.length} variant(s) from ${path.basename(zipPath)}`);
   }
   return added;
+}
+
+// ─── AUTHORITATIVE ROUTE REGISTRY ─────────────────────────────────────────────
+// One canonical list of every route the system knows about, unioned across ALL
+// sources so nothing slips through the cracks: the curated ROUTES config, the
+// live RTPI API, the live GTFS feed, the bundled seed GTFS, the reference file,
+// and routes inferred purely from observed GPS history. Each entry records where
+// its data came from (provenance) and whether it has a drawn shape, a live
+// vehicle, and a classification. Served at /api/registry; logged at boot so any
+// route lacking geometry is visible immediately instead of being silently missing.
+let ROUTE_REGISTRY = [];
+function buildRouteRegistry() {
+  const reg = {}; // short -> entry
+  const touch = short => (reg[short] = reg[short] || {
+    short, appId: null, name: null, color: null, class: null,
+    hasShape: false, hasLiveVehicle: false, sources: [],
+  });
+  const addSrc = (e, s) => { if (!e.sources.includes(s)) e.sources.push(s); };
+
+  // 1) Curated ROUTES config (incl. scheduleOnly).
+  ROUTES.forEach(r => {
+    const e = touch(String(r.short));
+    e.appId = r.id; e.name = r.name; e.color = r.color;
+    if (r.scheduleOnly) addSrc(e, 'config:scheduleOnly'); else addSrc(e, 'config');
+  });
+
+  // 2) Reference file (classification + GTFS-derived roster).
+  const refClass = (REFERENCE && REFERENCE.routeClass) || {};
+  const refRoutes = (REFERENCE && REFERENCE.routes) || {};
+  Object.keys(refClass).forEach(short => { const e = touch(short); e.class = refClass[short]; addSrc(e, 'reference'); });
+  Object.entries(refRoutes).forEach(([short, r]) => {
+    const e = touch(short);
+    if (!e.name && r.name) e.name = r.name;
+    if (!e.color && r.color) e.color = r.color;
+    addSrc(e, 'gtfs');
+  });
+
+  // 3) Which routes actually have a drawn shape in the DB.
+  const shapeRows = dbAll(`SELECT DISTINCT route_id FROM route_shapes`);
+  const shapeAppIds = new Set(shapeRows.map(r => String(r.route_id)));
+  // 4) Which routes have a live vehicle right now.
+  const liveRows = dbAll(`SELECT DISTINCT route_id FROM pings WHERE ts > ?`, [Date.now() - 3600000]);
+  const liveAppIds = new Set(liveRows.map(r => String(r.route_id)));
+
+  // Resolve appId per entry (config gives it; else fall back to the short number),
+  // then flag shape/live presence.
+  Object.values(reg).forEach(e => {
+    if (e.appId == null) e.appId = parseInt(e.short) || e.short;
+    if (shapeAppIds.has(String(e.appId))) e.hasShape = true;
+    if (liveAppIds.has(String(e.appId))) { e.hasLiveVehicle = true; addSrc(e, 'live'); }
+  });
+
+  ROUTE_REGISTRY = Object.values(reg).sort((a, b) => (parseInt(a.short) || 0) - (parseInt(b.short) || 0));
+
+  // Loudly surface any route with NO geometry so it can't be silently missing.
+  const noShape = ROUTE_REGISTRY.filter(e => !e.hasShape);
+  console.log(`[registry] ${ROUTE_REGISTRY.length} routes known; ${ROUTE_REGISTRY.filter(e=>e.hasShape).length} have shapes`);
+  if (noShape.length) console.warn(`[registry] NO SHAPE for: ${noShape.map(e => e.short).join(', ')} — investigate (live API? GTFS? seed?)`);
+  return ROUTE_REGISTRY;
 }
 
 // Fill in geometry for every schedule-only route that still has no drawn shape.
@@ -1733,6 +1807,13 @@ async function handleApi(url, res) {
     return json(res, REFERENCE);
   }
 
+  // Authoritative route registry — every route known across all sources, with
+  // provenance and whether it has a shape / live vehicle. The single source of
+  // truth for "do we have all the routes?".
+  if (p === '/api/registry') {
+    return json(res, { count: ROUTE_REGISTRY.length, routes: ROUTE_REGISTRY, builtAt: Date.now() });
+  }
+
   if (p === '/api/shapes') {
     const rows = dbAll(`SELECT route_id, pattern_id, name, direction, color, shape FROM route_shapes ORDER BY route_id, pattern_id`);
     // Serve the agency's own GTFS shapes (which already lie on the roads), with
@@ -2493,6 +2574,9 @@ const server = http.createServer((req, res) => {
   // Fill in geometry for schedule-only routes (401/301/204/502) that the live
   // upstream API doesn't serve, using GTFS shapes.txt — so they appear on the map.
   try { loadGtfsShapesForMissing(); } catch (e) { console.error('[gtfs-shapes]', e.message); }
+  // Build the authoritative route registry (unions every source) and log any
+  // route still missing geometry, so gaps surface immediately, never silently.
+  try { buildRouteRegistry(); } catch (e) { console.error('[registry]', e.message); }
   buildTripIndex();
   // Train learning model on past stop_arrivals history
   try { await trainFromHistory(); } catch(e) { console.error('[learn] train error:', e.message); }
@@ -2525,6 +2609,9 @@ const server = http.createServer((req, res) => {
   setInterval(fetchShapes, 24 * 60 * 60 * 1000);
   setInterval(fetchAllStops, 24 * 60 * 60 * 1000);
   setInterval(discoverNewRoutes, 10 * 60 * 1000); // check for new routes every 10 min
+  // Rebuild the authoritative registry every 10 min so newly-seen live routes and
+  // freshly-loaded shapes are reflected (and any gap re-surfaces in the log).
+  setInterval(() => { try { buildRouteRegistry(); } catch {} }, 10 * 60 * 1000);
   // Weekly: mirror the agency's human-readable schedule PDFs (runs the scraper
   // as a child process; non-fatal if the agency site blocks us — GTFS is the
   // machine-readable source of truth and refreshes separately). First run ~1 min
