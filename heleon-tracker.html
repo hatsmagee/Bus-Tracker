@@ -711,6 +711,20 @@ function initMap() {
   // Re-fan overlapping buses whenever the camera settles (overlap is zoom/pan
   // dependent — buses separate as you zoom in).
   map.on('moveend', () => { try { deOverlapMarkers(); } catch (e) {} });
+  // setFeatureState lives on the SOURCE (keyed by feature id) so it should
+  // already persist as new tiles load while panning — but cheaply re-assert
+  // it on new basemap-road tile loads as defensive insurance, straight from
+  // the cached wayId->color map (no render pipeline involved, so this can't
+  // loop or trigger another sourcedata storm).
+  map.on('sourcedata', (e) => {
+    if (e.sourceId !== BASEMAP_ROAD_SOURCE || !e.isSourceLoaded) return;
+    for (const [wayId, color] of lastColoredWayColor) {
+      map.setFeatureState(
+        { source: BASEMAP_ROAD_SOURCE, sourceLayer: BASEMAP_ROAD_SOURCE_LAYER, id: wayId },
+        { routeColor: color }
+      );
+    }
+  });
   map.on('error', (e) => {
     // Suppress known MapLibre v4 bugs about listener arrays
     if (e?.error?.message?.includes('slice is not a function')) return;
@@ -1658,87 +1672,6 @@ function buildRouteMetaFromVehicles() {
   });
 }
 
-// Assign each route a lateral "slot" so routes sharing a road draw as parallel
-// lines (2 routes → a double line, 3 → triple, etc.), centered on the road. We
-// snap every route's points to a coarse grid, find which routes co-occur in many
-// cells (i.e. run the same corridor), group them, and give each a centered slot.
-// `routeCoordMap`: routeId -> [ [[lon,lat]…], … ] (one or more pattern polylines).
-function gridKey(lon, lat) { return `${Math.round(lat * 3000)},${Math.round(lon * 3000)}`; } // ~37m cells
-
-// Is this pattern's road already drawn by patterns we're keeping for the same
-// route? Direction-agnostic (a grid cell doesn't care which way the bus goes), so
-// the reverse-direction twin of a road comes back ≈fully covered and is dropped.
-// A pattern with a meaningful stretch of NEW road (a different loop/branch) is
-// kept. Threshold 0.7: <30% new coverage ⇒ it's effectively the same line.
-function coverageAlreadyDrawn(coords, keptParts) {
-  if (!keptParts.length) return false;
-  const have = new Set();
-  for (const part of keptParts) for (const [lon, lat] of part) have.add(gridKey(lon, lat));
-  let covered = 0, total = 0;
-  const own = new Set();
-  for (const [lon, lat] of coords) own.add(gridKey(lon, lat));
-  for (const k of own) { total++; if (have.has(k)) covered++; }
-  return total > 0 && covered / total >= 0.7;
-}
-// Build a coarse grid of which routes pass through each cell. Used to find each
-// route's LOCAL neighbors at any given point along its line — a route's siblings
-// change as it travels (it may share a road with route A for a few blocks, then
-// run solo, then share with B and C elsewhere), so a single route-wide offset is
-// wrong: it either jitters where the local sharing differs from the global guess,
-// or pushes a solo stretch sideways off the road for no reason.
-function buildShareGrid(routeCoordMap) {
-  const grid = {}; // cell -> Set(routeId)
-  for (const [rid, parts] of Object.entries(routeCoordMap)) {
-    for (const coords of parts) for (const [lon, lat] of coords) {
-      const k = gridKey(lon, lat);
-      (grid[k] = grid[k] || new Set()).add(rid);
-    }
-  }
-  return grid;
-}
-
-// Walk one route's polyline and cut it into runs of consecutive points that share
-// the same LOCAL group of co-located routes (checked in a 3x3 cell neighborhood so
-// a route doesn't flicker in/out of a shared lane between adjacent grid cells).
-// Each run gets a stable, centered slot within that local group — same idea as
-// before, just computed locally instead of once for the whole route.
-function sliceRouteIntoOffsetRuns(rid, coords, grid) {
-  const localGroupAt = (lon, lat) => {
-    const latCell = Math.round(lat * 3000), lonCell = Math.round(lon * 3000);
-    const peers = new Set([rid]);
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const set = grid[`${latCell + dy},${lonCell + dx}`];
-      if (set) for (const p of set) peers.add(p);
-    }
-    return [...peers].sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
-  };
-
-  const runs = [];
-  let curGroupKey = null, curGroup = null, curPts = [];
-  for (const pt of coords) {
-    const group = localGroupAt(pt[0], pt[1]);
-    const key = group.join(',');
-    if (key !== curGroupKey) {
-      if (curPts.length > 1) runs.push({ group: curGroup, pts: curPts });
-      curGroupKey = key;
-      curGroup = group;
-      curPts = curPts.length ? [curPts[curPts.length - 1], pt] : [pt]; // 1-pt overlap so runs join seamlessly
-    } else {
-      curPts.push(pt);
-    }
-  }
-  if (curPts.length > 1) runs.push({ group: curGroup, pts: curPts });
-
-  return runs.map(r => {
-    const idx = r.group.indexOf(rid);
-    const center = (r.group.length - 1) / 2;
-    return { pts: r.pts, slot: idx - center };
-  });
-}
-
-let routeLayerIds = [];  // MapLibre layer IDs
-let routeSourceIds = []; // MapLibre source IDs
-
 // Build a fast lookup of route shape coordinates for the golden-path arrows.
 let routeShapeCoords = {}; // routeId -> [[lon,lat], ...] (first pattern, for the drawn line)
 let allPatternCoords = {}; // routeId -> [ [[lon,lat]…], … ] (all patterns, for snapping)
@@ -1909,48 +1842,42 @@ function renderRouteShapes(force) {
   // We render ALL routes — not just ones with a live bus — so a rider in
   // Pepeʻekeo or on Saddle Road can see where the route goes even when no bus
   // is currently out. The Routes tab toggles control visibility per route.
-  const routeMultiCoords = {}; // routeId -> [ coords, … ] (ALL patterns, drawn)
+  const routeMultiCoords = {}; // routeId -> [ coords, … ] (ALL patterns; chevrons/motion only — NOT drawn as a line any more)
   const routeMeta = {};   // routeId -> { color, name }
   const seen = new Set();
   routeShapeCoords = {};
   allPatternCoords = {};
+  // routeId -> Set(real OSM way id) — the actual basemap road features to
+  // recolor directly via setFeatureState. This is the whole point: there is
+  // no overlay line any more, so a route can never visually diverge from the
+  // road it's drawn on — it doesn't draw anything, it recolors the road
+  // pixels the basemap was already going to render.
+  const routeWayIds = {};
 
   routeShapes.forEach(s => {
     if (!s.shape && !s.segments) return;
     if (routeVisible[s.route_id] === false) return;
+    if (s.wayIds && s.wayIds.length) {
+      const set = (routeWayIds[s.route_id] = routeWayIds[s.route_id] || new Set());
+      for (const wid of s.wayIds) set.add(wid);
+    }
     // A pattern is either ONE polyline (`shape` — older Valhalla-matched or raw
     // GTFS fallback) or SEVERAL (`segments` — road-graph-snapped, real OSM road
     // geometry; multiple pieces because honest OSM-coverage gaps are kept as
     // real breaks rather than bridged with a straight line). Normalize to a
-    // list of coordinate arrays either way so the rest of the pipeline
-    // (dedup/offset-slicing/chevrons) doesn't need to care which it got.
+    // list of coordinate arrays either way — still needed for chevrons/motion
+    // snapping even though drawing the line itself is gone.
     let patternCoordsList;
     try {
       patternCoordsList = s.segments
         ? s.segments.map(decodePolyline).filter(c => c.length >= 2)
         : [decodePolyline(s.shape)].filter(c => c.length >= 2);
       if (!patternCoordsList.length) return;
-      // Draw the road geometry EXACTLY as-is — no client-side simplification or
-      // smoothing. It's already road-snapped (and Chaikin-smoothed server-side
-      // for the Valhalla-matched path) before it ever reaches the browser. A
-      // Douglas–Peucker pass here used to delete ~70% of vertices — the very
-      // points that make a curve read as a curve — collapsing gentle bends into
-      // hard kinks that line-join:round (which only rounds by half the line
-      // width) cannot rescue. We feed the full polyline(s) straight in.
     } catch(e) { return; }
     for (const coords of patternCoordsList) {
       // Keep EVERY pattern's polyline for motion/chevron snapping (a bus can run
       // either direction along the same road, and the chevrons need both).
       (allPatternCoords[s.route_id] = allPatternCoords[s.route_id] || []).push(coords);
-      // For DRAWING, dedupe within the route: the outbound and inbound patterns of a
-      // route usually trace the SAME road, so drawing both stacks two identical lines
-      // ("double route"). Direction is shown by the chevrons, not a second line — so
-      // we only add a pattern if it covers road the kept patterns don't already cover.
-      // Genuinely distinct legs (e.g. 401's separate north + south loops, or two
-      // segments either side of an OSM coverage gap) survive because their
-      // coverage is new.
-      const kept = (routeMultiCoords[s.route_id] = routeMultiCoords[s.route_id] || []);
-      if (!coverageAlreadyDrawn(coords, kept)) kept.push(coords);
     }
     const coords = patternCoordsList[0];
     if (!seen.has(s.route_id)) {
@@ -1961,89 +1888,88 @@ function renderRouteShapes(force) {
     routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || normalizeColor(s.color) || '#888', name: s.name };
   });
 
-  // Route lines now live in ONE shared source/layer (route-shapes /
-  // route-shapes-line) rather than one pair per route, so there's nothing to
-  // tear down between renders any more — we just update the single source's
-  // data in place below. Only remove them if shapes are toggled fully off.
-  if (!showRouteShapes) {
-    routeLayerIds.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
-    routeSourceIds.forEach(id => { if (map.getSource(id)) map.removeSource(id); });
-    routeLayerIds = [];
-    routeSourceIds = [];
-    return;
-  }
-
-  // Where routes share a road, draw them as PARALLEL lines side by side — a double
-  // line for two routes, triple for three, etc. — so every route's color stays
-  // visible and you can see which routes run together and which way they go.
-  // Sharing is LOCAL: a route's neighbors change as it travels (shares a road
-  // with route A for a few blocks, runs solo elsewhere, shares with B and C
-  // further on) — so each route is cut into runs, and each run gets its own
-  // centered slot among whichever routes are actually co-located there. Solo
-  // runs get slot 0 and sit exactly on the road.
-  const grid = buildShareGrid(routeMultiCoords);
-  const SLOT_PX = 3.4; // px between adjacent parallel routes (per zoom step below)
-  const features = [];
-  for (const [rid, parts] of Object.entries(routeMultiCoords)) {
-    const { color, name } = routeMeta[rid];
-    for (const coords of parts) {
-      for (const run of sliceRouteIntoOffsetRuns(rid, coords, grid)) {
-        features.push({
-          type: 'Feature',
-          geometry: { type: 'LineString', coordinates: run.pts },
-          properties: { color, slot: run.slot, routeId: rid, routeName: name || `Route ${rid}` }
-        });
-      }
-    }
-  }
-
-  const srcId = 'route-shapes';
-  const layId = 'route-shapes-line';
-  // Defensive: update in place if a stale source survived (e.g. a re-entrant
-  // render call before the removal above landed) instead of throwing on addSource.
-  // If the source exists but its line layer somehow doesn't (the bug this once
-  // was: a source with no layer would silently never draw, forever), still add
-  // the layer — only the duplicate addSource call needs avoiding.
-  const existingSrc = map.getSource(srcId);
-  if (existingSrc) {
-    existingSrc.setData({ type: 'FeatureCollection', features });
-    if (!map.getLayer(layId)) {
-      addRouteLineLayer(srcId, layId, SLOT_PX);
-    }
-    routeLayerIds.push(layId);
-    routeSourceIds.push(srcId);
-    renderAheadArrows();
-    return;
-  }
-  map.addSource(srcId, { type: 'geojson', data: { type: 'FeatureCollection', features } });
-  addRouteLineLayer(srcId, layId, SLOT_PX);
-  routeLayerIds.push(layId);
-  routeSourceIds.push(srcId);
+  recolorBasemapRoads(showRouteShapes ? routeWayIds : {}, routeMeta);
   renderAheadArrows();
 }
 
-function addRouteLineLayer(srcId, layId, SLOT_PX) {
-  map.addLayer({
-    id: layId, type: 'line', source: srcId,
-    paint: {
-      'line-color': ['get', 'color'],
-      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2.2, 12, 3.4, 15, 4.6, 18, 6.2],
-      'line-opacity': 0.92,
-      // Parallel separation, scaled by zoom so the lines stay adjacent (not
-      // fanned) — small at low zoom, a touch wider when zoomed in. Slot is
-      // centered, so a 3-route group renders at -1/0/+1 → three clean lanes.
-      'line-offset': ['interpolate', ['linear'], ['zoom'],
-        10, ['*', ['get', 'slot'], SLOT_PX * 0.6],
-        13, ['*', ['get', 'slot'], SLOT_PX],
-        16, ['*', ['get', 'slot'], SLOT_PX * 1.6]]
-    },
-    layout: { 'line-join': 'round', 'line-cap': 'round' }
-  }, 'stops-circle'); // insert below stops layer
-  wireLayerHover(layId, p => `
-    <div style="display:flex;align-items:center;gap:6px;">
-      <span style="width:10px;height:10px;border-radius:50%;background:${p.color};flex-shrink:0;border:1px solid rgba(255,255,255,.5);"></span>
-      <span style="font-weight:600;">${escapeHtml(p.routeName)}</span>
-    </div>`);
+// ─── RECOLOR THE BASEMAP'S OWN ROADS (no overlay line, ever) ───────────────
+// MapTiler's "transportation" vector layer feature.id IS the real OSM way id
+// (verified directly against vector tiles — OpenMapTiles' planet schema
+// exposes osm_id as the MVT feature id on this layer). That means a Hele-On
+// route can be shown by literally recoloring the basemap road the bus drives
+// on, via map.setFeatureState + a feature-state-driven paint override on
+// MapTiler's own "Road network" layer — not by drawing a colored line next
+// to/on top of it. A route can never visually diverge from its real road
+// because nothing is drawn; the road's own pixels change color.
+const BASEMAP_ROAD_SOURCE = 'maptiler_planet';
+const BASEMAP_ROAD_SOURCE_LAYER = 'transportation';
+const BASEMAP_ROAD_LAYER_ID = 'Road network';
+let basemapRoadPaintPatched = false;
+let lastColoredWayIds = []; // so we can clear state on ways no longer in any visible route
+let lastColoredWayColor = new Map(); // wayId -> color, for re-asserting state on tile (re)load
+
+// One-time: make the existing basemap road layer's color/width state-aware,
+// keeping its original look for every road state-NOT covering. We read the
+// layer's CURRENT paint (not stylesheet literals) so this works regardless
+// of which MapTiler style is loaded.
+function ensureBasemapRoadPaintPatched() {
+  if (basemapRoadPaintPatched) return;
+  if (!map.getLayer(BASEMAP_ROAD_LAYER_ID)) return; // style hasn't loaded this layer yet
+  const origColor = map.getPaintProperty(BASEMAP_ROAD_LAYER_ID, 'line-color');
+  const origWidth = map.getPaintProperty(BASEMAP_ROAD_LAYER_ID, 'line-width');
+  map.setPaintProperty(BASEMAP_ROAD_LAYER_ID, 'line-color', [
+    'case', ['to-boolean', ['feature-state', 'routeColor']], ['feature-state', 'routeColor'], origColor
+  ]);
+  // Widen slightly only where a route is recoloring it, so the route color
+  // reads clearly without changing the look of every other road.
+  map.setPaintProperty(BASEMAP_ROAD_LAYER_ID, 'line-width', [
+    'case', ['to-boolean', ['feature-state', 'routeColor']],
+      ['*', origWidth, 1.6],
+      origWidth
+  ]);
+  basemapRoadPaintPatched = true;
+}
+
+function recolorBasemapRoads(routeWayIds, routeMeta) {
+  if (!mapReady) return;
+  ensureBasemapRoadPaintPatched();
+  if (!basemapRoadPaintPatched) return; // layer not ready yet; next render call will retry
+
+  // Clear state on every way we colored last time, then set the current set —
+  // simpler and more robust than diffing, and this only runs on real shape
+  // updates (rare), not every poll.
+  for (const wayId of lastColoredWayIds) {
+    map.removeFeatureState(
+      { source: BASEMAP_ROAD_SOURCE, sourceLayer: BASEMAP_ROAD_SOURCE_LAYER, id: wayId },
+      'routeColor'
+    );
+  }
+  lastColoredWayIds = [];
+
+  // A road shared by multiple routes can only show ONE color via this
+  // technique (we're recoloring the real basemap feature, not stacking
+  // independent lines) — first route to claim a way wins, ordered by route id
+  // for stability so the same road always shows the same route's color
+  // across re-renders rather than flickering between contenders.
+  const wayOwner = new Map(); // wayId -> routeId
+  const orderedRouteIds = Object.keys(routeWayIds).sort((a, b) => (parseInt(a)||0) - (parseInt(b)||0));
+  for (const rid of orderedRouteIds) {
+    const meta = routeMeta[rid];
+    if (!meta) continue;
+    for (const wayId of routeWayIds[rid]) {
+      if (!wayOwner.has(wayId)) wayOwner.set(wayId, rid);
+    }
+  }
+  lastColoredWayColor = new Map();
+  for (const [wayId, rid] of wayOwner) {
+    const color = routeMeta[rid].color;
+    map.setFeatureState(
+      { source: BASEMAP_ROAD_SOURCE, sourceLayer: BASEMAP_ROAD_SOURCE_LAYER, id: wayId },
+      { routeColor: color }
+    );
+    lastColoredWayIds.push(wayId);
+    lastColoredWayColor.set(wayId, color);
+  }
 }
 
 // ─── RENDER TRAILS ────────────────────────────────────────────────────────────

@@ -66,7 +66,7 @@ function buildGraph(roads) {
         let lengthM = 0;
         for (let j = 1; j < segCoords.length; j++) lengthM += distM(segCoords[j-1], segCoords[j]);
         const edgeIdx = edges.length;
-        edges.push({ a: aKey, b: bKey, coords: segCoords, hw: w.hw, name: w.name, lengthM });
+        edges.push({ a: aKey, b: bKey, coords: segCoords, hw: w.hw, name: w.name, lengthM, wayId: w.id });
         nodes.get(aKey).edges.push(edgeIdx);
         nodes.get(bKey).edges.push(edgeIdx);
         segStart = i;

@@ -100,23 +100,29 @@ const SNAP_RADIUS_FALLBACK_M = 150; // rural OSM ways / GTFS points are sparser
 // between two samples, which then looks like a "gap" even though the route
 // is fully continuous on real roads; this is about matching density, not
 // inventing geometry, so it doesn't reintroduce any synthesized point.
-function colorRoadsForShape(graph, edgeIndex, rawCoords) {
+function collapseConsecutive(arr) {
+  const out = [];
+  for (const x of arr) {
+    if (out.length && out[out.length - 1] === x) continue;
+    out.push(x);
+  }
+  return out;
+}
+
+// Which real road-graph edges (in order, deduplicated, noise-folded) a GTFS
+// shape actually travels. Shared by colorRoadsForShape (draws their full
+// coordinates) and wayIdsForShape (just needs which OSM ways they came
+// from, to recolor the BASEMAP's own road features via setFeatureState
+// instead of drawing anything).
+function matchedEdgeSequence(graph, edgeIndex, rawCoords) {
   const pts = downsample(rawCoords, 8);
   const snaps = pts.map(p =>
     nearestPointOnGraph(graph, edgeIndex, p, SNAP_RADIUS_M) ||
     nearestPointOnGraph(graph, edgeIndex, p, SNAP_RADIUS_FALLBACK_M));
 
   // Collapse consecutive duplicate edge matches (many shape points land on
-  // the same edge as the bus travels along one road). `raw` may still
-  // contain `null` for unsnapped samples.
-  function collapseConsecutive(arr) {
-    const out = [];
-    for (const x of arr) {
-      if (out.length && out[out.length - 1] === x) continue;
-      out.push(x);
-    }
-    return out;
-  }
+  // the same edge as the bus travels along one road). May still contain
+  // `null` for unsnapped samples.
   let edgeSeq = collapseConsecutive(snaps.map(s => s ? s.edgeIdx : null));
 
   // Fold a short run that's bookended by the SAME edge on both sides back
@@ -145,6 +151,27 @@ function colorRoadsForShape(graph, edgeIndex, rawCoords) {
     edgeSeq = collapseConsecutive(edgeSeq);
     if (!changed) break;
   }
+  return edgeSeq;
+}
+
+// Distinct real OSM way IDs (in travel order, deduplicated) a route's shape
+// travels along — used to recolor the BASEMAP's own road features directly
+// (MapTiler's transportation layer feature.id IS the OSM way id, verified
+// against data/osm/bigisland-roads.json), instead of drawing any overlay
+// line. No coordinates are produced or needed for this path at all.
+function wayIdsForShape(graph, edgeIndex, rawCoords) {
+  const edgeSeq = matchedEdgeSequence(graph, edgeIndex, rawCoords);
+  const wayIds = [];
+  for (const edgeIdx of edgeSeq) {
+    if (edgeIdx == null) continue;
+    const wayId = graph.edges[edgeIdx].wayId;
+    if (wayId != null && wayIds[wayIds.length - 1] !== wayId) wayIds.push(wayId);
+  }
+  return [...new Set(wayIds)];
+}
+
+function colorRoadsForShape(graph, edgeIndex, rawCoords) {
+  const edgeSeq = matchedEdgeSequence(graph, edgeIndex, rawCoords);
 
   // Append one real edge's FULL coordinate array to `current`, oriented so it
   // continues from whichever end touches the path's current last point
@@ -244,7 +271,7 @@ function removeRetraces(coords) {
   return out;
 }
 
-module.exports = { colorRoadsForShape, decode, encode, downsample };
+module.exports = { colorRoadsForShape, wayIdsForShape, decode, encode, downsample };
 
 // Bring in route_id + raw GTFS shape pairing from a downloaded GTFS zip's
 // shapes.txt/trips.txt, NOT from a previously-matched/densified file — the
@@ -310,17 +337,21 @@ async function main() {
     const entry = sourceShapes[key];
     if (!entry.coords || entry.coords.length < 2) continue;
     const rawCoords = entry.coords;
-    let segments;
+    let wayIds, segments;
     try {
+      wayIds = wayIdsForShape(graph, edgeIndex, rawCoords);
       segments = colorRoadsForShape(graph, edgeIndex, rawCoords);
     } catch (e) {
       console.error(`  pattern ${key} (route ${entry.route_id}) failed: ${e.message}`);
       failedCount++;
       continue;
     }
-    const totalPts = segments.reduce((s, seg) => s + seg.length, 0);
-    if (totalPts < 2) { failedCount++; continue; }
-    out[key] = { route_id: entry.route_id, segments: segments.map(seg => encode(seg)) };
+    if (!wayIds.length) { failedCount++; continue; }
+    out[key] = {
+      route_id: entry.route_id,
+      wayIds, // real OSM way IDs to recolor directly on the basemap — primary path
+      segments: segments.map(seg => encode(seg)), // fallback overlay geometry, same real-road data
+    };
     snappedCount++;
     if (snappedCount % 20 === 0) console.log(`  ...${snappedCount} patterns colored`);
   }

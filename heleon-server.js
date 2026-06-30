@@ -1667,8 +1667,14 @@ function scheduleMatching() {
 }
 
 // Geometry for a pattern, in priority order:
-//   1. Road-graph-snapped segments (every point is real OSM road geometry by
-//      construction — see ROAD_SNAPPED above). Returns { segments } when present.
+//   1. Road-graph-snapped wayIds + segments (every point/way is real OSM road
+//      data by construction — see ROAD_SNAPPED above). `wayIds` are real OSM
+//      way IDs — MapTiler's basemap "transportation" layer's own feature.id
+//      IS the OSM way id (verified directly against vector tiles), so the
+//      client can recolor the BASEMAP's existing road pixels via
+//      map.setFeatureState instead of drawing any overlay line at all.
+//      `segments` (the same real-road coordinates) ride along as a fallback
+//      for any client/basemap combination where that isn't possible.
 //   2. Vendored Valhalla-matched single shape (older pipeline, still authoritative
 //      where a route hasn't been re-run through the road-graph snapper yet).
 //   3. A freshly-matched DB result for a pattern with no vendored entry at all
@@ -1676,7 +1682,7 @@ function scheduleMatching() {
 //   4. Raw GTFS shape as the final fallback — an honest sparse line, never bridged.
 function bestPatternShape(patternId, rawShape) {
   const rs = ROAD_SNAPPED[String(patternId)];
-  if (rs && rs.segments && rs.segments.length) return { segments: rs.segments };
+  if (rs && rs.wayIds && rs.wayIds.length) return { wayIds: rs.wayIds, segments: rs.segments || [] };
   const v = VENDORED_SHAPES[String(patternId)];
   if (v && v.shape) return { shape: v.shape };
   const m = dbGet(`SELECT shape, is_raw FROM route_shapes_matched WHERE pattern_id=?`, [patternId]);
@@ -2017,13 +2023,13 @@ async function handleApi(url, res) {
       // include pale pastels and #FFFFFF that vanish on the map).
       if (ROUTE_MAP[r.route_id]) r.color = ROUTE_MAP[r.route_id].color;
       // Prefer road-graph-snapped geometry — see bestPatternShape(). A pattern
-      // either gets `segments` (multiple real-road polylines, gaps kept honest)
-      // or a single `shape` (older Valhalla-matched or raw GTFS fallback); the
-      // client handles both. Drop the raw `shape` key when we're returning
-      // segments instead, so old client code can't accidentally draw the raw
+      // either gets `wayIds` (+ `segments` as a fallback) or a single `shape`
+      // (older Valhalla-matched or raw GTFS fallback); the client handles
+      // both. Drop the raw `shape` key when we're returning wayIds/segments
+      // instead, so old client code can't accidentally draw the raw
       // unsnapped line on top of the snapped one.
       const best = bestPatternShape(r.pattern_id, r.shape);
-      if (best.segments) { delete r.shape; r.segments = best.segments; r.matched = true; }
+      if (best.wayIds) { delete r.shape; r.wayIds = best.wayIds; r.segments = best.segments; r.matched = true; }
       else if (best.shape !== r.shape) { r.shape = best.shape; r.matched = true; }
     });
     return json(res, rows);
