@@ -1026,8 +1026,11 @@ function layerNorm(x, gamma, beta) {
 // the forward-pass output for token i is a good predictor for the head that
 // targets "i stops ahead". Forward returns token-level outputs (not just the
 // mean-pooled one) and we map head k to token k.
-function buildTokenSequence(vehicle, distanceKm, schedDeltaSec, routeId) {
-  const now = new Date();
+function buildTokenSequence(vehicle, distanceKm, schedDeltaSec, routeId, atMs) {
+  // atMs lets a caller build the token sequence for a HISTORICAL moment (e.g.
+  // training on a stop_arrivals row from 3 weeks ago) instead of always "now".
+  // Defaulting to Date.now() keeps the live-prediction call sites unchanged.
+  const now = new Date(atMs ?? Date.now());
   const hour = now.getHours() + now.getMinutes() / 60;
   const dow = now.getDay();
   const hourSin = Math.sin(2 * Math.PI * hour / 24);
@@ -1067,8 +1070,44 @@ function buildTokenSequence(vehicle, distanceKm, schedDeltaSec, routeId) {
   return tokens;
 }
 
+// How far ahead/behind schedule a HISTORICAL arrival was, in signed seconds
+// (positive = late), by matching it to the GTFS trip whose scheduled
+// time-of-day is closest to when it actually happened (±2h tolerance — outside
+// that there's no scheduled service to compare against, e.g. an off-hours
+// deadhead). Mirrors the live "nearest scheduled trip to now" lookup used for
+// the on-screen schedule-adherence badge, just evaluated at an arbitrary past
+// timestamp instead of always "now" — this is what makes the schedule-delta
+// token feature meaningful during training instead of always reading zero.
+function scheduleDeltaAt(routeId, stopId, atMs) {
+  const d = new Date(atMs);
+  const daySec = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+  const candidates = dbAll(
+    `SELECT arrival_sec FROM gtfs_stop_times WHERE route_id=? AND stop_id=?`,
+    [routeId, stopId]
+  );
+  if (!candidates.length) return null;
+  let best = null, bestDiff = Infinity;
+  for (const c of candidates) {
+    const sec = c.arrival_sec % 86400;
+    const diff = Math.min(Math.abs(sec - daySec), 86400 - Math.abs(sec - daySec));
+    if (diff < bestDiff) { bestDiff = diff; best = sec; }
+  }
+  if (best == null || bestDiff > 7200) return null; // no plausible scheduled trip
+  // Signed delta: actual minus scheduled, wrapped the short way around midnight.
+  let delta = daySec - best;
+  if (delta > 43200) delta -= 86400; else if (delta < -43200) delta += 86400;
+  return delta;
+}
+
 async function trainFromHistory() {
   console.log('[learn] Training transformer on stop_arrivals history…');
+  // Pull from the FULL retained history (now up to 365 days — see
+  // ARRIVALS_RETAIN_MS) so the model actually sees enough distinct
+  // hour-of-day/day-of-week combinations to learn real patterns, not just
+  // whatever happened in the last week. Capped at a few thousand rows per
+  // training pass to keep this fast; trainFromHistory re-runs periodically
+  // (see boot) so it cycles through history over time rather than needing it
+  // all in one pass.
   const rows = dbAll(`
     SELECT sa.ts as actual_ts, sa.stop_id, sa.route_id, sa.vehicle_id,
            p.speed, p.lat, p.lon, s.lat as stop_lat, s.lon as stop_lon
@@ -1076,8 +1115,8 @@ async function trainFromHistory() {
     JOIN pings p ON p.vehicle_id = sa.vehicle_id AND ABS(sa.ts - p.ts) < 300000
     JOIN stops s ON s.id = sa.stop_id AND s.route_id = sa.route_id
     WHERE sa.ts > ?
-    ORDER BY sa.ts DESC LIMIT 300
-  `, [Date.now() - 7 * 86400000]);
+    ORDER BY sa.ts DESC LIMIT 4000
+  `, [Date.now() - ARRIVALS_RETAIN_MS]);
   console.log(`[learn] Got ${rows.length} training rows`);
 
   let totalLoss = 0, n = 0;
@@ -1104,7 +1143,13 @@ async function trainFromHistory() {
       const targets = future.map(f => (f.actual_ts - r.actual_ts) / 60000 - naiveEta);
       while (targets.length < 5) targets.push(null);
 
-      const tokens = buildTokenSequence({ speed: r.speed }, dist, null, r.route_id);
+      const schedDeltaSec = scheduleDeltaAt(r.route_id, r.stop_id, r.actual_ts);
+      // Use the row's OWN arrival time for hour/day-of-week, not "now" — every
+      // training example was previously stamped with whatever moment the
+      // server happened to be training at, which collapsed the entire
+      // time-of-day/day-of-week embedding to a single point and made it
+      // impossible to learn rush-hour vs. midday patterns.
+      const tokens = buildTokenSequence({ speed: r.speed }, dist, schedDeltaSec, r.route_id, r.actual_ts);
       const loss = TX.train(tokens, targets);
       totalLoss += loss; n++;
     } catch(e) { /* skip bad row */ }
@@ -1408,7 +1453,8 @@ function detectArrivals(vehicle, routeId) {
               if ((prevState.speed || 0) > 1 && dist > 0.05) {
                 const naiveEta = (dist / (prevState.speed * 1.60934)) * 60;
                 const residual = timeSince - naiveEta;
-                const tokens = buildTokenSequence({ speed: prevState.speed }, dist, null, routeId);
+                const schedDeltaSec = scheduleDeltaAt(routeId, prevStop.id, prevArr.ts);
+                const tokens = buildTokenSequence({ speed: prevState.speed }, dist, schedDeltaSec, routeId, prevArr.ts);
                 const targets = [residual, null, null, null, null];
                 TX.train(tokens, targets);
               }
@@ -2159,7 +2205,13 @@ async function handleApi(url, res) {
     // and each token has its own output head — so the residual for the k-th
     // stop ahead is `seqOut[k]`. The stop's rank-ahead is determined by
     // distance (clamped to the 5 trained heads).
-    const fwdRes = TX.forward(buildTokenSequence(v, 0, null, v.routeId));
+    // Schedule delta uses the NEAREST stop (the one the bus is currently
+    // approaching) as the reference for "ahead/behind schedule right now" —
+    // matches the same feature trainFromHistory now actually populates.
+    const nearestStopIdx = stops.reduce((mi, s, i) =>
+      haversineKm(v.lat, v.lon, s.lat, s.lon) < haversineKm(v.lat, v.lon, stops[mi].lat, stops[mi].lon) ? i : mi, 0);
+    const liveSchedDeltaSec = scheduleDeltaAt(v.routeId, stops[nearestStopIdx].id, nowMsEta);
+    const fwdRes = TX.forward(buildTokenSequence(v, 0, liveSchedDeltaSec, v.routeId, nowMsEta));
     const seqOut = fwdRes.tokenOut; // length 12; first 5 are the trained heads
     // Rank stops by distance to map them to "n stops ahead" → head index.
     const distRank = {};
@@ -2783,7 +2835,23 @@ const server = http.createServer((req, res) => {
   }
 
   await fetchAllStops();
-  await loadGtfs();
+  // Retry the initial GTFS load: on a fresh ephemeral instance (Render redeploy)
+  // there's no cached DB row to fall back on, so a single transient network
+  // hiccup hitting the county's feed at boot leaves gtfs_stop_times empty for
+  // the server's ENTIRE lifetime — no scheduled times, no schedule-adherence
+  // badge, no real schedDeltaSec for the transformer — until the next deploy.
+  // A few retries with backoff covers the common transient case cheaply.
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    await loadGtfs();
+    const n = dbGet(`SELECT COUNT(*) as n FROM gtfs_stop_times`);
+    if (n && n.n > 0) break;
+    if (attempt < 4) {
+      console.error(`[gtfs] boot load attempt ${attempt} produced no data, retrying in ${attempt * 5}s…`);
+      await new Promise(r => setTimeout(r, attempt * 5000));
+    } else {
+      console.error('[gtfs] boot load failed after 4 attempts — scheduled times unavailable until next deploy or periodic refresh');
+    }
+  }
   // Fill in geometry for schedule-only routes (401/301/204/502) that the live
   // upstream API doesn't serve, using GTFS shapes.txt — so they appear on the map.
   try { loadGtfsShapesForMissing(); } catch (e) { console.error('[gtfs-shapes]', e.message); }
