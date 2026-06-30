@@ -2484,26 +2484,66 @@ function scheduleAisReconnect() {
 // for the anonymous tier (10s rate limit). We poll every 12s with a tight
 // Hawaii bbox so we never get more than ~30 aircraft per call.
 const OPENSKY_URL = 'https://opensky-network.org/api/states/all';
-// Hawaii bounding box, slightly widened from the bus fleet bbox to catch
-// aircraft on approach to / departure from the islands (HNL, KOA, OGG, ITO, LIH).
+// Big-Island-focused bbox. OpenSky charges per query by area: ≤25 sq° = 1 credit,
+// 25–100 = 2, etc. The old wide Hawaii bbox (~42 sq°) cost 2 credits/call and blew
+// past the anonymous 400-credit/day budget → constant rate-limit timeouts. This
+// box (~1.5° × 1.8° ≈ 2.7 sq°) is 1 credit and still covers ITO/KOA + approaches.
 const HAWAII_AIR_BBOX = {
-  lamin: 18.5, lomin: -161.0,    // include KOA airspace to the west
-  lamax: 22.5, lomax: -154.5,    // include northern Big Island
+  lamin: 18.7, lomin: -156.3,
+  lamax: 20.5, lomax: -154.6,
 };
 const AIRCRAFT_STALE_MS = 90 * 1000;  // 90s — OpenSky refreshes every 10s; anything older is unreliable
 let aircraftCache = [];               // [{ icao24, callsign, country, lat, lon, altM, velMs, headingDeg, onGround, lastTs }]
 let aircraftLastPollTs = null;
 let aircraftLastError = null;
 
+// ── OpenSky OAuth2 (optional, free) ──────────────────────────────────────────
+// Anonymous = 400 credits/day (one /states/all call costs 1+ credits), so a live
+// poll exhausts it fast. A free OpenSky account → API client gives 4,000/day.
+// Set OPENSKY_CLIENT_ID + OPENSKY_CLIENT_SECRET to enable; we fetch & cache an
+// OAuth2 token (client_credentials grant) and send it as a Bearer header. With no
+// credentials we fall back to anonymous (still works, just polled more slowly).
+const OPENSKY_CLIENT_ID = process.env.OPENSKY_CLIENT_ID || '';
+const OPENSKY_CLIENT_SECRET = process.env.OPENSKY_CLIENT_SECRET || '';
+const OPENSKY_TOKEN_URL = 'https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token';
+const openskyAuthed = () => !!(OPENSKY_CLIENT_ID && OPENSKY_CLIENT_SECRET);
+let openskyToken = null, openskyTokenExp = 0;
+
+async function getOpenSkyToken() {
+  if (!openskyAuthed()) return null;
+  if (openskyToken && Date.now() < openskyTokenExp - 60000) return openskyToken; // still valid (60s margin)
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: OPENSKY_CLIENT_ID,
+    client_secret: OPENSKY_CLIENT_SECRET,
+  }).toString();
+  const u = new URL(OPENSKY_TOKEN_URL);
+  const json = await new Promise((resolve, reject) => {
+    const req = https.request({ hostname: u.hostname, path: u.pathname, method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) },
+      timeout: 15000 }, res => {
+      let b = ''; res.on('data', d => b += d);
+      res.on('end', () => { if (res.statusCode !== 200) return reject(new Error(`token HTTP ${res.statusCode}`)); try { resolve(JSON.parse(b)); } catch { reject(new Error('bad token JSON')); } });
+    });
+    req.on('error', reject); req.on('timeout', () => { req.destroy(); reject(new Error('token timeout')); });
+    req.end(body);
+  });
+  openskyToken = json.access_token;
+  openskyTokenExp = Date.now() + (json.expires_in || 1800) * 1000;
+  return openskyToken;
+}
+
 // OpenSky's anonymous tier is rate-limited and frequently slow/throttled. Fetch
 // with a generous timeout and an explicit HTTP-status check (a 429/503 returns an
 // HTML body that would otherwise blow up JSON.parse and look like a hard error).
 // On ANY failure we keep the last good aircraft on screen (cache untouched) so a
 // transient timeout doesn't blank the map — we only note the error.
-function fetchOpenSky(reqPath) {
+function fetchOpenSky(reqPath, token) {
   return new Promise((resolve, reject) => {
+    const headers = { 'User-Agent': 'heleon-tracker', 'Accept': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     const req = https.request({ hostname: 'opensky-network.org', path: reqPath, method: 'GET',
-      headers: { 'User-Agent': 'heleon-tracker', 'Accept': 'application/json' }, timeout: 20000 }, res => {
+      headers, timeout: 20000 }, res => {
       let b = ''; res.on('data', d => b += d);
       res.on('end', () => {
         if (res.statusCode === 429) return reject(new Error('rate limited (429) — backing off'));
@@ -2517,11 +2557,21 @@ function fetchOpenSky(reqPath) {
   });
 }
 
+// Authenticated users have 10× the credits, so they can afford a wider box that
+// shows all-Hawaii traffic (inter-island flights, neighbor-island airports).
+const HAWAII_AIR_BBOX_WIDE = { lamin: 18.5, lomin: -160.5, lamax: 22.5, lomax: -154.5 };
 async function pollAircraft() {
-  const params = new URLSearchParams(HAWAII_AIR_BBOX).toString();
+  const box = openskyAuthed() ? HAWAII_AIR_BBOX_WIDE : HAWAII_AIR_BBOX;
+  const params = new URLSearchParams(box).toString();
   try {
-    const res = await fetchOpenSky(`/api/states/all?${params}`);
+    // Use an OAuth2 bearer token when credentials are configured (4000 credits/day
+    // vs 400 anonymous). A token failure falls back to an anonymous request.
+    let token = null;
+    try { token = await getOpenSkyToken(); } catch (e) { aircraftLastError = 'auth: ' + e.message; }
+    const res = await fetchOpenSky(`/api/states/all?${params}`, token);
     if (!res || !Array.isArray(res.states)) {
+      // No states in the box right now is normal (quiet airspace) — not an error.
+      if (res && res.states === null) { aircraftCache = []; aircraftLastPollTs = Date.now(); aircraftLastError = null; return; }
       aircraftLastError = 'unexpected response shape';
       return; // keep last cache
     }
@@ -2612,13 +2662,16 @@ const server = http.createServer((req, res) => {
   } else {
     console.log('[boats] AISSTREAM_API_KEY not set — boats layer disabled (set env var to enable)');
   }
-  // Airplanes layer — OpenSky Network's anonymous tier, no key needed. The
-  // anonymous tier is rate-limited (a 12s poll on a wide bbox gets throttled,
-  // which is what caused the "OpenSky timeout / upstream error"). Poll every 30s
-  // — gentle enough to stay under the limits while still feeling live (planes
-  // move slowly relative to the map). On error the last fix stays on screen.
+  // Airplanes layer — OpenSky Network. The credit budget is the real constraint:
+  // anonymous = 400/day, authenticated = 4000/day, at 1 credit per (now-small)
+  // bbox call. Poll fast enough to feel live but stay under budget:
+  //   authenticated: every 25s  → ~3450 calls/day  (< 4000)
+  //   anonymous:     every 240s → ~360 calls/day   (< 400)
+  // On error the last fix stays on screen, so a hiccup never blanks the map.
+  const aircraftPollMs = openskyAuthed() ? 25000 : 240000;
+  console.log(`[aircraft] OpenSky ${openskyAuthed() ? 'authenticated (4000 credits/day)' : 'anonymous (400 credits/day) — set OPENSKY_CLIENT_ID/SECRET for higher limits'}; polling every ${aircraftPollMs/1000}s`);
   pollAircraft();
-  setInterval(pollAircraft, 30000);
+  setInterval(pollAircraft, aircraftPollMs);
   setTimeout(pruneDb, 30000);                // full prune+VACUUM shortly after boot
   setInterval(pruneDb, 24 * 60 * 60 * 1000); // and daily thereafter
   // poll_log grows ~88 rows/cycle (22 routes × 4/min) but /api/stats only reads

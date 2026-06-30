@@ -25,8 +25,17 @@ services:
     #   S3-compatible (B2/R2):   BACKUP_S3_ENDPOINT, BACKUP_S3_BUCKET,
     #                            BACKUP_S3_ACCESS_KEY, BACKUP_S3_SECRET
     # With none set the app still runs; history just resets on each deploy.
+    # OpenSky aircraft (optional): anonymous works but has only 400 credits/day,
+    # so planes poll slowly (every 4 min) over a Big-Island-only box. A FREE
+    # OpenSky account → "API client" gives 4000/day → fast polling (25s) + an
+    # all-Hawaii box. Create one at opensky-network.org and set:
+    #   OPENSKY_CLIENT_ID, OPENSKY_CLIENT_SECRET
     envVars:
       - key: BACKUP_GITHUB_TOKEN
         sync: false
       - key: BACKUP_GITHUB_REPO
+        sync: false
+      - key: OPENSKY_CLIENT_ID
+        sync: false
+      - key: OPENSKY_CLIENT_SECRET
         sync: false
