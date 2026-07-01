@@ -2682,6 +2682,7 @@ const ROAD_SRC = 'route-roads';
 const ROAD_LAYER = 'route-roads-line';
 let routeRoadsData = null;         // GeoJSON of OSM ways routes travel
 let roadStateApplied = new Set();  // wayIds we've set feature-state on (to clear)
+let wayRouteMap = new Map();       // wayId -> [{routeId,color}] for the road hover
 
 async function fetchRouteRoads() {
   if (routeRoadsData) return routeRoadsData;
@@ -2704,7 +2705,10 @@ function renderRouteRibbons() {
   ensureRouteRoadLayer(); // idempotent; creates the real-road layer once ready
 
   // wayId → visible route colors on that way (dedup, in stable route order).
+  // Kept module-global so the road hover can list every route on the road under
+  // the cursor.
   const wayColors = new Map();
+  wayRouteMap = wayColors;
   // Group multi-route edges by route for the ribbon-band overlay.
   const byRoute = new Map(); // routeId -> { color, edges:[{coords,slot}] }
   for (const edge of routeEdgesData.edges) {
@@ -2712,7 +2716,7 @@ function renderRouteRibbons() {
     if (!vis.length) continue;
     if (edge.wayId != null) {
       let arr = wayColors.get(edge.wayId); if (!arr) wayColors.set(edge.wayId, arr = []);
-      for (const r of vis) if (!arr.some(x => x.routeId === r.routeId)) arr.push({ routeId: r.routeId, color: r.color });
+      for (const r of vis) if (!arr.some(x => x.routeId === r.routeId)) arr.push({ routeId: r.routeId, color: r.color, short: r.short, name: r.name });
     }
     if (vis.length >= 2) {
       const center = (vis.length - 1) / 2;
@@ -2735,6 +2739,12 @@ function renderRouteRibbons() {
       roadStateApplied.add(wid);
     }
   }
+
+  // (1b) Subtle route-number pills along the roads. One small label per way at
+  // its midpoint, showing the route short(s) on it — a light touch (only ways
+  // long enough to carry a label, only shown from mid-zoom in) so you can read
+  // which route a road is without hovering, without cluttering the map.
+  renderRoutePills(wayColors);
 
   // (2) Ribbon bands on shared roads only (real coords, small offset).
   const features = [];
@@ -2790,6 +2800,83 @@ function ensureRouteRoadLayer() {
     },
     layout: { 'line-join': 'round', 'line-cap': 'round' },
   }, 'stops-circle');
+
+  // Hover a road → list EVERY route on it, right at the cursor. Uses wayRouteMap
+  // (wayId → routes) built in renderRouteRibbons, so it's always in sync.
+  map.on('mousemove', ROAD_LAYER, e => {
+    if (!e.features || !e.features.length) return;
+    const wid = e.features[0].properties.wayId ?? e.features[0].id;
+    const routes = wayRouteMap.get(wid) || wayRouteMap.get(Number(wid));
+    if (!routes || !routes.length) return;
+    map.getCanvas().style.cursor = 'pointer';
+    const rows = routes.map(r => {
+      const name = r.name || (ROUTES_META[r.routeId] || {}).name || ('Route ' + r.routeId);
+      return `<div style="display:flex;align-items:center;gap:6px;line-height:1.5;">
+        <span style="width:9px;height:9px;border-radius:2px;background:${r.color};flex-shrink:0;border:1px solid rgba(255,255,255,.5);"></span>
+        <span style="font-weight:600;white-space:nowrap;">${escapeHtml(name)}</span></div>`;
+    }).join('');
+    const header = routes.length > 1 ? `<div style="font-size:10px;color:var(--muted);margin-bottom:3px;">${routes.length} routes on this road</div>` : '';
+    showLayerHover(header + rows, e.originalEvent.clientX, e.originalEvent.clientY);
+  });
+  map.on('mouseleave', ROAD_LAYER, () => { map.getCanvas().style.cursor = ''; hideLayerHover(); });
+}
+
+// wayId -> {coords, lengthM} index, built once from routeRoadsData for pills.
+let _wayGeomIndex = null;
+function wayGeomIndex() {
+  if (_wayGeomIndex || !routeRoadsData) return _wayGeomIndex;
+  _wayGeomIndex = new Map();
+  const distM = (a, b) => { const mLat = 111320, mLon = mLat * Math.cos(a[1]*Math.PI/180); return Math.hypot((b[0]-a[0])*mLon, (b[1]-a[1])*mLat); };
+  for (const f of routeRoadsData.features) {
+    const c = f.geometry.coordinates;
+    let len = 0; for (let i = 1; i < c.length; i++) len += distM(c[i-1], c[i]);
+    _wayGeomIndex.set(f.id, { coords: c, lengthM: len });
+  }
+  return _wayGeomIndex;
+}
+
+const PILLS_SRC = 'route-pills';
+const PILLS_LAYER = 'route-pills-symbol';
+// A point label at each labelled way's midpoint, text = its route short(s).
+function renderRoutePills(wayColors) {
+  const idx = wayGeomIndex();
+  if (!idx) return;
+  const feats = [];
+  for (const [wid, cols] of wayColors) {
+    const g = idx.get(wid) || idx.get(Number(wid));
+    if (!g || g.lengthM < 180) continue;      // skip stubs — subtle, not everywhere
+    const mid = g.coords[Math.floor(g.coords.length / 2)];
+    // Keep pills short: at most 3 shorts, then "+N" — a busy corridor shows
+    // "10 · 1 · 2 +5", not an unreadable 11-route string.
+    const shorts = cols.map(c => c.short);
+    const label = shorts.length <= 3 ? shorts.join(' · ')
+      : shorts.slice(0, 3).join(' · ') + ' +' + (shorts.length - 3);
+    feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: mid },
+      properties: { label, color: cols.length === 1 ? cols[0].color : '#37415a' } });
+  }
+  const data = { type: 'FeatureCollection', features: feats };
+  const src = map.getSource(PILLS_SRC);
+  if (src) { src.setData(data); return; }
+  map.addSource(PILLS_SRC, { type: 'geojson', data });
+  map.addLayer({
+    id: PILLS_LAYER, type: 'symbol', source: PILLS_SRC,
+    minzoom: 12.5,   // only when zoomed enough to matter
+    layout: {
+      'text-field': ['get', 'label'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 12.5, 9, 16, 11],
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'symbol-placement': 'point',
+      'text-padding': 14,          // spread them out so they don't crowd
+      'text-allow-overlap': false,
+      'text-optional': true,
+    },
+    paint: {
+      'text-color': '#ffffff',
+      'text-halo-color': ['get', 'color'],
+      'text-halo-width': 2,
+      'text-opacity': 0.92,
+    },
+  });
 }
 
 // ─── RENDER TRAILS ────────────────────────────────────────────────────────────

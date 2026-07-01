@@ -2250,7 +2250,12 @@ async function handleApi(url, res) {
         id: e.id,
         wayId: e.wayId,   // join key to the self-hosted road source (feature-state recolor)
         coords: e.coords,
-        routes: e.routeIds.map(rid => ({ routeId: rid, color: (ROUTE_MAP[rid] && ROUTE_MAP[rid].color) || '#888' })),
+        routes: e.routeIds.map(rid => ({
+          routeId: rid,
+          color: (ROUTE_MAP[rid] && ROUTE_MAP[rid].color) || '#888',
+          short: (ROUTE_MAP[rid] && ROUTE_MAP[rid].short) || String(rid),
+          name: (ROUTE_MAP[rid] && ROUTE_MAP[rid].name) || ('Route ' + rid),
+        })),
         ...(ctl ? { signals: ctl.signals, stops: ctl.stops } : {}),
       };
     });
