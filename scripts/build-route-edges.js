@@ -61,6 +61,52 @@ async function main() {
   }
   console.log(`Processed ${processed} patterns, ${edgeRoutes.size} distinct road edges used by at least one route`);
 
+  // Smooth short-edge lane-count transitions. A block that's genuinely just
+  // 15-20m long (a real, common OSM segment length at busy intersections)
+  // sitting between two longer segments carrying MORE routes shows a visible
+  // "jog" in the ribbon at each end — the rendered lane count snaps from N to
+  // fewer and back to N over a span barely wider than the line itself, which
+  // reads as a broken/dashed line even though the underlying road is one
+  // continuous street. Fix: a short edge (<30m) inherits the UNION of the
+  // route sets on its immediate neighbor edges (those sharing a graph node),
+  // when that union is a superset of what it already has — so the ribbon's
+  // lane count stays visually consistent across a short connector instead of
+  // narrowing and widening within the space of one rendered dash. This adds
+  // route membership only (never new coordinates) and only where the short
+  // edge's neighbors already independently carry those routes, so it can't
+  // claim a route never actually used this block.
+  function distM(a, b) {
+    const R = 6371000;
+    const mPerDegLat = 111320, mPerDegLon = mPerDegLat * Math.cos(a[1] * Math.PI / 180);
+    return Math.hypot((b[0]-a[0])*mPerDegLon, (b[1]-a[1])*mPerDegLat);
+  }
+  function edgeLengthM(e) {
+    let len = 0;
+    for (let i = 1; i < e.coords.length; i++) len += distM(e.coords[i-1], e.coords[i]);
+    return len;
+  }
+  const SHORT_EDGE_M = 30;
+  for (const [edgeIdx, routeIdSet] of edgeRoutes) {
+    const e = graph.edges[edgeIdx];
+    if (edgeLengthM(e) >= SHORT_EDGE_M) continue;
+    const neighborUnion = new Set();
+    for (const node of [e.a, e.b]) {
+      const n = graph.nodes.get(node);
+      if (!n) continue;
+      for (const neighborIdx of n.edges) {
+        if (neighborIdx === edgeIdx) continue;
+        const neighborRoutes = edgeRoutes.get(neighborIdx);
+        if (neighborRoutes) for (const rid of neighborRoutes) neighborUnion.add(rid);
+      }
+    }
+    // Only absorb if BOTH ends have a neighbor with route data and the union
+    // is strictly larger — a short edge with no route-carrying neighbors (a
+    // genuine isolated case) is left as-is rather than guessed at.
+    if (neighborUnion.size > routeIdSet.size) {
+      for (const rid of neighborUnion) routeIdSet.add(rid);
+    }
+  }
+
   const edges = [];
   for (const [edgeIdx, routeIdSet] of edgeRoutes) {
     const e = graph.edges[edgeIdx];
