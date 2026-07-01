@@ -786,20 +786,6 @@ function initMap() {
   // Re-fan overlapping buses whenever the camera settles (overlap is zoom/pan
   // dependent — buses separate as you zoom in).
   map.on('moveend', () => { try { deOverlapMarkers(); } catch (e) {} });
-  // Ribbon parallel-offset is baked into geometry in screen px, so it must be
-  // re-baked when zoom changes enough to shift the stripe width. Debounced, and
-  // only when the rounded zoom actually moved, so panning never triggers it.
-  let _lastRibbonZoom = null, _ribbonRebakeTimer = null;
-  map.on('zoomend', () => {
-    const z = Math.round(map.getZoom() * 2) / 2; // 0.5-zoom granularity
-    if (z === _lastRibbonZoom) return;
-    _lastRibbonZoom = z;
-    clearTimeout(_ribbonRebakeTimer);
-    _ribbonRebakeTimer = setTimeout(() => {
-      try { renderRouteRibbons(); } catch (e) {}
-      try { renderTrailRibbons(); } catch (e) {}
-    }, 120);
-  });
   map.on('error', (e) => {
     // Suppress known MapLibre v4 bugs about listener arrays
     if (e?.error?.message?.includes('slice is not a function')) return;
@@ -825,11 +811,15 @@ function initMapLayers() {
   // just dashed. Fallback (pre-edge-data) features have no `slot` property,
   // which reads as 0 (no offset), so a single un-ribboned line still renders
   // correctly during that brief window.
-  // Offset is baked into trail geometry (offsetPolyline, tapered at junctions),
-  // re-baked on zoom — same as the live route ribbons — so no line-offset here.
+  // Trails ride the real road too; a small screen-space per-lane offset keeps
+  // overlapping dashed trails distinct without leaving the road.
   map.addLayer({ id: 'trails-line', type: 'line', source: 'trails',
     paint: { 'line-color': ['get', 'color'], 'line-width': 2.5, 'line-opacity': 0.7,
-      'line-dasharray': [0.5, 2] },
+      'line-dasharray': [0.5, 2],
+      'line-offset': ['interpolate', ['linear'], ['zoom'],
+        12, ['*', ['coalesce', ['get', 'slot'], 0], 1.4],
+        15, ['*', ['coalesce', ['get', 'slot'], 0], 2.2],
+        18, ['*', ['coalesce', ['get', 'slot'], 0], 3]] },
     layout: { 'line-join': 'round', 'line-cap': 'round' }
   });
 
@@ -2702,19 +2692,21 @@ function renderRouteRibbons() {
     });
   }
 
-  const z = map.getZoom();
-  const stripePx = ribbonStripePxAt(z);
+  // GROUND TRUTH = THE ROAD. Draw each route as the EXACT real road-edge
+  // coordinates it travels — no smoothing (which invents curves), no
+  // parallel-offset baking (which drifts the copy off the road and drew arcs
+  // across the bay), no gap-bridging in the client. chainRouteEdges only
+  // concatenates edges that literally share an endpoint, so a feature is always
+  // a real, connected run of actual road; edges that don't touch stay separate
+  // (a gap is honest — never a line where there's no road). Overlaps get a tiny
+  // screen-space line-offset by slot so shared roads still show distinct colors,
+  // but it's small enough to stay on the road.
   const features = [];
   for (const [routeId, { color, edges }] of byRoute) {
-    // Chain into connected runs, smooth corners, then bake in a tapered
-    // parallel offset (lane * stripe width) so lanes pull onto the centerline
-    // at junctions — no fan/blob — and ride tight parallel bands mid-corridor.
     for (const run of chainRouteEdges(edges)) {
-      const smoothed = smoothPolyline(run.coords);
-      const offset = offsetPolyline(smoothed, run.slot * stripePx, z);
       features.push({
         type: 'Feature',
-        geometry: { type: 'LineString', coordinates: offset },
+        geometry: { type: 'LineString', coordinates: run.coords },
         properties: { color, slot: run.slot, routeId },
       });
     }
@@ -2731,8 +2723,12 @@ function renderRouteRibbons() {
       'line-color': ['get', 'color'],
       'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 12, RIBBON_STRIPE_PX, 15, 4.4, 18, 6],
       'line-opacity': 0.95,
-      // Offset is baked into the geometry (see offsetPolyline) and re-baked on
-      // zoom, so no line-offset here.
+      // Small screen-space offset per lane so overlapping routes stay distinct
+      // without drifting off the road; solo roads (slot 0) sit dead-on center.
+      'line-offset': ['interpolate', ['linear'], ['zoom'],
+        12, ['*', ['get', 'slot'], 1.6],
+        15, ['*', ['get', 'slot'], 2.6],
+        18, ['*', ['get', 'slot'], 3.4]],
     },
     layout: { 'line-join': 'round', 'line-cap': 'round' },
   }, 'stops-circle');
@@ -2766,15 +2762,15 @@ function renderTrailRibbons() {
       byRoute.get(r.routeId).edges.push({ coords: edge.coords, slot: i - center });
     });
   }
-  const z = map.getZoom();
-  const stripePx = ribbonStripePxAt(z, TRAIL_STRIPE_PX_BAKE);
+  // Same ground-truth rule as live ribbons: real road coords only, no
+  // smoothing/offset invention; a small screen-space offset comes from the
+  // layer paint (slot) so overlapping dashed trails stay distinct.
   const features = [];
   for (const [routeId, { color, edges }] of byRoute) {
     for (const run of chainRouteEdges(edges)) {
-      const offset = offsetPolyline(smoothPolyline(run.coords), run.slot * stripePx, z);
       features.push({
         type: 'Feature',
-        geometry: { type: 'LineString', coordinates: offset },
+        geometry: { type: 'LineString', coordinates: run.coords },
         properties: { color, slot: run.slot, routeId },
       });
     }
