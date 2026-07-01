@@ -2456,10 +2456,30 @@ const RIBBON_STRIPE_PX = 3.2; // width of one stripe; a 3-route ribbon is ~3x th
 
 const _ptKey = (p) => `${p[0].toFixed(6)},${p[1].toFixed(6)}`;
 
-// Chain a set of edges (each {coords, slot}) belonging to ONE route into
-// connected runs, splitting a run whenever the slot changes (so each emitted
-// feature carries a single constant offset). Edges connect where an endpoint
-// of one equals an endpoint of another (they're built connected server-side).
+// Turn angle in degrees away from straight-ahead at vertex b (0 = dead
+// straight, 180 = full reversal), in a local flat-earth metric.
+function _turnDeg(a, b, c) {
+  const mLat = 111320, mLon = mLat * Math.cos(b[1] * Math.PI / 180);
+  const v1x = (b[0] - a[0]) * mLon, v1y = (b[1] - a[1]) * mLat;
+  const v2x = (c[0] - b[0]) * mLon, v2y = (c[1] - b[1]) * mLat;
+  const d1 = Math.hypot(v1x, v1y), d2 = Math.hypot(v2x, v2y);
+  if (d1 < 1e-9 || d2 < 1e-9) return 0;
+  let cos = (v1x * v2x + v1y * v2y) / (d1 * d2);
+  cos = Math.max(-1, Math.min(1, cos));
+  return Math.acos(cos) * 180 / Math.PI;
+}
+
+// Chain a set of edges (each {coords, slot}) belonging to ONE route into the
+// FEWEST possible connected runs. Edges connect where an endpoint of one equals
+// an endpoint of another (they're built connected server-side).
+//
+// Crucially we chain PURELY BY GEOMETRIC CONNECTIVITY — we do NOT split a run
+// when the slot changes. The `slot` is a per-edge lane number derived from how
+// many *other* routes happen to overlap that exact edge, so it churns at every
+// intersection; splitting on it shattered each route into hundreds of tiny
+// disjointed stubs (the "mangled mess"). Instead each run gets ONE stable slot
+// (the median of its edges' slots), so a route stays in a consistent lane and
+// renders as a few long, smooth ribbons instead of confetti.
 function chainRouteEdges(edges) {
   // Index endpoints -> edge occurrences.
   const remaining = edges.map((e, i) => ({ i, coords: e.coords, slot: e.slot, used: false }));
@@ -2477,18 +2497,30 @@ function chainRouteEdges(edges) {
     // Build a run outward from this edge in both directions.
     start.used = true;
     let coords = start.coords.slice();
-    const slot = start.slot;
-    // Extend forward from the tail.
-    const extend = (atEndReversed) => {
+    const slots = [start.slot];
+    // Extend from the tail, following an unused touching edge. At a junction
+    // (several touch the tail) pick the STRAIGHTEST continuation — the edge
+    // whose heading best matches the direction we arrived travelling — so the
+    // ribbon flows through intersections like a real road instead of taking a
+    // random hard turn and orphaning the through-street into its own stub.
+    const extend = () => {
       let progress = true;
       while (progress) {
         progress = false;
         const tail = coords[coords.length - 1];
-        const cands = (byEnd.get(_ptKey(tail)) || []).filter(c => !c.used && c.slot === slot);
+        const prev = coords[coords.length - 2] || tail;
+        const cands = (byEnd.get(_ptKey(tail)) || []).filter(c => !c.used);
         if (!cands.length) break;
-        const nxt = cands[0];
-        nxt.used = true;
-        const nc = _ptKey(nxt.coords[0]) === _ptKey(tail) ? nxt.coords : nxt.coords.slice().reverse();
+        let best = cands[0], bestTurn = Infinity;
+        for (const c of cands) {
+          // Orient candidate so it starts at the tail, then measure its turn.
+          const cc = _ptKey(c.coords[0]) === _ptKey(tail) ? c.coords : c.coords.slice().reverse();
+          const turn = _turnDeg(prev, tail, cc[1] || tail);
+          if (turn < bestTurn) { bestTurn = turn; best = c; }
+        }
+        best.used = true;
+        slots.push(best.slot);
+        const nc = _ptKey(best.coords[0]) === _ptKey(tail) ? best.coords : best.coords.slice().reverse();
         coords = coords.concat(nc.slice(1));
         progress = true;
       }
@@ -2498,6 +2530,9 @@ function chainRouteEdges(edges) {
     coords.reverse();
     extend();
     coords.reverse();
+    // One stable lane for the whole run: the median of its edges' slots.
+    slots.sort((a, b) => a - b);
+    const slot = slots[Math.floor(slots.length / 2)];
     runs.push({ coords, slot });
   }
   return runs;
