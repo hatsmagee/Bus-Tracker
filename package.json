@@ -8,6 +8,7 @@
     "dev": "node heleon-server.js",
     "snap-routes": "node scripts/snap-routes-to-roads.js",
     "build-route-edges": "node scripts/build-route-edges.js",
+    "trace-route-colors": "node scripts/trace-route-colors.js",
     "validate-routes": "node scripts/validate-route-roads.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

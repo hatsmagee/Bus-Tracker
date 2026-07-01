@@ -26,3 +26,4 @@ valhalla/
 data/osm/hawaii-latest.osm.pbf
 data/osm/.tmp-highways.jsonl
 data/osm/road-alignment-report.json
+data/route-color-trace-report.json
