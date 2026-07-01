@@ -822,6 +822,13 @@ function initMap() {
     try { fetchStreamflow(); } catch (e) {}
     try { fetchOcean(); } catch (e) {}
     try { fetchAprs(); } catch (e) {}
+    // Keep an open click-card glued to its map anchor as the map moves.
+    map.on('move', positionMapCard);
+    // Click on empty map (no interactive feature) closes the card.
+    map.on('click', e => {
+      const hits = map.queryRenderedFeatures(e.point, { layers: CARD_LAYERS.filter(l => map.getLayer(l)) });
+      if (!hits.length) hideMapCard();
+    });
   });
   // Re-fan overlapping buses whenever the camera settles (overlap is zoom/pan
   // dependent — buses separate as you zoom in).
@@ -1250,82 +1257,98 @@ function initMapLayers() {
       <div style="color:var(--muted);font-size:11px;">${t} · ${h} RH · ${w} wind</div>
       <div style="color:var(--muted);font-size:10px;">NWS ${escapeHtml(p.stationId)} · ${p.elevation ? Math.round(+p.elevation) + ' m' : '?'} elev · ${p.timestamp ? new Date(p.timestamp).toLocaleString() : '—'}</div>`;
   });
+  wireLayerCard('weather-stations-dot', p => {
+    const rows = [];
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+    if (p.temperatureC != null) row('Temperature', `${(+p.temperatureC).toFixed(1)} °C`);
+    if (p.humidity != null) row('Humidity', `${Math.round(+p.humidity)} %`);
+    if (p.windSpeedKmh != null) row('Wind', `${(+p.windSpeedKmh).toFixed(1)} km/h`);
+    const foot = `<div style="color:#8b949e;font-size:10px;margin-top:8px;">NWS ${escapeHtml(p.stationId || '')}${p.elevation ? ' · ' + Math.round(+p.elevation) + ' m' : ''}${p.timestamp ? ' · ' + new Date(p.timestamp).toLocaleString() : ''}</div>`;
+    return { title: `🌡️ ${p.name}`, body: (rows.join('') || 'No current reading.') + foot };
+  });
 
-  // Ocean stations: NDBC wave/weather buoys + NOAA tide gauges (keyless). Buoys
-  // show wave height, tide gauges show water level. Always on.
+  // Ocean stations: NDBC wave/weather buoys + NOAA tide gauges (keyless). Drawn
+  // as an emoji icon (🛟 buoy / 🌊 tide) with the reading beside it. Icons use
+  // text-allow-overlap:false so MapLibre's collision engine automatically hides
+  // any that would pile up — they thin out when zoomed out, fill in when zoomed
+  // in. `icon` prop is set per-feature in fetchOcean.
   map.addSource('ocean', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
-    id: 'ocean-dot', type: 'circle', source: 'ocean',
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 4, 12, 7],
-      'circle-color': ['match', ['get', 'kind'], 'tide', '#0891b2', /* buoy */ '#0369a1'],
-      'circle-stroke-width': 2, 'circle-stroke-color': '#e0f2fe',
+    id: 'ocean-dot', type: 'symbol', source: 'ocean',
+    layout: {
+      'text-field': ['concat', ['get', 'icon'], ' ', ['get', 'badge']],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 6, 11, 12, 14],
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 6,
     },
-  });
-  map.addLayer({
-    id: 'ocean-label', type: 'symbol', source: 'ocean',
-    layout: { 'text-field': ['get', 'badge'], 'text-size': 10, 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-      'text-offset': [0, 1.3], 'text-anchor': 'top', 'text-allow-overlap': false },
     paint: { 'text-color': '#075985', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
-  wireLayerHover('ocean-dot', p => {
+  const oceanCard = p => {
     const r = JSON.parse(p.readings || '{}');
-    const L = [];
-    if (r.waveHtM != null) L.push(`🌊 ${(+r.waveHtM).toFixed(1)} m${r.domPeriodS != null ? ' @ ' + Math.round(r.domPeriodS) + 's' : ''}`);
-    if (r.waterTempC != null) L.push(`🌡️ sea ${(+r.waterTempC).toFixed(1)}°C`);
-    if (r.windMs != null) L.push(`💨 ${(+r.windMs).toFixed(0)} m/s${r.windDir != null ? ' @ ' + Math.round(r.windDir) + '°' : ''}`);
-    if (r.pressureHpa != null) L.push(`${Math.round(r.pressureHpa)} hPa`);
-    if (r.waterLevelFt != null) L.push(`tide ${(+r.waterLevelFt).toFixed(2)} ft`);
-    return `<div style="font-weight:600;">${p.kind === 'tide' ? '🌊' : '🛟'} ${escapeHtml(p.name)}</div>
-      <div style="color:var(--muted);font-size:11px;">${L.join(' · ') || 'no reading'}</div>`;
-  });
+    const rows = [];
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+    if (r.waveHtM != null) row('Wave height', `${(+r.waveHtM).toFixed(1)} m` + (r.domPeriodS != null ? ` @ ${Math.round(r.domPeriodS)} s` : ''));
+    if (r.waveDir != null) row('Wave dir', `${Math.round(r.waveDir)}°`);
+    if (r.waterTempC != null) row('Sea temp', `${(+r.waterTempC).toFixed(1)} °C`);
+    if (r.windMs != null) row('Wind', `${(+r.windMs).toFixed(1)} m/s` + (r.windDir != null ? ` @ ${Math.round(r.windDir)}°` : ''));
+    if (r.gustMs != null) row('Gust', `${(+r.gustMs).toFixed(1)} m/s`);
+    if (r.airTempC != null) row('Air temp', `${(+r.airTempC).toFixed(1)} °C`);
+    if (r.pressureHpa != null) row('Pressure', `${Math.round(r.pressureHpa)} hPa`);
+    if (r.waterLevelFt != null) row('Water level', `${(+r.waterLevelFt).toFixed(2)} ft` + (r.at ? ` (${r.at})` : ''));
+    return { title: `${p.kind === 'tide' ? '🌊' : '🛟'} ${p.name}`, body: rows.join('') || 'No current reading.' };
+  };
+  wireLayerHover('ocean-dot', p => `<div style="font-weight:600;">${p.kind === 'tide' ? '🌊' : '🛟'} ${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:10px;">click for details</div>`);
+  wireLayerCard('ocean-dot', oceanCard);
 
-  // APRS ham-radio positions (vehicles/stations/weather beacons, keyless). Real
-  // moving things hams transmit. Symbol-tinted by kind. Populates in production.
+  // APRS ham-radio positions (vehicles/stations/weather beacons, keyless). Emoji
+  // by kind (🚗 vehicle / 🌤 wx / ⛵ boat / 📻 station); collision-hidden so a
+  // busy area doesn't turn to mush. Populates in production.
   map.addSource('aprs', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
-    id: 'aprs-dot', type: 'circle', source: 'aprs',
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 3, 14, 6],
-      'circle-color': ['match', ['get', 'kind'], 'vehicle', '#16a34a', 'weather', '#f59e0b', 'boat', '#0369a1', /* station */ '#dc2626'],
-      'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff', 'circle-opacity': 0.9,
+    id: 'aprs-dot', type: 'symbol', source: 'aprs',
+    layout: {
+      'text-field': ['match', ['get', 'kind'], 'vehicle', '🚗', 'weather', '🌤', 'boat', '⛵', '📻'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 8, 12, 14, 18],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
     },
   });
   wireLayerHover('aprs-dot', p => `<div style="font-weight:600;font-family:monospace;">📻 ${escapeHtml(p.call)}</div>
     <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.kind)}${p.comment ? ' · ' + escapeHtml(p.comment) : ''}</div>`);
+  wireLayerCard('aprs-dot', p => ({ title: `📻 ${p.call}`,
+    body: `<div style="padding:2px 0;"><span style="color:#8b949e;">Type</span> · <b>${escapeHtml(p.kind)}</b></div>${p.comment ? `<div style="margin-top:4px;color:#c9d1d9;">${escapeHtml(p.comment)}</div>` : ''}` }));
 
   // Summit observatories (Maunakea CFHT tower, Mauna Loa NOAA) — live conditions
   // straight from the observatories, no key. A telescope glyph with a small
   // readout; hover for full readings.
   map.addSource('summits', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
-    id: 'summits-dot', type: 'circle', source: 'summits',
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 4, 12, 7],
-      'circle-color': '#a855f7',
-      'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
-    },
-  });
-  map.addLayer({
-    id: 'summits-label', type: 'symbol', source: 'summits',
+    id: 'summits-dot', type: 'symbol', source: 'summits',
     layout: {
-      'text-field': ['get', 'badge'], 'text-size': 10,
+      'text-field': ['concat', '🔭 ', ['get', 'badge']],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 12, 12, 15],
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-      'text-offset': [0, 1.3], 'text-anchor': 'top', 'text-allow-overlap': false,
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 6,
     },
     paint: { 'text-color': '#6b21a8', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
-  wireLayerHover('summits-dot', p => {
+  wireLayerHover('summits-dot', p => `<div style="font-weight:600;">🔭 ${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:10px;">click for details</div>`);
+  wireLayerCard('summits-dot', p => {
     const r = JSON.parse(p.readings || '{}');
-    const lines = [];
-    if (r.tempC != null) lines.push(`🌡️ ${(+r.tempC).toFixed(1)}°C`);
-    if (r.windKt != null) lines.push(`💨 ${(+r.windKt).toFixed(0)} kt${r.windDir != null ? ' @ ' + Math.round(r.windDir) + '°' : ''}`);
-    if (r.humidity != null) lines.push(`${Math.round(r.humidity)}% RH`);
-    if (r.pressureMb != null) lines.push(`${Math.round(r.pressureMb)} mb`);
-    if (r.co2ppm != null) lines.push(`CO₂ ${(+r.co2ppm).toFixed(1)} ppm (${(+r.co2ppm - +r.co2OneYearAgo).toFixed(1)} vs 1yr ago)`);
-    return `<div style="font-weight:600;">🔭 ${escapeHtml(p.name)}</div>
-      <div style="color:var(--muted);font-size:11px;">${lines.join(' · ') || 'no reading'}</div>
-      <div style="color:var(--muted);font-size:10px;">${p.elevM ? Math.round(p.elevM) + ' m' : ''}${r.readingTs ? ' · ' + r.readingTs : ''}${r.co2Year ? ' · week of ' + r.co2Year : ''}</div>`;
+    const rows = [];
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+    if (r.tempC != null) row('Temperature', `${(+r.tempC).toFixed(1)} °C`);
+    if (r.windKt != null) row('Wind', `${(+r.windKt).toFixed(0)} kt` + (r.windDir != null ? ` @ ${Math.round(r.windDir)}°` : ''));
+    if (r.humidity != null) row('Humidity', `${Math.round(r.humidity)} %`);
+    if (r.pressureMb != null) row('Pressure', `${Math.round(r.pressureMb)} mb`);
+    if (r.co2ppm != null) {
+      row('CO₂', `${(+r.co2ppm).toFixed(2)} ppm`);
+      if (r.co2OneYearAgo != null) row('vs 1 year ago', `${(+r.co2ppm - +r.co2OneYearAgo >= 0 ? '+' : '')}${(+r.co2ppm - +r.co2OneYearAgo).toFixed(2)} ppm`);
+      if (r.co2TenYearsAgo != null) row('vs 10 years ago', `+${(+r.co2ppm - +r.co2TenYearsAgo).toFixed(1)} ppm`);
+    }
+    const foot = `<div style="color:#8b949e;font-size:10px;margin-top:8px;">${p.elevM ? Math.round(p.elevM) + ' m elev' : ''}${r.readingTs ? ' · ' + r.readingTs : ''}${r.co2Year ? ' · week of ' + r.co2Year : ''}</div>`;
+    return { title: `🔭 ${p.name}`, body: (rows.join('') || 'No current reading.') + foot };
   });
 
   // Public-safety facility markers — static reference locations, off by
@@ -2180,9 +2203,9 @@ async function fetchSummits() {
     const feats = (data.summits || []).map(s => {
       const r = s.readings || {};
       // Compact on-map badge: temp for the weather tower, CO₂ for Mauna Loa.
-      let badge = s.name.split('(')[0].trim();
-      if (r.tempC != null) badge = `🔭 ${(+r.tempC).toFixed(0)}°C`;
-      else if (r.co2ppm != null) badge = `🔭 ${(+r.co2ppm).toFixed(0)}ppm`;
+      let badge = '';
+      if (r.tempC != null) badge = `${(+r.tempC).toFixed(0)}°C`;
+      else if (r.co2ppm != null) badge = `${(+r.co2ppm).toFixed(0)}ppm`;
       return { type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
         properties: { name: s.name, elevM: s.elevM, badge, readings: JSON.stringify(r) } };
     });
@@ -2198,12 +2221,13 @@ async function fetchOcean() {
     if (!mapReady || !map.getSource('ocean')) return;
     const feats = (data.stations || []).map(s => {
       const r = s.readings || {};
-      let badge = '🛟';
-      if (r.waveHtM != null) badge = `🌊 ${(+r.waveHtM).toFixed(1)}m`;
-      else if (r.waterLevelFt != null) badge = `🌊 ${(+r.waterLevelFt).toFixed(1)}ft`;
+      const icon = s.kind === 'tide' ? '🌊' : '🛟';
+      let badge = '';
+      if (r.waveHtM != null) badge = `${(+r.waveHtM).toFixed(1)}m`;
+      else if (r.waterLevelFt != null) badge = `${(+r.waterLevelFt).toFixed(1)}ft`;
       else if (r.waterTempC != null) badge = `${(+r.waterTempC).toFixed(0)}°C`;
       return { type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
-        properties: { name: s.name, kind: s.kind, badge, readings: JSON.stringify(r) } };
+        properties: { name: s.name, kind: s.kind, icon, badge, readings: JSON.stringify(r) } };
     });
     map.getSource('ocean').setData({ type: 'FeatureCollection', features: feats });
   } catch (e) { /* keep last */ }
@@ -4217,6 +4241,69 @@ function showLayerHover(html, x, y) {
 function hideLayerHover() {
   hideBusTooltip();
   hoverTooltip && (hoverTooltip.style.minWidth = '', hoverTooltip.style.maxWidth = '', hoverTooltip.style.padding = '');
+}
+
+// ─── CLICK CARD ───────────────────────────────────────────────────────────────
+// A persistent, dismissible detail card (distinct from the transient hover
+// tooltip). One card at a time; click a feature to open, click its ✕ / press
+// Esc / click elsewhere on the map to close. Anchored to a map lng/lat so it
+// stays put while the map is still, and clamped on-screen. This is the single
+// controlled popup all clickable map things use.
+let mapCard = null, mapCardAnchor = null;
+function ensureMapCard() {
+  if (mapCard) return;
+  mapCard = document.createElement('div');
+  mapCard.className = 'map-card';
+  mapCard.style.cssText = `position:fixed;z-index:10000;display:none;background:#161b22;
+    border:1px solid #30363d;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.75);
+    font-family:'Segoe UI',system-ui,sans-serif;color:#e6edf3;font-size:12px;line-height:1.45;
+    min-width:220px;max-width:340px;overflow:hidden;`;
+  document.body.appendChild(mapCard);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') hideMapCard(); });
+}
+// Open a card. `bodyHtml` is the inner content; `lngLat` (optional) anchors it
+// to the map so it tracks pan/zoom. `title` renders a header with a close ✕.
+function showMapCard(bodyHtml, lngLat, title) {
+  ensureMapCard();
+  mapCardAnchor = lngLat || null;
+  mapCard.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:#0d1117;border-bottom:1px solid #30363d;">
+      <div style="font-weight:700;font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${title || ''}</div>
+      <div class="map-card-x" style="cursor:pointer;color:#8b949e;font-size:16px;line-height:1;padding:0 2px;">✕</div>
+    </div>
+    <div style="padding:12px;max-height:60vh;overflow-y:auto;">${bodyHtml}</div>`;
+  mapCard.querySelector('.map-card-x').onclick = hideMapCard;
+  mapCard.style.display = 'block';
+  positionMapCard();
+}
+function hideMapCard() { if (mapCard) { mapCard.style.display = 'none'; mapCardAnchor = null; } }
+function positionMapCard() {
+  if (!mapCard || mapCard.style.display === 'none') return;
+  let x, y;
+  if (mapCardAnchor && mapReady) { const pt = map.project(mapCardAnchor); const r = map.getCanvas().getBoundingClientRect(); x = pt.x + r.left; y = pt.y + r.top; }
+  else { x = window.innerWidth / 2; y = 120; }
+  const w = mapCard.offsetWidth || 260, h = mapCard.offsetHeight || 200;
+  let tx = x + 16, ty = y - h / 2;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  if (tx + w > vw - 10) tx = x - w - 16;
+  if (tx < 10) tx = 10;
+  if (ty < 10) ty = 10;
+  if (ty + h > vh - 10) ty = vh - h - 10;
+  mapCard.style.left = tx + 'px'; mapCard.style.top = ty + 'px';
+}
+
+// Layers whose features open a click-card (and whose empty-space click closes it).
+const CARD_LAYERS = ['ocean-dot', 'aprs-dot', 'summits-dot', 'weather-stations-dot', 'aircraft-triangles'];
+// Wire click-to-open-card on a layer. buildCard(props) -> { title, body }.
+function wireLayerCard(layerId, buildCard) {
+  map.on('click', layerId, e => {
+    if (!e.features || !e.features.length) return;
+    e.preventDefault && e.preventDefault();
+    const f = e.features[0];
+    const { title, body } = buildCard(f.properties);
+    const c = f.geometry && f.geometry.type === 'Point' ? f.geometry.coordinates : [e.lngLat.lng, e.lngLat.lat];
+    showMapCard(body, c, title);
+  });
 }
 
 // Wire hover-to-identify on a MapLibre layer: shows `buildHtml(feature.properties)`
