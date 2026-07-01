@@ -711,20 +711,6 @@ function initMap() {
   // Re-fan overlapping buses whenever the camera settles (overlap is zoom/pan
   // dependent — buses separate as you zoom in).
   map.on('moveend', () => { try { deOverlapMarkers(); } catch (e) {} });
-  // setFeatureState lives on the SOURCE (keyed by feature id) so it should
-  // already persist as new tiles load while panning — but cheaply re-assert
-  // it on new basemap-road tile loads as defensive insurance, straight from
-  // the cached wayId->color map (no render pipeline involved, so this can't
-  // loop or trigger another sourcedata storm).
-  map.on('sourcedata', (e) => {
-    if (e.sourceId !== BASEMAP_ROAD_SOURCE || !e.isSourceLoaded) return;
-    for (const [wayId, color] of lastColoredWayColor) {
-      map.setFeatureState(
-        { source: BASEMAP_ROAD_SOURCE, sourceLayer: BASEMAP_ROAD_SOURCE_LAYER, id: wayId },
-        { routeColor: color }
-      );
-    }
-  });
   map.on('error', (e) => {
     // Suppress known MapLibre v4 bugs about listener arrays
     if (e?.error?.message?.includes('slice is not a function')) return;
@@ -1842,25 +1828,15 @@ function renderRouteShapes(force) {
   // We render ALL routes — not just ones with a live bus — so a rider in
   // Pepeʻekeo or on Saddle Road can see where the route goes even when no bus
   // is currently out. The Routes tab toggles control visibility per route.
-  const routeMultiCoords = {}; // routeId -> [ coords, … ] (ALL patterns; chevrons/motion only — NOT drawn as a line any more)
+  const routeMultiCoords = {}; // routeId -> [ coords, … ] (ALL patterns; chevrons/motion only — the ribbon layer draws separately from route-edges.json)
   const routeMeta = {};   // routeId -> { color, name }
   const seen = new Set();
   routeShapeCoords = {};
   allPatternCoords = {};
-  // routeId -> Set(real OSM way id) — the actual basemap road features to
-  // recolor directly via setFeatureState. This is the whole point: there is
-  // no overlay line any more, so a route can never visually diverge from the
-  // road it's drawn on — it doesn't draw anything, it recolors the road
-  // pixels the basemap was already going to render.
-  const routeWayIds = {};
 
   routeShapes.forEach(s => {
     if (!s.shape && !s.segments) return;
     if (routeVisible[s.route_id] === false) return;
-    if (s.wayIds && s.wayIds.length) {
-      const set = (routeWayIds[s.route_id] = routeWayIds[s.route_id] || new Set());
-      for (const wid of s.wayIds) set.add(wid);
-    }
     // A pattern is either ONE polyline (`shape` — older Valhalla-matched or raw
     // GTFS fallback) or SEVERAL (`segments` — road-graph-snapped, real OSM road
     // geometry; multiple pieces because honest OSM-coverage gaps are kept as
@@ -1888,88 +1864,84 @@ function renderRouteShapes(force) {
     routeMeta[s.route_id] = { color: ROUTE_COLOR_MAP[s.route_id] || normalizeColor(s.color) || '#888', name: s.name };
   });
 
-  recolorBasemapRoads(showRouteShapes ? routeWayIds : {}, routeMeta);
+  if (showRouteShapes) {
+    renderRouteRibbons();
+    if (map.getLayer(RIBBON_LAYER)) map.setLayoutProperty(RIBBON_LAYER, 'visibility', 'visible');
+  } else if (map.getLayer(RIBBON_LAYER)) {
+    map.setLayoutProperty(RIBBON_LAYER, 'visibility', 'none');
+  }
   renderAheadArrows();
 }
 
-// ─── RECOLOR THE BASEMAP'S OWN ROADS (no overlay line, ever) ───────────────
-// MapTiler's "transportation" vector layer feature.id IS the real OSM way id
-// (verified directly against vector tiles — OpenMapTiles' planet schema
-// exposes osm_id as the MVT feature id on this layer). That means a Hele-On
-// route can be shown by literally recoloring the basemap road the bus drives
-// on, via map.setFeatureState + a feature-state-driven paint override on
-// MapTiler's own "Road network" layer — not by drawing a colored line next
-// to/on top of it. A route can never visually diverge from its real road
-// because nothing is drawn; the road's own pixels change color.
-const BASEMAP_ROAD_SOURCE = 'maptiler_planet';
-const BASEMAP_ROAD_SOURCE_LAYER = 'transportation';
-const BASEMAP_ROAD_LAYER_ID = 'Road network';
-let basemapRoadPaintPatched = false;
-let lastColoredWayIds = []; // so we can clear state on ways no longer in any visible route
-let lastColoredWayColor = new Map(); // wayId -> color, for re-asserting state on tile (re)load
+// ─── RIBBON ROUTE RENDERING ─────────────────────────────────────────────────
+// Every real road-graph EDGE (a junction-to-junction slice of a real OSM way)
+// that any route travels is pre-computed server-side (scripts/build-route-edges.js)
+// with the exact set of routes that use it. A road used by N routes draws as
+// N thin parallel stripes tight together — the classic printed-transit-map
+// "ribbon" convention (see e.g. NYC subway map bullet lines) — using ONLY
+// that edge's own real coordinates via MapLibre's line-offset, never a
+// synthesized point. A solo road gets one stripe. This shows every route's
+// color on a shared road at once, unlike basemap recoloring (which can only
+// show one route per road) or the old grid-cell-approximate offset slicing
+// (which could jitter because "nearby" isn't "the same real road" — here the
+// grouping is the exact same OSM-derived edge, not a heuristic).
+let routeEdgesData = null; // { edges: [{ id, coords, routes:[{routeId,color}] }] }
 
-// One-time: make the existing basemap road layer's color/width state-aware,
-// keeping its original look for every road state-NOT covering. We read the
-// layer's CURRENT paint (not stylesheet literals) so this works regardless
-// of which MapTiler style is loaded.
-function ensureBasemapRoadPaintPatched() {
-  if (basemapRoadPaintPatched) return;
-  if (!map.getLayer(BASEMAP_ROAD_LAYER_ID)) return; // style hasn't loaded this layer yet
-  const origColor = map.getPaintProperty(BASEMAP_ROAD_LAYER_ID, 'line-color');
-  const origWidth = map.getPaintProperty(BASEMAP_ROAD_LAYER_ID, 'line-width');
-  map.setPaintProperty(BASEMAP_ROAD_LAYER_ID, 'line-color', [
-    'case', ['to-boolean', ['feature-state', 'routeColor']], ['feature-state', 'routeColor'], origColor
-  ]);
-  // Widen slightly only where a route is recoloring it, so the route color
-  // reads clearly without changing the look of every other road.
-  map.setPaintProperty(BASEMAP_ROAD_LAYER_ID, 'line-width', [
-    'case', ['to-boolean', ['feature-state', 'routeColor']],
-      ['*', origWidth, 1.6],
-      origWidth
-  ]);
-  basemapRoadPaintPatched = true;
+async function fetchRouteEdges() {
+  try {
+    const res = await fetch('/api/route-edges');
+    routeEdgesData = await res.json();
+  } catch (e) { console.error('[fetchRouteEdges]', e); }
 }
 
-function recolorBasemapRoads(routeWayIds, routeMeta) {
-  if (!mapReady) return;
-  ensureBasemapRoadPaintPatched();
-  if (!basemapRoadPaintPatched) return; // layer not ready yet; next render call will retry
+const RIBBON_SRC = 'route-ribbons';
+const RIBBON_LAYER = 'route-ribbons-line';
+const RIBBON_STRIPE_PX = 3.2; // width of one stripe; a 3-route ribbon is ~3x this, tight with no gap
 
-  // Clear state on every way we colored last time, then set the current set —
-  // simpler and more robust than diffing, and this only runs on real shape
-  // updates (rare), not every poll.
-  for (const wayId of lastColoredWayIds) {
-    map.removeFeatureState(
-      { source: BASEMAP_ROAD_SOURCE, sourceLayer: BASEMAP_ROAD_SOURCE_LAYER, id: wayId },
-      'routeColor'
-    );
+function renderRouteRibbons() {
+  if (!mapReady || !routeEdgesData) return;
+  const features = [];
+  for (const edge of routeEdgesData.edges) {
+    const visibleRoutes = edge.routes.filter(r => routeVisible[r.routeId] !== false);
+    if (!visibleRoutes.length) continue;
+    const n = visibleRoutes.length;
+    const center = (n - 1) / 2;
+    visibleRoutes.forEach((r, i) => {
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: edge.coords },
+        properties: { color: r.color, slot: i - center, routeId: r.routeId, edgeId: edge.id },
+      });
+    });
   }
-  lastColoredWayIds = [];
 
-  // A road shared by multiple routes can only show ONE color via this
-  // technique (we're recoloring the real basemap feature, not stacking
-  // independent lines) — first route to claim a way wins, ordered by route id
-  // for stability so the same road always shows the same route's color
-  // across re-renders rather than flickering between contenders.
-  const wayOwner = new Map(); // wayId -> routeId
-  const orderedRouteIds = Object.keys(routeWayIds).sort((a, b) => (parseInt(a)||0) - (parseInt(b)||0));
-  for (const rid of orderedRouteIds) {
-    const meta = routeMeta[rid];
-    if (!meta) continue;
-    for (const wayId of routeWayIds[rid]) {
-      if (!wayOwner.has(wayId)) wayOwner.set(wayId, rid);
-    }
-  }
-  lastColoredWayColor = new Map();
-  for (const [wayId, rid] of wayOwner) {
-    const color = routeMeta[rid].color;
-    map.setFeatureState(
-      { source: BASEMAP_ROAD_SOURCE, sourceLayer: BASEMAP_ROAD_SOURCE_LAYER, id: wayId },
-      { routeColor: color }
-    );
-    lastColoredWayIds.push(wayId);
-    lastColoredWayColor.set(wayId, color);
-  }
+  const data = { type: 'FeatureCollection', features };
+  const src = map.getSource(RIBBON_SRC);
+  if (src) { src.setData(data); return; }
+
+  map.addSource(RIBBON_SRC, { type: 'geojson', data });
+  map.addLayer({
+    id: RIBBON_LAYER, type: 'line', source: RIBBON_SRC,
+    paint: {
+      'line-color': ['get', 'color'],
+      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 12, RIBBON_STRIPE_PX, 15, 4.4, 18, 6],
+      'line-opacity': 0.95,
+      // Offset is in SCREEN pixels and scales with zoom the same way
+      // line-width does, so stripes stay tight against each other (no gap,
+      // no overlap) at every zoom instead of fanning out when zoomed in.
+      'line-offset': ['interpolate', ['linear'], ['zoom'],
+        8, ['*', ['get', 'slot'], 2],
+        12, ['*', ['get', 'slot'], RIBBON_STRIPE_PX],
+        15, ['*', ['get', 'slot'], 4.4],
+        18, ['*', ['get', 'slot'], 6]],
+    },
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+  }, 'stops-circle');
+  wireLayerHover(RIBBON_LAYER, p => `
+    <div style="display:flex;align-items:center;gap:6px;">
+      <span style="width:10px;height:10px;border-radius:50%;background:${p.color};flex-shrink:0;border:1px solid rgba(255,255,255,.5);"></span>
+      <span style="font-weight:600;">${escapeHtml((ROUTES_META[p.routeId]||{}).name || 'Route ' + p.routeId)}</span>
+    </div>`);
 }
 
 // ─── RENDER TRAILS ────────────────────────────────────────────────────────────
@@ -4021,6 +3993,7 @@ initMap();
 Promise.all([
   fetchReference(),
   fetchShapes(),
+  fetchRouteEdges().then(() => renderRouteRibbons()),
   fetchAll(),
   fetchAllStops(),
   fetchLearnedStops(),

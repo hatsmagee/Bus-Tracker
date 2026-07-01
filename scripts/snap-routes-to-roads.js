@@ -271,7 +271,14 @@ function removeRetraces(coords) {
   return out;
 }
 
-module.exports = { colorRoadsForShape, wayIdsForShape, decode, encode, downsample };
+module.exports = {
+  colorRoadsForShape, wayIdsForShape, decode, encode, downsample,
+  // Exposed for scripts/build-route-edges.js, which needs per-edge (not
+  // per-route-concatenated) matching — same real-road matching logic, finer
+  // granularity output.
+  matchedEdgeSequenceForCli: matchedEdgeSequence,
+  loadRawGtfsShapesForCli: loadRawGtfsShapes,
+};
 
 // Bring in route_id + raw GTFS shape pairing from a downloaded GTFS zip's
 // shapes.txt/trips.txt, NOT from a previously-matched/densified file — the

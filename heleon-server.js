@@ -1650,6 +1650,20 @@ function loadRoadSnappedShapes() {
   } catch { ROAD_SNAPPED = {}; }
 }
 
+// Per-real-road-edge route membership (scripts/build-route-edges.js) — for
+// the "ribbon" renderer: a road used by N routes draws as N thin parallel
+// stripes using this EXACT edge's own coordinates (never synthesized), so a
+// shared road can show every route's color at once (like a printed transit
+// map), not just one via basemap recoloring.
+const ROUTE_EDGES_PATH = path.join(__dirname, 'data', 'route-edges.json');
+let ROUTE_EDGES = { edges: [] };
+function loadRouteEdges() {
+  try {
+    ROUTE_EDGES = JSON.parse(fs.readFileSync(ROUTE_EDGES_PATH, 'utf8')) || { edges: [] };
+    console.log(`[route-edges] loaded ${ROUTE_EDGES.edges.length} real road edges for ribbon rendering`);
+  } catch { ROUTE_EDGES = { edges: [] }; }
+}
+
 // Self-healing scheduler: keep retrying until every pattern has a snap result,
 // then settle to a daily refresh. If Valhalla was down at boot, this recovers on
 // its own within the hour instead of waiting a full day — zero manual steps.
@@ -2014,6 +2028,18 @@ async function handleApi(url, res) {
   // truth for "do we have all the routes?".
   if (p === '/api/registry') {
     return json(res, { count: ROUTE_REGISTRY.length, routes: ROUTE_REGISTRY, builtAt: Date.now() });
+  }
+
+  // Per-real-road-edge route membership for the "ribbon" renderer — see
+  // ROUTE_EDGES above. Route colors are resolved here (not baked into the
+  // static file) so a route-color change takes effect without regenerating it.
+  if (p === '/api/route-edges') {
+    const edges = ROUTE_EDGES.edges.map(e => ({
+      id: e.id,
+      coords: e.coords,
+      routes: e.routeIds.map(rid => ({ routeId: rid, color: (ROUTE_MAP[rid] && ROUTE_MAP[rid].color) || '#888' })),
+    }));
+    return json(res, { edges });
   }
 
   if (p === '/api/shapes') {
@@ -2899,6 +2925,7 @@ const server = http.createServer((req, res) => {
   // — see bestPatternShape) is a static, pre-generated file too: run
   // scripts/snap-routes-to-roads.js to (re)build it when new GTFS patterns appear.
   try { loadRoadSnappedShapes(); } catch (e) { console.error('[road-snap] seed:', e.message); }
+  try { loadRouteEdges(); } catch (e) { console.error('[route-edges] seed:', e.message); }
   scheduleMatching();
   buildTripIndex();
   // Train learning model on past stop_arrivals history
