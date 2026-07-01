@@ -2818,6 +2818,16 @@ async function handleApi(url, res) {
     });
   }
 
+  // ── WEATHER STATIONS (NWS, Big Island, no key) ──────────────────────────
+  if (p === '/api/weather-stations') {
+    return json(res, {
+      ts: Date.now(),
+      lastPollTs: weatherStationsLastPollTs,
+      lastError: weatherStationsLastError,
+      geojson: weatherStationsCache || { type: 'FeatureCollection', features: [] },
+    });
+  }
+
   res.writeHead(404); res.end('Not found');
 }
 
@@ -3249,6 +3259,67 @@ async function pollStreamflow() {
   }
 }
 
+// NWS weather stations — Big Island fixed weather stations (HELCO *HE* and
+// Hawaii Island *HI* suffixes in NWS naming) with real-time observations:
+// temperature, dewpoint, humidity, wind, barometer. Refreshed every 10 min.
+let weatherStationsCache = null;
+let weatherStationsLastPollTs = null, weatherStationsLastError = null;
+async function fetchWeatherStationsState() {
+  try {
+    const list = await fetchJson('api.weather.gov', '/stations?state=HI&limit=100',
+      { 'User-Agent': 'heleon-tracker', 'Accept': 'application/geo+json' });
+    const all = list.features || [];
+    // Pre-compute the Big Island subset, with coordinates normalized to lon/lat,
+    // so we can fan out per-station /observations/latest calls without
+    // re-filtering the whole list each cycle.
+    const big = all.filter(f => {
+      const c = f.geometry && f.geometry.coordinates;
+      return c && c[1] > 18.8 && c[1] < 20.5 && c[0] > -156.4 && c[0] < -154.5;
+    });
+    // Concurrently fetch each station's latest observation, with a short per-call
+    // timeout so a single slow station doesn't stall the whole batch.
+    const fetchOne = async (f) => {
+      const p = f.properties;
+      const sid = p.stationIdentifier;
+      try {
+        const obs = await fetchJson('api.weather.gov', `/stations/${sid}/observations/latest`,
+          { 'User-Agent': 'heleon-tracker', 'Accept': 'application/geo+json' });
+        const o = obs.properties || {};
+        const C = v => v == null ? null : (typeof v === 'object' ? v.value : v);
+        return {
+          type: 'Feature',
+          geometry: f.geometry,
+          properties: {
+            stationId: sid,
+            name: p.name || sid,
+            elevation: p.elevation && p.elevation.value,
+            timeZone: p.timeZone,
+            temperatureC: C(o.temperature),
+            dewpointC: C(o.dewpoint),
+            humidity: C(o.relativeHumidity),
+            windDirection: C(o.windDirection),
+            windSpeedKmh: C(o.windSpeed),
+            windGustKmh: C(o.windGust),
+            pressurePa: C(o.barometricPressure),
+            textDescription: o.textDescription || '',
+            timestamp: C(o.timestamp),
+          },
+        };
+      } catch (e) { return null; }
+    };
+    const results = await Promise.all(big.map(fetchOne));
+    weatherStationsCache = {
+      type: 'FeatureCollection',
+      features: results.filter(Boolean),
+    };
+    weatherStationsLastPollTs = Date.now();
+    weatherStationsLastError = null;
+  } catch (e) {
+    weatherStationsLastError = (e && e.message) || 'unknown error';
+  }
+}
+const fetchWeatherStations = fetchWeatherStationsState;
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin':'*' }); res.end(); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -3351,10 +3422,12 @@ const server = http.createServer((req, res) => {
   pollWildfireHotspots();
   pollPubSafetyFacilities();
   pollStreamflow();
+  fetchWeatherStations();
   setInterval(pollEarthquakes, 5 * 60 * 1000);
   setInterval(pollAlerts, 5 * 60 * 1000);
   setInterval(pollWildfireHotspots, 5 * 60 * 1000);
   setInterval(pollStreamflow, 15 * 60 * 1000);
+  setInterval(fetchWeatherStations, 10 * 60 * 1000);
   setInterval(pollHazardZones, 24 * 60 * 60 * 1000);
   setInterval(pollPubSafetyFacilities, 24 * 60 * 60 * 1000);
   setTimeout(pruneDb, 30000);                // full prune+VACUUM shortly after boot

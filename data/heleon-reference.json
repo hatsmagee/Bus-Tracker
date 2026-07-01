@@ -2,7 +2,7 @@
   "_comment": "Curated reference data distilled from the HeleOn System Map PDF (Sources/HeleOn System Ma.pdf). Captures what GTFS does NOT carry: route classification (GTFS marks every route as generic type 3), transit-hub connections, and Park-and-Ride / terminal / airport points. Auto-validated weekly against live GTFS by scripts/scrape-reference.js, which updates `routes` and flags drift. The classification/hubs/landmarks change ~yearly (map 'Effective Sunday, August 28, 2022'); update them here if the agency reissues the map.",
   "effective": "2022-08-28",
   "source": "Sources/HeleOn System Ma.pdf",
-  "updatedAt": "2026-07-01T13:44:27.415Z",
+  "updatedAt": "2026-07-01T18:15:14.450Z",
   "routeTypes": {
     "express": {
       "label": "Express",

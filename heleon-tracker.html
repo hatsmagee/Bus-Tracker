@@ -542,6 +542,7 @@
       </div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showStreamflow" onchange="toggleStreamflow()"> USGS streamflow gauges</label>
+        <label><input type="checkbox" id="showWeatherStations" onchange="toggleWeatherStations()"> NWS weather stations</label>
         <span class="vessel-status" id="streamflowStatus"></span>
       </div>
       <div class="section-header">🚓 Public Safety Facilities</div>
@@ -1107,17 +1108,104 @@ function initMapLayers() {
     id: 'streamflow-circle', type: 'circle', source: 'streamflow',
     layout: { visibility: 'none' },
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['get', 'value'], 0, 3, 50, 6, 500, 10],
+      // Base ring — solid blue, size scales with discharge.
+      'circle-radius': ['interpolate', ['linear'], ['get', 'value'], 0, 3, 50, 6, 500, 12],
       'circle-color': ['interpolate', ['linear'], ['get', 'value'], 0, '#7dd3fc', 50, '#3b82f6', 500, '#1e40af'],
-      'circle-opacity': 0.75,
-      'circle-stroke-width': 1,
-      'circle-stroke-color': '#0c4a6e',
+      'circle-opacity': 0.85,
+      'circle-stroke-width': 1.5,
+      'circle-stroke-color': '#082f49',
     },
   });
+  // Pulsing outer ring — the "waterfall" effect. A second circle layer with a
+  // larger radius and growing/shrinking animation driven by a per-frame
+  // CSS-style pulse scaled by current discharge, so bigger flow = bigger pulse.
+  map.addLayer({
+    id: 'streamflow-pulse', type: 'circle', source: 'streamflow',
+    layout: { visibility: 'none' },
+    paint: {
+      'circle-radius': [
+        'interpolate', ['linear'], ['get', 'value'],
+        0, 5, 50, 10, 500, 22
+      ],
+      'circle-color': '#60a5fa',
+      'circle-opacity': ['interpolate', ['linear'], ['get', 'value'], 0, 0.05, 100, 0.2, 500, 0.45],
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#1d4ed8',
+      'circle-stroke-opacity': ['interpolate', ['linear'], ['get', 'value'], 0, 0.1, 500, 0.6],
+    },
+  }, 'streamflow-circle');
+  // Numeric label rendered as a symbol — discharge rate, so the rate itself
+  // is visible on the map (not just a colored dot).
+  map.addLayer({
+    id: 'streamflow-label', type: 'symbol', source: 'streamflow',
+    layout: {
+      'text-field': ['concat', ['to-string', ['get', 'value']], ' ft³/s'],
+      'text-size': 10,
+      'text-allow-overlap': false,
+      'text-offset': [0, 1.4],
+    },
+    paint: {
+      'text-color': '#082f49',
+      'text-halo-color': '#ffffff',
+      'text-halo-width': 1.5,
+    },
+  });
+  // Simple JS animation: every 1.5s, scale the pulse layer's outer radius
+  // expression outward and back via a state-driven property. Looks like a
+  // "spinning water wheel" — the bigger the discharge, the more visible.
+  let _streamflowPulsePhase = 0;
+  setInterval(() => {
+    if (!mapReady) return;
+    const phase = (_streamflowPulsePhase = (_streamflowPulsePhase + 1) % 4);
+    // Slightly modulate circle-opacity over time to give a "splash" effect.
+    if (!map.getLayer('streamflow-pulse')) return;
+    map.setPaintProperty('streamflow-pulse', 'circle-opacity', [
+      'interpolate', ['linear'], ['get', 'value'],
+      0, 0.05 + (phase % 2) * 0.02,
+      100, 0.20 + (phase % 2) * 0.05,
+      500, 0.45 + (phase % 2) * 0.10,
+    ]);
+  }, 1500);
   wireLayerHover('streamflow-circle', p => `
     <div style="font-weight:600;">💧 ${escapeHtml(p.name)}</div>
     <div style="color:var(--muted);font-size:11px;">${p.value != null ? (+p.value).toFixed(1) + ' ft³/s' : 'no recent reading'}</div>
     <div style="color:var(--muted);font-size:10px;">USGS gauge ${escapeHtml(p.site_no)} · ${p.ts ? new Date(p.ts).toLocaleString() : '—'}</div>`);
+
+  // NWS weather stations — current temperature/humidity/wind at each Big
+  // Island station. Big readable temp label, click for full popup.
+  map.addSource('weather-stations', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'weather-stations-label', type: 'symbol', source: 'weather-stations',
+    layout: {
+      'text-field': ['concat', ['to-string', ['round', ['get', 'temperatureC']]], '°'],
+      'text-size': 12,
+      'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+      'text-allow-overlap': false,
+      'text-offset': [0, 0],
+    },
+    paint: {
+      'text-color': '#0c4a6e',
+      'text-halo-color': '#ffffff',
+      'text-halo-width': 2,
+    },
+  });
+  map.addLayer({
+    id: 'weather-stations-dot', type: 'circle', source: 'weather-stations',
+    paint: {
+      'circle-radius': 3,
+      'circle-color': '#0ea5e9',
+      'circle-stroke-width': 1.5,
+      'circle-stroke-color': '#ffffff',
+    },
+  });
+  wireLayerHover('weather-stations-dot', p => {
+    const t = p.temperatureC != null ? `${(+p.temperatureC).toFixed(1)}°C` : '—';
+    const h = p.humidity != null ? `${Math.round(+p.humidity)}%` : '—';
+    const w = p.windSpeedKmh != null ? `${(+p.windSpeedKmh).toFixed(1)} km/h` : '—';
+    return `<div style="font-weight:600;">🌡️ ${escapeHtml(p.name)}</div>
+      <div style="color:var(--muted);font-size:11px;">${t} · ${h} RH · ${w} wind</div>
+      <div style="color:var(--muted);font-size:10px;">NWS ${escapeHtml(p.stationId)} · ${p.elevation ? Math.round(+p.elevation) + ' m' : '?'} elev · ${p.timestamp ? new Date(p.timestamp).toLocaleString() : '—'}</div>`;
+  });
 
   // Public-safety facility markers — static reference locations, off by
   // default so they don't clutter the map; toggled from the Hawaiʻi tab.
@@ -1830,8 +1918,35 @@ async function fetchStreamflow() {
 }
 function toggleStreamflow() {
   streamflowVisible = document.getElementById('showStreamflow').checked;
-  if (mapReady) map.setLayoutProperty('streamflow-circle', 'visibility', streamflowVisible ? 'visible' : 'none');
+  if (mapReady) {
+    const v = streamflowVisible ? 'visible' : 'none';
+    for (const id of ['streamflow-circle', 'streamflow-pulse', 'streamflow-label']) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
+    }
+  }
   if (streamflowVisible) fetchStreamflow();
+}
+
+// NWS weather stations (Big Island) — refetched every 10 min server-side.
+let weatherStationsVisible = false;
+async function fetchWeatherStations() {
+  try {
+    const res = await fetch('/api/weather-stations');
+    const data = await res.json();
+    if (mapReady && map.getSource('weather-stations')) {
+      map.getSource('weather-stations').setData(weatherStationsVisible ? data.geojson : { type: 'FeatureCollection', features: [] });
+    }
+  } catch (e) { /* keep last data on screen */ }
+}
+function toggleWeatherStations() {
+  weatherStationsVisible = document.getElementById('showWeatherStations').checked;
+  if (mapReady) {
+    const v = weatherStationsVisible ? 'visible' : 'none';
+    for (const id of ['weather-stations-dot', 'weather-stations-label']) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
+    }
+  }
+  if (weatherStationsVisible) fetchWeatherStations();
 }
 
 async function toggleFacility(kind) {
@@ -4583,6 +4698,7 @@ Promise.all([
   fetchAlerts(),
   fetchWildfire(),
   fetchStreamflow(),
+  fetchWeatherStations(),
 ]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
@@ -4605,7 +4721,7 @@ setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
 setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); }, 15 * 60 * 1000);
+setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); }, 15 * 60 * 1000);
 
 // Fast initial catch-up: on a fresh page load the server's first OpenSky/AIS poll
 // may not have completed yet, so the startup fetch returns 0 and the map looks
