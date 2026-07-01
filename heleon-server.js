@@ -2747,6 +2747,35 @@ async function handleApi(url, res) {
     return json(res, tsunamiZonesCache);
   }
 
+  // ── WILDFIRE HOTSPOTS (NASA VIIRS via Esri Living Atlas, no key) ────────
+  if (p === '/api/wildfire') {
+    return json(res, {
+      ts: Date.now(),
+      lastPollTs: wildfireLastPollTs,
+      lastError: wildfireLastError,
+      count: wildfireCache ? (wildfireCache.features || []).length : 0,
+      geojson: wildfireCache || { type: 'FeatureCollection', features: [] },
+    });
+  }
+
+  // ── PUBLIC SAFETY FACILITIES (Hawaii Statewide GIS, no key) ─────────────
+  if (p === '/api/facilities/police') {
+    if (!policeStationsCache) return json(res, { error: 'not loaded yet' }, 503);
+    return json(res, policeStationsCache);
+  }
+  if (p === '/api/facilities/fire') {
+    if (!fireStationsCache) return json(res, { error: 'not loaded yet' }, 503);
+    return json(res, fireStationsCache);
+  }
+  if (p === '/api/facilities/ems') {
+    if (!emsStationsCache) return json(res, { error: 'not loaded yet' }, 503);
+    return json(res, emsStationsCache);
+  }
+  if (p === '/api/facilities/trauma') {
+    if (!traumaCentersCache) return json(res, { error: 'not loaded yet' }, 503);
+    return json(res, traumaCentersCache);
+  }
+
   res.writeHead(404); res.end('Not found');
 }
 
@@ -3096,6 +3125,49 @@ async function pollHazardZones() {
   }
 }
 
+// Wildfire hotspots — NASA VIIRS satellite thermal-anomaly detections, the
+// same public Esri Living Atlas layer HI-EMA's own wildfire dashboard uses.
+// Genuinely live (refreshed continuously), unlike everything else in this
+// block, so it polls on the fast (5-min) cadence, not the daily one.
+let wildfireCache = null;
+let wildfireLastPollTs = null, wildfireLastError = null;
+async function pollWildfireHotspots() {
+  const b = BIGISLAND_BBOX;
+  const geom = `${b.minLon},${b.minLat},${b.maxLon},${b.maxLat}`;
+  const qs = `where=1=1&geometry=${geom}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=latitude,longitude,confidence,frp,acq_date,acq_time,hours_old,daynight&f=geojson`;
+  try {
+    wildfireCache = await fetchJson('services9.arcgis.com', `/RHVPKKiFTONKtxq3/arcgis/rest/services/Satellite_VIIRS_Thermal_Hotspots_and_Fire_Activity/FeatureServer/0/query?${qs}`, { 'User-Agent': 'heleon-tracker' });
+    wildfireLastPollTs = Date.now();
+    wildfireLastError = null;
+  } catch (e) {
+    wildfireLastError = (e && e.message) || 'unknown error';
+  }
+}
+
+// Public-safety facility locations — Hawaii Statewide GIS EmergMgmtPubSafety
+// service. Static reference data (station addresses), fetched once like the
+// hazard-zone polygons, not polled live — there is no live dispatch/CAD feed
+// published by Hawaii County Police or Fire; this is location context only.
+let policeStationsCache = null, fireStationsCache = null, emsStationsCache = null, traumaCentersCache = null;
+async function fetchPubSafetyLayer(layerId, outFields, extraWhere) {
+  const b = BIGISLAND_BBOX;
+  const geom = `${b.minLon},${b.minLat},${b.maxLon},${b.maxLat}`;
+  const where = extraWhere || '1=1';
+  const qs = `where=${encodeURIComponent(where)}&geometry=${geom}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=${outFields}&f=geojson`;
+  return fetchJson('geodata.hawaii.gov', `/arcgis/rest/services/EmergMgmtPubSafety/MapServer/${layerId}/query?${qs}`, { 'User-Agent': 'heleon-tracker' });
+}
+async function pollPubSafetyFacilities() {
+  try {
+    policeStationsCache = await fetchPubSafetyLayer(12, 'district,type,name,address,zipcode');
+    fireStationsCache = await fetchPubSafetyLayer(7, 'name,alt_name,island,status', "island='Hawaii'");
+    emsStationsCache = await fetchPubSafetyLayer(8, 'unit,unit_name,county,address');
+    traumaCentersCache = await fetchPubSafetyLayer(9, 'facility_name,trauma_level,island,address,city', "island='Hawaii'");
+    hazardZonesLastError = null; // reuse the same daily-refresh error slot
+  } catch (e) {
+    hazardZonesLastError = (e && e.message) || 'unknown error';
+  }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin':'*' }); res.end(); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -3191,13 +3263,17 @@ const server = http.createServer((req, res) => {
   // Hawaii civic layers — all free/keyless. Earthquakes and NWS alerts poll
   // every few minutes (nothing on this island changes faster than that);
   // hazard-zone polygons are static reference data, refreshed once a day.
-  console.log('[hazards] polling USGS earthquakes + NWS alerts every 5 min, hazard zones daily');
+  console.log('[hazards] polling USGS earthquakes + NWS alerts + wildfire hotspots every 5 min, hazard zones + public-safety facilities daily');
   pollEarthquakes();
   pollAlerts();
   pollHazardZones();
+  pollWildfireHotspots();
+  pollPubSafetyFacilities();
   setInterval(pollEarthquakes, 5 * 60 * 1000);
   setInterval(pollAlerts, 5 * 60 * 1000);
+  setInterval(pollWildfireHotspots, 5 * 60 * 1000);
   setInterval(pollHazardZones, 24 * 60 * 60 * 1000);
+  setInterval(pollPubSafetyFacilities, 24 * 60 * 60 * 1000);
   setTimeout(pruneDb, 30000);                // full prune+VACUUM shortly after boot
   setInterval(pruneDb, 24 * 60 * 60 * 1000); // and daily thereafter
   // poll_log grows ~88 rows/cycle (22 routes × 4/min) but /api/stats only reads

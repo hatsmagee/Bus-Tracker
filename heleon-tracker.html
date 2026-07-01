@@ -525,13 +525,28 @@
 
     <div class="tab-content" id="tab-hawaii">
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
-        <label><input type="checkbox" id="showLava" onchange="toggleLava()" checked> Lava flow hazard zones</label>
+        <label><input type="checkbox" id="showLava" onchange="toggleLava()"> Lava flow hazard zones</label>
       </div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showTsunami" onchange="toggleTsunami()"> Tsunami evacuation zone</label>
       </div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
-        <label><input type="checkbox" id="showQuakes" onchange="toggleQuakes()" checked> Recent earthquakes (30d)</label>
+        <label><input type="checkbox" id="showQuakes" onchange="toggleQuakes()"> Recent earthquakes (30d)</label>
+      </div>
+      <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
+        <label><input type="checkbox" id="showWildfire" onchange="toggleWildfire()" checked> Thermal hotspots (satellite)</label>
+        <span class="vessel-status" id="wildfireStatus"></span>
+      </div>
+      <div class="section-header">🚓 Public Safety Facilities</div>
+      <div class="trail-controls" style="flex-wrap:wrap;gap:10px;">
+        <label><input type="checkbox" id="show-police" onchange="toggleFacility('police')"> Police</label>
+        <label><input type="checkbox" id="show-fire" onchange="toggleFacility('fire')"> Fire</label>
+        <label><input type="checkbox" id="show-ems" onchange="toggleFacility('ems')"> EMS</label>
+        <label><input type="checkbox" id="show-trauma" onchange="toggleFacility('trauma')"> Trauma centers</label>
+      </div>
+      <div style="padding:4px 12px;color:var(--muted);font-size:10px;">
+        Station locations only — neither Hawaiʻi Police nor Hawaiʻi Fire
+        publishes a live dispatch/incident feed.
       </div>
       <div class="section-header">⚠️ Active NWS Alerts</div>
       <div id="alertsList"><div class="empty"><div class="empty-icon">🌤️</div>Loading…</div></div>
@@ -540,7 +555,8 @@
       <div style="padding:8px 12px;color:var(--muted);font-size:10px;">
         Sources: <a href="https://www.usgs.gov/" target="_blank" style="color:#58a6ff">USGS Earthquake Hazards</a> ·
         <a href="https://www.weather.gov/" target="_blank" style="color:#58a6ff">National Weather Service</a> ·
-        <a href="https://planning.hawaii.gov/gis/" target="_blank" style="color:#58a6ff">Hawaii Statewide GIS</a> —
+        <a href="https://planning.hawaii.gov/gis/" target="_blank" style="color:#58a6ff">Hawaii Statewide GIS</a> ·
+        <a href="https://www.arcgis.com/home/item.html?id=b8f4033069f141729ffb298b7418b653" target="_blank" style="color:#58a6ff">NASA VIIRS (Esri Living Atlas)</a> —
         all free, public, no API key.
       </div>
     </div>
@@ -990,6 +1006,7 @@ function initMapLayers() {
   map.addSource('lava-zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
     id: 'lava-zones-fill', type: 'fill', source: 'lava-zones',
+    layout: { visibility: 'none' },
     paint: {
       'fill-color': [
         'match', ['to-string', ['get', 'hzone']],
@@ -1003,6 +1020,7 @@ function initMapLayers() {
   }, 'stops-circle');
   map.addLayer({
     id: 'lava-zones-line', type: 'line', source: 'lava-zones',
+    layout: { visibility: 'none' },
     paint: { 'line-color': '#ea580c', 'line-width': 0.6, 'line-opacity': 0.5 },
   }, 'stops-circle');
   wireLayerHover('lava-zones-fill', p => `
@@ -1038,6 +1056,45 @@ function initMapLayers() {
   wireLayerHover('earthquakes-circle', p => `
     <div style="font-weight:600;">🌎 M${(+p.mag).toFixed(1)} — ${escapeHtml(p.place)}</div>
     <div style="color:var(--muted);font-size:11px;">${new Date(+p.time).toLocaleString()} · depth ${(+p.depthKm).toFixed(1)} km</div>`);
+
+  // Wildfire / thermal hotspots (NASA VIIRS satellite detections) — note this
+  // layer also lights up on active lava (Kīlauea), not just wildfire; the
+  // popup says "thermal hotspot" rather than assuming fire.
+  map.addSource('wildfire', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'wildfire-circle', type: 'circle', source: 'wildfire',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 4, 50, 8, 200, 14],
+      'circle-color': '#f97316',
+      'circle-opacity': 0.5,
+      'circle-stroke-width': 1,
+      'circle-stroke-color': '#7c2d12',
+    },
+  });
+  wireLayerHover('wildfire-circle', p => `
+    <div style="font-weight:600;">🔥 Thermal hotspot (satellite)</div>
+    <div style="color:var(--muted);font-size:11px;">FRP ${(+p.frp).toFixed(1)} MW · confidence ${escapeHtml(p.confidence)} · ${p.hours_old}h old</div>
+    <div style="color:var(--muted);font-size:10px;">Detected by NASA VIIRS — may be wildfire OR active lava (Kīlauea), not confirmed either way.</div>`);
+
+  // Public-safety facility markers — static reference locations, off by
+  // default so they don't clutter the map; toggled from the Hawaiʻi tab.
+  ['police', 'fire', 'ems', 'trauma'].forEach(kind => {
+    map.addSource(`facility-${kind}`, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({
+      id: `facility-${kind}-circle`, type: 'circle', source: `facility-${kind}`,
+      layout: { visibility: 'none' },
+      paint: {
+        'circle-radius': 5,
+        'circle-color': { police: '#1d4ed8', fire: '#dc2626', ems: '#16a34a', trauma: '#7c3aed' }[kind],
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#ffffff',
+      },
+    });
+  });
+  wireLayerHover('facility-police-circle', p => `<div style="font-weight:600;">🚓 ${escapeHtml(p.name || 'Police station')}</div><div style="color:var(--muted);font-size:11px;">${escapeHtml(p.address || '')}</div>`);
+  wireLayerHover('facility-fire-circle', p => `<div style="font-weight:600;">🚒 ${escapeHtml(p.name || 'Fire station')}</div>`);
+  wireLayerHover('facility-ems-circle', p => `<div style="font-weight:600;">🚑 ${escapeHtml(p.unit_name || 'EMS station')}</div><div style="color:var(--muted);font-size:11px;">${escapeHtml(p.address || '')}</div>`);
+  wireLayerHover('facility-trauma-circle', p => `<div style="font-weight:600;">🏥 ${escapeHtml(p.facility_name || 'Trauma center')}</div><div style="color:var(--muted);font-size:11px;">Level ${escapeHtml(String(p.trauma_level || '?'))} · ${escapeHtml(p.address || '')}</div>`);
 
   // Stop hover + click tooltip — hover for desktop, click/tap for mobile.
   let stopHoverPopup = null;
@@ -1574,7 +1631,7 @@ function focusAircraft(icao) {
 // All free/keyless federal/state sources. Hazard-zone polygons are fetched
 // once (static reference geometry); earthquakes/alerts refresh periodically.
 let allQuakes = [];
-let quakesVisible = true, lavaVisible = true, tsunamiVisible = false;
+let quakesVisible = false, lavaVisible = false, tsunamiVisible = false;
 let hazardZonesLoaded = false;
 
 async function fetchHazardZonesOnce() {
@@ -1670,6 +1727,39 @@ async function fetchAlerts() {
       </div>`).join('');
   } catch (e) {
     if (el) el.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>Couldn't load NWS alerts.</div>`;
+  }
+}
+
+// Wildfire / thermal hotspots (NASA VIIRS) — live, so refreshed alongside quakes/alerts.
+let wildfireVisible = true;
+async function fetchWildfire() {
+  try {
+    const res = await fetch('/api/wildfire');
+    const data = await res.json();
+    if (mapReady && map.getSource('wildfire')) {
+      map.getSource('wildfire').setData(wildfireVisible ? data.geojson : { type: 'FeatureCollection', features: [] });
+    }
+    const el = document.getElementById('wildfireStatus');
+    if (el) el.textContent = data.count ? `${data.count} thermal hotspot${data.count === 1 ? '' : 's'} detected` : 'No thermal hotspots detected right now';
+  } catch (e) { /* keep last-known on screen */ }
+}
+function toggleWildfire() {
+  wildfireVisible = document.getElementById('showWildfire').checked;
+  fetchWildfire();
+}
+
+// Public-safety facility layers — static, fetched once per kind on first toggle-on.
+const facilityLoaded = { police: false, fire: false, ems: false, trauma: false };
+async function toggleFacility(kind) {
+  const checked = document.getElementById(`show-${kind}`).checked;
+  if (!mapReady) return;
+  map.setLayoutProperty(`facility-${kind}-circle`, 'visibility', checked ? 'visible' : 'none');
+  if (checked && !facilityLoaded[kind]) {
+    try {
+      const data = await (await fetch(`/api/facilities/${kind}`)).json();
+      map.getSource(`facility-${kind}`).setData(data);
+      facilityLoaded[kind] = true;
+    } catch (e) { /* leave empty */ }
   }
 }
 
@@ -3902,7 +3992,7 @@ function switchTab(name) {
   if (name === 'fleet') fetchFleet();
   if (name === 'boats') fetchVessels();
   if (name === 'aircraft') fetchAircraft();
-  if (name === 'hawaii') { fetchQuakes(); fetchAlerts(); fetchHazardZonesOnce(); }
+  if (name === 'hawaii') { fetchQuakes(); fetchAlerts(); fetchWildfire(); fetchHazardZonesOnce(); }
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
 
@@ -4367,6 +4457,7 @@ Promise.all([
   fetchAircraft(),
   fetchQuakes(),
   fetchAlerts(),
+  fetchWildfire(),
 ]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
@@ -4388,7 +4479,7 @@ setInterval(() => { if (!document.hidden) fetchVessels(); }, 30000);
 setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
-setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); } }, 5 * 60 * 1000);
+setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); } }, 5 * 60 * 1000);
 
 // Fast initial catch-up: on a fresh page load the server's first OpenSky/AIS poll
 // may not have completed yet, so the startup fetch returns 0 and the map looks
