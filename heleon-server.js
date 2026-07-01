@@ -1822,6 +1822,26 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+// Hele-On's own (Syncromatics RTPI) arrival predictions for a stop, so riders
+// can compare our GPS-derived ETA against the agency's native one. Keyed by
+// route short name since a stop can be served by several routes and the
+// caller only wants the prediction for its own vehicle's route.
+async function fetchHeleOnArrivals(stopId, routeShort) {
+  try {
+    const r = await upstreamFetch(`stops/${stopId}/arrivals`);
+    if (r.status !== 200) return null;
+    const arr = JSON.parse(r.body);
+    if (!Array.isArray(arr)) return null;
+    const hit = arr.find(a => a.route && String(a.route.shortName) === String(routeShort));
+    if (!hit || hit.secondsToArrival == null) return null;
+    return {
+      etaMin: Math.round((hit.secondsToArrival / 60) * 10) / 10,
+      scheduleBased: !!hit.schedulePrediction,  // true = timetable guess, not live GPS
+      vehicleId: hit.vehicle ? hit.vehicle.id : null,
+    };
+  } catch { return null; }
+}
+
 function calcETAs(vehicle, stops) {
   if (!stops || !stops.length || vehicle.speed === undefined) return [];
   const speedKmh = (vehicle.speed || 0) * 1.60934; // mph → km/h
@@ -2159,6 +2179,12 @@ async function handleApi(url, res) {
     if (!v) return json(res, { error: 'vehicle not found' }, 404);
     const stops = await ensureStops(v.routeId);
     const etas = calcETAs(v, stops);
+    // Enrich each of our ETAs with Hele-On's own (Syncromatics) prediction for
+    // the same stop, so the two can be shown side by side in the UI.
+    await Promise.all(etas.map(async e => {
+      const heleon = await fetchHeleOnArrivals(e.stopId, v.routeShort);
+      if (heleon) e.heleon = heleon;
+    }));
     return json(res, { vehicle_id: vid, route: v.routeName, speed_mph: v.speed, etas });
   }
 

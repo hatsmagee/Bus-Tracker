@@ -3602,11 +3602,15 @@ async function showEtaPanel(v) {
           : '—';
         const etaColor = s.etaMin === null ? 'var(--muted)' : s.etaMin < 2 ? 'var(--green)' : s.etaMin < 10 ? 'var(--yellow)' : 'var(--text)';
         const distStr = s.distKm < 1 ? `${Math.round(s.distKm*1000)} m` : `${s.distKm.toFixed(1)} km`;
+        const heleonStr = s.heleon
+          ? `Hele-On: ~${s.heleon.etaMin} min${s.heleon.scheduleBased ? ' (schedule)' : ' (live)'}`
+          : null;
         return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);">
           <div style="width:18px;height:18px;border-radius:50%;background:var(--panel2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--muted);flex-shrink:0;">${i+1}</div>
           <div style="flex:1;min-width:0;">
             <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.name || 'Stop '+s.stopId}</div>
             <div style="font-size:10px;color:var(--muted);">${distStr} away</div>
+            ${heleonStr ? `<div style="font-size:9px;color:var(--muted);">${heleonStr}</div>` : ''}
           </div>
           <div style="font-size:13px;font-weight:700;color:${etaColor};flex-shrink:0;">${etaStr}</div>
         </div>`;
