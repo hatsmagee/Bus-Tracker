@@ -525,6 +525,9 @@
 
     <div class="tab-content" id="tab-hawaii">
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
+        <label><input type="checkbox" id="showRadar" onchange="toggleRadar()"> Precipitation radar</label>
+      </div>
+      <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showLava" onchange="toggleLava()"> Lava flow hazard zones</label>
       </div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
@@ -1001,8 +1004,20 @@ function initMapLayers() {
   // ─── HAWAII HAZARD LAYERS ───────────────────────────────────────────────────
   // Lava flow hazard zones + tsunami evacuation zone (Hawaii Statewide GIS,
   // fetched once — static reference geometry, not polled) and recent
-  // earthquakes (USGS, refreshed periodically). All optional, off by default
-  // except lava zones and quakes, and drawn under the bus/route layers.
+  // earthquakes (USGS, refreshed periodically). All optional and off by
+  // default, drawn under the bus/route layers.
+
+  // ─── PRECIPITATION RADAR (RainViewer, free/keyless XYZ tiles) ─────────────
+  // A raster tile source using RainViewer's latest available frame. The frame
+  // path is time-stamped and changes every ~10 min, so it's refreshed on the
+  // same interval as the other slow-moving Hawaiʻi-tab data.
+  map.addSource('radar', { type: 'raster', tiles: [], tileSize: 256 });
+  map.addLayer({
+    id: 'radar-layer', type: 'raster', source: 'radar',
+    layout: { visibility: 'none' },
+    paint: { 'raster-opacity': 0.55 },
+  }, 'stops-circle');
+
   map.addSource('lava-zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
     id: 'lava-zones-fill', type: 'fill', source: 'lava-zones',
@@ -1730,6 +1745,27 @@ async function fetchAlerts() {
   }
 }
 
+// Precipitation radar (RainViewer) — fetch the current frame list directly
+// from RainViewer's own public endpoint (no server proxy needed, it's already
+// keyless/CORS-open) and point the raster source at the latest frame.
+let radarVisible = false;
+async function fetchRadarFrame() {
+  try {
+    const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+    const data = await res.json();
+    const past = data.radar && data.radar.past;
+    if (!past || !past.length) return;
+    const frame = past[past.length - 1]; // most recent
+    const tiles = [`${data.host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`];
+    if (mapReady && map.getSource('radar')) map.getSource('radar').setTiles(tiles);
+  } catch (e) { /* leave last frame on screen */ }
+}
+function toggleRadar() {
+  radarVisible = document.getElementById('showRadar').checked;
+  if (mapReady) map.setLayoutProperty('radar-layer', 'visibility', radarVisible ? 'visible' : 'none');
+  if (radarVisible) fetchRadarFrame();
+}
+
 // Wildfire / thermal hotspots (NASA VIIRS) — live, so refreshed alongside quakes/alerts.
 let wildfireVisible = true;
 async function fetchWildfire() {
@@ -1793,6 +1829,12 @@ function buildStopPopupHtml(p, arrData) {
   const gtfsStop = gtfsStopMap[p.stopId] || {};
   const wcIcon = gtfsStop.wheelchair === 1 ? ' <span title="Wheelchair accessible" style="color:#58a6ff;">♿</span>' : '';
   const officialName = gtfsStop.stop_name || p.name;
+  const wxHtml = gtfsStop.weather ? `
+      <div style="color:#e6edf3;font-size:11px;margin-bottom:8px;display:flex;align-items:center;gap:5px;">
+        <span>${weatherEmoji(gtfsStop.weather.code, gtfsStop.weather.isDay)}</span>
+        <span>${Math.round(gtfsStop.weather.tempF)}°F</span>
+        <span style="color:#8b949e;">· ${weatherLabel(gtfsStop.weather.code)}</span>
+      </div>` : '';
 
   if (!arrData) {
     return `<div class="popup-inner" style="padding:12px;min-width:260px;">
@@ -1801,6 +1843,7 @@ function buildStopPopupHtml(p, arrData) {
         <div style="font-weight:700;font-size:13px;">${officialName}${wcIcon}</div>
       </div>
       <div style="color:#8b949e;font-size:10px;margin-bottom:10px;">Stop #${p.stopCode||gtfsStop.stop_code||'—'} · ${p.routeName||''}</div>
+      ${wxHtml}
       <div style="color:#8b949e;font-size:11px;">Loading…</div>
     </div>`;
   }
@@ -1881,6 +1924,7 @@ function buildStopPopupHtml(p, arrData) {
       <div style="font-weight:700;font-size:13px;line-height:1.3;">${officialName}${wcIcon}</div>
     </div>
     <div style="color:#8b949e;font-size:10px;margin-bottom:10px;">Stop #${p.stopCode||gtfsStop.stop_code||'—'} · ${p.routeName||'Route '+p.routeId}</div>
+    ${wxHtml}
     <div style="font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Approaching now</div>
     ${approachHtml}
     ${headwayHtml}
@@ -3992,7 +4036,7 @@ function switchTab(name) {
   if (name === 'fleet') fetchFleet();
   if (name === 'boats') fetchVessels();
   if (name === 'aircraft') fetchAircraft();
-  if (name === 'hawaii') { fetchQuakes(); fetchAlerts(); fetchWildfire(); fetchHazardZonesOnce(); }
+  if (name === 'hawaii') { fetchQuakes(); fetchAlerts(); fetchWildfire(); fetchHazardZonesOnce(); if (radarVisible) fetchRadarFrame(); }
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
 
@@ -4479,7 +4523,7 @@ setInterval(() => { if (!document.hidden) fetchVessels(); }, 30000);
 setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
-setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); } }, 5 * 60 * 1000);
+setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
 
 // Fast initial catch-up: on a fresh page load the server's first OpenSky/AIS poll
 // may not have completed yet, so the startup fetch returns 0 and the map looks

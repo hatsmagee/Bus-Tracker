@@ -708,6 +708,36 @@ async function refreshWeather() {
   } catch (e) { /* weather is best-effort; keep last good values */ }
 }
 
+// Per-stop weather — same idea as per-bus, but for every official stop, so a
+// rider can see current conditions at a stop before a bus is even nearby.
+// Stops don't move, so this refreshes on a much slower cadence than buses.
+let weatherByStop = {}; // stop_id -> { tempF, code, isDay, ts }
+let weatherStopLastFetch = 0;
+const WEATHER_STOP_TTL_MS = 20 * 60 * 1000;
+async function refreshStopWeather() {
+  const now = Date.now();
+  if (now - weatherStopLastFetch < WEATHER_STOP_TTL_MS) return;
+  const rows = dbAll(`SELECT stop_id, stop_lat, stop_lon FROM gtfs_stops WHERE stop_lat IS NOT NULL AND stop_lon IS NOT NULL`);
+  if (!rows.length) return;
+  weatherStopLastFetch = now;
+  // Open-Meteo accepts up to 1000 locations per call — comfortably above our
+  // ~350 stops, so one request covers the whole island in one shot.
+  const lats = rows.map(r => r.stop_lat.toFixed(3)).join(',');
+  const lons = rows.map(r => r.stop_lon.toFixed(3)).join(',');
+  try {
+    const path = `/v1/forecast?latitude=${lats}&longitude=${lons}` +
+                 `&current=temperature_2m,weather_code,is_day&temperature_unit=fahrenheit`;
+    let data = await fetchJson('api.open-meteo.com', path);
+    if (!Array.isArray(data)) data = [data];
+    const next = {};
+    rows.forEach((r, i) => {
+      const cur = data[i] && data[i].current;
+      if (cur) next[r.stop_id] = { tempF: Math.round(cur.temperature_2m), code: cur.weather_code, isDay: !!cur.is_day, ts: now };
+    });
+    weatherByStop = next;
+  } catch (e) { /* best-effort; keep last good values */ }
+}
+
 // Fetch a binary body (GTFS-RT protobuf) from the upstream host.
 function fetchBinary(reqPath) {
   return new Promise((resolve, reject) => {
@@ -1502,6 +1532,7 @@ async function pollAll() {
   // Attach cached microclimate weather + refresh it in the background.
   latestVehicles.forEach(v => { v.weather = weatherByVehicle[v.id] || null; });
   refreshWeather().catch(() => {});
+  refreshStopWeather().catch(() => {});
   // Detect stop arrivals for each active vehicle
   latestVehicles.forEach(v => {
     if (v.routeId) { try { detectArrivals(v, v.routeId); } catch(e) {} }
@@ -2636,6 +2667,7 @@ async function handleApi(url, res) {
   // GTFS official stop data (names, wheelchair)
   if (p === '/api/gtfs/stops') {
     const rows = dbAll(`SELECT stop_id,stop_code,stop_name,stop_lat,stop_lon,wheelchair FROM gtfs_stops`);
+    rows.forEach(r => { r.weather = weatherByStop[r.stop_id] || null; });
     return json(res, rows);
   }
 
