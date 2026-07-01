@@ -822,6 +822,7 @@ function initMap() {
     try { fetchStreamflow(); } catch (e) {}
     try { fetchOcean(); } catch (e) {}
     try { fetchAprs(); } catch (e) {}
+    try { fetchAirQuality(); } catch (e) {}
     // Keep an open click-card glued to its map anchor as the map moves.
     map.on('move', positionMapCard);
     // Click on empty map (no interactive feature) closes the card.
@@ -1317,6 +1318,37 @@ function initMapLayers() {
     <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.kind)}${p.comment ? ' · ' + escapeHtml(p.comment) : ''}</div>`);
   wireLayerCard('aprs-dot', p => ({ title: `📻 ${p.call}`,
     body: `<div style="padding:2px 0;"><span style="color:#8b949e;">Type</span> · <b>${escapeHtml(p.kind)}</b></div>${p.comment ? `<div style="margin-top:4px;color:#c9d1d9;">${escapeHtml(p.comment)}</div>` : ''}` }));
+
+  // Air quality / vog — sampled Big Island towns (Open-Meteo, keyless). A dot
+  // colored by US AQI (green→maroon) with the AQI number; vog usually hits
+  // Kona/Ka'ū worst. Always on. Circle (not emoji) so the color IS the signal.
+  map.addSource('airquality', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'airquality-dot', type: 'circle', source: 'airquality',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 7, 12, 12],
+      'circle-color': ['step', ['get', 'usAqi'], '#00e400', 51, '#ffff00', 101, '#ff7e00', 151, '#ff0000', 201, '#8f3f97', 301, '#7e0023'],
+      'circle-opacity': 0.55, 'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff',
+    },
+  });
+  map.addLayer({
+    id: 'airquality-label', type: 'symbol', source: 'airquality',
+    layout: { 'text-field': ['to-string', ['get', 'usAqi']], 'text-size': 10,
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-allow-overlap': false, 'text-optional': true },
+    paint: { 'text-color': '#111827', 'text-halo-color': '#ffffff', 'text-halo-width': 1.2 },
+  });
+  wireLayerHover('airquality-dot', p => `<div style="font-weight:600;">🌫️ ${escapeHtml(p.name)} air</div>
+    <div style="color:var(--muted);font-size:11px;">AQI ${p.usAqi} · click for vog details</div>`);
+  wireLayerCard('airquality-dot', p => {
+    const rows = [];
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+    const cat = a => a <= 50 ? 'Good' : a <= 100 ? 'Moderate' : a <= 150 ? 'Unhealthy (sensitive)' : a <= 200 ? 'Unhealthy' : a <= 300 ? 'Very unhealthy' : 'Hazardous';
+    if (p.usAqi != null) row('US AQI', `${p.usAqi} — ${cat(+p.usAqi)}`);
+    if (p.pm25 != null) row('PM2.5', `${(+p.pm25).toFixed(1)} µg/m³`);
+    if (p.pm10 != null) row('PM10', `${(+p.pm10).toFixed(1)} µg/m³`);
+    if (p.so2 != null) row('SO₂ (vog)', `${(+p.so2).toFixed(1)} µg/m³`);
+    return { title: `🌫️ ${p.name} — air quality`, body: rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Open-Meteo${p.at ? ' · ' + p.at : ''}</div>` };
+  });
 
   // Summit observatories (Maunakea CFHT tower, Mauna Loa NOAA) — live conditions
   // straight from the observatories, no key. A telescope glyph with a small
@@ -2210,6 +2242,19 @@ async function fetchSummits() {
         properties: { name: s.name, elevM: s.elevM, badge, readings: JSON.stringify(r) } };
     });
     map.getSource('summits').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
+}
+
+// Air quality / vog sampled across Big Island towns. Always on.
+async function fetchAirQuality() {
+  try {
+    const res = await fetch('/api/air-quality');
+    const data = await res.json();
+    if (!mapReady || !map.getSource('airquality')) return;
+    const feats = (data.points || []).map(p => ({
+      type: 'Feature', geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
+      properties: { name: p.name, usAqi: p.usAqi != null ? p.usAqi : 0, pm25: p.pm25, pm10: p.pm10, so2: p.so2, at: p.at } }));
+    map.getSource('airquality').setData({ type: 'FeatureCollection', features: feats });
   } catch (e) { /* keep last */ }
 }
 
@@ -4293,7 +4338,7 @@ function positionMapCard() {
 }
 
 // Layers whose features open a click-card (and whose empty-space click closes it).
-const CARD_LAYERS = ['ocean-dot', 'aprs-dot', 'summits-dot', 'weather-stations-dot', 'aircraft-triangles'];
+const CARD_LAYERS = ['ocean-dot', 'aprs-dot', 'summits-dot', 'weather-stations-dot', 'aircraft-triangles', 'airquality-dot'];
 // Wire click-to-open-card on a layer. buildCard(props) -> { title, body }.
 function wireLayerCard(layerId, buildCard) {
   map.on('click', layerId, e => {
@@ -5387,6 +5432,7 @@ Promise.all([
   fetchSummits(),
   fetchOcean(),
   fetchAprs(),
+  fetchAirQuality(),
 ]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
@@ -5409,7 +5455,7 @@ setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
 setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); }, 15 * 60 * 1000);
+setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchAirQuality(); }, 15 * 60 * 1000);
 // APRS moves faster (vehicles) — refresh more often when it has data.
 setInterval(() => { if (!document.hidden) fetchAprs(); }, 60 * 1000);
 

@@ -2974,6 +2974,11 @@ async function handleApi(url, res) {
     return json(res, { ts: now, lastRxTs: aprsLastRxTs, lastError: aprsLastError, count: list.length, stations: list });
   }
 
+  // ── AIR QUALITY / VOG (Open-Meteo, keyless) ───────────────────────────────
+  if (p === '/api/air-quality') {
+    return json(res, { ts: Date.now(), lastPollTs: airQualityLastPollTs, lastError: airQualityLastError, points: airQualityCache });
+  }
+
   // ── OCEAN (NDBC buoys + NOAA tide stations, keyless) ──────────────────────
   if (p === '/api/ocean') {
     return json(res, { ts: Date.now(), lastPollTs: oceanLastPollTs, lastError: oceanLastError, stations: oceanCache });
@@ -3795,6 +3800,44 @@ function connectAprs() {
   } catch (e) { aprsLastError = e.message; setTimeout(connectAprs, 60000); }
 }
 
+// ─── AIR QUALITY / VOG (Open-Meteo, keyless) ──────────────────────────────────
+// Vog (volcanic SO₂ + sulfate haze from Kīlauea) is a defining Big Island air
+// hazard. Open-Meteo's air-quality API is fully open (no key) and returns PM2.5,
+// PM10, SO₂ and US AQI per point, so we sample representative towns across the
+// island to build a live AQ layer. Downwind (Kona/Ka'ū) usually reads worst.
+const AQ_POINTS = [
+  { name: 'Hilo', lat: 19.707, lon: -155.09 },
+  { name: 'Kailua-Kona', lat: 19.64, lon: -155.996 },
+  { name: 'Volcano', lat: 19.44, lon: -155.23 },
+  { name: 'Pāhala', lat: 19.2, lon: -155.48 },
+  { name: 'Ocean View', lat: 19.09, lon: -155.76 },
+  { name: 'Waimea', lat: 20.02, lon: -155.67 },
+  { name: 'Waikoloa', lat: 19.94, lon: -155.79 },
+  { name: 'Pāhoa', lat: 19.49, lon: -154.95 },
+  { name: 'Captain Cook', lat: 19.5, lon: -155.92 },
+];
+let airQualityCache = [];
+let airQualityLastPollTs = null, airQualityLastError = null;
+async function pollAirQuality() {
+  const lats = AQ_POINTS.map(p => p.lat).join(',');
+  const lons = AQ_POINTS.map(p => p.lon).join(',');
+  try {
+    // Open-Meteo accepts comma-separated lat/lon for a batch of points in one call.
+    const j = await fetchJson('air-quality-api.open-meteo.com',
+      `/v1/air-quality?latitude=${lats}&longitude=${lons}&current=pm2_5,pm10,sulphur_dioxide,us_aqi&timezone=Pacific%2FHonolulu`,
+      { 'User-Agent': 'heleon-tracker' });
+    const arr = Array.isArray(j) ? j : [j]; // batch returns an array; single returns object
+    const next = arr.map((r, i) => ({
+      name: AQ_POINTS[i] ? AQ_POINTS[i].name : `pt${i}`,
+      lat: r.latitude, lon: r.longitude,
+      pm25: r.current && r.current.pm2_5, pm10: r.current && r.current.pm10,
+      so2: r.current && r.current.sulphur_dioxide, usAqi: r.current && r.current.us_aqi,
+      at: r.current && r.current.time,
+    })).filter(x => x.usAqi != null || x.pm25 != null);
+    if (next.length) { airQualityCache = next; airQualityLastPollTs = Date.now(); airQualityLastError = null; }
+  } catch (e) { airQualityLastError = e.message; }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin':'*' }); res.end(); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -3905,6 +3948,7 @@ const server = http.createServer((req, res) => {
   fetchWeatherStations();
   pollSummits();
   pollOcean();
+  pollAirQuality();
   connectAprs();
   setInterval(pollEarthquakes, 5 * 60 * 1000);
   setInterval(pollAlerts, 5 * 60 * 1000);
@@ -3913,6 +3957,7 @@ const server = http.createServer((req, res) => {
   setInterval(fetchWeatherStations, 10 * 60 * 1000);
   setInterval(pollSummits, 5 * 60 * 1000);
   setInterval(pollOcean, 10 * 60 * 1000);
+  setInterval(pollAirQuality, 15 * 60 * 1000);
   setInterval(pollHazardZones, 24 * 60 * 60 * 1000);
   setInterval(pollPubSafetyFacilities, 24 * 60 * 60 * 1000);
   setTimeout(pruneDb, 30000);                // full prune+VACUUM shortly after boot
