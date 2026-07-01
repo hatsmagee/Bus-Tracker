@@ -552,7 +552,7 @@
         <span class="vessel-status" id="wildfireStatus"></span>
       </div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
-        <label><input type="checkbox" id="showStreamflow" onchange="toggleStreamflow()"> USGS streamflow gauges</label>
+        <label><input type="checkbox" id="showStreamflow" onchange="toggleStreamflow()" checked> USGS streamflow gauges</label>
         <label><input type="checkbox" id="showWeatherStations" onchange="toggleWeatherStations()"> NWS weather stations</label>
         <span class="vessel-status" id="streamflowStatus"></span>
       </div>
@@ -1916,7 +1916,7 @@ function toggleWildfire() {
 const facilityLoaded = { police: false, fire: false, ems: false, trauma: false };
 
 // Streamflow (USGS NWIS) — same refresh cadence as the other Hawaiʻi-tab live data.
-let streamflowVisible = false;
+let streamflowVisible = true; // water-wheel gauges shown by default
 let streamflowData = null;
 const streamWheelMarkers = {}; // site_no -> maplibregl.Marker
 async function fetchStreamflow() {
