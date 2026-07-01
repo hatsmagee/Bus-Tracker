@@ -3781,7 +3781,11 @@ function renderMarkers() {
     }
 
     const loadFrac = loadFraction(v);
-    const fix = [v.lon, v.lat];
+    // Buses drive on roads: the server snaps the raw GPS onto the nearest real
+    // road-graph edge (snapLon/snapLat). Use that as the position when present
+    // so the dot rides the street instead of floating; fall back to raw GPS if
+    // the point was too far from any road to snap confidently.
+    const fix = (v.snapLon != null && v.snapLat != null) ? [v.snapLon, v.snapLat] : [v.lon, v.lat];
     const nowT = performance.now();
     // Snap to whichever of the route's PATTERNS the bus is nearest (a bus on
     // pattern 2/3 is far from pattern 1). Pick the closest; if it's within 120 m

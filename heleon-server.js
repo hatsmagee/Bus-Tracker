@@ -17,6 +17,7 @@ const os = require('os');
 const { execSync } = require('child_process');
 const WebSocket = require('ws');
 const { parseFeedMessage } = require('./gtfs-rt');
+const { nearestPointOnGraph } = require('./road-graph.js');
 
 // Big Island bounding box — fleet feed includes parked/relocated buses
 // (e.g. on Oʻahu for maintenance); ignore anything outside Hawaiʻi County.
@@ -1389,6 +1390,23 @@ async function pollFleet() {
       gtfsCurrentStatus: st ? st.currentStatus : null,   // 0 INCOMING_AT, 1 STOPPED_AT, 2 IN_TRANSIT_TO
       congestionLevel: st ? st.congestionLevel : null,   // 0 UNKNOWN..4 SEVERE_CONGESTION
     };
+    // Buses drive on ROADS, not free GPS coordinates. Snap the reported point
+    // onto the nearest real road-graph edge (within SNAP_RADIUS_M) so the dot
+    // sits on the street it's actually on instead of floating in a yard or
+    // between two parallel roads. Raw lat/lon are kept for the DB/telemetry;
+    // snapLat/snapLon (+ how far it moved) are what the map draws.
+    try {
+      ensureTrailGraph();
+      if (TRAIL_GRAPH && v.lat != null && v.lon != null) {
+        const SNAP_RADIUS_M = 45;
+        const snap = nearestPointOnGraph(TRAIL_GRAPH, TRAIL_EDGE_INDEX, [v.lon, v.lat], SNAP_RADIUS_M);
+        if (snap) {
+          v.snapLon = snap.point[0];
+          v.snapLat = snap.point[1];
+          v.snapDist = Math.round(snap.dist);
+        }
+      }
+    } catch (e) { /* snapping is best-effort; fall back to raw GPS */ }
     vehicles.push(v);
 
     dbRun(`INSERT INTO pings (ts,vehicle_id,vehicle_name,route_id,pattern_id,lat,lon,speed,heading,heading_deg,passenger_load,capacity,shape_dist,last_updated,occupancy_status,gtfs_current_status,congestion_level)
