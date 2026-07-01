@@ -785,6 +785,20 @@ function initMap() {
   // Re-fan overlapping buses whenever the camera settles (overlap is zoom/pan
   // dependent — buses separate as you zoom in).
   map.on('moveend', () => { try { deOverlapMarkers(); } catch (e) {} });
+  // Ribbon parallel-offset is baked into geometry in screen px, so it must be
+  // re-baked when zoom changes enough to shift the stripe width. Debounced, and
+  // only when the rounded zoom actually moved, so panning never triggers it.
+  let _lastRibbonZoom = null, _ribbonRebakeTimer = null;
+  map.on('zoomend', () => {
+    const z = Math.round(map.getZoom() * 2) / 2; // 0.5-zoom granularity
+    if (z === _lastRibbonZoom) return;
+    _lastRibbonZoom = z;
+    clearTimeout(_ribbonRebakeTimer);
+    _ribbonRebakeTimer = setTimeout(() => {
+      try { renderRouteRibbons(); } catch (e) {}
+      try { renderTrailRibbons(); } catch (e) {}
+    }, 120);
+  });
   map.on('error', (e) => {
     // Suppress known MapLibre v4 bugs about listener arrays
     if (e?.error?.message?.includes('slice is not a function')) return;
@@ -810,15 +824,11 @@ function initMapLayers() {
   // just dashed. Fallback (pre-edge-data) features have no `slot` property,
   // which reads as 0 (no offset), so a single un-ribboned line still renders
   // correctly during that brief window.
-  const TRAIL_STRIPE_PX = 2.6;
+  // Offset is baked into trail geometry (offsetPolyline, tapered at junctions),
+  // re-baked on zoom — same as the live route ribbons — so no line-offset here.
   map.addLayer({ id: 'trails-line', type: 'line', source: 'trails',
     paint: { 'line-color': ['get', 'color'], 'line-width': 2.5, 'line-opacity': 0.7,
-      'line-dasharray': [0.5, 2],
-      'line-offset': ['interpolate', ['linear'], ['zoom'],
-        8, ['*', ['coalesce', ['get', 'slot'], 0], 1.6],
-        12, ['*', ['coalesce', ['get', 'slot'], 0], TRAIL_STRIPE_PX],
-        15, ['*', ['coalesce', ['get', 'slot'], 0], 3.6],
-        18, ['*', ['coalesce', ['get', 'slot'], 0], 5]] },
+      'line-dasharray': [0.5, 2] },
     layout: { 'line-join': 'round', 'line-cap': 'round' }
   });
 
@@ -2445,6 +2455,23 @@ async function fetchRouteEdges() {
 const RIBBON_SRC = 'route-ribbons';
 const RIBBON_LAYER = 'route-ribbons-line';
 const RIBBON_STRIPE_PX = 3.2; // width of one stripe; a 3-route ribbon is ~3x this, tight with no gap
+const TRAIL_STRIPE_PX_BAKE = 2.6;
+
+// Per-stripe offset width (px) at a given zoom — matches the line-width ramp so
+// stripes stay tight (no gap, no overlap) at every zoom. Used to bake the
+// parallel offset into ribbon geometry (offsetPolyline).
+function ribbonStripePxAt(z, base = RIBBON_STRIPE_PX) {
+  const ramp = [[8, 2], [12, base], [15, 4.4], [18, 6]];
+  if (z <= ramp[0][0]) return ramp[0][1];
+  if (z >= ramp[ramp.length - 1][0]) return ramp[ramp.length - 1][1];
+  for (let i = 1; i < ramp.length; i++) {
+    if (z <= ramp[i][0]) {
+      const [z0, v0] = ramp[i - 1], [z1, v1] = ramp[i];
+      return v0 + (v1 - v0) * (z - z0) / (z1 - z0);
+    }
+  }
+  return base;
+}
 
 // ── Geometry helpers for smooth, unbroken ribbons ──
 // The old renderer drew each real-road EDGE as its own separate LineString.
@@ -2538,6 +2565,44 @@ function chainRouteEdges(edges) {
   return runs;
 }
 
+// Parallel-offset a polyline by `offsetPx` screen pixels (converted to degrees
+// at the given zoom), BAKED INTO THE GEOMETRY — offset lives in the coordinates
+// instead of MapLibre's per-feature line-offset. That lets us TAPER the offset
+// to zero over the last `taperN` vertices at each end, so where a run terminates
+// at a busy junction its lane pulls back onto the road centerline instead of
+// splaying out into the fan/blob that plagues naive constant-offset ribbons —
+// the standard trick professional transit renderers use to keep interchanges
+// clean. Mid-run the full offset holds, so parallel routes still ride as tight
+// bands. Offset is perpendicular to the local direction (right-hand normal).
+function offsetPolyline(coords, offsetPx, zoom, taperN = 6) {
+  if (coords.length < 2 || Math.abs(offsetPx) < 1e-6) return coords;
+  // Screen pixels -> degrees at this zoom/latitude (Web Mercator ground res).
+  const lat = coords[Math.floor(coords.length / 2)][1];
+  const metersPerPx = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
+  const offMeters = offsetPx * metersPerPx;
+  const mLat = 111320, mLon = mLat * Math.cos(lat * Math.PI / 180);
+  const out = [];
+  const n = coords.length;
+  for (let i = 0; i < n; i++) {
+    // Local tangent from neighbor vertices (averaged at interior points).
+    const p = coords[Math.max(0, i - 1)], q = coords[Math.min(n - 1, i + 1)];
+    let tx = (q[0] - p[0]) * mLon, ty = (q[1] - p[1]) * mLat;
+    const tl = Math.hypot(tx, ty) || 1;
+    tx /= tl; ty /= tl;
+    // Right-hand normal.
+    const nx = ty, ny = -tx;
+    // Taper: full offset in the middle, easing to 0 within taperN of each end.
+    const edgeDist = Math.min(i, n - 1 - i);
+    const taper = taperN > 0 ? Math.min(1, edgeDist / taperN) : 1;
+    const off = offMeters * taper;
+    out.push([
+      coords[i][0] + (nx * off) / mLon,
+      coords[i][1] + (ny * off) / mLat,
+    ]);
+  }
+  return out;
+}
+
 // Round the corners of a polyline with a Chaikin-style corner cut, giving each
 // bend a small radius so turns look professional instead of hard-angled. Two
 // passes is plenty for a transit-map feel; endpoints are preserved so runs
@@ -2575,13 +2640,19 @@ function renderRouteRibbons() {
     });
   }
 
+  const z = map.getZoom();
+  const stripePx = ribbonStripePxAt(z);
   const features = [];
   for (const [routeId, { color, edges }] of byRoute) {
-    // Chain into connected, constant-slot runs, then smooth each run's corners.
+    // Chain into connected runs, smooth corners, then bake in a tapered
+    // parallel offset (lane * stripe width) so lanes pull onto the centerline
+    // at junctions — no fan/blob — and ride tight parallel bands mid-corridor.
     for (const run of chainRouteEdges(edges)) {
+      const smoothed = smoothPolyline(run.coords);
+      const offset = offsetPolyline(smoothed, run.slot * stripePx, z);
       features.push({
         type: 'Feature',
-        geometry: { type: 'LineString', coordinates: smoothPolyline(run.coords) },
+        geometry: { type: 'LineString', coordinates: offset },
         properties: { color, slot: run.slot, routeId },
       });
     }
@@ -2598,14 +2669,8 @@ function renderRouteRibbons() {
       'line-color': ['get', 'color'],
       'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 12, RIBBON_STRIPE_PX, 15, 4.4, 18, 6],
       'line-opacity': 0.95,
-      // Offset is in SCREEN pixels and scales with zoom the same way
-      // line-width does, so stripes stay tight against each other (no gap,
-      // no overlap) at every zoom instead of fanning out when zoomed in.
-      'line-offset': ['interpolate', ['linear'], ['zoom'],
-        8, ['*', ['get', 'slot'], 2],
-        12, ['*', ['get', 'slot'], RIBBON_STRIPE_PX],
-        15, ['*', ['get', 'slot'], 4.4],
-        18, ['*', ['get', 'slot'], 6]],
+      // Offset is baked into the geometry (see offsetPolyline) and re-baked on
+      // zoom, so no line-offset here.
     },
     layout: { 'line-join': 'round', 'line-cap': 'round' },
   }, 'stops-circle');
@@ -2639,12 +2704,15 @@ function renderTrailRibbons() {
       byRoute.get(r.routeId).edges.push({ coords: edge.coords, slot: i - center });
     });
   }
+  const z = map.getZoom();
+  const stripePx = ribbonStripePxAt(z, TRAIL_STRIPE_PX_BAKE);
   const features = [];
   for (const [routeId, { color, edges }] of byRoute) {
     for (const run of chainRouteEdges(edges)) {
+      const offset = offsetPolyline(smoothPolyline(run.coords), run.slot * stripePx, z);
       features.push({
         type: 'Feature',
-        geometry: { type: 'LineString', coordinates: smoothPolyline(run.coords) },
+        geometry: { type: 'LineString', coordinates: offset },
         properties: { color, slot: run.slot, routeId },
       });
     }
