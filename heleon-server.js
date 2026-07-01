@@ -147,8 +147,15 @@ async function openDb() {
     passenger_load REAL,
     capacity      INTEGER,
     shape_dist    REAL,
-    last_updated  TEXT
+    last_updated  TEXT,
+    occupancy_status INTEGER,
+    gtfs_current_status INTEGER,
+    congestion_level INTEGER
   )`);
+  // Columns added after initial release — ALTER for DBs created before this change.
+  ['occupancy_status', 'gtfs_current_status', 'congestion_level'].forEach(col => {
+    try { db.run(`ALTER TABLE pings ADD COLUMN ${col} INTEGER`); } catch {}
+  });
   db.run(`CREATE INDEX IF NOT EXISTS idx_pings_v_ts ON pings(vehicle_id, ts)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_pings_ts ON pings(ts)`);
 
@@ -1203,6 +1210,7 @@ async function pollTripUpdates() {
 // drives the vehicle list (the fleet JSON below is the authoritative source).
 const vpBearing = {};  // vehicleId -> { bearing, ts }
 let vpTripMap = {};     // vehicleId -> tripId, used only when TripUpdates lacks the bus
+const vpStatus = {};   // vehicleId -> { occupancyStatus, currentStatus, congestionLevel, ts }
 async function pollVehiclePositions() {
   let res;
   try { res = await fetchBinary(RT_VP_PATH); } catch { return; }
@@ -1219,6 +1227,14 @@ async function pollVehiclePositions() {
     if (tripId) nextTrip[id] = tripId;
     if (vp.bearing != null && vp.timestamp && (now - vp.timestamp * 1000) < VEHICLE_STALE_MS) {
       vpBearing[id] = { bearing: Math.round(vp.bearing), ts: vp.timestamp * 1000 };
+    }
+    if (vp.timestamp && (now - vp.timestamp * 1000) < VEHICLE_STALE_MS) {
+      vpStatus[id] = {
+        occupancyStatus: vp.occupancyStatus != null ? vp.occupancyStatus : null,
+        currentStatus: vp.currentStatus != null ? vp.currentStatus : null,
+        congestionLevel: vp.congestionLevel != null ? vp.congestionLevel : null,
+        ts: vp.timestamp * 1000,
+      };
     }
   });
   vpTripMap = nextTrip;
@@ -1312,6 +1328,7 @@ async function pollFleet() {
     // Heading: prefer the GTFS-RT bearing (smoothed), else the endpoint's value.
     const brg = vpBearing[id] && (ts - vpBearing[id].ts) < VEHICLE_STALE_MS ? vpBearing[id].bearing
               : (raw.headingDegrees != null ? Math.round(raw.headingDegrees) : null);
+    const st = vpStatus[id] && (ts - vpStatus[id].ts) < VEHICLE_STALE_MS ? vpStatus[id] : null;
     const v = {
       id, name: raw.name || String(id),
       lat: raw.lat, lon: raw.lon,
@@ -1338,13 +1355,17 @@ async function pollFleet() {
       routeName: route ? route.name : 'Not in service',
       routeShort: route ? route.short : '—',
       routeColor: route ? route.color : '#8b949e',
+      occupancyStatus: st ? st.occupancyStatus : null,   // GTFS-rt enum 0 EMPTY..8 NOT_BOARDABLE
+      gtfsCurrentStatus: st ? st.currentStatus : null,   // 0 INCOMING_AT, 1 STOPPED_AT, 2 IN_TRANSIT_TO
+      congestionLevel: st ? st.congestionLevel : null,   // 0 UNKNOWN..4 SEVERE_CONGESTION
     };
     vehicles.push(v);
 
-    dbRun(`INSERT INTO pings (ts,vehicle_id,vehicle_name,route_id,pattern_id,lat,lon,speed,heading,heading_deg,passenger_load,capacity,shape_dist,last_updated)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    dbRun(`INSERT INTO pings (ts,vehicle_id,vehicle_name,route_id,pattern_id,lat,lon,speed,heading,heading_deg,passenger_load,capacity,shape_dist,last_updated,occupancy_status,gtfs_current_status,congestion_level)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [ts, v.id, v.name, routeId, v.patternId, v.lat, v.lon, v.speed,
-       v.heading, v.headingDegrees, v.passengerLoad, v.capacity, v.shapeDistanceTraveled, tripId]);
+       v.heading, v.headingDegrees, v.passengerLoad, v.capacity, v.shapeDistanceTraveled, tripId,
+       v.occupancyStatus, v.gtfsCurrentStatus, v.congestionLevel]);
 
     lastGoodVehicle[id] = v;
   });

@@ -81,7 +81,9 @@ function parseVehiclePosition(buf) {
     currentStopSeq: num(v[3]),
     currentStatus: num(v[4]),     // 0 INCOMING_AT, 1 STOPPED_AT, 2 IN_TRANSIT_TO
     timestamp: num(v[5]),         // epoch seconds
+    congestionLevel: num(v[6]),   // 0 UNKNOWN, 1 RUNNING_SMOOTHLY, 2 STOP_AND_GO, 3 CONGESTION, 4 SEVERE_CONGESTION
     stopId: str(v[7]),
+    occupancyStatus: num(v[9]),   // 0 EMPTY .. 8 NOT_BOARDABLE, per GTFS-rt spec
     vehicleId: vehId,
     vehicleLabel: vehLabel,
   };
