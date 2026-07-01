@@ -2261,6 +2261,12 @@ function headingArrow(deg) { return deg == null ? '' : ['↑','↗','→','↘',
 // Compass label from bearing degrees (GTFS-RT gives degrees, not N/NE text).
 function compass(deg) { return deg == null ? '—' : ['N','NE','E','SE','S','SW','W','NW'][Math.round((deg % 360) / 45) % 8]; }
 function isStale(v) { return getAgeMinutes(v) >= STALE_THRESHOLD; }
+// GTFS-RT VehiclePosition enums — Hele-On rarely populates these, so callers
+// should skip rendering the field entirely when the value is null.
+const OCCUPANCY_LABELS = ['Empty','Many seats','Few seats','Standing room','Crushed standing','Full','Not accepting','—','Not boardable'];
+const GTFS_STATUS_LABELS = ['Approaching stop','At stop','En route'];
+function occupancyLabel(n) { return n == null ? null : (OCCUPANCY_LABELS[n] || null); }
+function gtfsStatusLabel(n) { return n == null ? null : (GTFS_STATUS_LABELS[n] || null); }
 function visibleVehicles() { return showStale ? allVehicles : allVehicles.filter(v => !isStale(v)); }
 
 function toggleStale() {
@@ -2394,6 +2400,8 @@ function renderVehicleList() {
         <div class="vc-stat"><div class="vc-stat-label">Speed</div><div class="vc-stat-val">${v.speed} <span style="font-size:9px;color:var(--muted)">mph</span></div></div>
         <div class="vc-stat"><div class="vc-stat-label">Heading</div><div class="vc-stat-val">${headingArrow(v.headingDegrees)} ${v.heading||'—'}</div></div>
         <div class="vc-stat"><div class="vc-stat-label">Load</div><div class="vc-stat-val">${(load*100).toFixed(0)}<span style="font-size:9px;color:var(--muted)">%</span></div></div>
+        ${occupancyLabel(v.occupancyStatus) ? `<div class="vc-stat"><div class="vc-stat-label">Occupancy</div><div class="vc-stat-val" style="font-size:11px;">${occupancyLabel(v.occupancyStatus)}</div></div>` : ''}
+        ${gtfsStatusLabel(v.gtfsCurrentStatus) ? `<div class="vc-stat"><div class="vc-stat-label">Status</div><div class="vc-stat-val" style="font-size:11px;">${gtfsStatusLabel(v.gtfsCurrentStatus)}</div></div>` : ''}
       </div>
       <div class="vc-load-bar"><div class="vc-load-fill" style="width:${load*100}%;background:${loadColor(load)}"></div></div>
       <div style="margin-top:5px;font-size:10px;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${nextStopStr}</div>
@@ -3639,6 +3647,8 @@ function selectVehicle(id) {
         <div class="popup-field"><div class="popup-field-label">Heading</div><div class="popup-field-val">${headingArrow(v.headingDegrees)} ${compass(v.headingDegrees)}${v.headingDegrees != null ? ' ('+v.headingDegrees+'°)' : ''}</div></div>
         <div class="popup-field"><div class="popup-field-label">Passengers</div><div class="popup-field-val">${load}%</div></div>
         <div class="popup-field"><div class="popup-field-label">Capacity</div><div class="popup-field-val">${v.capacity} seats</div></div>
+        ${occupancyLabel(v.occupancyStatus) ? `<div class="popup-field"><div class="popup-field-label">Occupancy</div><div class="popup-field-val">${occupancyLabel(v.occupancyStatus)}</div></div>` : ''}
+        ${gtfsStatusLabel(v.gtfsCurrentStatus) ? `<div class="popup-field"><div class="popup-field-label">Status</div><div class="popup-field-val">${gtfsStatusLabel(v.gtfsCurrentStatus)}</div></div>` : ''}
       </div>
       <div class="popup-coords" style="margin-top:8px;">📍 ${v.lat?.toFixed(6)}, ${v.lon?.toFixed(6)}</div>
       <div class="popup-coords">⏱ ${stalenessLabel(v)}</div>
