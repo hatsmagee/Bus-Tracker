@@ -444,6 +444,7 @@
       <div class="tab" data-tab="routes">🗺️ Routes</div>
       <div class="tab" data-tab="boats" id="boatsTab">⛵ Boats</div>
       <div class="tab" data-tab="aircraft" id="aircraftTab">✈️ Aircraft</div>
+      <div class="tab" data-tab="hawaii" id="hawaiiTab">🌋 Hawaiʻi</div>
       <div class="tab" data-tab="system">📊 System</div>
       <div class="tab" data-tab="docs">📚 Docs</div>
     </div>
@@ -522,6 +523,28 @@
       <div id="aircraftList"><div class="empty"><div class="empty-icon">✈️</div>Loading…</div></div>
     </div>
 
+    <div class="tab-content" id="tab-hawaii">
+      <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
+        <label><input type="checkbox" id="showLava" onchange="toggleLava()" checked> Lava flow hazard zones</label>
+      </div>
+      <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
+        <label><input type="checkbox" id="showTsunami" onchange="toggleTsunami()"> Tsunami evacuation zone</label>
+      </div>
+      <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
+        <label><input type="checkbox" id="showQuakes" onchange="toggleQuakes()" checked> Recent earthquakes (30d)</label>
+      </div>
+      <div class="section-header">⚠️ Active NWS Alerts</div>
+      <div id="alertsList"><div class="empty"><div class="empty-icon">🌤️</div>Loading…</div></div>
+      <div class="section-header">🌎 Recent Earthquakes</div>
+      <div id="quakeList"><div class="empty"><div class="empty-icon">🌋</div>Loading…</div></div>
+      <div style="padding:8px 12px;color:var(--muted);font-size:10px;">
+        Sources: <a href="https://www.usgs.gov/" target="_blank" style="color:#58a6ff">USGS Earthquake Hazards</a> ·
+        <a href="https://www.weather.gov/" target="_blank" style="color:#58a6ff">National Weather Service</a> ·
+        <a href="https://planning.hawaii.gov/gis/" target="_blank" style="color:#58a6ff">Hawaii Statewide GIS</a> —
+        all free, public, no API key.
+      </div>
+    </div>
+
     <div class="tab-content" id="tab-docs">
       <div class="docs-section">
         <div class="docs-h">🚌 About this dashboard</div>
@@ -557,6 +580,13 @@
           positions (requires a free <a href="https://aisstream.io" target="_blank" style="color:#58a6ff">aisstream.io</a> key) and the
           <strong style="color:#e6edf3">Aircraft</strong> tab shows live ADS-B
           positions around the islands via OpenSky Network (no key needed).
+          The <strong style="color:#e6edf3">Hawaiʻi</strong> tab layers in
+          public federal/state data: recent <strong style="color:#e6edf3">USGS
+          earthquakes</strong>, active <strong style="color:#e6edf3">NWS
+          watches/warnings</strong>, and <strong style="color:#e6edf3">lava flow
+          hazard zones</strong> / <strong style="color:#e6edf3">tsunami evacuation
+          zones</strong> from the Hawaii Statewide GIS Program — all free and
+          keyless.
         </div>
         <div class="docs-grid">
           <div class="docs-stat"><div class="docs-stat-k">Refresh</div><div class="docs-stat-v">15 s</div></div>
@@ -623,6 +653,21 @@
           <span class="docs-link-icon">⛅</span>
           <span><strong>Open-Meteo</strong> · free weather API (no key)</span>
           <span class="docs-link-meta">open-meteo.com</span>
+        </a>
+        <a class="docs-link" href="https://earthquake.usgs.gov/fdsnws/event/1/" target="_blank">
+          <span class="docs-link-icon">🌋</span>
+          <span><strong>USGS Earthquake API</strong> · real-time quake feed (no key)</span>
+          <span class="docs-link-meta">earthquake.usgs.gov</span>
+        </a>
+        <a class="docs-link" href="https://www.weather.gov/documentation/services-web-api" target="_blank">
+          <span class="docs-link-icon">🌤️</span>
+          <span><strong>NWS API</strong> · watches/warnings/alerts (no key)</span>
+          <span class="docs-link-meta">api.weather.gov</span>
+        </a>
+        <a class="docs-link" href="https://planning.hawaii.gov/gis/" target="_blank">
+          <span class="docs-link-icon">🗺️</span>
+          <span><strong>Hawaii Statewide GIS</strong> · lava/tsunami hazard zones (no key)</span>
+          <span class="docs-link-meta">geodata.hawaii.gov</span>
         </a>
         <a class="docs-link" href="https://github.com/hatsmagee/Bus-Tracker" target="_blank">
           <span class="docs-link-icon">🐙</span>
@@ -936,6 +981,63 @@ function initMapLayers() {
     return `<div style="font-weight:600;font-family:monospace;">✈️ ${escapeHtml(p.callsign) || p.icao24}</div>
       <div style="color:var(--muted);font-size:11px;">${altFt} · ${(p.onGround === true || p.onGround === 'true') ? 'on ground' : 'airborne'}</div>`;
   });
+
+  // ─── HAWAII HAZARD LAYERS ───────────────────────────────────────────────────
+  // Lava flow hazard zones + tsunami evacuation zone (Hawaii Statewide GIS,
+  // fetched once — static reference geometry, not polled) and recent
+  // earthquakes (USGS, refreshed periodically). All optional, off by default
+  // except lava zones and quakes, and drawn under the bus/route layers.
+  map.addSource('lava-zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'lava-zones-fill', type: 'fill', source: 'lava-zones',
+    paint: {
+      'fill-color': [
+        'match', ['to-string', ['get', 'hzone']],
+        '1', '#7f1d1d', '2', '#9a3412', '3', '#c2410c',
+        '4', '#ea580c', '5', '#f59e0b', '6', '#eab308',
+        '7', '#facc15', '8', '#fde047', '9', '#fef08a',
+        '#f59e0b'
+      ],
+      'fill-opacity': 0.22,
+    },
+  }, 'stops-circle');
+  map.addLayer({
+    id: 'lava-zones-line', type: 'line', source: 'lava-zones',
+    paint: { 'line-color': '#ea580c', 'line-width': 0.6, 'line-opacity': 0.5 },
+  }, 'stops-circle');
+  wireLayerHover('lava-zones-fill', p => `
+    <div style="font-weight:600;">🌋 Lava Flow Hazard Zone ${escapeHtml(String(p.hzone))}</div>
+    <div style="color:var(--muted);font-size:11px;">1 = highest risk, 9 = lowest — Hawaii Statewide GIS</div>`);
+
+  map.addSource('tsunami-zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'tsunami-zones-fill', type: 'fill', source: 'tsunami-zones',
+    layout: { visibility: 'none' },
+    paint: { 'fill-color': '#1d4ed8', 'fill-opacity': 0.18 },
+  }, 'stops-circle');
+  map.addLayer({
+    id: 'tsunami-zones-line', type: 'line', source: 'tsunami-zones',
+    layout: { visibility: 'none' },
+    paint: { 'line-color': '#1d4ed8', 'line-width': 1, 'line-opacity': 0.6 },
+  }, 'stops-circle');
+  wireLayerHover('tsunami-zones-fill', p => `
+    <div style="font-weight:600;">🌊 ${escapeHtml(p.zone_type || 'Tsunami Evacuation Zone')}</div>
+    <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.zone_desc || '')}</div>`);
+
+  map.addSource('earthquakes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'earthquakes-circle', type: 'circle', source: 'earthquakes',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['get', 'mag'], 1.5, 3, 3, 6, 5, 12, 7, 18],
+      'circle-color': ['interpolate', ['linear'], ['get', 'mag'], 1.5, '#fde047', 3, '#f97316', 5, '#dc2626'],
+      'circle-opacity': 0.55,
+      'circle-stroke-width': 1,
+      'circle-stroke-color': '#000000',
+    },
+  });
+  wireLayerHover('earthquakes-circle', p => `
+    <div style="font-weight:600;">🌎 M${(+p.mag).toFixed(1)} — ${escapeHtml(p.place)}</div>
+    <div style="color:var(--muted);font-size:11px;">${new Date(+p.time).toLocaleString()} · depth ${(+p.depthKm).toFixed(1)} km</div>`);
 
   // Stop hover + click tooltip — hover for desktop, click/tap for mobile.
   let stopHoverPopup = null;
@@ -1466,6 +1568,109 @@ function focusAircraft(icao) {
   const a = allAircraft.find(x => x.icao24 === icao);
   if (!a || !mapReady) return;
   map.flyTo({ center: [a.lon, a.lat], zoom: 9 });
+}
+
+// ─── HAWAII CIVIC LAYERS (earthquakes, NWS alerts, hazard zones) ────────────
+// All free/keyless federal/state sources. Hazard-zone polygons are fetched
+// once (static reference geometry); earthquakes/alerts refresh periodically.
+let allQuakes = [];
+let quakesVisible = true, lavaVisible = true, tsunamiVisible = false;
+let hazardZonesLoaded = false;
+
+async function fetchHazardZonesOnce() {
+  if (hazardZonesLoaded || !mapReady) return;
+  try {
+    const [lava, tsunami] = await Promise.all([
+      fetch('/api/hazards/lava').then(r => r.ok ? r.json() : null),
+      fetch('/api/hazards/tsunami').then(r => r.ok ? r.json() : null),
+    ]);
+    if (lava && map.getSource('lava-zones')) map.getSource('lava-zones').setData(lava);
+    if (tsunami && map.getSource('tsunami-zones')) map.getSource('tsunami-zones').setData(tsunami);
+    hazardZonesLoaded = true;
+  } catch (e) { /* leave layers empty; not critical */ }
+}
+
+async function fetchQuakes() {
+  try {
+    const res = await fetch('/api/earthquakes');
+    const data = await res.json();
+    allQuakes = data.earthquakes || [];
+    renderQuakeMarkers();
+    renderQuakeList(data);
+  } catch (e) { /* keep last-known quakes on screen */ }
+}
+function renderQuakeMarkers() {
+  if (!mapReady || !map.getSource('earthquakes')) return;
+  const src = map.getSource('earthquakes');
+  if (!quakesVisible) { src.setData({ type: 'FeatureCollection', features: [] }); return; }
+  src.setData({
+    type: 'FeatureCollection',
+    features: allQuakes.map(q => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [q.lon, q.lat] },
+      properties: { mag: q.mag, place: q.place, time: q.time, depthKm: q.depthKm },
+    })),
+  });
+}
+function renderQuakeList(data) {
+  const el = document.getElementById('quakeList');
+  if (!el) return;
+  if (!allQuakes.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">🌋</div>No M1.5+ earthquakes near Hawaiʻi Island in the last 30 days.</div>`;
+    return;
+  }
+  const sorted = [...allQuakes].sort((a, b) => b.time - a.time);
+  el.innerHTML = sorted.slice(0, 30).map(q => `
+    <div class="vessel-row" onclick="focusQuake('${q.id}')">
+      <div class="vessel-icon">🌋</div>
+      <div class="vessel-info">
+        <div class="vessel-name">M${q.mag.toFixed(1)} — ${escapeHtml(q.place)}</div>
+        <div class="vessel-meta"><span>${new Date(q.time).toLocaleString()}</span><span>depth ${q.depthKm.toFixed(1)} km</span></div>
+      </div>
+    </div>`).join('');
+}
+function focusQuake(id) {
+  const q = allQuakes.find(x => x.id === id);
+  if (!q || !mapReady) return;
+  map.flyTo({ center: [q.lon, q.lat], zoom: 10 });
+}
+function toggleQuakes() { quakesVisible = document.getElementById('showQuakes').checked; renderQuakeMarkers(); }
+function toggleLava() {
+  lavaVisible = document.getElementById('showLava').checked;
+  if (mapReady) {
+    map.setLayoutProperty('lava-zones-fill', 'visibility', lavaVisible ? 'visible' : 'none');
+    map.setLayoutProperty('lava-zones-line', 'visibility', lavaVisible ? 'visible' : 'none');
+  }
+}
+function toggleTsunami() {
+  tsunamiVisible = document.getElementById('showTsunami').checked;
+  if (mapReady) {
+    map.setLayoutProperty('tsunami-zones-fill', 'visibility', tsunamiVisible ? 'visible' : 'none');
+    map.setLayoutProperty('tsunami-zones-line', 'visibility', tsunamiVisible ? 'visible' : 'none');
+  }
+}
+
+async function fetchAlerts() {
+  const el = document.getElementById('alertsList');
+  try {
+    const res = await fetch('/api/alerts');
+    const data = await res.json();
+    if (!el) return;
+    if (!data.count) {
+      el.innerHTML = `<div class="empty"><div class="empty-icon">🌤️</div>No active NWS watches or warnings for Hawaiʻi right now.</div>`;
+      return;
+    }
+    el.innerHTML = data.alerts.map(a => `
+      <div class="vessel-row">
+        <div class="vessel-icon">⚠️</div>
+        <div class="vessel-info">
+          <div class="vessel-name">${escapeHtml(a.event)}</div>
+          <div class="vessel-meta"><span>${escapeHtml(a.areaDesc || '')}</span></div>
+        </div>
+      </div>`).join('');
+  } catch (e) {
+    if (el) el.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>Couldn't load NWS alerts.</div>`;
+  }
 }
 
 // Learned/observed stops (places buses repeatedly dwell that aren't official).
@@ -3697,6 +3902,7 @@ function switchTab(name) {
   if (name === 'fleet') fetchFleet();
   if (name === 'boats') fetchVessels();
   if (name === 'aircraft') fetchAircraft();
+  if (name === 'hawaii') { fetchQuakes(); fetchAlerts(); fetchHazardZonesOnce(); }
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
 
@@ -4159,7 +4365,9 @@ Promise.all([
   fetchTrails(),
   fetchVessels(),
   fetchAircraft(),
-]).then(() => { renderHubMarkers(); fetchStoplines(); });
+  fetchQuakes(),
+  fetchAlerts(),
+]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
 setInterval(() => { if (activeTab === 'system' && !document.hidden) { pollLearn(); fetchApiStats(); } }, 5000);
@@ -4178,6 +4386,9 @@ setInterval(() => { if (!document.hidden) fetchVessels(); }, 30000);
 // Slower than the server poll is fine — the visible difference between
 // snapshots a few seconds apart is negligible.
 setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
+// Earthquakes/alerts change slowly — the server itself only polls every 5 min,
+// so there's no benefit to refreshing the UI faster than that.
+setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); } }, 5 * 60 * 1000);
 
 // Fast initial catch-up: on a fresh page load the server's first OpenSky/AIS poll
 // may not have completed yet, so the startup fetch returns 0 and the map looks

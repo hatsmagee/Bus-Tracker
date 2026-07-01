@@ -2715,6 +2715,38 @@ async function handleApi(url, res) {
     });
   }
 
+  // ── EARTHQUAKES (USGS, no key) ──────────────────────────────────────────
+  if (p === '/api/earthquakes') {
+    return json(res, {
+      ts: Date.now(),
+      lastPollTs: earthquakeLastPollTs,
+      lastError: earthquakeLastError,
+      count: earthquakeCache.length,
+      earthquakes: earthquakeCache,
+    });
+  }
+
+  // ── WEATHER ALERTS (NWS api.weather.gov, no key) ────────────────────────
+  if (p === '/api/alerts') {
+    return json(res, {
+      ts: Date.now(),
+      lastPollTs: alertsLastPollTs,
+      lastError: alertsLastError,
+      count: alertsCache.length,
+      alerts: alertsCache,
+    });
+  }
+
+  // ── HAZARD ZONES (Hawaii Statewide GIS ArcGIS, no key) ──────────────────
+  if (p === '/api/hazards/lava') {
+    if (!lavaZonesCache) return json(res, { error: 'not loaded yet', lastError: hazardZonesLastError }, 503);
+    return json(res, lavaZonesCache);
+  }
+  if (p === '/api/hazards/tsunami') {
+    if (!tsunamiZonesCache) return json(res, { error: 'not loaded yet', lastError: hazardZonesLastError }, 503);
+    return json(res, tsunamiZonesCache);
+  }
+
   res.writeHead(404); res.end('Not found');
 }
 
@@ -2966,6 +2998,104 @@ async function pollAircraft() {
   }
 }
 
+// ─── HAWAII CIVIC LAYERS (all free, keyless, official federal/state sources) ─
+// Three independent feeds relevant to a Big Island map: recent earthquakes
+// (USGS), active NWS watches/warnings for Hawai'i, and static hazard-zone
+// polygons (lava flow zones, tsunami evacuation zones — Hawaii Statewide GIS
+// ArcGIS REST). Hazard-zone geometry never changes day-to-day, so it's fetched
+// once at boot and re-fetched only every 24h; earthquakes/alerts poll often.
+
+function fetchJson(hostname, reqPath, headers) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({ hostname, path: reqPath, method: 'GET', headers, timeout: 15000 }, res => {
+      let b = ''; res.on('data', d => b += d);
+      res.on('end', () => {
+        if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`));
+        try { resolve(JSON.parse(b)); } catch { reject(new Error('bad JSON')); }
+      });
+    });
+    req.on('error', e => reject(new Error(e.code || e.message)));
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.end();
+  });
+}
+
+// Big Island bbox, generous margin (same footprint as the vehicle/aircraft boxes).
+const BIGISLAND_BBOX = { minLat: 18.5, maxLat: 20.5, minLon: -156.3, maxLon: -154.5 };
+
+let earthquakeCache = [];
+let earthquakeLastPollTs = null, earthquakeLastError = null;
+async function pollEarthquakes() {
+  const b = BIGISLAND_BBOX;
+  const starttime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const qs = `format=geojson&starttime=${starttime}&minlatitude=${b.minLat}&maxlatitude=${b.maxLat}&minlongitude=${b.minLon}&maxlongitude=${b.maxLon}&minmagnitude=1.5&orderby=time`;
+  try {
+    const data = await fetchJson('earthquake.usgs.gov', `/fdsnws/event/1/query?${qs}`, { 'User-Agent': 'heleon-tracker' });
+    earthquakeCache = (data.features || []).map(f => ({
+      id: f.id,
+      mag: f.properties.mag,
+      place: f.properties.place,
+      time: f.properties.time,
+      depthKm: f.geometry.coordinates[2],
+      lon: f.geometry.coordinates[0],
+      lat: f.geometry.coordinates[1],
+      url: f.properties.url,
+      tsunami: !!f.properties.tsunami,
+    }));
+    earthquakeLastPollTs = Date.now();
+    earthquakeLastError = null;
+  } catch (e) {
+    earthquakeLastError = (e && e.message) || 'unknown error';
+  }
+}
+
+let alertsCache = [];
+let alertsLastPollTs = null, alertsLastError = null;
+async function pollAlerts() {
+  try {
+    const data = await fetchJson('api.weather.gov', '/alerts/active?area=HI', {
+      'User-Agent': 'heleon-tracker (https://github.com/hatsmagee/Bus-Tracker)',
+      'Accept': 'application/geo+json',
+    });
+    alertsCache = (data.features || []).map(f => ({
+      id: f.properties.id,
+      event: f.properties.event,
+      severity: f.properties.severity,
+      headline: f.properties.headline,
+      areaDesc: f.properties.areaDesc,
+      sent: f.properties.sent,
+      expires: f.properties.expires,
+      description: f.properties.description,
+    }));
+    alertsLastPollTs = Date.now();
+    alertsLastError = null;
+  } catch (e) {
+    alertsLastError = (e && e.message) || 'unknown error';
+  }
+}
+
+// Hazard-zone polygons (lava flow zones id 3, tsunami evacuation zones id 2) —
+// static reference geometry, refetched daily rather than on the live poll loop.
+let lavaZonesCache = null, tsunamiZonesCache = null;
+let hazardZonesLastFetchTs = null, hazardZonesLastError = null;
+async function fetchHazardLayer(layerId, outFields) {
+  const b = BIGISLAND_BBOX;
+  const geom = `${b.minLon},${b.minLat},${b.maxLon},${b.maxLat}`;
+  const qs = `where=1=1&geometry=${geom}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=${outFields}&f=geojson&geometryPrecision=5`;
+  const data = await fetchJson('geodata.hawaii.gov', `/arcgis/rest/services/Hazards/MapServer/${layerId}/query?${qs}`, { 'User-Agent': 'heleon-tracker' });
+  return data;
+}
+async function pollHazardZones() {
+  try {
+    lavaZonesCache = await fetchHazardLayer(3, 'hzone,mzone');
+    tsunamiZonesCache = await fetchHazardLayer(2, 'zone_type,zone_desc,evac_zone,island');
+    hazardZonesLastFetchTs = Date.now();
+    hazardZonesLastError = null;
+  } catch (e) {
+    hazardZonesLastError = (e && e.message) || 'unknown error';
+  }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin':'*' }); res.end(); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -3058,6 +3188,16 @@ const server = http.createServer((req, res) => {
   console.log(`[aircraft] OpenSky ${openskyAuthed() ? 'authenticated (4000 credits/day)' : 'anonymous (400 credits/day) — set OPENSKY_CLIENT_ID/SECRET for higher limits'}; polling every ${aircraftPollMs/1000}s`);
   pollAircraft();
   setInterval(pollAircraft, aircraftPollMs);
+  // Hawaii civic layers — all free/keyless. Earthquakes and NWS alerts poll
+  // every few minutes (nothing on this island changes faster than that);
+  // hazard-zone polygons are static reference data, refreshed once a day.
+  console.log('[hazards] polling USGS earthquakes + NWS alerts every 5 min, hazard zones daily');
+  pollEarthquakes();
+  pollAlerts();
+  pollHazardZones();
+  setInterval(pollEarthquakes, 5 * 60 * 1000);
+  setInterval(pollAlerts, 5 * 60 * 1000);
+  setInterval(pollHazardZones, 24 * 60 * 60 * 1000);
   setTimeout(pruneDb, 30000);                // full prune+VACUUM shortly after boot
   setInterval(pruneDb, 24 * 60 * 60 * 1000); // and daily thereafter
   // poll_log grows ~88 rows/cycle (22 routes × 4/min) but /api/stats only reads
