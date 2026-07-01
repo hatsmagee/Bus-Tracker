@@ -33,33 +33,65 @@ async function main() {
 
   const gtfsDir = process.argv[2];
   if (!gtfsDir) {
-    console.error('Usage: node scripts/build-route-edges.js <path-to-extracted-gtfs-dir>');
+    console.error('Usage: node scripts/build-route-edges.js <live-gtfs-dir> [supplemental-gtfs-dir ...]');
+    console.error('  Live feed carries the 5xxx route ids (matched to live vehicles).');
+    console.error('  Each supplemental feed (e.g. the richer "Sources" GTFS) contributes ONLY');
+    console.error('  routes the earlier feeds lack — so schedule-only routes the live feed');
+    console.error('  dropped (401 Hawaiian Beaches, 301 Waimea, 204 S. Kona) still get road');
+    console.error('  geometry, without double-rendering routes that already have live coverage.');
     process.exit(1);
   }
-  const sourceShapes = loadRawGtfsShapesForCli(gtfsDir);
-  console.log(`  ${Object.keys(sourceShapes).length} source patterns`);
+  const supplementalDirs = process.argv.slice(3);
+  // From supplemental feeds, ADD ONLY these route_ids — the schedule-only routes
+  // the live feed dropped but the agency still runs (their ids match the server's
+  // ROUTES config so colors resolve). Everything else in the richer feed is the
+  // SAME real route under a different (plain vs 5xxx) id and would double-render.
+  const SUPP_ALLOW = new Set([401, 301, 204]);
 
   // edgeIdx -> Set(route_id) — which routes travel this exact real road edge.
   const edgeRoutes = new Map();
-  let processed = 0;
-  for (const key of Object.keys(sourceShapes)) {
-    const entry = sourceShapes[key];
-    if (!entry.coords || entry.coords.length < 2 || entry.route_id == null) continue;
-    let edgeSeq;
-    try {
-      edgeSeq = connectedEdgePathForCli(graph, edgeIndex, entry.coords);
-    } catch (e) {
-      console.error(`  pattern ${key} failed: ${e.message}`);
-      continue;
+  const seenRoutes = new Set();
+  function ingest(sourceShapes, label, onlyNewRoutes) {
+    let processed = 0, added = 0;
+    // What route_ids does this feed carry (so we can add all their patterns)?
+    const feedRoutes = new Set();
+    for (const key of Object.keys(sourceShapes)) {
+      const rid = sourceShapes[key].route_id;
+      if (rid != null) feedRoutes.add(rid);
     }
-    for (const edgeIdx of edgeSeq) {
-      if (edgeIdx == null) continue;
-      if (!edgeRoutes.has(edgeIdx)) edgeRoutes.set(edgeIdx, new Set());
-      edgeRoutes.get(edgeIdx).add(entry.route_id);
+    for (const key of Object.keys(sourceShapes)) {
+      const entry = sourceShapes[key];
+      if (!entry.coords || entry.coords.length < 2 || entry.route_id == null) continue;
+      // For a supplemental feed, only add explicitly-allowed schedule-only routes.
+      if (onlyNewRoutes && (!SUPP_ALLOW.has(entry.route_id) || seenRoutes.has(entry.route_id))) continue;
+      let edgeSeq;
+      try {
+        edgeSeq = connectedEdgePathForCli(graph, edgeIndex, entry.coords);
+      } catch (e) {
+        console.error(`  [${label}] pattern ${key} failed: ${e.message}`);
+        continue;
+      }
+      for (const edgeIdx of edgeSeq) {
+        if (edgeIdx == null) continue;
+        if (!edgeRoutes.has(edgeIdx)) edgeRoutes.set(edgeIdx, new Set());
+        edgeRoutes.get(edgeIdx).add(entry.route_id);
+      }
+      seenRoutes.add(entry.route_id);
+      processed++; added++;
     }
-    processed++;
+    console.log(`  [${label}] ${feedRoutes.size} routes, ${processed} patterns ingested`);
   }
-  console.log(`Processed ${processed} patterns, ${edgeRoutes.size} distinct road edges used by at least one route`);
+
+  const liveShapes = loadRawGtfsShapesForCli(gtfsDir);
+  console.log(`  live feed: ${Object.keys(liveShapes).length} source patterns`);
+  ingest(liveShapes, 'live', false);
+  for (const dir of supplementalDirs) {
+    let sup;
+    try { sup = loadRawGtfsShapesForCli(dir); }
+    catch (e) { console.error(`  supplemental feed ${dir} failed to load: ${e.message}`); continue; }
+    ingest(sup, `supp:${path.basename(dir)}`, true);
+  }
+  console.log(`Total: ${seenRoutes.size} distinct routes, ${edgeRoutes.size} distinct road edges`);
 
   // Smooth short-edge lane-count transitions. A block that's genuinely just
   // 15-20m long (a real, common OSM segment length at busy intersections)
