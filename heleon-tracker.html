@@ -817,6 +817,9 @@ function initMap() {
     try { renderLearnedStops(); } catch (e) {}
     try { renderRouteShapes(); } catch (e) { console.error('[map] shapes:', e); }
     try { renderRouteRibbons(); } catch (e) { console.error('[map] ribbons:', e); }
+    // Layers whose boot fetch may have resolved before the style loaded — (re)draw.
+    try { fetchSummits(); } catch (e) {}
+    try { fetchStreamflow(); } catch (e) {}
   });
   // Re-fan overlapping buses whenever the camera settles (overlap is zoom/pan
   // dependent — buses separate as you zoom in).
@@ -1043,8 +1046,11 @@ function initMapLayers() {
   });
   wireLayerHover('aircraft-triangles', p => {
     const altFt = p.altM != null && p.altM !== '' ? Math.round(p.altM * 3.28084).toLocaleString() + ' ft' : '—';
+    const spd = p.velMs != null && p.velMs !== '' ? Math.round(p.velMs * 1.94384) + ' kts' : '';
+    const typeReg = [p.type, p.registration].filter(Boolean).join(' · ');
     return `<div style="font-weight:600;font-family:monospace;">✈️ ${escapeHtml(p.callsign) || p.icao24}</div>
-      <div style="color:var(--muted);font-size:11px;">${altFt} · ${(p.onGround === true || p.onGround === 'true') ? 'on ground' : 'airborne'}</div>`;
+      ${typeReg ? `<div style="color:var(--muted);font-size:11px;">${escapeHtml(typeReg)}</div>` : ''}
+      <div style="color:var(--muted);font-size:11px;">${altFt}${spd ? ' · ' + spd : ''} · ${(p.onGround === true || p.onGround === 'true') ? 'on ground' : 'airborne'}</div>`;
   });
 
   // ─── HAWAII HAZARD LAYERS ───────────────────────────────────────────────────
@@ -1241,6 +1247,40 @@ function initMapLayers() {
     return `<div style="font-weight:600;">🌡️ ${escapeHtml(p.name)}</div>
       <div style="color:var(--muted);font-size:11px;">${t} · ${h} RH · ${w} wind</div>
       <div style="color:var(--muted);font-size:10px;">NWS ${escapeHtml(p.stationId)} · ${p.elevation ? Math.round(+p.elevation) + ' m' : '?'} elev · ${p.timestamp ? new Date(p.timestamp).toLocaleString() : '—'}</div>`;
+  });
+
+  // Summit observatories (Maunakea CFHT tower, Mauna Loa NOAA) — live conditions
+  // straight from the observatories, no key. A telescope glyph with a small
+  // readout; hover for full readings.
+  map.addSource('summits', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'summits-dot', type: 'circle', source: 'summits',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 4, 12, 7],
+      'circle-color': '#a855f7',
+      'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
+    },
+  });
+  map.addLayer({
+    id: 'summits-label', type: 'symbol', source: 'summits',
+    layout: {
+      'text-field': ['get', 'badge'], 'text-size': 10,
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-offset': [0, 1.3], 'text-anchor': 'top', 'text-allow-overlap': false,
+    },
+    paint: { 'text-color': '#6b21a8', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+  });
+  wireLayerHover('summits-dot', p => {
+    const r = JSON.parse(p.readings || '{}');
+    const lines = [];
+    if (r.tempC != null) lines.push(`🌡️ ${(+r.tempC).toFixed(1)}°C`);
+    if (r.windKt != null) lines.push(`💨 ${(+r.windKt).toFixed(0)} kt${r.windDir != null ? ' @ ' + Math.round(r.windDir) + '°' : ''}`);
+    if (r.humidity != null) lines.push(`${Math.round(r.humidity)}% RH`);
+    if (r.pressureMb != null) lines.push(`${Math.round(r.pressureMb)} mb`);
+    if (r.co2ppm != null) lines.push(`CO₂ ${(+r.co2ppm).toFixed(1)} ppm (${(+r.co2ppm - +r.co2OneYearAgo).toFixed(1)} vs 1yr ago)`);
+    return `<div style="font-weight:600;">🔭 ${escapeHtml(p.name)}</div>
+      <div style="color:var(--muted);font-size:11px;">${lines.join(' · ') || 'no reading'}</div>
+      <div style="color:var(--muted);font-size:10px;">${p.elevM ? Math.round(p.elevM) + ' m' : ''}${r.readingTs ? ' · ' + r.readingTs : ''}${r.co2Year ? ' · week of ' + r.co2Year : ''}</div>`;
   });
 
   // Public-safety facility markers — static reference locations, off by
@@ -1779,6 +1819,7 @@ function renderAircraftMarkers() {
         velMs: a.velMs != null ? a.velMs : '',
         heading: a.headingDeg || 0,
         onGround: !!a.onGround,
+        type: a.type || '', registration: a.registration || '',
         lat: a.lat, lon: a.lon,
       }
     }))
@@ -2083,6 +2124,25 @@ function toggleStreamflow() {
   }
   if (streamflowVisible) fetchStreamflow();
   else renderStreamflowWheels(); // clears wheels
+}
+
+// Summit observatories (Maunakea/Mauna Loa live conditions). Shown by default.
+async function fetchSummits() {
+  try {
+    const res = await fetch('/api/summits');
+    const data = await res.json();
+    if (!mapReady || !map.getSource('summits')) return;
+    const feats = (data.summits || []).map(s => {
+      const r = s.readings || {};
+      // Compact on-map badge: temp for the weather tower, CO₂ for Mauna Loa.
+      let badge = s.name.split('(')[0].trim();
+      if (r.tempC != null) badge = `🔭 ${(+r.tempC).toFixed(0)}°C`;
+      else if (r.co2ppm != null) badge = `🔭 ${(+r.co2ppm).toFixed(0)}ppm`;
+      return { type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+        properties: { name: s.name, elevM: s.elevM, badge, readings: JSON.stringify(r) } };
+    });
+    map.getSource('summits').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
 }
 
 // NWS weather stations (Big Island) — refetched every 10 min server-side.
@@ -5160,6 +5220,7 @@ Promise.all([
   fetchWildfire(),
   fetchStreamflow(),
   fetchWeatherStations(),
+  fetchSummits(),
 ]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
@@ -5182,7 +5243,7 @@ setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
 setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); }, 15 * 60 * 1000);
+setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); }, 15 * 60 * 1000);
 
 // Fast initial catch-up: on a fresh page load the server's first OpenSky/AIS poll
 // may not have completed yet, so the startup fetch returns 0 and the map looks

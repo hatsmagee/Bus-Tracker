@@ -2848,6 +2848,7 @@ async function handleApi(url, res) {
       ts: now,
       lastPollTs: aircraftLastPollTs,
       lastError: aircraftLastError,
+      source: aircraftSource,
       count: list.length,
       aircraft: list,
     });
@@ -2924,6 +2925,52 @@ async function handleApi(url, res) {
     });
   }
 
+  // Historical stats for every current flow gauge (all-time min/max + today's
+  // percentiles). Drives the vertical level meters. Best-effort per site.
+  if (p === '/api/streamflow-stats') {
+    const feats = (streamflowCache && streamflowCache.features) || [];
+    const today = new Date();
+    const doy = `${today.getMonth() + 1}-${today.getDate()}`;
+    const out = {};
+    await Promise.all(feats.filter(f => f.properties.value != null).map(async f => {
+      const site = f.properties.site_no;
+      try {
+        const s = await usgsDailyStats(site, '00060');
+        const d = s.byDoy[doy] || null;
+        out[site] = {
+          allMin: s.allMin, allMax: s.allMax, allMinYr: s.allMinYr, allMaxYr: s.allMaxYr,
+          beginYr: s.beginYr, endYr: s.endYr,
+          todayMin: d && d.min, todayMax: d && d.max, todayMedian: d && d.p50, todayP10: d && d.p10, todayP90: d && d.p90,
+        };
+      } catch (e) { /* site may have no stats; skip */ }
+    }));
+    return json(res, { stats: out });
+  }
+
+  // Time series for a gauge, for the detail-card graph. param defaults to
+  // discharge; range = 'year' | '5yr' | 'month' | 'week'.
+  if (p === '/api/gauge-history') {
+    const site = q.get('site'); const param = q.get('param') || '00060';
+    const range = q.get('range') || 'year';
+    if (!site) return json(res, { error: 'site required', series: [] });
+    const end = new Date();
+    const start = new Date(end);
+    if (range === '5yr') start.setFullYear(end.getFullYear() - 5);
+    else if (range === 'month') start.setMonth(end.getMonth() - 1);
+    else if (range === 'week') start.setDate(end.getDate() - 7);
+    else start.setFullYear(end.getFullYear() - 1);
+    const iso = d => d.toISOString().slice(0, 10);
+    try {
+      const series = await usgsDailyValues(site, param, iso(start), iso(end));
+      return json(res, { site, param, range, series });
+    } catch (e) { return json(res, { site, param, range, series: [], error: e.message }); }
+  }
+
+  // ── SUMMIT OBSERVATORIES (Mauna Kea towers, live conditions, no key) ──────
+  if (p === '/api/summits') {
+    return json(res, { ts: Date.now(), lastPollTs: summitLastPollTs, lastError: summitLastError, summits: summitCache });
+  }
+
   // ── WEATHER STATIONS (NWS, Big Island, no key) ──────────────────────────
   if (p === '/api/weather-stations') {
     return json(res, {
@@ -2966,7 +3013,10 @@ function decodeBundledAisKey() {
 const AISSTREAM_API_KEY = process.env.AISSTREAM_API_KEY || decodeBundledAisKey();
 const AISSTREAM_URL = 'wss://stream.aisstream.io/v0/stream';
 // Hawaii bounding box for filtering: lat 18.8..20.4, lon -156.2..-154.7
-const HAWAII_BBOX = [[[18.8, -156.2], [20.4, -154.7]]];
+// Wider than the island itself so we catch cargo/cruise/fishing traffic in the
+// approaches and inter-island lanes (AIS shore-receiver coverage out here is
+// sparse, so a tight box often shows nothing even when ships are near).
+const HAWAII_BBOX = [[[18.3, -157.2], [21.0, -154.2]]];
 const VESSEL_STALE_MS = 10 * 60 * 1000; // drop unseen vessels after 10 min
 const vesselCache = new Map(); // mmsi -> { mmsi, name, lat, lon, speedKts, headingDeg, lastTs, shipType }
 let vesselLastConnectTs = null;
@@ -3063,6 +3113,7 @@ const AIRCRAFT_STALE_MS = 90 * 1000;  // 90s — OpenSky refreshes every 10s; an
 let aircraftCache = [];               // [{ icao24, callsign, country, lat, lon, altM, velMs, headingDeg, onGround, lastTs }]
 let aircraftLastPollTs = null;
 let aircraftLastError = null;
+let aircraftSource = null;  // which feed the current cache came from
 
 // ── OpenSky OAuth2 (optional, free) ──────────────────────────────────────────
 // Anonymous = 400 credits/day (one /states/all call costs 1+ credits), so a live
@@ -3138,50 +3189,72 @@ function fetchOpenSky(reqPath, token) {
 // Authenticated users have 10× the credits, so they can afford a wider box that
 // shows all-Hawaii traffic (inter-island flights, neighbor-island airports).
 const HAWAII_AIR_BBOX_WIDE = { lamin: 18.5, lomin: -160.5, lamax: 22.5, lomax: -154.5 };
+
+// PRIMARY aircraft source: community ADS-B aggregators (adsb.lol, airplanes.live,
+// adsb.one). They're free, keyless, and — critically — have FAR better Hawaii
+// coverage than OpenSky's anonymous tier (dozens of aircraft vs frequently zero),
+// because they pool volunteer feeders. Same v2 point/radius API + response shape
+// (ADSBExchange-style `ac[]`), so one parser handles all three. Radius in NM.
+const ADSB_HOSTS = ['api.adsb.lol', 'api.airplanes.live', 'api.adsb.one'];
+const ADSB_CENTER = { lat: 19.6, lon: -156.2 };  // between Big Island & the chain
+const ADSB_RADIUS_NM = 250;                        // covers the whole island group
+const ftToM = 0.3048, ktToMs = 0.514444;
+
 async function pollAircraft() {
-  const box = openskyAuthed() ? HAWAII_AIR_BBOX_WIDE : HAWAII_AIR_BBOX;
-  const params = new URLSearchParams(box).toString();
-  try {
-    // Use an OAuth2 bearer token when credentials are configured (4000 credits/day
-    // vs 400 anonymous). A token failure falls back to an anonymous request.
-    let token = null;
-    try { token = await getOpenSkyToken(); } catch (e) { aircraftLastError = 'auth: ' + e.message; }
-    const res = await fetchOpenSky(`/api/states/all?${params}`, token);
-    if (!res || !Array.isArray(res.states)) {
-      // No states in the box right now is normal (quiet airspace) — not an error.
-      if (res && res.states === null) { aircraftCache = []; aircraftLastPollTs = Date.now(); aircraftLastError = null; return; }
-      aircraftLastError = 'unexpected response shape';
-      return; // keep last cache
-    }
+  const reqPath = `/v2/point/${ADSB_CENTER.lat}/${ADSB_CENTER.lon}/${ADSB_RADIUS_NM}`;
+  let data = null, usedHost = null, lastErr = null;
+  for (const host of ADSB_HOSTS) {
+    try { data = await fetchJson(host, reqPath, { 'User-Agent': 'heleon-tracker' }); usedHost = host; break; }
+    catch (e) { lastErr = `${host}: ${e.message}`; }
+  }
+  if (data && Array.isArray(data.ac)) {
     const now = Date.now();
     const next = [];
-    for (const s of res.states) {
-      // OpenSky returns a positional array (no keys). Indices per their schema:
-      // 0 icao24, 1 callsign, 2 origin_country, 3 time_position, 4 last_contact,
-      // 5 lon, 6 lat, 7 baro_altitude, 8 on_ground, 9 velocity, 10 true_track,
-      // 11 vertical_rate, 12-... sensors + spare
-      const lat = s[6], lon = s[5];
+    for (const a of data.ac) {
+      const lat = a.lat, lon = a.lon;
       if (lat == null || lon == null) continue;
-      const cs = (s[1] || '').trim();
+      // alt_baro can be the string "ground"; gs in knots; track in degrees.
+      const onGround = a.alt_baro === 'ground' || a.alt_baro === 0;
+      const altFt = typeof a.alt_baro === 'number' ? a.alt_baro : (typeof a.alt_geom === 'number' ? a.alt_geom : null);
       next.push({
-        icao24: s[0],
-        callsign: cs,
-        country: s[2],
+        icao24: a.hex, callsign: (a.flight || '').trim(),
+        country: '', // aggregators don't include origin country; not worth a lookup
         lat, lon,
-        altM: s[7],
-        onGround: !!s[8],
-        velMs: s[9],                              // m/s
-        headingDeg: s[10] != null ? s[10] : 0,
-        verticalRateMs: s[11],
-        lastContact: s[4],
+        altM: altFt != null ? altFt * ftToM : null,
+        onGround,
+        velMs: a.gs != null ? a.gs * ktToMs : null,
+        headingDeg: a.track != null ? a.track : (a.true_heading != null ? a.true_heading : 0),
+        verticalRateMs: a.baro_rate != null ? a.baro_rate * ftToM / 60 : null,
+        type: a.t || null, registration: a.r || null,  // aircraft type + tail number
+        lastContact: Math.round(now / 1000 - (a.seen || 0)),
         lastTs: now,
       });
     }
     aircraftCache = next;
     aircraftLastPollTs = now;
     aircraftLastError = null;
+    aircraftSource = usedHost;
+    return;
+  }
+  // All aggregators failed — fall back to OpenSky (keyed or anonymous) so we
+  // degrade gracefully rather than blanking the layer.
+  try {
+    const box = openskyAuthed() ? HAWAII_AIR_BBOX_WIDE : HAWAII_AIR_BBOX;
+    const params = new URLSearchParams(box).toString();
+    let token = null;
+    try { token = await getOpenSkyToken(); } catch { /* anonymous */ }
+    const res = await fetchOpenSky(`/api/states/all?${params}`, token);
+    if (res && res.states === null) { aircraftCache = []; aircraftLastPollTs = Date.now(); aircraftLastError = null; aircraftSource = 'opensky'; return; }
+    if (!res || !Array.isArray(res.states)) { aircraftLastError = lastErr || 'no aircraft source'; return; }
+    const now = Date.now();
+    aircraftCache = res.states.filter(s => s[6] != null && s[5] != null).map(s => ({
+      icao24: s[0], callsign: (s[1] || '').trim(), country: s[2], lat: s[6], lon: s[5],
+      altM: s[7], onGround: !!s[8], velMs: s[9], headingDeg: s[10] != null ? s[10] : 0,
+      verticalRateMs: s[11], lastContact: s[4], lastTs: now,
+    }));
+    aircraftLastPollTs = now; aircraftLastError = null; aircraftSource = 'opensky';
   } catch (e) {
-    aircraftLastError = (e && e.message) || 'unknown error';
+    aircraftLastError = lastErr || (e && e.message) || 'unknown error';
   }
 }
 
@@ -3205,6 +3278,78 @@ function fetchJson(hostname, reqPath, headers) {
     req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
     req.end();
   });
+}
+
+function fetchText(hostname, reqPath, headers) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({ hostname, path: reqPath, method: 'GET', headers, timeout: 25000 }, res => {
+      let b = ''; res.on('data', d => b += d);
+      res.on('end', () => res.statusCode === 200 ? resolve(b) : reject(new Error(`HTTP ${res.statusCode}`)));
+    });
+    req.on('error', e => reject(new Error(e.code || e.message)));
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.end();
+  });
+}
+
+// ── USGS gauge statistics (daily percentiles over the full period of record) ──
+// Drives the vertical meter (where does today's reading sit between the all-time
+// min and max, and vs the median for this day of year) and the detail card.
+// Cached per site+param for a day — these barely change.
+const gaugeStatsCache = new Map(); // `${site}:${param}` -> { at, stats }
+async function usgsDailyStats(site, param) {
+  const key = `${site}:${param}`;
+  const c = gaugeStatsCache.get(key);
+  if (c && Date.now() - c.at < 24 * 3600 * 1000) return c.stats;
+  const rdb = await fetchText('waterservices.usgs.gov',
+    `/nwis/stat/?format=rdb&sites=${site}&statReportType=daily&statTypeCd=all&parameterCd=${param}`,
+    { 'User-Agent': 'heleon-tracker' });
+  // RDB: comment lines start with '#'; then a header row, a format row, then data.
+  const lines = rdb.split('\n').filter(l => l && !l.startsWith('#'));
+  if (lines.length < 3) throw new Error('no stat rows');
+  const cols = lines[0].split('\t');
+  const idx = name => cols.indexOf(name);
+  const iMon = idx('month_nu'), iDay = idx('day_nu'), iBeg = idx('begin_yr'), iEnd = idx('end_yr');
+  const iCount = idx('count_nu'), iMax = idx('max_va'), iMin = idx('min_va'), iMean = idx('mean_va');
+  const iMaxYr = idx('max_va_yr'), iMinYr = idx('min_va_yr'), iP50 = idx('p50_va'), iP10 = idx('p10_va'), iP90 = idx('p90_va');
+  let allMin = Infinity, allMax = -Infinity, allMinYr = null, allMaxYr = null, beginYr = null, endYr = null;
+  const byDoy = {}; // "M-D" -> {min,max,mean,p10,p50,p90}
+  for (let i = 2; i < lines.length; i++) {
+    const c = lines[i].split('\t');
+    const mn = +c[iMon], dy = +c[iDay];
+    const mx = parseFloat(c[iMax]), mi = parseFloat(c[iMin]);
+    if (Number.isFinite(mx) && mx > allMax) { allMax = mx; allMaxYr = c[iMaxYr]; }
+    if (Number.isFinite(mi) && mi < allMin) { allMin = mi; allMinYr = c[iMinYr]; }
+    if (iBeg >= 0 && c[iBeg]) beginYr = beginYr == null ? +c[iBeg] : Math.min(beginYr, +c[iBeg]);
+    if (iEnd >= 0 && c[iEnd]) endYr = endYr == null ? +c[iEnd] : Math.max(endYr, +c[iEnd]);
+    byDoy[`${mn}-${dy}`] = {
+      min: parseFloat(c[iMin]), max: parseFloat(c[iMax]), mean: parseFloat(c[iMean]),
+      p10: parseFloat(c[iP10]), p50: parseFloat(c[iP50]), p90: parseFloat(c[iP90]),
+    };
+  }
+  const stats = {
+    param, allMin: allMin === Infinity ? null : allMin, allMax: allMax === -Infinity ? null : allMax,
+    allMinYr, allMaxYr, beginYr, endYr, byDoy,
+  };
+  gaugeStatsCache.set(key, { at: Date.now(), stats });
+  return stats;
+}
+
+// USGS daily-values time series for the card's graph. Cached briefly.
+const gaugeHistCache = new Map();
+async function usgsDailyValues(site, param, startDT, endDT) {
+  const key = `${site}:${param}:${startDT}:${endDT}`;
+  const c = gaugeHistCache.get(key);
+  if (c && Date.now() - c.at < 6 * 3600 * 1000) return c.series;
+  const j = await fetchJson('waterservices.usgs.gov',
+    `/nwis/dv/?format=json&sites=${site}&parameterCd=${param}&statCd=00003&startDT=${startDT}&endDT=${endDT}`,
+    { 'User-Agent': 'heleon-tracker' });
+  const ts = j.value && j.value.timeSeries && j.value.timeSeries[0];
+  const series = ts ? ts.values[0].value
+    .map(v => ({ t: v.dateTime.slice(0, 10), v: parseFloat(v.value) }))
+    .filter(x => Number.isFinite(x.v) && x.v > -999999) : [];
+  gaugeHistCache.set(key, { at: Date.now(), series });
+  return series;
 }
 
 // Big Island bbox, generous margin (same footprint as the vehicle/aircraft boxes).
@@ -3458,6 +3603,61 @@ async function fetchWeatherStationsState() {
 }
 const fetchWeatherStations = fetchWeatherStationsState;
 
+// ─── SUMMIT OBSERVATORIES (Mauna Kea + Mauna Loa) ─────────────────────────────
+// Real-time conditions the observatories publish publicly, no key. The Mauna Kea
+// telescopes sit on the summit at ~4200 m; CFHT's weather-tower datalogger emits
+// a clean key=value block (wind, temp, humidity, pressure), timestamped. We map
+// each observatory to its summit location so it shows as a point on the map with
+// live weather — the closest thing to "what's happening on the summit right now"
+// that's openly streamed. Extend SUMMIT_SITES to add more towers as they expose
+// machine-readable feeds.
+const SUMMIT_SITES = [
+  { id: 'cfht', name: 'CFHT Weather Tower (Maunakea summit)', lat: 19.8253, lon: -155.4689, elevM: 4204,
+    host: 'www.cfht.hawaii.edu', path: '/cgi-bin/dl_gemini.csh', kind: 'cfht' },
+  { id: 'mlo', name: 'Mauna Loa Observatory (NOAA — atmospheric CO₂)', lat: 19.5362, lon: -155.5763, elevM: 3397,
+    host: 'gml.noaa.gov', path: '/webdata/ccgg/trends/co2/co2_weekly_mlo.txt', kind: 'noaa_co2' },
+];
+function parseNoaaCo2(text) {
+  // Columns: year month day decimal ppm num_days 1_yr_ago 10_yr_ago since_1800
+  const rows = text.split('\n').filter(l => l && !l.startsWith('#'));
+  const last = rows[rows.length - 1].trim().split(/\s+/);
+  if (last.length < 8) return {};
+  return {
+    co2ppm: parseFloat(last[4]),
+    co2Year: `${last[0]}-${last[1].padStart(2, '0')}-${last[2].padStart(2, '0')}`,
+    co2OneYearAgo: parseFloat(last[6]),
+    co2TenYearsAgo: parseFloat(last[7]),
+  };
+}
+let summitCache = [];
+let summitLastPollTs = null, summitLastError = null;
+function parseCfhtTower(text) {
+  // Lines like "WS=    5.21   #Wind speed (knots)"
+  const out = {};
+  const grab = (re) => { const m = text.match(re); return m ? parseFloat(m[1]) : null; };
+  out.windKt = grab(/WS=\s*([-\d.]+)/);
+  out.windDir = grab(/WD=\s*([-\d.]+)/);
+  out.tempC = grab(/T\s*=\s*([-\d.]+)/);
+  out.humidity = grab(/RH=\s*([-\d.]+)/);
+  out.pressureMb = grab(/BP=\s*([-\d.]+)/);
+  const tm = text.match(/(\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2})/);
+  out.readingTs = tm ? tm[1] : null;
+  return out;
+}
+async function pollSummits() {
+  const next = [];
+  for (const s of SUMMIT_SITES) {
+    try {
+      const text = await fetchText(s.host, s.path, { 'User-Agent': 'Mozilla/5.0 (heleon-tracker)' });
+      let readings = {};
+      if (s.kind === 'cfht') readings = parseCfhtTower(text);
+      else if (s.kind === 'noaa_co2') readings = parseNoaaCo2(text);
+      next.push({ id: s.id, name: s.name, lat: s.lat, lon: s.lon, elevM: s.elevM, readings });
+    } catch (e) { summitLastError = `${s.id}: ${e.message}`; }
+  }
+  if (next.length) { summitCache = next; summitLastPollTs = Date.now(); summitLastError = null; }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin':'*' }); res.end(); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -3548,8 +3748,11 @@ const server = http.createServer((req, res) => {
   //   authenticated: every 25s  → ~3450 calls/day  (< 4000)
   //   anonymous:     every 240s → ~360 calls/day   (< 400)
   // On error the last fix stays on screen, so a hiccup never blanks the map.
-  const aircraftPollMs = openskyAuthed() ? 25000 : 240000;
-  console.log(`[aircraft] OpenSky ${openskyAuthed() ? 'authenticated (4000 credits/day)' : 'anonymous (400 credits/day) — set OPENSKY_CLIENT_ID/SECRET for higher limits'}; polling every ${aircraftPollMs/1000}s`);
+  // Community ADS-B aggregators (adsb.lol/airplanes.live) are the primary source
+  // now — no credit budget, ~1 req/s limit — so we can poll fast. OpenSky is only
+  // the fallback. 15s keeps aircraft moving smoothly without hammering the API.
+  const aircraftPollMs = 15000;
+  console.log(`[aircraft] primary: community ADS-B (adsb.lol → airplanes.live → adsb.one), no key; OpenSky fallback ${openskyAuthed() ? '(authenticated)' : '(anonymous)'}; polling every ${aircraftPollMs/1000}s`);
   pollAircraft();
   setInterval(pollAircraft, aircraftPollMs);
   // Hawaii civic layers — all free/keyless. Earthquakes and NWS alerts poll
@@ -3563,11 +3766,13 @@ const server = http.createServer((req, res) => {
   pollPubSafetyFacilities();
   pollStreamflow();
   fetchWeatherStations();
+  pollSummits();
   setInterval(pollEarthquakes, 5 * 60 * 1000);
   setInterval(pollAlerts, 5 * 60 * 1000);
   setInterval(pollWildfireHotspots, 5 * 60 * 1000);
   setInterval(pollStreamflow, 15 * 60 * 1000);
   setInterval(fetchWeatherStations, 10 * 60 * 1000);
+  setInterval(pollSummits, 5 * 60 * 1000);
   setInterval(pollHazardZones, 24 * 60 * 60 * 1000);
   setInterval(pollPubSafetyFacilities, 24 * 60 * 60 * 1000);
   setTimeout(pruneDb, 30000);                // full prune+VACUUM shortly after boot
