@@ -114,6 +114,16 @@
   @keyframes flowDash { to { stroke-dashoffset: -200; } }
   .bus-ahead-line { animation: flowDash 4s linear infinite; }
 
+  /* ─── STREAMFLOW WATER WHEEL (spins faster with higher discharge) ── */
+  @keyframes waterWheelSpin { to { transform: rotate(360deg); } }
+  .stream-wheel { display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .stream-wheel .wheel { width:26px; height:26px; flex-shrink:0;
+    animation: waterWheelSpin linear infinite; transform-origin:50% 50%;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
+  .stream-wheel .rate { font-size:10px; font-weight:700; color:#082f49;
+    background:rgba(255,255,255,.9); border:1px solid #bae6fd; border-radius:9px;
+    padding:1px 5px; white-space:nowrap; line-height:1.4; }
+
   /* ─── OCCUPANCY BAR (inside bus marker) ───────────────────────────── */
   .bus-occ-bar {
     position: absolute;
@@ -1907,26 +1917,101 @@ const facilityLoaded = { police: false, fire: false, ems: false, trauma: false }
 
 // Streamflow (USGS NWIS) — same refresh cadence as the other Hawaiʻi-tab live data.
 let streamflowVisible = false;
+let streamflowData = null;
+const streamWheelMarkers = {}; // site_no -> maplibregl.Marker
 async function fetchStreamflow() {
   try {
     const res = await fetch('/api/streamflow');
     const data = await res.json();
+    streamflowData = data.geojson || { type: 'FeatureCollection', features: [] };
+    // Keep the invisible base circle source alive for feature hover/click.
     if (mapReady && map.getSource('streamflow')) {
-      map.getSource('streamflow').setData(streamflowVisible ? data.geojson : { type: 'FeatureCollection', features: [] });
+      map.getSource('streamflow').setData(streamflowVisible ? streamflowData : { type: 'FeatureCollection', features: [] });
     }
+    renderStreamflowWheels();
     const el = document.getElementById('streamflowStatus');
-    if (el) el.textContent = `${(data.geojson.features || []).length} active gauges reporting`;
+    if (el) el.textContent = `${(streamflowData.features || []).length} active gauges reporting`;
   } catch (e) { /* keep last data on screen */ }
 }
+
+// Map a discharge (ft³/s) to a wheel spin duration (seconds/rev): trickle spins
+// slowly (~6s), a raging flow whips around (~0.5s). Log scale so the difference
+// between 5 and 50 cfs is visible, not just the extremes.
+function wheelSpinSeconds(cfs) {
+  if (!(cfs > 0)) return 0; // no flow → don't spin
+  const f = Math.min(1, Math.log10(cfs + 1) / Math.log10(1001)); // 0..1 over 0..1000 cfs
+  return 6 - f * 5.5; // 6s (slow) → 0.5s (fast)
+}
+
+function streamWheelSvg(cfs) {
+  // A simple 8-spoke water wheel (undershot-style), tinted by flow strength.
+  const strong = Math.min(1, (cfs || 0) / 300);
+  const rim = `rgb(${29 + strong*20},${78 + strong*40},${216 - strong*40})`;
+  let spokes = '';
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4;
+    spokes += `<line x1="13" y1="13" x2="${13 + 11*Math.cos(a)}" y2="${13 + 11*Math.sin(a)}" stroke="${rim}" stroke-width="1.6"/>`;
+    // paddle at rim
+    spokes += `<circle cx="${13 + 11*Math.cos(a)}" cy="${13 + 11*Math.sin(a)}" r="1.8" fill="#60a5fa"/>`;
+  }
+  return `<svg class="wheel" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="13" cy="13" r="11.5" stroke="${rim}" stroke-width="2" fill="rgba(96,165,250,.18)"/>
+    ${spokes}
+    <circle cx="13" cy="13" r="2.4" fill="${rim}"/>
+  </svg>`;
+}
+
+function renderStreamflowWheels() {
+  if (!mapReady) return;
+  const feats = (streamflowVisible && streamflowData) ? streamflowData.features : [];
+  const seen = new Set();
+  for (const f of feats) {
+    const p = f.properties, site = p.site_no;
+    seen.add(site);
+    const cfs = p.value != null ? +p.value : 0;
+    const spin = wheelSpinSeconds(cfs);
+    const rateTxt = p.value != null ? `${cfs.toFixed(cfs < 10 ? 1 : 0)} ft³/s` : '—';
+    let m = streamWheelMarkers[site];
+    if (!m) {
+      const el = document.createElement('div');
+      el.className = 'stream-wheel';
+      el.innerHTML = `${streamWheelSvg(cfs)}<span class="rate"></span>`;
+      el.title = `${p.name || 'USGS gauge'} — ${rateTxt}`;
+      el.onclick = () => showLayerHover(
+        `<div style="font-weight:600;">💧 ${escapeHtml(p.name || 'Stream gauge')}</div>
+         <div style="color:var(--muted);font-size:11px;">${rateTxt}</div>
+         <div style="color:var(--muted);font-size:10px;">USGS ${escapeHtml(site)}${p.ts ? ' · ' + new Date(p.ts).toLocaleString() : ''}</div>`,
+        window.innerWidth / 2, 80);
+      m = new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat(f.geometry.coordinates).addTo(map);
+      streamWheelMarkers[site] = m;
+    }
+    const el = m.getElement();
+    const wheel = el.querySelector('.wheel');
+    // Spin speed = flow rate; 0 flow = paused.
+    wheel.style.animationDuration = spin ? `${spin.toFixed(2)}s` : '0s';
+    wheel.style.animationPlayState = spin ? 'running' : 'paused';
+    el.querySelector('.rate').textContent = rateTxt;
+    el.title = `${p.name || 'USGS gauge'} — ${rateTxt}`;
+    m.setLngLat(f.geometry.coordinates);
+  }
+  // Remove markers for gauges no longer present/visible.
+  for (const site of Object.keys(streamWheelMarkers)) {
+    if (!seen.has(site)) { streamWheelMarkers[site].remove(); delete streamWheelMarkers[site]; }
+  }
+}
+
 function toggleStreamflow() {
   streamflowVisible = document.getElementById('showStreamflow').checked;
+  // The old pulse/label MapLibre layers are retired in favor of DOM wheels;
+  // keep the base circle hidden (used only for potential feature queries).
   if (mapReady) {
-    const v = streamflowVisible ? 'visible' : 'none';
     for (const id of ['streamflow-circle', 'streamflow-pulse', 'streamflow-label']) {
-      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none');
     }
   }
   if (streamflowVisible) fetchStreamflow();
+  else renderStreamflowWheels(); // clears wheels
 }
 
 // NWS weather stations (Big Island) — refetched every 10 min server-side.
