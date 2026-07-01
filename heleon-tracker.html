@@ -2496,6 +2496,10 @@ function _turnDeg(a, b, c) {
   return Math.acos(cos) * 180 / Math.PI;
 }
 
+// A continuation sharper than this is treated as a hairpin/knot and ends the
+// run rather than folding the ribbon back over itself.
+const MAX_TURN_DEG = 135;
+
 // Chain a set of edges (each {coords, slot}) belonging to ONE route into the
 // FEWEST possible connected runs. Edges connect where an endpoint of one equals
 // an endpoint of another (they're built connected server-side).
@@ -2545,6 +2549,10 @@ function chainRouteEdges(edges) {
           const turn = _turnDeg(prev, tail, cc[1] || tail);
           if (turn < bestTurn) { bestTurn = turn; best = c; }
         }
+        // Never fold the ribbon back on itself: if even the straightest
+        // continuation is a hairpin (>MAX_TURN_DEG), stop the run here and let
+        // that edge start its own run instead of drawing a bow-tie knot.
+        if (bestTurn > MAX_TURN_DEG) break;
         best.used = true;
         slots.push(best.slot);
         const nc = _ptKey(best.coords[0]) === _ptKey(tail) ? best.coords : best.coords.slice().reverse();

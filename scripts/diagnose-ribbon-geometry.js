@@ -70,6 +70,7 @@ function chainRouteEdges(edges) {
           const t = turnDeg(prev, tail, cc[1] || tail);
           if (t < bestTurn) { bestTurn = t; best = c; }
         }
+        if (bestTurn > 135) break; // hairpin -> stop run, don't fold (MAX_TURN_DEG)
         best.used = true;
         slots.push(best.slot);
         const nc = _ptKey(best.coords[0]) === _ptKey(tail) ? best.coords : best.coords.slice().reverse();
@@ -117,6 +118,41 @@ function turnDeg(a, b, c) {
 
 // Build byRoute exactly like the client: slot = lane among visible routes on
 // that edge, centered on 0 (here ALL routes are "visible").
+// ── Geometric defect detectors ──────────────────────────────────────────────
+// A "knot" (the teal bow-tie in the screenshots) shows up geometrically as
+// either a revisited vertex or two non-adjacent segments of the SAME run
+// crossing each other. A "spike" is a near-180° U-turn: the run reverses over
+// almost the same ground. Both are things a clean transit ribbon never does, so
+// we detect them numerically instead of eyeballing screenshots.
+function segIntersect(p1, p2, p3, p4) {
+  const d = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  const d1 = d(p3, p4, p1), d2 = d(p3, p4, p2), d3 = d(p1, p2, p3), d4 = d(p1, p2, p4);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+function countSelfIntersections(coords) {
+  let hits = 0;
+  const n = coords.length;
+  for (let i = 0; i < n - 1; i++) {
+    // skip adjacent segments (they legitimately share a vertex)
+    for (let j = i + 2; j < n - 1; j++) {
+      if (i === 0 && j === n - 2) continue; // closed-loop endpoints touching is fine
+      if (segIntersect(coords[i], coords[i + 1], coords[j], coords[j + 1])) hits++;
+    }
+  }
+  return hits;
+}
+function countRevisits(coords) {
+  const seen = new Set();
+  let r = 0;
+  for (const p of coords) { const k = p[0].toFixed(6) + ',' + p[1].toFixed(6); if (seen.has(k)) r++; else seen.add(k); }
+  return r;
+}
+function countSpikes(coords) { // near-U-turn interior vertices
+  let s = 0;
+  for (let i = 1; i < coords.length - 1; i++) if (turnDeg(coords[i - 1], coords[i], coords[i + 1]) > 150) s++;
+  return s;
+}
+
 const byRoute = new Map();
 for (const edge of data.edges) {
   const routeIds = edge.routeIds;
@@ -132,13 +168,17 @@ for (const edge of data.edges) {
 const rows = [];
 for (const [rid, edges] of byRoute) {
   const runs = chainRouteEdges(edges);
-  let frags = 0, kinks = 0, worstKink = 0, totalLen = 0;
+  let frags = 0, kinks = 0, worstKink = 0, totalLen = 0, knots = 0, spikes = 0;
   const slots = new Set();
   for (const run of runs) {
     const len = polylineLenM(run.coords);
     totalLen += len;
     if (len < FRAG_M) frags++;
     slots.add(run.slot);
+    // Geometric-defect checks on the RAW run (before smoothing, which would
+    // only round the same knot).
+    if (countRevisits(run.coords) > 0 || countSelfIntersections(run.coords) > 0) knots++;
+    spikes += countSpikes(run.coords);
     const sm = smoothPolyline(run.coords);
     for (let i = 1; i < sm.length - 1; i++) {
       const t = turnDeg(sm[i - 1], sm[i], sm[i + 1]);
@@ -146,23 +186,24 @@ for (const [rid, edges] of byRoute) {
       if (t > worstKink) worstKink = t;
     }
   }
-  rows.push({ rid, runs: runs.length, frags, slots: slots.size, kinks, worstKink, km: totalLen / 1000 });
+  rows.push({ rid, runs: runs.length, frags, slots: slots.size, kinks, worstKink, knots, spikes, km: totalLen / 1000 });
 }
 
 rows.sort((a, b) => b.runs - a.runs);
 console.log(`\nRibbon geometry report — ${rows.length} route(s), from data/route-edges.json`);
 console.log(`(runs=separate polylines, frag=<${FRAG_M}m stub, kink=turn>${KINK_DEG}° after smoothing)\n`);
-console.log('route    runs  frags  slots  kinks  worstTurn   length');
-console.log('─'.repeat(62));
+console.log('route    runs  frags  knots  spikes  kinks  worstTurn   length');
+console.log('─'.repeat(70));
 for (const r of rows) {
-  const flag = (r.runs > 8 || r.frags > 3 || r.kinks > 0) ? '  ⚠' : '';
+  const bad = r.knots > 0 || r.spikes > 0;
+  const flag = bad ? '  ⚠KNOT' : (r.runs > 8 || r.frags > 3 || r.kinks > 0 ? '  ⚠' : '');
   console.log(
     `${String(r.rid).padEnd(7)} ${String(r.runs).padStart(5)} ${String(r.frags).padStart(6)} ` +
-    `${String(r.slots).padStart(6)} ${String(r.kinks).padStart(6)} ${(r.worstKink).toFixed(0).padStart(9)}° ` +
-    `${r.km.toFixed(1).padStart(7)}km${flag}`
+    `${String(r.knots).padStart(6)} ${String(r.spikes).padStart(7)} ${String(r.kinks).padStart(6)} ` +
+    `${(r.worstKink).toFixed(0).padStart(9)}° ${r.km.toFixed(1).padStart(7)}km${flag}`
   );
 }
-const tot = rows.reduce((a, r) => ({ runs: a.runs + r.runs, frags: a.frags + r.frags, kinks: a.kinks + r.kinks }), { runs: 0, frags: 0, kinks: 0 });
-console.log('─'.repeat(62));
-console.log(`TOTAL   ${String(tot.runs).padStart(5)} ${String(tot.frags).padStart(6)}        ${String(tot.kinks).padStart(6)}`);
-console.log(`\n${rows.filter(r => r.runs > 8 || r.frags > 3 || r.kinks > 0).length} route(s) flagged for cleanup.`);
+const tot = rows.reduce((a, r) => ({ runs: a.runs + r.runs, frags: a.frags + r.frags, kinks: a.kinks + r.kinks, knots: a.knots + r.knots, spikes: a.spikes + r.spikes }), { runs: 0, frags: 0, kinks: 0, knots: 0, spikes: 0 });
+console.log('─'.repeat(70));
+console.log(`TOTAL   ${String(tot.runs).padStart(5)} ${String(tot.frags).padStart(6)} ${String(tot.knots).padStart(6)} ${String(tot.spikes).padStart(7)} ${String(tot.kinks).padStart(6)}`);
+console.log(`\n${rows.filter(r => r.knots > 0 || r.spikes > 0).length} route(s) have KNOTS/spikes (self-intersections or U-turns) — the visual bow-ties.`);
