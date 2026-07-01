@@ -782,6 +782,7 @@ function initMap() {
     try { renderStopMarkers(); } catch (e) { console.error('[map] stops:', e); }
     try { renderLearnedStops(); } catch (e) {}
     try { renderRouteShapes(); } catch (e) { console.error('[map] shapes:', e); }
+    try { renderRouteRibbons(); } catch (e) { console.error('[map] ribbons:', e); }
   });
   // Re-fan overlapping buses whenever the camera settles (overlap is zoom/pan
   // dependent — buses separate as you zoom in).
@@ -2676,55 +2677,82 @@ function smoothPolyline(coords, passes = 3) {
   return pts;
 }
 
+// The self-hosted real-road source (feature id = OSM way id) and its state.
+const ROAD_SRC = 'route-roads';
+const ROAD_LAYER = 'route-roads-line';
+let routeRoadsData = null;         // GeoJSON of OSM ways routes travel
+let roadStateApplied = new Set();  // wayIds we've set feature-state on (to clear)
+
+async function fetchRouteRoads() {
+  if (routeRoadsData) return routeRoadsData;
+  try {
+    const res = await fetch('/api/route-roads');
+    routeRoadsData = await res.json();
+  } catch (e) { console.error('[fetchRouteRoads]', e); routeRoadsData = { type: 'FeatureCollection', features: [] }; }
+  return routeRoadsData;
+}
+
+// COLOR THE ACTUAL ROAD. We render routes two ways, both on real OSM road
+// geometry (never invented):
+//   • single-route roads  → recolor the real road LINE via feature-state on its
+//     OSM way id. This literally colors the map's road, pixel-on-road.
+//   • shared roads (2+ routes) → tight parallel ribbon bands drawn on the real
+//     road coords (one line can't show N colors), small screen-space offset so
+//     they hug the road.
 function renderRouteRibbons() {
   if (!mapReady || !routeEdgesData) return;
-  // Group visible edges by route, recording this route's slot on each edge
-  // (slot = its lane among the routes sharing that edge, centered on 0).
-  const byRoute = new Map(); // routeId -> { color, edges: [{coords, slot}] }
-  for (const edge of routeEdgesData.edges) {
-    const visibleRoutes = edge.routes.filter(r => routeVisible[r.routeId] !== false);
-    if (!visibleRoutes.length) continue;
-    const n = visibleRoutes.length;
-    const center = (n - 1) / 2;
-    visibleRoutes.forEach((r, i) => {
-      if (!byRoute.has(r.routeId)) byRoute.set(r.routeId, { color: r.color, edges: [] });
-      byRoute.get(r.routeId).edges.push({ coords: edge.coords, slot: i - center });
-    });
-  }
+  ensureRouteRoadLayer(); // idempotent; creates the real-road layer once ready
 
-  // GROUND TRUTH = THE ROAD. Draw each route as the EXACT real road-edge
-  // coordinates it travels — no smoothing (which invents curves), no
-  // parallel-offset baking (which drifts the copy off the road and drew arcs
-  // across the bay), no gap-bridging in the client. chainRouteEdges only
-  // concatenates edges that literally share an endpoint, so a feature is always
-  // a real, connected run of actual road; edges that don't touch stay separate
-  // (a gap is honest — never a line where there's no road). Overlaps get a tiny
-  // screen-space line-offset by slot so shared roads still show distinct colors,
-  // but it's small enough to stay on the road.
-  const features = [];
-  for (const [routeId, { color, edges }] of byRoute) {
-    for (const run of chainRouteEdges(edges)) {
-      features.push({
-        type: 'Feature',
-        geometry: { type: 'LineString', coordinates: run.coords },
-        properties: { color, slot: run.slot, routeId },
+  // wayId → visible route colors on that way (dedup, in stable route order).
+  const wayColors = new Map();
+  // Group multi-route edges by route for the ribbon-band overlay.
+  const byRoute = new Map(); // routeId -> { color, edges:[{coords,slot}] }
+  for (const edge of routeEdgesData.edges) {
+    const vis = edge.routes.filter(r => routeVisible[r.routeId] !== false);
+    if (!vis.length) continue;
+    if (edge.wayId != null) {
+      let arr = wayColors.get(edge.wayId); if (!arr) wayColors.set(edge.wayId, arr = []);
+      for (const r of vis) if (!arr.some(x => x.routeId === r.routeId)) arr.push({ routeId: r.routeId, color: r.color });
+    }
+    if (vis.length >= 2) {
+      const center = (vis.length - 1) / 2;
+      vis.forEach((r, i) => {
+        let g = byRoute.get(r.routeId); if (!g) byRoute.set(r.routeId, g = { color: r.color, edges: [] });
+        g.edges.push({ coords: edge.coords, slot: i - center });
       });
     }
   }
 
-  const data = { type: 'FeatureCollection', features };
-  const src = map.getSource(RIBBON_SRC);
-  if (src) { src.setData(data); return; }
+  // (1) Feature-state recolor of the real road lines. A road used by exactly one
+  // visible route gets that color; a shared road gets a neutral base (the bands
+  // drawn on top carry the per-route colors).
+  if (map.getSource(ROAD_SRC) && map.getLayer(ROAD_LAYER)) {
+    for (const wid of roadStateApplied) map.removeFeatureState({ source: ROAD_SRC, id: wid });
+    roadStateApplied = new Set();
+    for (const [wid, cols] of wayColors) {
+      const color = cols.length === 1 ? cols[0].color : '#9aa4b2';
+      map.setFeatureState({ source: ROAD_SRC, id: wid }, { color, on: true, shared: cols.length > 1 });
+      roadStateApplied.add(wid);
+    }
+  }
 
+  // (2) Ribbon bands on shared roads only (real coords, small offset).
+  const features = [];
+  for (const [routeId, { color, edges }] of byRoute) {
+    for (const run of chainRouteEdges(edges)) {
+      features.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: run.coords }, properties: { color, slot: run.slot, routeId } });
+    }
+  }
+  const data = { type: 'FeatureCollection', features };
+  const bandSrc = map.getSource(RIBBON_SRC);
+  if (bandSrc) { bandSrc.setData(data); return; }
   map.addSource(RIBBON_SRC, { type: 'geojson', data });
   map.addLayer({
     id: RIBBON_LAYER, type: 'line', source: RIBBON_SRC,
     paint: {
       'line-color': ['get', 'color'],
-      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 12, RIBBON_STRIPE_PX, 15, 4.4, 18, 6],
+      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.6, 12, 2.6, 15, 3.6, 18, 5],
       'line-opacity': 0.95,
-      // Small screen-space offset per lane so overlapping routes stay distinct
-      // without drifting off the road; solo roads (slot 0) sit dead-on center.
       'line-offset': ['interpolate', ['linear'], ['zoom'],
         12, ['*', ['get', 'slot'], 1.6],
         15, ['*', ['get', 'slot'], 2.6],
@@ -2737,6 +2765,31 @@ function renderRouteRibbons() {
       <span style="width:10px;height:10px;border-radius:50%;background:${p.color};flex-shrink:0;border:1px solid rgba(255,255,255,.5);"></span>
       <span style="font-weight:600;">${escapeHtml((ROUTES_META[p.routeId]||{}).name || 'Route ' + p.routeId)}</span>
     </div>`);
+}
+
+// Add the real-road source + a line layer painted from feature-state. Inserted
+// once, before renderRouteRibbons sets state. promoteId makes the OSM way id the
+// feature id so setFeatureState({id: wayId}) targets the right road.
+function ensureRouteRoadLayer() {
+  if (!mapReady || map.getSource(ROAD_SRC) || !routeRoadsData) return;
+  map.addSource(ROAD_SRC, { type: 'geojson', data: routeRoadsData, promoteId: 'wayId' });
+  // NOTE: MapLibre disallows feature-state in a layer `filter`, so visibility is
+  // driven by opacity — a way with no state (`on` unset) renders fully
+  // transparent; only recolored roads show.
+  map.addLayer({
+    id: ROAD_LAYER, type: 'line', source: ROAD_SRC,
+    paint: {
+      'line-color': ['coalesce', ['feature-state', 'color'], '#9aa4b2'],
+      // Slightly wider than a lane so the color reads as "this road is on a
+      // route"; shared roads get a hair narrower since bands ride on top.
+      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.5, 12, 3, 15, 4.5, 18, 6.5],
+      'line-opacity': ['case',
+        ['coalesce', ['feature-state', 'on'], false],
+        ['case', ['coalesce', ['feature-state', 'shared'], false], 0.5, 0.95],
+        0],
+    },
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+  }, 'stops-circle');
 }
 
 // ─── RENDER TRAILS ────────────────────────────────────────────────────────────
@@ -4851,7 +4904,7 @@ initMap();
 Promise.all([
   fetchReference(),
   fetchShapes(),
-  fetchRouteEdges().then(() => renderRouteRibbons()),
+  Promise.all([fetchRouteEdges(), fetchRouteRoads()]).then(() => { ensureRouteRoadLayer(); renderRouteRibbons(); }),
   fetchAll(),
   fetchAllStops(),
   fetchLearnedStops(),

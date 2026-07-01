@@ -2248,12 +2248,24 @@ async function handleApi(url, res) {
       const ctl = EDGE_CONTROLS.get(e.id);
       return {
         id: e.id,
+        wayId: e.wayId,   // join key to the self-hosted road source (feature-state recolor)
         coords: e.coords,
         routes: e.routeIds.map(rid => ({ routeId: rid, color: (ROUTE_MAP[rid] && ROUTE_MAP[rid].color) || '#888' })),
         ...(ctl ? { signals: ctl.signals, stops: ctl.stops } : {}),
       };
     });
     return json(res, { edges });
+  }
+
+  // The real OSM road ways every route travels, feature id = OSM way id. The
+  // client colors these actual road lines via feature-state (see build-route-
+  // roads-geojson.js). Cached hard — it only changes when routes/roads rebuild.
+  if (p === '/api/route-roads') {
+    try {
+      const buf = fs.readFileSync(path.join(__dirname, 'data', 'osm', 'route-roads.geojson'));
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=86400' });
+      return res.end(buf);
+    } catch { return json(res, { type: 'FeatureCollection', features: [] }); }
   }
 
   // Real traffic-control locations (signals, stop signs, crossings). Locations

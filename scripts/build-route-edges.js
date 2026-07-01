@@ -112,6 +112,7 @@ async function main() {
     const e = graph.edges[edgeIdx];
     edges.push({
       id: edgeIdx,
+      wayId: e.wayId,   // OSM way id — join key to the self-hosted road tiles
       coords: e.coords,
       routeIds: [...routeIdSet].sort((a, b) => a - b),
     });
