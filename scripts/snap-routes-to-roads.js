@@ -172,6 +172,7 @@ function connectedEdgePath(graph, edgeIndex, rawCoords) {
 
   const out = [];               // ordered edge indices, guaranteed connected
   let curNode = null;           // graph node where the assembled path currently ends
+  const visitedNodes = new Set(); // every node the path has already passed through
 
   // Choose the starting orientation of the first edge so its FAR end faces the
   // second matched edge — keeps the natural travel direction.
@@ -180,6 +181,8 @@ function connectedEdgePath(graph, edgeIndex, rawCoords) {
     // entryNode is the node we arrive at this edge through; leave via the other.
     out.push(edgeIdx);
     curNode = e.a === entryNode ? e.b : e.a;
+    visitedNodes.add(entryNode);
+    visitedNodes.add(curNode);
   };
 
   for (let s = 0; s < rawSeq.length; s++) {
@@ -222,6 +225,26 @@ function connectedEdgePath(graph, edgeIndex, rawCoords) {
       // than break the chain. (Rare: only if OSM has a true coverage hole.)
       continue;
     }
+
+    // Reject a bridge that would double back through a node the path already
+    // passed — the graph is undirected (no carriageway/one-way modeling), so
+    // when a shape point snaps to the "wrong side" of a divided road or a
+    // roundabout, the true shortest path back to a reachable edge can walk
+    // straight through an already-visited junction, producing a visible
+    // teardrop loop instead of a straight run. Real routes don't cross their
+    // own path within a couple hundred meters, so this is a safe reject: fold
+    // the target edge into an honest gap (drop, matching the `bridge == null`
+    // case) rather than draw the loop.
+    let node = curNode;
+    let revisits = false;
+    for (const bi of bridge) {
+      const be = graph.edges[bi];
+      const other = be.a === node ? be.b : be.a;
+      if (visitedNodes.has(other)) { revisits = true; break; }
+      node = other;
+    }
+    if (revisits) continue;
+
     // Walk the bridge edges, advancing curNode each step.
     for (const bi of bridge) {
       const be = graph.edges[bi];

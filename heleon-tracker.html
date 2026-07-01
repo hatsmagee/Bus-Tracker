@@ -741,6 +741,7 @@ function initMapLayers() {
     paint: { 'line-color': ['get', 'color'], 'line-width': 2.5, 'line-opacity': 0.7,
       'line-dasharray': [0.5, 2],
       'line-offset': ['interpolate', ['linear'], ['zoom'],
+        6, 0,
         8, ['*', ['coalesce', ['get', 'slot'], 0], 1.6],
         12, ['*', ['coalesce', ['get', 'slot'], 0], TRAIL_STRIPE_PX],
         15, ['*', ['coalesce', ['get', 'slot'], 0], 3.6],
@@ -1990,19 +1991,36 @@ function smoothPolyline(coords, passes = 3) {
   return pts;
 }
 
+// A route's lane MUST stay put as the bundle narrows/widens along a road —
+// otherwise routes visibly swap colors/positions at every junction where the
+// shared-route set changes (even though nothing routes to do). Fix: rank each
+// route's slot by its position in THIS EDGE'S FULL routeIds list (server-sent
+// order, numerically sorted by route id — stable and independent of which
+// routes are toggled visible), not by its index among only the currently-
+// visible routes. A route's rank among all routes sharing this edge only
+// changes when the real set of routes sharing the road changes (a genuine
+// join/split), so a shared trunk tapering down to fewer routes keeps the
+// surviving routes in their same relative order/side — a clean taper instead
+// of a reshuffle — and toggling route visibility can't shift anyone else's lane.
+function stableRouteSlot(edge, routeId) {
+  const ids = edge.routes.map(r => r.routeId);
+  const n = ids.length;
+  const i = ids.indexOf(routeId);
+  return i - (n - 1) / 2;
+}
+
 function renderRouteRibbons() {
   if (!mapReady || !routeEdgesData) return;
   // Group visible edges by route, recording this route's slot on each edge
-  // (slot = its lane among the routes sharing that edge, centered on 0).
+  // (slot = its stable lane among ALL routes sharing that edge, not just the
+  // visible ones — see stableRouteSlot).
   const byRoute = new Map(); // routeId -> { color, edges: [{coords, slot}] }
   for (const edge of routeEdgesData.edges) {
     const visibleRoutes = edge.routes.filter(r => routeVisible[r.routeId] !== false);
     if (!visibleRoutes.length) continue;
-    const n = visibleRoutes.length;
-    const center = (n - 1) / 2;
-    visibleRoutes.forEach((r, i) => {
+    visibleRoutes.forEach(r => {
       if (!byRoute.has(r.routeId)) byRoute.set(r.routeId, { color: r.color, edges: [] });
-      byRoute.get(r.routeId).edges.push({ coords: edge.coords, slot: i - center });
+      byRoute.get(r.routeId).edges.push({ coords: edge.coords, slot: stableRouteSlot(edge, r.routeId) });
     });
   }
 
@@ -2027,12 +2045,18 @@ function renderRouteRibbons() {
     id: RIBBON_LAYER, type: 'line', source: RIBBON_SRC,
     paint: {
       'line-color': ['get', 'color'],
-      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 12, RIBBON_STRIPE_PX, 15, 4.4, 18, 6],
+      'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.2, 8, 2, 12, RIBBON_STRIPE_PX, 15, 4.4, 18, 6],
       'line-opacity': 0.95,
       // Offset is in SCREEN pixels and scales with zoom the same way
       // line-width does, so stripes stay tight against each other (no gap,
       // no overlap) at every zoom instead of fanning out when zoomed in.
+      // Below zoom 8 the road itself shrinks to a handful of screen pixels,
+      // so a fixed per-slot offset starts making lanes cross each other at
+      // every bend instead of reading as one route bundle — collapse the
+      // offset to 0 by zoom 6 so far-out views show one coherent line per
+      // road instead of tangled stripes.
       'line-offset': ['interpolate', ['linear'], ['zoom'],
+        6, 0,
         8, ['*', ['get', 'slot'], 2],
         12, ['*', ['get', 'slot'], RIBBON_STRIPE_PX],
         15, ['*', ['get', 'slot'], 4.4],
@@ -2063,11 +2087,9 @@ function renderTrailRibbons() {
   for (const edge of trailEdgesData.edges) {
     const visibleRoutes = edge.routes.filter(r => routeVisible[r.routeId] !== false);
     if (!visibleRoutes.length) continue;
-    const n = visibleRoutes.length;
-    const center = (n - 1) / 2;
-    visibleRoutes.forEach((r, i) => {
+    visibleRoutes.forEach(r => {
       if (!byRoute.has(r.routeId)) byRoute.set(r.routeId, { color: r.color, edges: [] });
-      byRoute.get(r.routeId).edges.push({ coords: edge.coords, slot: i - center });
+      byRoute.get(r.routeId).edges.push({ coords: edge.coords, slot: stableRouteSlot(edge, r.routeId) });
     });
   }
   const features = [];
