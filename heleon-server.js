@@ -2808,6 +2808,16 @@ async function handleApi(url, res) {
     return json(res, traumaCentersCache);
   }
 
+  // ── STREAMFLOW (USGS NWIS, Big Island river gauges, no key) ─────────────
+  if (p === '/api/streamflow') {
+    return json(res, {
+      ts: Date.now(),
+      lastPollTs: streamflowLastPollTs,
+      lastError: streamflowLastError,
+      geojson: streamflowCache || { type: 'FeatureCollection', features: [] },
+    });
+  }
+
   res.writeHead(404); res.end('Not found');
 }
 
@@ -3200,6 +3210,45 @@ async function pollPubSafetyFacilities() {
   }
 }
 
+// USGS real-time streamflow — Big Island river/streams gauges, keyless JSON
+// from the National Water Information System. Filtered down to the Big Island
+// bbox client-side because the NWIS endpoint only takes one major filter
+// (state, bbox, OR sites), and state=HI also pulls in Kauai/Maui sites.
+let streamflowCache = null;
+let streamflowLastPollTs = null, streamflowLastError = null;
+async function pollStreamflow() {
+  try {
+    const data = await fetchJson('waterservices.usgs.gov', '/nwis/iv/?format=json&stateCd=hi&siteType=ST&parameterCd=00060&period=PT1H',
+      { 'User-Agent': 'heleon-tracker' });
+    const ts = (data.value && data.value.timeSeries) || [];
+    const features = [];
+    for (const s of ts) {
+      const g = s.sourceInfo.geoLocation.geogLocation;
+      const lat = g.latitude, lon = g.longitude;
+      if (lat < BIGISLAND_BBOX.minLat || lat > BIGISLAND_BBOX.maxLat ||
+          lon < BIGISLAND_BBOX.minLon || lon > BIGISLAND_BBOX.maxLon) continue;
+      const vals = (s.values && s.values[0] && s.values[0].value) || [];
+      const latest = vals[vals.length - 1];
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [lon, lat] },
+        properties: {
+          site_no: s.sourceInfo.siteCode[0].value,
+          name: s.sourceInfo.siteName,
+          value: latest && latest.value && latest.value !== 'n/a' ? parseFloat(latest.value) : null,
+          unit: 'ft³/s',  // parameter 00060 = discharge in cubic feet per second
+          ts: latest ? latest.dateTime : null,
+        },
+      });
+    }
+    streamflowCache = { type: 'FeatureCollection', features };
+    streamflowLastPollTs = Date.now();
+    streamflowLastError = null;
+  } catch (e) {
+    streamflowLastError = (e && e.message) || 'unknown error';
+  }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin':'*' }); res.end(); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -3301,9 +3350,11 @@ const server = http.createServer((req, res) => {
   pollHazardZones();
   pollWildfireHotspots();
   pollPubSafetyFacilities();
+  pollStreamflow();
   setInterval(pollEarthquakes, 5 * 60 * 1000);
   setInterval(pollAlerts, 5 * 60 * 1000);
   setInterval(pollWildfireHotspots, 5 * 60 * 1000);
+  setInterval(pollStreamflow, 15 * 60 * 1000);
   setInterval(pollHazardZones, 24 * 60 * 60 * 1000);
   setInterval(pollPubSafetyFacilities, 24 * 60 * 60 * 1000);
   setTimeout(pruneDb, 30000);                // full prune+VACUUM shortly after boot

@@ -540,6 +540,10 @@
         <label><input type="checkbox" id="showWildfire" onchange="toggleWildfire()" checked> Thermal hotspots (satellite)</label>
         <span class="vessel-status" id="wildfireStatus"></span>
       </div>
+      <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
+        <label><input type="checkbox" id="showStreamflow" onchange="toggleStreamflow()"> USGS streamflow gauges</label>
+        <span class="vessel-status" id="streamflowStatus"></span>
+      </div>
       <div class="section-header">🚓 Public Safety Facilities</div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:10px;">
         <label><input type="checkbox" id="show-police" onchange="toggleFacility('police')"> Police</label>
@@ -551,6 +555,11 @@
         Station locations only — neither Hawaiʻi Police nor Hawaiʻi Fire
         publishes a live dispatch/incident feed.
       </div>
+      <div class="section-header">📻 Live Radio</div>
+      <div style="padding:6px 12px 4px;color:var(--muted);font-size:10px;">
+        Click to play directly in your browser — no logins, no keys, no leaving the page.
+      </div>
+      <div id="radioList"></div>
       <div class="section-header">⚠️ Active NWS Alerts</div>
       <div id="alertsList"><div class="empty"><div class="empty-icon">🌤️</div>Loading…</div></div>
       <div class="section-header">🌎 Recent Earthquakes</div>
@@ -1090,6 +1099,25 @@ function initMapLayers() {
     <div style="font-weight:600;">🔥 Thermal hotspot (satellite)</div>
     <div style="color:var(--muted);font-size:11px;">FRP ${(+p.frp).toFixed(1)} MW · confidence ${escapeHtml(p.confidence)} · ${p.hours_old}h old</div>
     <div style="color:var(--muted);font-size:10px;">Detected by NASA VIIRS — may be wildfire OR active lava (Kīlauea), not confirmed either way.</div>`);
+
+  // USGS real-time streamflow gauges (Big Island rivers/streams), fed by the
+  // NWIS water-information system. Sizes ~linearly with discharge in ft³/s.
+  map.addSource('streamflow', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'streamflow-circle', type: 'circle', source: 'streamflow',
+    layout: { visibility: 'none' },
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['get', 'value'], 0, 3, 50, 6, 500, 10],
+      'circle-color': ['interpolate', ['linear'], ['get', 'value'], 0, '#7dd3fc', 50, '#3b82f6', 500, '#1e40af'],
+      'circle-opacity': 0.75,
+      'circle-stroke-width': 1,
+      'circle-stroke-color': '#0c4a6e',
+    },
+  });
+  wireLayerHover('streamflow-circle', p => `
+    <div style="font-weight:600;">💧 ${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:11px;">${p.value != null ? (+p.value).toFixed(1) + ' ft³/s' : 'no recent reading'}</div>
+    <div style="color:var(--muted);font-size:10px;">USGS gauge ${escapeHtml(p.site_no)} · ${p.ts ? new Date(p.ts).toLocaleString() : '—'}</div>`);
 
   // Public-safety facility markers — static reference locations, off by
   // default so they don't clutter the map; toggled from the Hawaiʻi tab.
@@ -1786,6 +1814,26 @@ function toggleWildfire() {
 
 // Public-safety facility layers — static, fetched once per kind on first toggle-on.
 const facilityLoaded = { police: false, fire: false, ems: false, trauma: false };
+
+// Streamflow (USGS NWIS) — same refresh cadence as the other Hawaiʻi-tab live data.
+let streamflowVisible = false;
+async function fetchStreamflow() {
+  try {
+    const res = await fetch('/api/streamflow');
+    const data = await res.json();
+    if (mapReady && map.getSource('streamflow')) {
+      map.getSource('streamflow').setData(streamflowVisible ? data.geojson : { type: 'FeatureCollection', features: [] });
+    }
+    const el = document.getElementById('streamflowStatus');
+    if (el) el.textContent = `${(data.geojson.features || []).length} active gauges reporting`;
+  } catch (e) { /* keep last data on screen */ }
+}
+function toggleStreamflow() {
+  streamflowVisible = document.getElementById('showStreamflow').checked;
+  if (mapReady) map.setLayoutProperty('streamflow-circle', 'visibility', streamflowVisible ? 'visible' : 'none');
+  if (streamflowVisible) fetchStreamflow();
+}
+
 async function toggleFacility(kind) {
   const checked = document.getElementById(`show-${kind}`).checked;
   if (!mapReady) return;
@@ -1797,6 +1845,38 @@ async function toggleFacility(kind) {
       facilityLoaded[kind] = true;
     } catch (e) { /* leave empty */ }
   }
+}
+
+// ─── LIVE RADIO STREAMS ─────────────────────────────────────────────────────
+// Direct Icecast/SecureNet MP3 URLs — no logins, no API key, just click to
+// play in an <audio> element. Each station's URL is verified to send
+// "Access-Control-Allow-Origin: *" so the browser can stream cross-origin.
+const RADIO_STATIONS = [
+  { name: 'HPR-1 News & Talk', kind: 'Hawaiʻi Public Radio (Hilo)', url: 'https://khpr-ice.streamguys1.com/khpr2.mp3' },
+  { name: 'HPR-2 Classical', kind: 'Hawaiʻi Public Radio', url: 'https://khpr-ice.streamguys1.com/kipo2.mp3' },
+  { name: 'KKOA', kind: 'Kona (1220 AM)', url: 'https://radio.securenetsystems.net/v5/KKOA' },
+];
+let audioEl = null;
+function pickStream(url) {
+  // Stop any previous stream before starting a new one, so only one station
+  // plays at a time and we don't leak audio element across selections.
+  if (audioEl) { audioEl.pause(); audioEl = null; }
+  audioEl = new Audio(url);
+  audioEl.crossOrigin = 'anonymous';
+  audioEl.play().catch(e => console.warn('audio play blocked:', e));
+}
+function renderRadioList() {
+  const el = document.getElementById('radioList');
+  if (!el) return;
+  el.innerHTML = RADIO_STATIONS.map(s => `
+    <div class="vessel-row" onclick="pickStream('${s.url}')">
+      <div class="vessel-icon">📻</div>
+      <div class="vessel-info">
+        <div class="vessel-name">${escapeHtml(s.name)}</div>
+        <div class="vessel-meta"><span>${escapeHtml(s.kind)}</span></div>
+      </div>
+      <div class="vessel-coord">▶</div>
+    </div>`).join('');
 }
 
 // Learned/observed stops (places buses repeatedly dwell that aren't official).
@@ -4036,7 +4116,7 @@ function switchTab(name) {
   if (name === 'fleet') fetchFleet();
   if (name === 'boats') fetchVessels();
   if (name === 'aircraft') fetchAircraft();
-  if (name === 'hawaii') { fetchQuakes(); fetchAlerts(); fetchWildfire(); fetchHazardZonesOnce(); if (radarVisible) fetchRadarFrame(); }
+  if (name === 'hawaii') { fetchQuakes(); fetchAlerts(); fetchWildfire(); fetchHazardZonesOnce(); if (radarVisible) fetchRadarFrame(); renderRadioList(); }
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
 
@@ -4502,6 +4582,7 @@ Promise.all([
   fetchQuakes(),
   fetchAlerts(),
   fetchWildfire(),
+  fetchStreamflow(),
 ]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
@@ -4524,6 +4605,7 @@ setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
 setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
+setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); }, 15 * 60 * 1000);
 
 // Fast initial catch-up: on a fresh page load the server's first OpenSky/AIS poll
 // may not have completed yet, so the startup fetch returns 0 and the map looks
