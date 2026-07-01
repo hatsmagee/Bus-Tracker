@@ -577,7 +577,7 @@
       </div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showStreamflow" onchange="toggleStreamflow()" checked> USGS streamflow gauges</label>
-        <label><input type="checkbox" id="showWeatherStations" onchange="toggleWeatherStations()"> NWS weather stations</label>
+        <label><input type="checkbox" id="showWeatherStations" onchange="toggleWeatherStations()" checked> NWS weather stations</label>
         <span class="vessel-status" id="streamflowStatus"></span>
       </div>
       <div class="section-header">🚓 Public Safety Facilities</div>
@@ -2086,7 +2086,7 @@ function toggleStreamflow() {
 }
 
 // NWS weather stations (Big Island) — refetched every 10 min server-side.
-let weatherStationsVisible = false;
+let weatherStationsVisible = true; // shown by default
 async function fetchWeatherStations() {
   try {
     const res = await fetch('/api/weather-stations');
