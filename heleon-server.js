@@ -1664,6 +1664,24 @@ function loadRouteEdges() {
   } catch { ROUTE_EDGES = { edges: [] }; }
 }
 
+// Road graph + spatial index, lazily built once and reused to snap historical
+// GPS trails onto real road edges the same way routes are snapped (see
+// scripts/build-route-edges.js) — so trails ribbon (parallel dashed stripes)
+// wherever multiple vehicles/routes share a road, instead of drawing each
+// vehicle's own possibly-noisy GPS line, which can diagonal-cut across blocks.
+let TRAIL_GRAPH = null, TRAIL_EDGE_INDEX = null;
+function ensureTrailGraph() {
+  if (TRAIL_GRAPH) return;
+  try {
+    const { loadRoadGraph, buildEdgeIndex } = require('./road-graph.js');
+    TRAIL_GRAPH = loadRoadGraph();
+    TRAIL_EDGE_INDEX = buildEdgeIndex(TRAIL_GRAPH);
+    console.log(`[trail-graph] loaded road graph for trail snapping (${TRAIL_GRAPH.edges.length} edges)`);
+  } catch (e) {
+    console.error('[trail-graph] load failed:', e.message);
+  }
+}
+
 // Self-healing scheduler: keep retrying until every pattern has a snap result,
 // then settle to a daily refresh. If Valhalla was down at boot, this recovers on
 // its own within the hour instead of waiting a full day — zero manual steps.
@@ -2014,7 +2032,45 @@ async function handleApi(url, res) {
       if (lastRaw && pts[pts.length - 1] !== lastRaw) pts.push(lastRaw);
       return { vehicle_id: v.vehicle_id, name: v.name, route_id: v.route_id, points: pts };
     });
-    return json(res, out);
+
+    // Snap each vehicle's de-spaghettied trail onto real road-graph edges (the
+    // exact same graph/matcher the live-route ribbons use) and key the result
+    // by edge, so the client can draw overlapping trails as parallel dashed
+    // stripes instead of independent GPS lines that can diagonal-cut across a
+    // block whenever a raw fix drifts. Splits into separate runs on genuine
+    // gaps (time/distance jumps already applied above, plus unsnappable
+    // stretches) so a trail with a real off-road excursion doesn't get bridged
+    // through unrelated roads.
+    const edgeTrails = new Map(); // edgeIdx -> Map(vehicle_id -> {route_id, color-relevant info})
+    if (TRAIL_GRAPH) {
+      const { matchedEdgeSequenceForCli } = require('./scripts/snap-routes-to-roads.js');
+      for (const v of out) {
+        if (!v.points || v.points.length < 2) continue;
+        if (v.route_id == null) continue; // no route to ribbon/color — leave off this layer entirely
+        const rawCoords = v.points.map(p => [p[0], p[1]]);
+        let edgeSeq;
+        try {
+          edgeSeq = matchedEdgeSequenceForCli(TRAIL_GRAPH, TRAIL_EDGE_INDEX, rawCoords);
+        } catch (e) { continue; }
+        for (const edgeIdx of edgeSeq) {
+          if (edgeIdx == null) continue;
+          if (!edgeTrails.has(edgeIdx)) edgeTrails.set(edgeIdx, new Map());
+          edgeTrails.get(edgeIdx).set(v.vehicle_id, v.route_id);
+        }
+      }
+    }
+    const edges = [];
+    for (const [edgeIdx, vehicleMap] of edgeTrails) {
+      const e = TRAIL_GRAPH.edges[edgeIdx];
+      const routeIds = [...new Set([...vehicleMap.values()])];
+      edges.push({
+        id: edgeIdx,
+        coords: e.coords,
+        routes: routeIds.map(rid => ({ routeId: rid, color: (ROUTE_MAP[rid] && ROUTE_MAP[rid].color) || '#888' })),
+      });
+    }
+
+    return json(res, { vehicles: out, edges });
   }
 
   // Reference data (route classification, hub connections, P&R/terminals/airports)
@@ -2926,6 +2982,7 @@ const server = http.createServer((req, res) => {
   // scripts/snap-routes-to-roads.js to (re)build it when new GTFS patterns appear.
   try { loadRoadSnappedShapes(); } catch (e) { console.error('[road-snap] seed:', e.message); }
   try { loadRouteEdges(); } catch (e) { console.error('[route-edges] seed:', e.message); }
+  try { ensureTrailGraph(); } catch (e) { console.error('[trail-graph] seed:', e.message); }
   scheduleMatching();
   buildTripIndex();
   // Train learning model on past stop_arrivals history

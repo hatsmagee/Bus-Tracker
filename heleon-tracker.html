@@ -730,9 +730,21 @@ function initMapLayers() {
 
   // Trail layer
   map.addSource('trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  // Ribbon-capable: when the server returns edge-keyed trail data (the normal
+  // case), each feature carries a `slot` used to offset overlapping vehicle
+  // trails into tight parallel stripes, same as the live route ribbons —
+  // just dashed. Fallback (pre-edge-data) features have no `slot` property,
+  // which reads as 0 (no offset), so a single un-ribboned line still renders
+  // correctly during that brief window.
+  const TRAIL_STRIPE_PX = 2.6;
   map.addLayer({ id: 'trails-line', type: 'line', source: 'trails',
     paint: { 'line-color': ['get', 'color'], 'line-width': 2.5, 'line-opacity': 0.7,
-      'line-dasharray': [0.5, 2] },
+      'line-dasharray': [0.5, 2],
+      'line-offset': ['interpolate', ['linear'], ['zoom'],
+        8, ['*', ['coalesce', ['get', 'slot'], 0], 1.6],
+        12, ['*', ['coalesce', ['get', 'slot'], 0], TRAIL_STRIPE_PX],
+        15, ['*', ['coalesce', ['get', 'slot'], 0], 3.6],
+        18, ['*', ['coalesce', ['get', 'slot'], 0], 5]] },
     layout: { 'line-join': 'round', 'line-cap': 'round' }
   });
 
@@ -1104,12 +1116,14 @@ async function fetchAll() {
 }
 let fetchFailCount = 0;
 
+let trailEdgesData = null; // {edges:[{id,coords,routes:[{routeId,color}]}]} — road-graph-snapped, for ribboning
 async function fetchTrails() {
   try {
     const res = await fetch(`/api/trails?minutes=${trailMinutes}`);
     const data = await res.json();
     trailData = {};
-    data.forEach(t => { trailData[t.vehicle_id] = t; });
+    (data.vehicles || data).forEach(t => { trailData[t.vehicle_id] = t; });
+    trailEdgesData = data.edges ? data : null;
     renderTrails();
   } catch(e) {}
 }
@@ -1945,12 +1959,43 @@ function renderRouteRibbons() {
 }
 
 // ─── RENDER TRAILS ────────────────────────────────────────────────────────────
+// Trail LINES are drawn from trailEdgesData — the server snaps each vehicle's
+// recent GPS onto the same real-road-graph edges the live route ribbons use
+// (see /api/trails), so a trail never diagonal-cuts across a block, and where
+// multiple vehicles'/routes' trails share a road they ribbon into tight
+// parallel dashed stripes exactly like the live-route ribbons, just dashed.
+// Dots still come from the per-vehicle route-shape snap below (unchanged) —
+// they're just sparse markers along the trail, not the line geometry itself.
+function renderTrailRibbons() {
+  if (!mapReady || !trailEdgesData) return;
+  const features = [];
+  for (const edge of trailEdgesData.edges) {
+    const visibleRoutes = edge.routes.filter(r => routeVisible[r.routeId] !== false);
+    if (!visibleRoutes.length) continue;
+    const n = visibleRoutes.length;
+    const center = (n - 1) / 2;
+    visibleRoutes.forEach((r, i) => {
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: edge.coords },
+        properties: { color: r.color, slot: i - center, routeId: r.routeId, edgeId: edge.id },
+      });
+    });
+  }
+  const data = { type: 'FeatureCollection', features };
+  const src = map.getSource('trails');
+  if (src) src.setData(data);
+}
+
 function renderTrails() {
   if (!mapReady) return;
   buildRouteMetaFromVehicles();
 
-  const lineFeatures = [];
+  if (trailEdgesData) {
+    renderTrailRibbons();
+  }
   const dotFeatures = [];
+  const fallbackLineFeatures = []; // used only if the server hasn't returned edge-ribbon data yet
 
   Object.values(trailData).forEach(t => {
     if (!t.points || t.points.length < 2) return;
@@ -2010,16 +2055,15 @@ function renderTrails() {
     };
     const snappedSegments = segments.map(s => { hintRc = null; hintDist = null; return s.map(snapPt); });
 
-    const coords = snappedSegments.length > 0 ? snappedSegments[0].map(p => [p[0], p[1]]) : [];
-    // Use MultiLineString so all segments render as one feature
-    const allCoords = snappedSegments.map(s => s.map(p => [p[0], p[1]]));
-
-    if (allCoords.length > 0) {
-      lineFeatures.push({
-        type: 'Feature',
-        geometry: { type: 'MultiLineString', coordinates: allCoords },
-        properties: { color, vehicle_id: t.vehicle_id, name: t.name }
-      });
+    if (!trailEdgesData) {
+      const allCoords = snappedSegments.map(s => s.map(p => [p[0], p[1]])).filter(s => s.length >= 2);
+      if (allCoords.length > 0) {
+        fallbackLineFeatures.push({
+          type: 'Feature',
+          geometry: { type: 'MultiLineString', coordinates: allCoords },
+          properties: { color, vehicle_id: t.vehicle_id, name: t.name }
+        });
+      }
     }
 
     // Sparse dots from valid segments only (road-snapped, same as the line)
@@ -2036,8 +2080,10 @@ function renderTrails() {
     });
   });
 
-  const trailSrc = map.getSource('trails');
-  if (trailSrc) trailSrc.setData({ type: 'FeatureCollection', features: lineFeatures });
+  if (!trailEdgesData) {
+    const trailSrc = map.getSource('trails');
+    if (trailSrc) trailSrc.setData({ type: 'FeatureCollection', features: fallbackLineFeatures });
+  }
   const dotSrc = map.getSource('trail-dots');
   if (dotSrc) dotSrc.setData({ type: 'FeatureCollection', features: dotFeatures });
 }
