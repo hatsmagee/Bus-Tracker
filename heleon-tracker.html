@@ -480,6 +480,7 @@
         </select>
         <label><input type="checkbox" id="showTrails" onchange="toggleTrails()" checked> Trails</label>
         <label><input type="checkbox" id="showRoutes" onchange="toggleRouteShapes()" checked> Route lines</label>
+        <label><input type="checkbox" id="showControls" onchange="toggleControls()"> Signals &amp; stops</label>
       </div>
       <div id="routeList"><div class="empty"><div class="empty-icon">🗺️</div>Loading…</div></div>
     </div>
@@ -2450,6 +2451,59 @@ async function fetchRouteEdges() {
     const res = await fetch('/api/route-edges');
     routeEdgesData = await res.json();
   } catch (e) { console.error('[fetchRouteEdges]', e); }
+}
+
+// ─── TRAFFIC CONTROLS (real OSM signals / stop signs) ───────────────────────
+// Locations only — live red/green states are not published for the Big Island.
+// Off by default (togglable in Routes tab); drawn as small icons on the road.
+let controlsData = null, controlsVisible = false;
+async function fetchControls() {
+  if (controlsData) return controlsData;
+  try {
+    const res = await fetch('/api/controls');
+    controlsData = await res.json();
+  } catch (e) { console.error('[fetchControls]', e); controlsData = { controls: [] }; }
+  return controlsData;
+}
+function renderControls() {
+  if (!mapReady || !controlsData) return;
+  const COLOR = { signal: '#e5484d', stop: '#d4380d', crossing: '#3b82f6', mini_roundabout: '#8b5cf6' };
+  const features = controlsData.controls.map(c => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [c.lon, c.lat] },
+    properties: { type: c.type, color: COLOR[c.type] || '#888' },
+  }));
+  const data = { type: 'FeatureCollection', features };
+  const src = map.getSource('controls');
+  if (src) { src.setData(data); return; }
+  map.addSource('controls', { type: 'geojson', data });
+  // Signals/stops as filled circles; crossings smaller/fainter (context only).
+  map.addLayer({
+    id: 'controls-circle', type: 'circle', source: 'controls',
+    layout: { visibility: controlsVisible ? 'visible' : 'none' },
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'],
+        12, ['match', ['get', 'type'], 'crossing', 1.5, 3],
+        16, ['match', ['get', 'type'], 'crossing', 3, 6]],
+      'circle-color': ['get', 'color'],
+      'circle-opacity': ['match', ['get', 'type'], 'crossing', 0.5, 0.9],
+      'circle-stroke-width': 1,
+      'circle-stroke-color': 'rgba(255,255,255,.85)',
+    },
+  }, 'stops-circle');
+  wireLayerHover('controls-circle', p => {
+    const label = { signal: 'Traffic signal', stop: 'Stop sign', crossing: 'Crosswalk', mini_roundabout: 'Mini-roundabout' }[p.type] || p.type;
+    return `<div style="font-weight:600;">${label}</div><div style="font-size:11px;color:var(--muted);">location only — no live state</div>`;
+  });
+}
+function toggleControls() {
+  controlsVisible = document.getElementById('showControls').checked;
+  const apply = () => { if (map.getLayer('controls-circle')) map.setLayoutProperty('controls-circle', 'visibility', controlsVisible ? 'visible' : 'none'); };
+  if (controlsVisible && !controlsData) {
+    fetchControls().then(() => { renderControls(); apply(); });
+  } else if (controlsVisible && !map.getLayer('controls-circle')) {
+    renderControls(); apply();
+  } else { apply(); }
 }
 
 const RIBBON_SRC = 'route-ribbons';

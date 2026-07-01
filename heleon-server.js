@@ -1734,6 +1734,67 @@ function loadRouteEdges() {
   } catch { ROUTE_EDGES = { edges: [] }; }
 }
 
+// Real OSM traffic-control nodes (signals, stop signs, crossings). Locations
+// only — live red/green states are not publicly available for the Big Island
+// (no HDOT SPaT feed). Served as a map layer and used to attach per-route-edge
+// counts (nControls) so a segment "knows" it has N signals/stops — an ETA
+// feature. See scripts/build-osm-controls.js.
+const CONTROLS_PATH = path.join(__dirname, 'data', 'osm', 'bigisland-controls.json');
+let TRAFFIC_CONTROLS = { controls: [] };
+function loadTrafficControls() {
+  try {
+    TRAFFIC_CONTROLS = JSON.parse(fs.readFileSync(CONTROLS_PATH, 'utf8')) || { controls: [] };
+    const c = TRAFFIC_CONTROLS.controls.length;
+    console.log(`[controls] loaded ${c} OSM traffic-control nodes (signals/stops/crossings)`);
+  } catch { TRAFFIC_CONTROLS = { controls: [] }; }
+}
+
+// For every route-edge, count how many signals/stops sit ON it (within
+// CONTROL_ON_EDGE_M of the edge polyline). This is the per-segment feature the
+// ETA model consumes: {signals, stops} per edge id. Computed once at boot
+// (edges + controls are both static) using a coarse lon/lat bucket so we only
+// test controls near each edge, not all 1195 against all 4867.
+let EDGE_CONTROLS = new Map(); // edgeId -> { signals, stops }
+function ensureTrafficControlIndex() {
+  EDGE_CONTROLS = new Map();
+  const controls = (TRAFFIC_CONTROLS.controls || []).filter(c => c.type === 'signal' || c.type === 'stop');
+  if (!controls.length || !ROUTE_EDGES.edges.length) return;
+  const CONTROL_ON_EDGE_M = 25;
+  const CELL = 0.003; // ~330m buckets
+  const bkey = (lon, lat) => `${Math.round(lon / CELL)},${Math.round(lat / CELL)}`;
+  const grid = new Map();
+  for (const c of controls) {
+    const k = bkey(c.lon, c.lat);
+    if (!grid.has(k)) grid.set(k, []);
+    grid.get(k).push(c);
+  }
+  const distToSegM = (p, a, b) => {
+    const mLat = 111320, mLon = mLat * Math.cos(p[1] * Math.PI / 180);
+    const px = p[0]*mLon, py = p[1]*mLat, ax = a[0]*mLon, ay = a[1]*mLat, bx = b[0]*mLon, by = b[1]*mLat;
+    const dx = bx-ax, dy = by-ay, len2 = dx*dx+dy*dy || 1;
+    let t = ((px-ax)*dx+(py-ay)*dy)/len2; t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px-(ax+dx*t), py-(ay+dy*t));
+  };
+  let matched = 0;
+  for (const e of ROUTE_EDGES.edges) {
+    let signals = 0, stops = 0;
+    const near = new Set();
+    for (const pt of e.coords) for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      const list = grid.get(`${Math.round(pt[0]/CELL)+dx},${Math.round(pt[1]/CELL)+dy}`);
+      if (list) for (const c of list) near.add(c);
+    }
+    for (const c of near) {
+      let on = false;
+      for (let i = 0; i < e.coords.length - 1 && !on; i++) {
+        if (distToSegM([c.lon, c.lat], e.coords[i], e.coords[i+1]) <= CONTROL_ON_EDGE_M) on = true;
+      }
+      if (on) { if (c.type === 'signal') signals++; else stops++; }
+    }
+    if (signals || stops) { EDGE_CONTROLS.set(e.id, { signals, stops }); matched++; }
+  }
+  console.log(`[controls] indexed onto ${matched} route edges`);
+}
+
 // Road graph + spatial index, lazily built once and reused to snap historical
 // GPS trails onto real road edges the same way routes are snapped (see
 // scripts/build-route-edges.js) — so trails ribbon (parallel dashed stripes)
@@ -2183,12 +2244,22 @@ async function handleApi(url, res) {
   // ROUTE_EDGES above. Route colors are resolved here (not baked into the
   // static file) so a route-color change takes effect without regenerating it.
   if (p === '/api/route-edges') {
-    const edges = ROUTE_EDGES.edges.map(e => ({
-      id: e.id,
-      coords: e.coords,
-      routes: e.routeIds.map(rid => ({ routeId: rid, color: (ROUTE_MAP[rid] && ROUTE_MAP[rid].color) || '#888' })),
-    }));
+    const edges = ROUTE_EDGES.edges.map(e => {
+      const ctl = EDGE_CONTROLS.get(e.id);
+      return {
+        id: e.id,
+        coords: e.coords,
+        routes: e.routeIds.map(rid => ({ routeId: rid, color: (ROUTE_MAP[rid] && ROUTE_MAP[rid].color) || '#888' })),
+        ...(ctl ? { signals: ctl.signals, stops: ctl.stops } : {}),
+      };
+    });
     return json(res, { edges });
+  }
+
+  // Real traffic-control locations (signals, stop signs, crossings). Locations
+  // only; no live states exist for this island.
+  if (p === '/api/controls') {
+    return json(res, { generated: TRAFFIC_CONTROLS.generated || null, controls: TRAFFIC_CONTROLS.controls });
   }
 
   if (p === '/api/shapes') {
@@ -3404,6 +3475,8 @@ const server = http.createServer((req, res) => {
   // scripts/snap-routes-to-roads.js to (re)build it when new GTFS patterns appear.
   try { loadRoadSnappedShapes(); } catch (e) { console.error('[road-snap] seed:', e.message); }
   try { loadRouteEdges(); } catch (e) { console.error('[route-edges] seed:', e.message); }
+  try { loadTrafficControls(); } catch (e) { console.error('[controls] seed:', e.message); }
+  try { ensureTrafficControlIndex(); } catch (e) { console.error('[controls] index:', e.message); }
   try { ensureTrailGraph(); } catch (e) { console.error('[trail-graph] seed:', e.message); }
   scheduleMatching();
   buildTripIndex();
