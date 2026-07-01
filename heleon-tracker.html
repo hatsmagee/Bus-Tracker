@@ -1912,21 +1912,110 @@ const RIBBON_SRC = 'route-ribbons';
 const RIBBON_LAYER = 'route-ribbons-line';
 const RIBBON_STRIPE_PX = 3.2; // width of one stripe; a 3-route ribbon is ~3x this, tight with no gap
 
+// ── Geometry helpers for smooth, unbroken ribbons ──
+// The old renderer drew each real-road EDGE as its own separate LineString.
+// MapLibre applies line-offset and line-join PER FEATURE, so at every junction
+// two adjacent edge-features were offset independently and their rounded ends
+// didn't meet — that's the blocky, gappy, "not connected" look. Fix: chain a
+// route's connected edges into ONE polyline, then offset+smooth that single
+// feature so the ribbon is continuous and the corners round cleanly.
+
+const _ptKey = (p) => `${p[0].toFixed(6)},${p[1].toFixed(6)}`;
+
+// Chain a set of edges (each {coords, slot}) belonging to ONE route into
+// connected runs, splitting a run whenever the slot changes (so each emitted
+// feature carries a single constant offset). Edges connect where an endpoint
+// of one equals an endpoint of another (they're built connected server-side).
+function chainRouteEdges(edges) {
+  // Index endpoints -> edge occurrences.
+  const remaining = edges.map((e, i) => ({ i, coords: e.coords, slot: e.slot, used: false }));
+  const byEnd = new Map();
+  for (const e of remaining) {
+    for (const end of [e.coords[0], e.coords[e.coords.length - 1]]) {
+      const k = _ptKey(end);
+      if (!byEnd.has(k)) byEnd.set(k, []);
+      byEnd.get(k).push(e);
+    }
+  }
+  const runs = [];
+  for (const start of remaining) {
+    if (start.used) continue;
+    // Build a run outward from this edge in both directions.
+    start.used = true;
+    let coords = start.coords.slice();
+    const slot = start.slot;
+    // Extend forward from the tail.
+    const extend = (atEndReversed) => {
+      let progress = true;
+      while (progress) {
+        progress = false;
+        const tail = coords[coords.length - 1];
+        const cands = (byEnd.get(_ptKey(tail)) || []).filter(c => !c.used && c.slot === slot);
+        if (!cands.length) break;
+        const nxt = cands[0];
+        nxt.used = true;
+        const nc = _ptKey(nxt.coords[0]) === _ptKey(tail) ? nxt.coords : nxt.coords.slice().reverse();
+        coords = coords.concat(nc.slice(1));
+        progress = true;
+      }
+    };
+    extend();
+    // Extend backward: reverse, extend from the (new) tail, reverse back.
+    coords.reverse();
+    extend();
+    coords.reverse();
+    runs.push({ coords, slot });
+  }
+  return runs;
+}
+
+// Round the corners of a polyline with a Chaikin-style corner cut, giving each
+// bend a small radius so turns look professional instead of hard-angled. Two
+// passes is plenty for a transit-map feel; endpoints are preserved so runs
+// still meet their neighbors exactly.
+function smoothPolyline(coords, passes = 3) {
+  if (coords.length < 3) return coords;
+  let pts = coords;
+  for (let p = 0; p < passes; p++) {
+    const out = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      // Cut each segment at 25% and 75% — classic Chaikin.
+      out.push([a[0] + (b[0] - a[0]) * 0.25, a[1] + (b[1] - a[1]) * 0.25]);
+      out.push([a[0] + (b[0] - a[0]) * 0.75, a[1] + (b[1] - a[1]) * 0.75]);
+    }
+    out.push(pts[pts.length - 1]);
+    pts = out;
+  }
+  return pts;
+}
+
 function renderRouteRibbons() {
   if (!mapReady || !routeEdgesData) return;
-  const features = [];
+  // Group visible edges by route, recording this route's slot on each edge
+  // (slot = its lane among the routes sharing that edge, centered on 0).
+  const byRoute = new Map(); // routeId -> { color, edges: [{coords, slot}] }
   for (const edge of routeEdgesData.edges) {
     const visibleRoutes = edge.routes.filter(r => routeVisible[r.routeId] !== false);
     if (!visibleRoutes.length) continue;
     const n = visibleRoutes.length;
     const center = (n - 1) / 2;
     visibleRoutes.forEach((r, i) => {
+      if (!byRoute.has(r.routeId)) byRoute.set(r.routeId, { color: r.color, edges: [] });
+      byRoute.get(r.routeId).edges.push({ coords: edge.coords, slot: i - center });
+    });
+  }
+
+  const features = [];
+  for (const [routeId, { color, edges }] of byRoute) {
+    // Chain into connected, constant-slot runs, then smooth each run's corners.
+    for (const run of chainRouteEdges(edges)) {
       features.push({
         type: 'Feature',
-        geometry: { type: 'LineString', coordinates: edge.coords },
-        properties: { color: r.color, slot: i - center, routeId: r.routeId, edgeId: edge.id },
+        geometry: { type: 'LineString', coordinates: smoothPolyline(run.coords) },
+        properties: { color, slot: run.slot, routeId },
       });
-    });
+    }
   }
 
   const data = { type: 'FeatureCollection', features };
@@ -1968,19 +2057,28 @@ function renderRouteRibbons() {
 // they're just sparse markers along the trail, not the line geometry itself.
 function renderTrailRibbons() {
   if (!mapReady || !trailEdgesData) return;
-  const features = [];
+  // Same stitch-into-connected-runs + corner-smooth pipeline as the live route
+  // ribbons, so trails are unbroken curved ribbons too (just dashed).
+  const byRoute = new Map();
   for (const edge of trailEdgesData.edges) {
     const visibleRoutes = edge.routes.filter(r => routeVisible[r.routeId] !== false);
     if (!visibleRoutes.length) continue;
     const n = visibleRoutes.length;
     const center = (n - 1) / 2;
     visibleRoutes.forEach((r, i) => {
+      if (!byRoute.has(r.routeId)) byRoute.set(r.routeId, { color: r.color, edges: [] });
+      byRoute.get(r.routeId).edges.push({ coords: edge.coords, slot: i - center });
+    });
+  }
+  const features = [];
+  for (const [routeId, { color, edges }] of byRoute) {
+    for (const run of chainRouteEdges(edges)) {
       features.push({
         type: 'Feature',
-        geometry: { type: 'LineString', coordinates: edge.coords },
-        properties: { color: r.color, slot: i - center, routeId: r.routeId, edgeId: edge.id },
+        geometry: { type: 'LineString', coordinates: smoothPolyline(run.coords) },
+        properties: { color, slot: run.slot, routeId },
       });
-    });
+    }
   }
   const data = { type: 'FeatureCollection', features };
   const src = map.getSource('trails');
