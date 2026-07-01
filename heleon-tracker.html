@@ -114,15 +114,39 @@
   @keyframes flowDash { to { stroke-dashoffset: -200; } }
   .bus-ahead-line { animation: flowDash 4s linear infinite; }
 
-  /* ─── STREAMFLOW WATER WHEEL (spins faster with higher discharge) ── */
+  /* ─── STREAMFLOW: wooden undershot water wheel over a flowing stream ──
+     An undershot mill wheel (water strikes the lower paddles): oak rim + arms +
+     paddles rendered in wood tones. Only the .wheel-spin group rotates; the
+     stream band flows past underneath independently, so it reads as a wheel
+     being turned BY a stream, not a spinning icon. Both speeds scale with the
+     gauge's discharge (set inline per-marker). */
   @keyframes waterWheelSpin { to { transform: rotate(360deg); } }
+  @keyframes streamFlow { to { background-position: -48px 0; } }
   .stream-wheel { display:flex; align-items:center; gap:5px; cursor:pointer; }
-  .stream-wheel .wheel { width:26px; height:26px; flex-shrink:0;
-    animation: waterWheelSpin linear infinite; transform-origin:50% 50%;
-    filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
-  .stream-wheel .rate { font-size:10px; font-weight:700; color:#082f49;
-    background:rgba(255,255,255,.9); border:1px solid #bae6fd; border-radius:9px;
+  .stream-wheel .rig { position:relative; width:34px; height:34px; flex-shrink:0;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+  .stream-wheel svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+  .stream-wheel .wheel-spin { transform-origin:17px 15px;
+    animation: waterWheelSpin linear infinite; }
+  /* The stream: a repeating ripple gradient sliding left→right under the wheel. */
+  .stream-wheel .stream { position:absolute; left:-6px; right:-6px; bottom:1px; height:8px;
+    border-radius:3px; overflow:hidden;
+    background:
+      repeating-linear-gradient(90deg,
+        rgba(255,255,255,.55) 0 3px, rgba(255,255,255,0) 3px 10px),
+      linear-gradient(180deg,#7ec7f0,#2e83c9);
+    background-size:24px 100%, 100% 100%;
+    animation: streamFlow linear infinite;
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.4); }
+  .stream-wheel .rate { font-size:10px; font-weight:700; color:#0b3a5b;
+    background:rgba(255,255,255,.92); border:1px solid #bae6fd; border-radius:9px;
     padding:1px 5px; white-space:nowrap; line-height:1.4; }
+  /* Gauges with no discharge reading: half-size, faded, no stream band, so the
+     live-flow wheels stand out and the stage-only ones stay out of the way. */
+  .stream-wheel.no-flow { opacity:.7; }
+  .stream-wheel.no-flow .rig { width:18px; height:18px; }
+  .stream-wheel.no-flow .stream { display:none; }
+  .stream-wheel.no-flow .rate { font-size:8px; padding:0 3px; opacity:.85; }
 
   /* ─── OCCUPANCY BAR (inside bus marker) ───────────────────────────── */
   .bus-occ-bar {
@@ -1942,22 +1966,48 @@ function wheelSpinSeconds(cfs) {
   const f = Math.min(1, Math.log10(cfs + 1) / Math.log10(1001)); // 0..1 over 0..1000 cfs
   return 6 - f * 5.5; // 6s (slow) → 0.5s (fast)
 }
+// The stream flows faster than the rim turns (water outruns the wheel), same
+// log scale on discharge; 0 flow = still water.
+function streamFlowSeconds(cfs) {
+  if (!(cfs > 0)) return 0;
+  const f = Math.min(1, Math.log10(cfs + 1) / Math.log10(1001));
+  return 2.2 - f * 1.9; // 2.2s (slow drift) → 0.3s (fast rush)
+}
 
-function streamWheelSvg(cfs) {
-  // A simple 8-spoke water wheel (undershot-style), tinted by flow strength.
-  const strong = Math.min(1, (cfs || 0) / 300);
-  const rim = `rgb(${29 + strong*20},${78 + strong*40},${216 - strong*40})`;
-  let spokes = '';
-  for (let i = 0; i < 8; i++) {
-    const a = (i * Math.PI) / 4;
-    spokes += `<line x1="13" y1="13" x2="${13 + 11*Math.cos(a)}" y2="${13 + 11*Math.sin(a)}" stroke="${rim}" stroke-width="1.6"/>`;
-    // paddle at rim
-    spokes += `<circle cx="${13 + 11*Math.cos(a)}" cy="${13 + 11*Math.sin(a)}" r="1.8" fill="#60a5fa"/>`;
+// A wooden UNDERSHOT mill wheel (oak tones): outer + inner rim ring, 8 arms, a
+// flat paddle board at each arm's tip, and a hub. Only the returned <g> spins;
+// the stream (drawn in the DOM, not here) flows past its lower paddles. Uses a
+// unique gradient id per marker so multiple wheels don't share defs.
+function woodenWheelSvg(uid) {
+  const cx = 17, cy = 15, R = 12.5, Rin = 9.5, hub = 3;
+  const N = 8;
+  let arms = '', paddles = '';
+  for (let i = 0; i < N; i++) {
+    const a = (i * 2 * Math.PI) / N;
+    const ox = cx + Math.cos(a), oy = cy + Math.sin(a); // hub offset so arms look socketed
+    const rx = cx + R * Math.cos(a), ry = cy + R * Math.sin(a);
+    arms += `<line x1="${(cx).toFixed(1)}" y1="${(cy).toFixed(1)}" x2="${rx.toFixed(1)}" y2="${ry.toFixed(1)}" stroke="url(#${uid}g)" stroke-width="1.7" stroke-linecap="round"/>`;
+    // Paddle: a short board tangent to the rim at each arm tip.
+    const tx = -Math.sin(a), ty = Math.cos(a); // tangent
+    const px = cx + (R + 0.6) * Math.cos(a), py = cy + (R + 0.6) * Math.sin(a);
+    const w = 2.6; // half-length of paddle
+    paddles += `<line x1="${(px - tx*w).toFixed(1)}" y1="${(py - ty*w).toFixed(1)}" x2="${(px + tx*w).toFixed(1)}" y2="${(py + ty*w).toFixed(1)}" stroke="#7a4a1e" stroke-width="2.4" stroke-linecap="butt"/>`;
   }
-  return `<svg class="wheel" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="13" cy="13" r="11.5" stroke="${rim}" stroke-width="2" fill="rgba(96,165,250,.18)"/>
-    ${spokes}
-    <circle cx="13" cy="13" r="2.4" fill="${rim}"/>
+  return `<svg viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="${uid}g" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#b07a3e"/><stop offset=".5" stop-color="#8a5a24"/>
+        <stop offset="1" stop-color="#5e3a15"/>
+      </linearGradient>
+    </defs>
+    <g class="wheel-spin">
+      ${paddles}
+      <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="url(#${uid}g)" stroke-width="2.2"/>
+      <circle cx="${cx}" cy="${cy}" r="${Rin}" fill="none" stroke="url(#${uid}g)" stroke-width="1.4" opacity=".85"/>
+      ${arms}
+      <circle cx="${cx}" cy="${cy}" r="${hub}" fill="#6b4420" stroke="#3f2810" stroke-width="1"/>
+      <circle cx="${cx}" cy="${cy}" r="1" fill="#2a1a08"/>
+    </g>
   </svg>`;
 }
 
@@ -1969,28 +2019,49 @@ function renderStreamflowWheels() {
     const p = f.properties, site = p.site_no;
     seen.add(site);
     const cfs = p.value != null ? +p.value : 0;
+    const hasFlow = p.value != null;
     const spin = wheelSpinSeconds(cfs);
-    const rateTxt = p.value != null ? `${cfs.toFixed(cfs < 10 ? 1 : 0)} ft³/s` : '—';
+    const streamSec = streamFlowSeconds(cfs);
+    // Pick the headline reading: discharge if present, else the first other
+    // reading the gauge does report (gage height, water temp, …) — never "—"
+    // if ANY data exists.
+    const readings = p.readings || {};
+    const fmt = r => `${(+r.value).toFixed(Math.abs(r.value) < 10 ? 1 : 0)} ${r.unit}`;
+    let rateTxt;
+    if (hasFlow) rateTxt = fmt({ value: cfs, unit: 'ft³/s' });
+    else {
+      const other = Object.values(readings)[0];
+      rateTxt = other ? `${other.label}: ${fmt(other)}` : '—';
+    }
+    // Full multi-line readout for the title/hover.
+    const allTxt = Object.values(readings).map(r => `${r.label}: ${fmt(r)}`).join(' · ') || 'no current reading';
     let m = streamWheelMarkers[site];
     if (!m) {
+      const uid = 'ww' + String(site).replace(/[^a-z0-9]/gi, '');
       const el = document.createElement('div');
       el.className = 'stream-wheel';
-      el.innerHTML = `${streamWheelSvg(cfs)}<span class="rate"></span>`;
-      el.title = `${p.name || 'USGS gauge'} — ${rateTxt}`;
-      el.onclick = () => showLayerHover(
-        `<div style="font-weight:600;">💧 ${escapeHtml(p.name || 'Stream gauge')}</div>
-         <div style="color:var(--muted);font-size:11px;">${rateTxt}</div>
-         <div style="color:var(--muted);font-size:10px;">USGS ${escapeHtml(site)}${p.ts ? ' · ' + new Date(p.ts).toLocaleString() : ''}</div>`,
-        window.innerWidth / 2, 80);
+      el.innerHTML = `<div class="rig">${woodenWheelSvg(uid)}<div class="stream"></div></div><span class="rate"></span>`;
       m = new maplibregl.Marker({ element: el, anchor: 'center' })
         .setLngLat(f.geometry.coordinates).addTo(map);
       streamWheelMarkers[site] = m;
     }
     const el = m.getElement();
-    const wheel = el.querySelector('.wheel');
-    // Spin speed = flow rate; 0 flow = paused.
+    // Gauges with no discharge read as SECONDARY: shrink them so they don't
+    // crowd the flowing wheels, and don't animate a stream that isn't measured.
+    el.classList.toggle('no-flow', !hasFlow);
+    el.onclick = () => showLayerHover(
+      `<div style="font-weight:600;">💧 ${escapeHtml(p.name || 'Stream gauge')}</div>
+       <div style="color:var(--muted);font-size:11px;">${escapeHtml(allTxt)}</div>
+       <div style="color:var(--muted);font-size:10px;">USGS ${escapeHtml(site)}${p.ts ? ' · ' + new Date(p.ts).toLocaleString() : ''}</div>`,
+      window.innerWidth / 2, 80);
+    el.title = `${p.name || 'USGS gauge'} — ${allTxt}`;
+    const wheel = el.querySelector('.wheel-spin');
+    const stream = el.querySelector('.stream');
+    // Both the wheel spin and the stream flow scale with discharge; 0 flow → still.
     wheel.style.animationDuration = spin ? `${spin.toFixed(2)}s` : '0s';
     wheel.style.animationPlayState = spin ? 'running' : 'paused';
+    stream.style.animationDuration = streamSec ? `${streamSec.toFixed(2)}s` : '0s';
+    stream.style.animationPlayState = streamSec ? 'running' : 'paused';
     el.querySelector('.rate').textContent = rateTxt;
     el.title = `${p.name || 'USGS gauge'} — ${rateTxt}`;
     m.setLngLat(f.geometry.coordinates);

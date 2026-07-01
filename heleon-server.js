@@ -3332,28 +3332,60 @@ async function pollPubSafetyFacilities() {
 // (state, bbox, OR sites), and state=HI also pulls in Kauai/Maui sites.
 let streamflowCache = null;
 let streamflowLastPollTs = null, streamflowLastError = null;
+// Which USGS parameters we ask for, and how to present each. A gauge often
+// reports only SOME of these — so instead of showing "—" when discharge is
+// missing, we surface whatever it does have (gage height, water temp, etc.).
+const NWIS_PARAMS = {
+  '00060': { key: 'discharge', label: 'Flow',        unit: 'ft³/s' },
+  '00065': { key: 'gageHeight', label: 'Gage height', unit: 'ft' },
+  '00010': { key: 'waterTempC', label: 'Water temp',  unit: '°C' },
+  '00045': { key: 'precip',     label: 'Precip',       unit: 'in' },
+};
 async function pollStreamflow() {
   try {
-    const data = await fetchJson('waterservices.usgs.gov', '/nwis/iv/?format=json&stateCd=hi&siteType=ST&parameterCd=00060&period=PT1H',
+    const pc = Object.keys(NWIS_PARAMS).join(',');
+    // siteType ST (stream) + LK (lake) so we don't miss gauges that only report
+    // stage; ask for every parameter above in one call.
+    const data = await fetchJson('waterservices.usgs.gov',
+      `/nwis/iv/?format=json&stateCd=hi&siteType=ST&parameterCd=${pc}&period=PT2H`,
       { 'User-Agent': 'heleon-tracker' });
     const ts = (data.value && data.value.timeSeries) || [];
-    const features = [];
+    // Group all parameter series by site (USGS returns one series per site×param).
+    const bySite = new Map();
     for (const s of ts) {
       const g = s.sourceInfo.geoLocation.geogLocation;
       const lat = g.latitude, lon = g.longitude;
       if (lat < BIGISLAND_BBOX.minLat || lat > BIGISLAND_BBOX.maxLat ||
           lon < BIGISLAND_BBOX.minLon || lon > BIGISLAND_BBOX.maxLon) continue;
+      const siteNo = s.sourceInfo.siteCode[0].value;
+      const paramCd = s.variable && s.variable.variableCode && s.variable.variableCode[0] && s.variable.variableCode[0].value;
+      const meta = NWIS_PARAMS[paramCd];
+      if (!meta) continue;
       const vals = (s.values && s.values[0] && s.values[0].value) || [];
       const latest = vals[vals.length - 1];
+      if (!latest || latest.value == null || latest.value === 'n/a') continue;
+      const num = parseFloat(latest.value);
+      if (!Number.isFinite(num) || num <= -999999) continue; // USGS -999999 = no data
+      let rec = bySite.get(siteNo);
+      if (!rec) { rec = { site_no: siteNo, name: s.sourceInfo.siteName, lat, lon, readings: {}, ts: null }; bySite.set(siteNo, rec); }
+      rec.readings[meta.key] = { value: num, label: meta.label, unit: meta.unit };
+      if (latest.dateTime && (!rec.ts || latest.dateTime > rec.ts)) rec.ts = latest.dateTime;
+    }
+    const features = [];
+    for (const rec of bySite.values()) {
+      const d = rec.readings.discharge;
       features.push({
         type: 'Feature',
-        geometry: { type: 'Point', coordinates: [lon, lat] },
+        geometry: { type: 'Point', coordinates: [rec.lon, rec.lat] },
         properties: {
-          site_no: s.sourceInfo.siteCode[0].value,
-          name: s.sourceInfo.siteName,
-          value: latest && latest.value && latest.value !== 'n/a' ? parseFloat(latest.value) : null,
-          unit: 'ft³/s',  // parameter 00060 = discharge in cubic feet per second
-          ts: latest ? latest.dateTime : null,
+          site_no: rec.site_no,
+          name: rec.name,
+          // `value`/`unit` keep the old discharge-first contract for the wheel
+          // spin; `readings` carries EVERY parameter this gauge reports.
+          value: d ? d.value : null,
+          unit: 'ft³/s',
+          readings: rec.readings,
+          ts: rec.ts,
         },
       });
     }
