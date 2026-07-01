@@ -2966,6 +2966,19 @@ async function handleApi(url, res) {
     } catch (e) { return json(res, { site, param, range, series: [], error: e.message }); }
   }
 
+  // ── APRS (ham radio real-time positions, keyless) ─────────────────────────
+  if (p === '/api/aprs') {
+    const now = Date.now();
+    const STALE = 60 * 60 * 1000; // drop stations not heard in an hour
+    const list = [...aprsCache.values()].filter(s => now - s.ts < STALE);
+    return json(res, { ts: now, lastRxTs: aprsLastRxTs, lastError: aprsLastError, count: list.length, stations: list });
+  }
+
+  // ── OCEAN (NDBC buoys + NOAA tide stations, keyless) ──────────────────────
+  if (p === '/api/ocean') {
+    return json(res, { ts: Date.now(), lastPollTs: oceanLastPollTs, lastError: oceanLastError, stations: oceanCache });
+  }
+
   // ── SUMMIT OBSERVATORIES (Mauna Kea towers, live conditions, no key) ──────
   if (p === '/api/summits') {
     return json(res, { ts: Date.now(), lastPollTs: summitLastPollTs, lastError: summitLastError, summits: summitCache });
@@ -3658,6 +3671,130 @@ async function pollSummits() {
   if (next.length) { summitCache = next; summitLastPollTs = Date.now(); summitLastError = null; }
 }
 
+// ─── OCEAN: NDBC wave/weather buoys + NOAA tide stations (keyless) ────────────
+// Real marine conditions around the Big Island. NDBC buoys emit a fixed-width
+// realtime2 text file (latest row = now); NOAA CO-OPS gives live water level.
+const NDBC_BUOYS = [
+  { id: '51000', name: 'NDBC 51000 — N of Hawaii', lat: 23.53, lon: -153.79 },
+  { id: '51001', name: 'NDBC 51001 — NW Hawaii', lat: 23.44, lon: -162.06 },
+  { id: '51002', name: 'NDBC 51002 — S of Hawaii', lat: 17.09, lon: -157.81 },
+  { id: '51004', name: 'NDBC 51004 — SE of Hawaii', lat: 17.52, lon: -152.24 },
+  { id: '51206', name: 'NDBC 51206 — Hilo (Waverider)', lat: 19.78, lon: -154.97 },
+  { id: '51207', name: 'NDBC 51207 — Kaneohe', lat: 21.48, lon: -157.75 },
+];
+const TIDE_STATIONS = [
+  { id: '1617760', name: 'Hilo Bay tide', lat: 19.7303, lon: -155.0556 },
+  { id: '1617433', name: 'Kawaihae tide', lat: 20.0366, lon: -155.8294 },
+];
+let oceanCache = [];
+let oceanLastPollTs = null, oceanLastError = null;
+function parseNdbc(text) {
+  const lines = text.split('\n').filter(l => l && !l.startsWith('#'));
+  if (!lines.length) return null;
+  const c = lines[0].trim().split(/\s+/);
+  // cols: YY MM DD hh mm WDIR WSPD GST WVHT DPD APD MWD PRES ATMP WTMP DEWP VIS PTDY TIDE
+  const num = v => (v && v !== 'MM' ? parseFloat(v) : null);
+  return {
+    windDir: num(c[5]), windMs: num(c[6]), gustMs: num(c[7]),
+    waveHtM: num(c[8]), domPeriodS: num(c[9]), waveDir: num(c[11]),
+    pressureHpa: num(c[12]), airTempC: num(c[13]), waterTempC: num(c[14]),
+  };
+}
+async function pollOcean() {
+  const next = [];
+  await Promise.all(NDBC_BUOYS.map(async b => {
+    try {
+      const t = await fetchText('www.ndbc.noaa.gov', `/data/realtime2/${b.id}.txt`, { 'User-Agent': 'heleon-tracker' });
+      const r = parseNdbc(t);
+      if (r) next.push({ kind: 'buoy', id: b.id, name: b.name, lat: b.lat, lon: b.lon, readings: r });
+    } catch (e) { /* skip this buoy */ }
+  }));
+  await Promise.all(TIDE_STATIONS.map(async s => {
+    try {
+      const j = await fetchJson('api.tidesandcurrents.noaa.gov',
+        `/api/prod/datagetter?date=latest&station=${s.id}&product=water_level&datum=MLLW&units=english&time_zone=lst_ldt&format=json`,
+        { 'User-Agent': 'heleon-tracker' });
+      const d = j.data && j.data[0];
+      if (d) next.push({ kind: 'tide', id: s.id, name: s.name, lat: s.lat, lon: s.lon, readings: { waterLevelFt: parseFloat(d.v), at: d.t } });
+    } catch (e) { /* skip */ }
+  }));
+  if (next.length) { oceanCache = next; oceanLastPollTs = Date.now(); oceanLastError = null; }
+  else oceanLastError = 'no ocean stations reporting';
+}
+
+// ─── APRS-IS (ham radio real-time positions: stations, vehicles, wx) ──────────
+// Keyless read-only feed from the APRS-Internet System. We connect with an area
+// filter around the Big Island and parse position packets — this surfaces real
+// moving things hams beacon: vehicles/trackers, handhelds, weather stations,
+// digipeaters. RX-only login needs no passcode (pass -1). Runs on the server so
+// it works in production even where this dev sandbox blocks the TCP port.
+const net = require('net');
+const APRS_ENABLED = process.env.APRS_DISABLE ? false : true;
+let aprsCache = new Map();  // callsign -> { call, lat, lon, symbol, comment, kind, ts }
+let aprsSock = null, aprsLastError = null, aprsLastRxTs = null;
+
+// Decode a standard uncompressed APRS lat/lon like "1947.50N/15528.30Wk".
+function aprsParseUncompressed(s) {
+  const m = s.match(/(\d{2})(\d{2}\.\d+)([NS])[\/\\](\d{3})(\d{2}\.\d+)([EW])(.)/);
+  if (!m) return null;
+  let lat = (+m[1]) + (+m[2]) / 60; if (m[3] === 'S') lat = -lat;
+  let lon = (+m[4]) + (+m[5]) / 60; if (m[6] === 'W') lon = -lon;
+  return { lat, lon, symbol: m[7] };
+}
+// Compressed format: "/YYYYXXXX$csT" after the symbol-table char.
+function aprsParseCompressed(body) {
+  const m = body.match(/[\/\\]([\x21-\x7b]{4})([\x21-\x7b]{4})(.)/);
+  if (!m) return null;
+  const dec = (s) => { let v = 0; for (const ch of s) v = v * 91 + (ch.charCodeAt(0) - 33); return v; };
+  const lat = 90 - dec(m[1]) / 380926;
+  const lon = -180 + dec(m[2]) / 190463;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return { lat, lon, symbol: m[3] };
+}
+function parseAprsPacket(line) {
+  const gt = line.indexOf('>'); const colon = line.indexOf(':');
+  if (gt < 0 || colon < 0) return null;
+  const call = line.slice(0, gt);
+  const payload = line.slice(colon + 1);
+  const dti = payload[0];
+  if (!'!=@/`\'.'.includes(dti)) return null; // not a position/weather packet
+  // Strip a leading timestamp on @// packets.
+  let body = payload.slice(1);
+  const pos = aprsParseUncompressed(body) || aprsParseCompressed(body);
+  if (!pos) return null;
+  if (pos.lat < 18 || pos.lat > 21 || pos.lon < -157 || pos.lon > -154) return null; // Big Island window
+  // Classify by APRS symbol code: '>' car, 'k' truck, '_' wx station, etc.
+  const sym = pos.symbol;
+  let kind = 'station';
+  if ('>kjuvs'.includes(sym)) kind = 'vehicle';
+  else if (sym === '_') kind = 'weather';
+  else if (sym === 'Y' || sym === 'y') kind = 'boat';
+  const comment = body.replace(/^[^\s]*\s?/, '').slice(0, 60);
+  return { call, lat: pos.lat, lon: pos.lon, symbol: sym, kind, comment, ts: Date.now() };
+}
+function connectAprs() {
+  if (!APRS_ENABLED) return;
+  try {
+    aprsSock = net.connect(14580, 'rotate.aprs2.net');
+    aprsSock.setEncoding('utf8');
+    let buf = '';
+    aprsSock.on('connect', () => {
+      aprsSock.write('user HELEON-RO pass -1 vers heleon 1.0 filter r/19.6/-155.5/300\r\n');
+    });
+    aprsSock.on('data', d => {
+      buf += d; const parts = buf.split('\n'); buf = parts.pop();
+      for (const raw of parts) {
+        const line = raw.trim();
+        if (!line || line.startsWith('#')) continue;
+        const pkt = parseAprsPacket(line);
+        if (pkt) { aprsCache.set(pkt.call, pkt); aprsLastRxTs = Date.now(); }
+      }
+    });
+    aprsSock.on('error', e => { aprsLastError = e.message; });
+    aprsSock.on('close', () => { setTimeout(connectAprs, 30000); }); // auto-reconnect
+  } catch (e) { aprsLastError = e.message; setTimeout(connectAprs, 60000); }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin':'*' }); res.end(); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -3767,12 +3904,15 @@ const server = http.createServer((req, res) => {
   pollStreamflow();
   fetchWeatherStations();
   pollSummits();
+  pollOcean();
+  connectAprs();
   setInterval(pollEarthquakes, 5 * 60 * 1000);
   setInterval(pollAlerts, 5 * 60 * 1000);
   setInterval(pollWildfireHotspots, 5 * 60 * 1000);
   setInterval(pollStreamflow, 15 * 60 * 1000);
   setInterval(fetchWeatherStations, 10 * 60 * 1000);
   setInterval(pollSummits, 5 * 60 * 1000);
+  setInterval(pollOcean, 10 * 60 * 1000);
   setInterval(pollHazardZones, 24 * 60 * 60 * 1000);
   setInterval(pollPubSafetyFacilities, 24 * 60 * 60 * 1000);
   setTimeout(pruneDb, 30000);                // full prune+VACUUM shortly after boot

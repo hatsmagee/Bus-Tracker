@@ -820,6 +820,8 @@ function initMap() {
     // Layers whose boot fetch may have resolved before the style loaded — (re)draw.
     try { fetchSummits(); } catch (e) {}
     try { fetchStreamflow(); } catch (e) {}
+    try { fetchOcean(); } catch (e) {}
+    try { fetchAprs(); } catch (e) {}
   });
   // Re-fan overlapping buses whenever the camera settles (overlap is zoom/pan
   // dependent — buses separate as you zoom in).
@@ -1248,6 +1250,49 @@ function initMapLayers() {
       <div style="color:var(--muted);font-size:11px;">${t} · ${h} RH · ${w} wind</div>
       <div style="color:var(--muted);font-size:10px;">NWS ${escapeHtml(p.stationId)} · ${p.elevation ? Math.round(+p.elevation) + ' m' : '?'} elev · ${p.timestamp ? new Date(p.timestamp).toLocaleString() : '—'}</div>`;
   });
+
+  // Ocean stations: NDBC wave/weather buoys + NOAA tide gauges (keyless). Buoys
+  // show wave height, tide gauges show water level. Always on.
+  map.addSource('ocean', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'ocean-dot', type: 'circle', source: 'ocean',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 4, 12, 7],
+      'circle-color': ['match', ['get', 'kind'], 'tide', '#0891b2', /* buoy */ '#0369a1'],
+      'circle-stroke-width': 2, 'circle-stroke-color': '#e0f2fe',
+    },
+  });
+  map.addLayer({
+    id: 'ocean-label', type: 'symbol', source: 'ocean',
+    layout: { 'text-field': ['get', 'badge'], 'text-size': 10, 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-offset': [0, 1.3], 'text-anchor': 'top', 'text-allow-overlap': false },
+    paint: { 'text-color': '#075985', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+  });
+  wireLayerHover('ocean-dot', p => {
+    const r = JSON.parse(p.readings || '{}');
+    const L = [];
+    if (r.waveHtM != null) L.push(`🌊 ${(+r.waveHtM).toFixed(1)} m${r.domPeriodS != null ? ' @ ' + Math.round(r.domPeriodS) + 's' : ''}`);
+    if (r.waterTempC != null) L.push(`🌡️ sea ${(+r.waterTempC).toFixed(1)}°C`);
+    if (r.windMs != null) L.push(`💨 ${(+r.windMs).toFixed(0)} m/s${r.windDir != null ? ' @ ' + Math.round(r.windDir) + '°' : ''}`);
+    if (r.pressureHpa != null) L.push(`${Math.round(r.pressureHpa)} hPa`);
+    if (r.waterLevelFt != null) L.push(`tide ${(+r.waterLevelFt).toFixed(2)} ft`);
+    return `<div style="font-weight:600;">${p.kind === 'tide' ? '🌊' : '🛟'} ${escapeHtml(p.name)}</div>
+      <div style="color:var(--muted);font-size:11px;">${L.join(' · ') || 'no reading'}</div>`;
+  });
+
+  // APRS ham-radio positions (vehicles/stations/weather beacons, keyless). Real
+  // moving things hams transmit. Symbol-tinted by kind. Populates in production.
+  map.addSource('aprs', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'aprs-dot', type: 'circle', source: 'aprs',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 3, 14, 6],
+      'circle-color': ['match', ['get', 'kind'], 'vehicle', '#16a34a', 'weather', '#f59e0b', 'boat', '#0369a1', /* station */ '#dc2626'],
+      'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff', 'circle-opacity': 0.9,
+    },
+  });
+  wireLayerHover('aprs-dot', p => `<div style="font-weight:600;font-family:monospace;">📻 ${escapeHtml(p.call)}</div>
+    <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.kind)}${p.comment ? ' · ' + escapeHtml(p.comment) : ''}</div>`);
 
   // Summit observatories (Maunakea CFHT tower, Mauna Loa NOAA) — live conditions
   // straight from the observatories, no key. A telescope glyph with a small
@@ -2142,6 +2187,38 @@ async function fetchSummits() {
         properties: { name: s.name, elevM: s.elevM, badge, readings: JSON.stringify(r) } };
     });
     map.getSource('summits').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
+}
+
+// Ocean stations (NDBC buoys + NOAA tides). Always on.
+async function fetchOcean() {
+  try {
+    const res = await fetch('/api/ocean');
+    const data = await res.json();
+    if (!mapReady || !map.getSource('ocean')) return;
+    const feats = (data.stations || []).map(s => {
+      const r = s.readings || {};
+      let badge = '🛟';
+      if (r.waveHtM != null) badge = `🌊 ${(+r.waveHtM).toFixed(1)}m`;
+      else if (r.waterLevelFt != null) badge = `🌊 ${(+r.waterLevelFt).toFixed(1)}ft`;
+      else if (r.waterTempC != null) badge = `${(+r.waterTempC).toFixed(0)}°C`;
+      return { type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+        properties: { name: s.name, kind: s.kind, badge, readings: JSON.stringify(r) } };
+    });
+    map.getSource('ocean').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
+}
+
+// APRS ham positions (populates in production; sandbox blocks the TCP port).
+async function fetchAprs() {
+  try {
+    const res = await fetch('/api/aprs');
+    const data = await res.json();
+    if (!mapReady || !map.getSource('aprs')) return;
+    const feats = (data.stations || []).map(s => ({
+      type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+      properties: { call: s.call, kind: s.kind, comment: s.comment || '' } }));
+    map.getSource('aprs').setData({ type: 'FeatureCollection', features: feats });
   } catch (e) { /* keep last */ }
 }
 
@@ -5221,6 +5298,8 @@ Promise.all([
   fetchStreamflow(),
   fetchWeatherStations(),
   fetchSummits(),
+  fetchOcean(),
+  fetchAprs(),
 ]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
@@ -5243,7 +5322,9 @@ setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
 setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); }, 15 * 60 * 1000);
+setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); }, 15 * 60 * 1000);
+// APRS moves faster (vehicles) — refresh more often when it has data.
+setInterval(() => { if (!document.hidden) fetchAprs(); }, 60 * 1000);
 
 // Fast initial catch-up: on a fresh page load the server's first OpenSky/AIS poll
 // may not have completed yet, so the startup fetch returns 0 and the map looks
