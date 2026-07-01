@@ -21,7 +21,7 @@
 const fs = require('fs');
 const path = require('path');
 const { loadRoadGraph, buildEdgeIndex } = require('../road-graph.js');
-const { loadRawGtfsShapesForCli, matchedEdgeSequenceForCli } = require('./snap-routes-to-roads.js');
+const { loadRawGtfsShapesForCli, connectedEdgePathForCli } = require('./snap-routes-to-roads.js');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -47,7 +47,7 @@ async function main() {
     if (!entry.coords || entry.coords.length < 2 || entry.route_id == null) continue;
     let edgeSeq;
     try {
-      edgeSeq = matchedEdgeSequenceForCli(graph, edgeIndex, entry.coords);
+      edgeSeq = connectedEdgePathForCli(graph, edgeIndex, entry.coords);
     } catch (e) {
       console.error(`  pattern ${key} failed: ${e.message}`);
       continue;

@@ -2043,14 +2043,17 @@ async function handleApi(url, res) {
     // through unrelated roads.
     const edgeTrails = new Map(); // edgeIdx -> Map(vehicle_id -> {route_id, color-relevant info})
     if (TRAIL_GRAPH) {
-      const { matchedEdgeSequenceForCli } = require('./scripts/snap-routes-to-roads.js');
+      const { connectedEdgePathForCli } = require('./scripts/snap-routes-to-roads.js');
       for (const v of out) {
         if (!v.points || v.points.length < 2) continue;
         if (v.route_id == null) continue; // no route to ribbon/color — leave off this layer entirely
         const rawCoords = v.points.map(p => [p[0], p[1]]);
         let edgeSeq;
         try {
-          edgeSeq = matchedEdgeSequenceForCli(TRAIL_GRAPH, TRAIL_EDGE_INDEX, rawCoords);
+          // Same connected-path builder the live route ribbons use, so a
+          // vehicle's historical trail is one unbroken road-snapped chain
+          // (dashed on the client) instead of scattered edge fragments.
+          edgeSeq = connectedEdgePathForCli(TRAIL_GRAPH, TRAIL_EDGE_INDEX, rawCoords);
         } catch (e) { continue; }
         for (const edgeIdx of edgeSeq) {
           if (edgeIdx == null) continue;

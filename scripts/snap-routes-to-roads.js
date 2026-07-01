@@ -43,7 +43,7 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { loadRoadGraph, buildEdgeIndex, nearestPointOnGraph, shortestPath, nodeKey } = require('../road-graph.js');
+const { loadRoadGraph, buildEdgeIndex, nearestPointOnGraph, shortestPath, nodeKey, edgeCoordsFrom } = require('../road-graph.js');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -152,6 +152,107 @@ function matchedEdgeSequence(graph, edgeIndex, rawCoords) {
     if (!changed) break;
   }
   return edgeSeq;
+}
+
+// ONE fully-connected ordered edge walk for a shape — the organism the ribbon
+// needs: no nulls, no floating edges, every consecutive pair shares a graph
+// node so the drawn ribbon is a single unbroken chain. Built by taking the
+// matched edge sequence and, wherever two consecutive matched edges don't
+// already touch, inserting the real shortest road path between them (whole real
+// edges only). Any matched edge that can't be reached from the current path end
+// within BRIDGE_MAX_M is DROPPED rather than left as a floating segment — the
+// bus's own next in-range match will re-anchor the walk. The result is
+// guaranteed connected: scripts/diagnose-route-connectivity.js should report 0
+// breaks / 0 gaps for every route built from this.
+const BRIDGE_MAX_M = 4000; // generous: rural GTFS shapes can skip long stretches between sparse points
+function connectedEdgePath(graph, edgeIndex, rawCoords) {
+  const rawSeq = matchedEdgeSequence(graph, edgeIndex, rawCoords)
+    .filter(x => x != null);
+  if (rawSeq.length === 0) return [];
+
+  const out = [];               // ordered edge indices, guaranteed connected
+  let curNode = null;           // graph node where the assembled path currently ends
+
+  // Choose the starting orientation of the first edge so its FAR end faces the
+  // second matched edge — keeps the natural travel direction.
+  const pushEdge = (edgeIdx, entryNode) => {
+    const e = graph.edges[edgeIdx];
+    // entryNode is the node we arrive at this edge through; leave via the other.
+    out.push(edgeIdx);
+    curNode = e.a === entryNode ? e.b : e.a;
+  };
+
+  for (let s = 0; s < rawSeq.length; s++) {
+    const edgeIdx = rawSeq[s];
+    const e = graph.edges[edgeIdx];
+    if (curNode == null) {
+      // First edge. Orient it toward the next matched edge if there is one.
+      let entry = e.a;
+      if (s + 1 < rawSeq.length) {
+        const n = graph.edges[rawSeq[s + 1]];
+        // If e.a is closer (shares/near) to next edge, enter via e.b so we exit at e.a toward next.
+        const da = Math.min(nodeGapM(graph, e.a, n.a), nodeGapM(graph, e.a, n.b));
+        const db = Math.min(nodeGapM(graph, e.b, n.a), nodeGapM(graph, e.b, n.b));
+        entry = da < db ? e.b : e.a; // exit toward the nearer end
+      }
+      pushEdge(edgeIdx, entry);
+      continue;
+    }
+
+    // Already connected? (edge touches current path end)
+    if (e.a === curNode || e.b === curNode) {
+      pushEdge(edgeIdx, curNode);
+      continue;
+    }
+
+    // Not touching — bridge with the real shortest path to whichever end of
+    // this edge is reachable and nearer.
+    let bridgeToA = shortestPath(graph, curNode, e.a, BRIDGE_MAX_M);
+    let bridgeToB = shortestPath(graph, curNode, e.b, BRIDGE_MAX_M);
+    let bridge = null, entry = null;
+    if (bridgeToA && bridgeToB) {
+      // pick shorter (by edge count is a fine proxy; both are real roads)
+      if (bridgeToA.length <= bridgeToB.length) { bridge = bridgeToA; entry = e.a; }
+      else { bridge = bridgeToB; entry = e.b; }
+    } else if (bridgeToA) { bridge = bridgeToA; entry = e.a; }
+    else if (bridgeToB) { bridge = bridgeToB; entry = e.b; }
+
+    if (bridge == null) {
+      // Genuinely unreachable within the cap — drop this stray match rather
+      // than break the chain. (Rare: only if OSM has a true coverage hole.)
+      continue;
+    }
+    // Walk the bridge edges, advancing curNode each step.
+    for (const bi of bridge) {
+      const be = graph.edges[bi];
+      // curNode must be an endpoint of be (shortestPath returns a connected walk).
+      pushEdge(bi, curNode);
+    }
+    // Now curNode === entry (the reachable end of our target edge); append it.
+    pushEdge(edgeIdx, curNode);
+  }
+
+  // Collapse immediate A-B-A backtracks introduced by bridging into a spur.
+  return dedupeImmediateBacktrack(out);
+}
+
+function nodeGapM(graph, k1, k2) {
+  if (k1 === k2) return 0;
+  const n1 = graph.nodes.get(k1), n2 = graph.nodes.get(k2);
+  if (!n1 || !n2) return Infinity;
+  return distM([n1.lon, n1.lat], [n2.lon, n2.lat]);
+}
+
+// Drop an edge that is immediately followed by itself (out-and-back over a
+// single edge produced when a bridge overshoots and comes right back).
+function dedupeImmediateBacktrack(seq) {
+  const out = [];
+  for (const e of seq) {
+    if (out.length >= 1 && out[out.length - 1] === e) continue;
+    if (out.length >= 2 && out[out.length - 2] === e) { out.pop(); continue; }
+    out.push(e);
+  }
+  return out;
 }
 
 // Distinct real OSM way IDs (in travel order, deduplicated) a route's shape
@@ -277,6 +378,7 @@ module.exports = {
   // per-route-concatenated) matching — same real-road matching logic, finer
   // granularity output.
   matchedEdgeSequenceForCli: matchedEdgeSequence,
+  connectedEdgePathForCli: connectedEdgePath,
   loadRawGtfsShapesForCli: loadRawGtfsShapes,
 };
 
