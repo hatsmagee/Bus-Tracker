@@ -7678,25 +7678,28 @@ function toggleLocate() {
 }
 
 function setupLocateButton() {
-  const wire = () => {
-    if (!map || !mapReady) { setTimeout(wire, 250); return; }
+  // The hamburger sheet toggle is pure UI chrome — wire it IMMEDIATELY, not
+  // behind mapReady, so it works even if the map is slow or WebGL is flaky.
+  document.getElementById('mobileMenuBtn')?.addEventListener('click', () => {
+    const sb = document.getElementById('sidebar');
+    if (!sb) return;
+    // If it's at peek (collapsed / no sheet class), open to mid; else collapse.
+    if (sb.classList.contains('collapsed') || (!sb.classList.contains('sheet-mid') && !sb.classList.contains('sheet-full'))) {
+      sb.classList.remove('collapsed', 'sheet-full');
+      sb.classList.add('sheet-mid');
+      sb.style.height = '';
+    } else {
+      sb.classList.remove('sheet-mid', 'sheet-full');
+      sb.classList.add('collapsed');
+      sb.style.height = '';
+    }
+  });
+  // Locate needs the map — retry until it's ready.
+  const wireLocate = () => {
+    if (!map || !mapReady) { setTimeout(wireLocate, 250); return; }
     document.getElementById('locateBadge')?.addEventListener('click', toggleLocate);
-    document.getElementById('mobileMenuBtn')?.addEventListener('click', () => {
-      const sb = document.getElementById('sidebar');
-      if (!sb) return;
-      // If it's already at peek, snap to mid; otherwise collapse to peek
-      if (sb.classList.contains('collapsed') || !sb.classList.contains('sheet-mid') && !sb.classList.contains('sheet-full')) {
-        sb.classList.remove('collapsed', 'sheet-full');
-        sb.classList.add('sheet-mid');
-        sb.style.height = '';
-      } else {
-        sb.classList.remove('sheet-mid', 'sheet-full');
-        sb.classList.add('collapsed');
-        sb.style.height = '';
-      }
-    });
   };
-  wire();
+  wireLocate();
 }
 setupLocateButton();
 
