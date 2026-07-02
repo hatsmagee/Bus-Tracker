@@ -1351,16 +1351,25 @@ function initMapLayers() {
   // busy area doesn't turn to mush. Populates in production.
   map.addSource('aprs', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
+    id: 'aprs-circle', type: 'circle', source: 'aprs',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 5, 12, 8],
+      'circle-color': '#16a34a', 'circle-opacity': 0.85,
+      'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff',
+    },
+  });
+  map.addLayer({
     id: 'aprs-dot', type: 'symbol', source: 'aprs',
     layout: {
       'text-field': ['match', ['get', 'kind'], 'vehicle', '🚗', 'weather', '🌤', 'boat', '⛵', '📻'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 8, 12, 14, 18],
-      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-allow-overlap': true, 'text-ignore-placement': true,
     },
   });
-  wireLayerHover('aprs-dot', p => `<div style="font-weight:600;font-family:monospace;">📻 ${escapeHtml(p.call)}</div>
+  wireLayerHover('aprs-circle', p => `<div style="font-weight:600;font-family:monospace;">📻 ${escapeHtml(p.call)}</div>
     <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.kind)}${p.comment ? ' · ' + escapeHtml(p.comment) : ''}</div>`);
-  wireLayerCard('aprs-dot', p => ({ title: `📻 ${p.call}`,
+  wireLayerCard('aprs-circle', p => ({ title: `📻 ${p.call}`,
     body: `<div style="padding:2px 0;"><span style="color:#8b949e;">Type</span> · <b>${escapeHtml(p.kind)}</b></div>${p.comment ? `<div style="margin-top:4px;color:#c9d1d9;">${escapeHtml(p.comment)}</div>` : ''}` }));
 
   // Air quality / vog — sampled Big Island towns (Open-Meteo, keyless). A dot
@@ -1462,16 +1471,25 @@ function initMapLayers() {
   // ridgelines, pocket nodes) heard over MQTT. Keyless.
   map.addSource('meshtastic', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
+    id: 'meshtastic-circle', type: 'circle', source: 'meshtastic',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 6, 12, 9],
+      'circle-color': '#7c3aed', 'circle-opacity': 0.9,
+      'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
+    },
+  });
+  map.addLayer({
     id: 'meshtastic-dot', type: 'symbol', source: 'meshtastic',
     layout: {
       'text-field': '📶',
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 13, 16],
-      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-allow-overlap': true, 'text-ignore-placement': true,
     },
   });
-  wireLayerHover('meshtastic-dot', p => `<div style="font-weight:600;">📶 ${escapeHtml(p.name)}</div>
+  wireLayerHover('meshtastic-circle', p => `<div style="font-weight:600;">📶 ${escapeHtml(p.name)}</div>
     <div style="color:var(--muted);font-size:10px;">LoRa mesh node · click for details</div>`);
-  wireLayerCard('meshtastic-dot', p => {
+  wireLayerCard('meshtastic-circle', p => {
     const rows = [];
     const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
     if (p.hwName) row('Hardware', p.hwName);
@@ -1487,17 +1505,25 @@ function initMapLayers() {
   // default behind the APRS/ham toggle... shown always for now, collision-thinned.
   map.addSource('repeaters', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
+    id: 'repeaters-circle', type: 'circle', source: 'repeaters',
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 4, 11, 7, 13, 9],
+      'circle-color': '#ea580c', 'circle-opacity': 0.8,
+      'circle-stroke-width': 1.2, 'circle-stroke-color': '#ffffff',
+    },
+  });
+  map.addLayer({
     id: 'repeaters-dot', type: 'symbol', source: 'repeaters',
-    minzoom: 9,   // infrastructure detail — only when zoomed in a bit
     layout: {
       'text-field': '📡',
       'text-size': ['interpolate', ['linear'], ['zoom'], 9, 10, 13, 14],
-      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 2,
     },
   });
-  wireLayerHover('repeaters-dot', p => `<div style="font-weight:600;font-family:monospace;">📡 ${escapeHtml(p.callsign)}</div>
+  wireLayerHover('repeaters-circle', p => `<div style="font-weight:600;font-family:monospace;">📡 ${escapeHtml(p.callsign)}</div>
     <div style="color:var(--muted);font-size:11px;">${p.freqMhz} MHz · ${escapeHtml(p.mode || 'FM')} · click for details</div>`);
-  wireLayerCard('repeaters-dot', p => {
+  wireLayerCard('repeaters-circle', p => {
     const rows = [];
     const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
     row('Frequency', `${p.freqMhz} MHz`);
@@ -4678,8 +4704,8 @@ function positionMapCard() {
 }
 
 // Layers whose features open a click-card (and whose empty-space click closes it).
-const CARD_LAYERS = ['ocean-dot', 'aprs-dot', 'summits-dot', 'weather-stations-dot', 'aircraft-triangles', 'airquality-dot',
-  'volcano-dot', 'metars-dot', 'meshtastic-dot', 'repeaters-dot'];
+const CARD_LAYERS = ['ocean-dot', 'aprs-circle', 'summits-dot', 'weather-stations-dot', 'aircraft-triangles', 'airquality-dot',
+  'volcano-dot', 'metars-dot', 'meshtastic-circle', 'repeaters-circle'];
 // Wire click-to-open-card on a layer. buildCard(props) -> { title, body }.
 function wireLayerCard(layerId, buildCard) {
   map.on('click', layerId, e => {
