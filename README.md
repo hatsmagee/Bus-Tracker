@@ -137,6 +137,38 @@ Set environment variables before starting the server:
 | `POLL_INTERVAL`| 15000 (ms)    | How often to poll the realtime feeds |
 | `MAPTILER_KEY` | (built-in)    | MapTiler API key for basemap tiles   |
 
+## Self-development agent
+
+After bootstrap, a keyless research agent continuously enriches map item cards
+(history, photos, summaries) and ships smoke-tested PRs to GitHub, which
+auto-deploy on Render. **Off by default** until you enable it.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AGENT_ENABLED` | `false` | Master kill switch |
+| `AGENT_ITEM_BUDGET` | `3` | Items researched per cron run |
+| `AGENT_STALE_DAYS` | `90` | Re-research entries older than this |
+| `AGENT_GITHUB_TOKEN` | unset | Fine-grained PAT with `contents:write` on the app repo |
+| `AGENT_GITHUB_REPO` | unset | `owner/repo` (e.g. `hatsmagee/Bus-Tracker`) |
+| `AGENT_GITHUB_BRANCH` | `main` | Base branch for agent PRs |
+| `AIHORDE_API_KEY` | anon | Optional AI Horde key for faster priority |
+| `RENDER_DEPLOY_HOOK` | unset | POST after PR merge to force immediate deploy |
+
+**CLI (local):**
+
+```bash
+npm run audit-map-items    # list gaps (72 fixed/named items)
+npm run agent-research     # research up to AGENT_ITEM_BUDGET items
+npm run agent-publish      # smoke test → branch → PR → merge → deploy hook
+npm run smoke-test         # validation gate only
+```
+
+**Safety:** no paid API keys (refuses if `OPENAI_API_KEY` / `TAVILY_API_KEY`
+present); AI Horde stops if down; circuit breaker trips after 3 failures/hour;
+smoke test blocks bad merges; never commits directly to `main`.
+
+**UI:** System tab → Self-Development Agent panel (queue, staged count, run/publish/reset).
+
 ## Deploying to Render.com
 
 The repo includes `render.yaml` (Blueprint). To deploy:

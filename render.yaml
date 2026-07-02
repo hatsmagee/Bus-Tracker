@@ -1,13 +1,8 @@
 # Render Blueprint — provisions the Hele-On Bus Tracker web service.
 #
-# The keep-alive ping runs locally (see README §"Local keep-alive
-# systemd timer") so we don't need a Render cron job, which doesn't
-# support the free plan anyway.
-#
 # To use: in Render dashboard → New → Blueprint → point at this repo.
 
 services:
-  # ── Web service: Node.js server + dashboard ────────────────────────────
   - type: web
     name: heleon-bus-tracker
     runtime: node
@@ -17,19 +12,6 @@ services:
     startCommand: npm start
     healthCheckPath: /healthz
     autoDeploy: true
-    # Free durable history backup. Render's free filesystem is ephemeral (/tmp is
-    # wiped on every deploy/restart), so the DB is snapshotted off-box and
-    # restored on boot. Pick ONE backend and set its secrets in the dashboard
-    # (left as sync:false so they aren't committed):
-    #   GitHub (free, no card):  BACKUP_GITHUB_TOKEN, BACKUP_GITHUB_REPO
-    #   S3-compatible (B2/R2):   BACKUP_S3_ENDPOINT, BACKUP_S3_BUCKET,
-    #                            BACKUP_S3_ACCESS_KEY, BACKUP_S3_SECRET
-    # With none set the app still runs; history just resets on each deploy.
-    # OpenSky aircraft (optional): anonymous works but has only 400 credits/day,
-    # so planes poll slowly (every 4 min) over a Big-Island-only box. A FREE
-    # OpenSky account → "API client" gives 4000/day → fast polling (25s) + an
-    # all-Hawaii box. Create one at opensky-network.org and set:
-    #   OPENSKY_CLIENT_ID, OPENSKY_CLIENT_SECRET
     envVars:
       - key: BACKUP_GITHUB_TOKEN
         sync: false
@@ -39,3 +21,19 @@ services:
         sync: false
       - key: OPENSKY_CLIENT_SECRET
         sync: false
+      - key: AGENT_ENABLED
+        value: "false"
+      - key: AGENT_GITHUB_TOKEN
+        sync: false
+      - key: AGENT_GITHUB_REPO
+        sync: false
+      - key: AGENT_GITHUB_BRANCH
+        value: main
+      - key: AIHORDE_API_KEY
+        sync: false
+      - key: RENDER_DEPLOY_HOOK
+        sync: false
+      - key: AGENT_ITEM_BUDGET
+        value: "3"
+      - key: AGENT_STALE_DAYS
+        value: "90"

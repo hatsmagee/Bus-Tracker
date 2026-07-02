@@ -32,3 +32,4 @@ data/route-color-trace-report.json
 data/infrastructure-cache.json
 data/local-cache.json
 data/meshtastic-nodes.json
+.agent-tmp/

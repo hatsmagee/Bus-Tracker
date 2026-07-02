@@ -1,0 +1,6 @@
+{
+  "_comment": "Curated history, photos, and summaries for fixed/named map items. Keys are category:id (e.g. summit:keck). Populated and maintained by scripts/agent/research-agent.js. GitHub main is source of truth; staged candidates live in map-items.staged.json until smoke-tested PR merge.",
+  "source": "agent + manual bootstrap",
+  "updatedAt": "2026-07-02T00:00:00.000Z",
+  "items": {}
+}

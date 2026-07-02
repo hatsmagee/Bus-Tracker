@@ -10,7 +10,11 @@
     "build-route-edges": "node scripts/build-route-edges.js",
     "trace-route-colors": "node scripts/trace-route-colors.js",
     "validate-routes": "node scripts/validate-route-roads.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "audit-map-items": "node scripts/audit-map-items.js",
+    "agent-research": "node scripts/agent/run-research.js",
+    "agent-publish": "node scripts/agent/run-publish.js",
+    "smoke-test": "node scripts/smoke-test.js",
+    "test": "node scripts/smoke-test.js"
   },
   "engines": {
     "node": ">=18"

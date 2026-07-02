@@ -74,6 +74,19 @@ function loadReference() {
 }
 loadReference();
 
+const MAP_ITEMS_PATH = process.env.MAP_ITEMS_PATH || path.join(__dirname, 'data', 'map-items.json');
+const MAP_ITEMS_STAGED_PATH = path.join(__dirname, 'data', 'map-items.staged.json');
+let MAP_ITEMS = { items: {} };
+function loadMapItems() {
+  try { MAP_ITEMS = JSON.parse(fs.readFileSync(MAP_ITEMS_PATH, 'utf8')); }
+  catch { MAP_ITEMS = { items: {} }; }
+  if (!MAP_ITEMS.items) MAP_ITEMS.items = {};
+}
+loadMapItems();
+
+const AGENT_ENABLED = process.env.AGENT_ENABLED === '1' || process.env.AGENT_ENABLED === 'true';
+let agentRunInFlight = false;
+
 // Server-side road-snapping (Valhalla map-matching, cached + auto-refreshing).
 const { matchShape, isLocal: VALHALLA_LOCAL } = require('./map-match');
 const matchCrypto = require('crypto');
@@ -2087,7 +2100,7 @@ function json(res, data, status = 200) {
   endMaybeGzip(res, status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, buf);
 }
 
-async function handleApi(url, res) {
+async function handleApi(url, res, req) {
   const p = url.pathname;
   const q = url.searchParams;
 
@@ -2259,6 +2272,67 @@ async function handleApi(url, res) {
   // distilled from the System Map PDF + auto-derived route roster from GTFS.
   if (p === '/api/reference') {
     return json(res, REFERENCE);
+  }
+
+  if (p === '/api/map-items') {
+    return json(res, MAP_ITEMS);
+  }
+
+  if (p === '/api/agent/status') {
+    let state = {};
+    try {
+      const agentState = require('./scripts/lib/agent-state');
+      state = agentState.loadState();
+      const queue = agentState.loadQueue();
+      state.queueSize = (queue.items || []).length;
+    } catch (e) { state = { error: e.message }; }
+    return json(res, {
+      enabled: AGENT_ENABLED,
+      runInFlight: agentRunInFlight,
+      ...state,
+    });
+  }
+
+  if (p === '/api/agent/staged') {
+    try {
+      const staged = JSON.parse(fs.readFileSync(MAP_ITEMS_STAGED_PATH, 'utf8'));
+      return json(res, staged);
+    } catch {
+      return json(res, { items: {} });
+    }
+  }
+
+  if (p === '/api/agent/run' && req && req.method === 'POST') {
+    if (!AGENT_ENABLED) return json(res, { ok: false, error: 'AGENT_ENABLED is false' }, 403);
+    if (agentRunInFlight) return json(res, { ok: false, error: 'agent run already in flight' }, 409);
+    const mode = (url.searchParams.get('mode') || 'research');
+    agentRunInFlight = true;
+    const script = mode === 'publish'
+      ? path.join(__dirname, 'scripts', 'agent', 'run-publish.js')
+      : path.join(__dirname, 'scripts', 'agent', 'run-research.js');
+    const child = require('child_process').spawn('node', [script], {
+      cwd: __dirname,
+      env: process.env,
+      detached: false,
+    });
+    let out = '';
+    child.stdout.on('data', d => { out += d; });
+    child.stderr.on('data', d => { out += d; });
+    child.on('close', code => {
+      agentRunInFlight = false;
+      if (mode === 'publish') loadMapItems();
+    });
+    return json(res, { ok: true, started: true, mode, pid: child.pid });
+  }
+
+  if (p === '/api/agent/reset-breaker' && req && req.method === 'POST') {
+    try {
+      const agentState = require('./scripts/lib/agent-state');
+      agentState.resetCircuit(agentState.loadState());
+      return json(res, { ok: true });
+    } catch (e) {
+      return json(res, { ok: false, error: e.message }, 500);
+    }
   }
 
   // Authoritative route registry — every route known across all sources, with
@@ -6282,7 +6356,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (url.pathname.startsWith('/api/') || url.pathname === '/proxy') {
-    handleApi(url, res).catch(e => { res.writeHead(500); res.end(JSON.stringify({ error: e.message })); });
+    handleApi(url, res, req).catch(e => { res.writeHead(500); res.end(JSON.stringify({ error: e.message })); });
   } else {
     handleStatic(url, res);
   }

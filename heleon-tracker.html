@@ -820,6 +820,16 @@
 
       <div class="section-header" style="margin-top:4px;">📡 Upstream API Polling</div>
       <div class="api-section" id="apiLog"></div>
+
+      <div class="section-header" style="margin-top:4px;">🤖 Self-Development Agent</div>
+      <div id="agentPanel" style="padding:8px 12px;font-size:11px;line-height:1.5;color:var(--muted);">
+        Loading agent status…
+      </div>
+      <div style="padding:0 12px 12px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" id="agentRunResearch" style="font-size:11px;padding:4px 10px;cursor:pointer;">Run research</button>
+        <button type="button" id="agentRunPublish" style="font-size:11px;padding:4px 10px;cursor:pointer;">Publish staged</button>
+        <button type="button" id="agentResetBreaker" style="font-size:11px;padding:4px 10px;cursor:pointer;">Reset breaker</button>
+      </div>
     </div>
 
     <div class="tab-content" id="tab-boats">
@@ -1267,7 +1277,7 @@ function buildSummitCard(p) {
   if (p.pageUrl) links.push(`<a href="${escapeHtml(p.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">Observatory page ↗</a>`);
   if (p.source) links.push(`<span style="color:#8b949e;">${escapeHtml(p.source)}</span>`);
   const foot = `<div style="color:#8b949e;font-size:10px;margin-top:8px;">${p.elevM ? Math.round(p.elevM) + ' m elev' : ''}${r.readingTs ? ' · ' + r.readingTs : ''}${r.co2Year ? ' · CO₂ ' + r.co2Year : ''}${links.length ? '<br>' + links.join(' · ') : ''}</div>`;
-  return { title: `🔭 ${p.name}`, body: (rows.join('') || 'No current reading.') + extra + foot + timelineHtml(p.id, p.name) + sourceInfoHtml('summits', p) };
+  return { title: `🔭 ${p.name}`, body: (rows.join('') || 'No current reading.') + extra + foot + timelineHtml(p.id, p.name) + sourceInfoHtml('summits', p) + itemLoreHtml(loreKeySummit(p.id)) };
 }
 
 function buildScannerCard(f) {
@@ -3380,6 +3390,66 @@ async function fetchReference() {
   try { REFERENCE = await (await fetch('/api/reference')).json(); }
   catch (e) { console.error('[fetchReference]', e); REFERENCE = {}; }
 }
+
+let MAP_LORE = { items: {} };
+async function fetchMapLore() {
+  try { MAP_LORE = await (await fetch('/api/map-items')).json(); }
+  catch (e) { console.error('[fetchMapLore]', e); MAP_LORE = { items: {} }; }
+}
+
+function itemLoreHtml(key) {
+  const entry = MAP_LORE.items && MAP_LORE.items[key];
+  if (!entry) return '';
+  let html = '<div style="margin-top:10px;border-top:1px solid #30363d;padding-top:8px;">';
+  html += '<div style="font-weight:700;font-size:11px;margin-bottom:6px;">📜 History</div>';
+  if (entry.summary) html += `<div style="font-size:11px;line-height:1.45;margin-bottom:8px;color:#c9d1d9;">${escapeHtml(entry.summary)}</div>`;
+  for (const p of (entry.photos || [])) {
+    html += `<img src="${escapeHtml(p.url)}" alt="" style="width:100%;border-radius:6px;margin-bottom:4px;">`;
+    if (p.caption || p.credit) html += `<div style="font-size:9px;color:#8b949e;margin-bottom:6px;">${escapeHtml(p.caption || '')}${p.credit ? ' · ' + escapeHtml(p.credit) : ''}</div>`;
+  }
+  for (const h of (entry.history || [])) {
+    html += `<div style="font-size:10px;margin-bottom:4px;"><span style="color:#58a6ff;font-weight:600;">${h.year}</span> — ${escapeHtml(h.text)}</div>`;
+  }
+  if ((entry.links || []).length) {
+    html += '<div style="margin-top:6px;font-size:10px;">' + entry.links.map(l =>
+      `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener" style="color:#58a6ff;margin-right:8px;">${escapeHtml(l.label)} ↗</a>`
+    ).join('') + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function loreKeySummit(id) { return id ? `summit:${id}` : ''; }
+function loreKeyOcean(id) { return id ? `ocean:${id}` : ''; }
+function loreKeyHub(name, kind) { return kind === 'pnr' ? `pnr:${name}` : `hub:${name}`; }
+
+async function refreshAgentPanel() {
+  const el = document.getElementById('agentPanel');
+  if (!el) return;
+  try {
+    const s = await (await fetch('/api/agent/status')).json();
+    const staged = await (await fetch('/api/agent/staged')).json();
+    const stagedN = Object.keys(staged.items || {}).length;
+    el.innerHTML = `
+      <div><strong>Enabled:</strong> ${s.enabled ? 'yes' : 'no'} · <strong>Circuit:</strong> ${s.circuitOpen ? 'OPEN' : 'closed'}</div>
+      <div><strong>Queue:</strong> ${s.queueSize ?? '—'} · <strong>Enriched today:</strong> ${s.enrichedToday ?? 0}</div>
+      <div><strong>Staged:</strong> ${stagedN} item(s) · <strong>Last research:</strong> ${s.lastResearchAt ? new Date(s.lastResearchAt).toLocaleString() : '—'}</div>
+      <div><strong>Last publish:</strong> ${s.lastPublishAt ? new Date(s.lastPublishAt).toLocaleString() : '—'}${s.lastPrNumber ? ` (PR #${s.lastPrNumber})` : ''}</div>
+      ${s.lastError ? `<div style="color:#f85149;margin-top:4px;">${escapeHtml(s.lastError)}</div>` : ''}`;
+  } catch (e) {
+    el.textContent = 'Agent status unavailable.';
+  }
+}
+
+function wireAgentButtons() {
+  const post = mode => fetch(`/api/agent/run?mode=${mode}`, { method: 'POST' }).then(() => refreshAgentPanel());
+  const runR = document.getElementById('agentRunResearch');
+  const runP = document.getElementById('agentRunPublish');
+  const reset = document.getElementById('agentResetBreaker');
+  if (runR) runR.onclick = () => post('research');
+  if (runP) runP.onclick = () => post('publish');
+  if (reset) reset.onclick = () => fetch('/api/agent/reset-breaker', { method: 'POST' }).then(() => refreshAgentPanel());
+}
 // Route classification badge ({label,color}) for a route short name, or null.
 function routeClass(short) {
   const k = REFERENCE.routeClass && REFERENCE.routeClass[String(short)];
@@ -3434,6 +3504,7 @@ function renderHubMarkers() {
           <div style="color:#8b949e;font-size:10px;margin:2px 0 6px;">
             ${isHub ? 'Transit hub' : 'Park & Ride'}${p.pnr === '1' ? ' · Park & Ride' : ''}</div>
           ${p.routes ? `<div style="font-size:11px;"><span style="color:#8b949e;">Routes:</span> ${p.routes}</div>` : ''}
+          ${itemLoreHtml(loreKeyHub(p.name, p.kind))}
         </div>`).addTo(map);
     });
     map.on('mouseenter', 'hubs-marker', () => map.getCanvas().style.cursor = 'pointer');
@@ -6079,7 +6150,7 @@ function hawaiiItemBody(catId, item) {
       if (item.note) h += `<div style="margin-top:6px;font-size:10px;color:#d29922;">${escapeHtml(item.note)}</div>`;
       if (item.webcamUrl) h += `<div style="margin-top:8px;"><img src="${escapeHtml(item.webcamUrl)}" alt="webcam" style="width:100%;border-radius:6px;"></div>`;
       if (item.pageUrl) h += `<div style="margin-top:6px;"><a href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">${escapeHtml(item.source || 'Observatory')} ↗</a></div>`;
-      return h + hawaiiMapBtn(item.lon, item.lat, 10);
+      return h + itemLoreHtml(loreKeySummit(item.id)) + hawaiiMapBtn(item.lon, item.lat, 10);
     }
     case 'ocean': {
       const r = item.readings || {};
@@ -6087,7 +6158,7 @@ function hawaiiItemBody(catId, item) {
       if (r.waveHtM != null) h += hawaiiDetailRow('🌊', 'Wave height', `${(+r.waveHtM).toFixed(1)} m`);
       if (r.waterLevelFt != null) h += hawaiiDetailRow('📏', 'Water level', `${(+r.waterLevelFt).toFixed(1)} ft`);
       if (r.waterTempC != null) h += hawaiiDetailRow('🌡️', 'Water temp', `${(+r.waterTempC).toFixed(1)}°C`);
-      return h + hawaiiMapBtn(item.lon, item.lat, 10);
+      return h + itemLoreHtml(loreKeyOcean(item.id)) + hawaiiMapBtn(item.lon, item.lat, 10);
     }
     case 'marineWebcams':
       return buildWebcamCardBody(item) + hawaiiMapBtn(item.lon, item.lat, 13);
@@ -9717,6 +9788,7 @@ initMap();
 // Kick off all data fetches in parallel — fastest possible load
 Promise.all([
   fetchReference(),
+  fetchMapLore(),
   fetchShapes(),
   Promise.all([fetchRouteEdges(), fetchRouteRoads()]).then(() => { ensureRouteRoadLayer(); renderRouteRibbons(); }),
   fetchAll(),
@@ -9757,10 +9829,10 @@ Promise.all([
   fetchLocal(),
   fetchEv(),
   fetchSurf(),
-]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); ensureHawaiiFacilitiesBrowse().then(() => renderHawaiiBrowser()); renderHawaiiBrowser(); });
+]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); ensureHawaiiFacilitiesBrowse().then(() => renderHawaiiBrowser()); renderHawaiiBrowser(); wireAgentButtons(); refreshAgentPanel(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
-setInterval(() => { if (activeTab === 'system' && !document.hidden) { pollLearn(); fetchApiStats(); } }, 5000);
+setInterval(() => { if (activeTab === 'system' && !document.hidden) { pollLearn(); fetchApiStats(); refreshAgentPanel(); } }, 5000);
 // Refresh the Fleet table while it's open (it's a heavier multi-request scrape,
 // so only when actually visible).
 setInterval(() => { if (activeTab === 'fleet' && !document.hidden) fetchFleet(); }, 15000);
