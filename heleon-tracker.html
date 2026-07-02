@@ -843,6 +843,7 @@
         <label><input type="checkbox" id="showRadar" onchange="toggleRadar()"> Precipitation radar</label>
         <label><input type="checkbox" id="showTopo" onchange="toggleTopography()"> ⛰️ Topography (elevation)</label>
         <label><input type="checkbox" id="showPlaces" onchange="togglePlaces()"> 🏛️ Historical & notable places</label>
+        <label><input type="checkbox" id="showHeritage" onchange="toggleHeritage()"> 🛕 Heritage & ancient sites</label>
       </div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showLava" onchange="toggleLava()"> Lava flow hazard zones</label>
@@ -2108,6 +2109,38 @@ function initMapLayers() {
     return { title: escapeHtml(p.title), body: img + note + link };
   });
 
+  // Heritage / historical sites — a curated deep-dive atlas: heiau, royal sites,
+  // plantation towns, flumes, old bridges, lighthouses, petroglyphs, lava-buried
+  // ghost towns, fishponds, ranches, famous natural landmarks. Per-category
+  // vendored icons; cards carry a real photo + deep write-up + link. Off by
+  // default (dense browse layer) — toggled from the map controls.
+  map.addSource('heritage', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'heritage-icon', type: 'symbol', source: 'heritage',
+    minzoom: 8,
+    layout: {
+      visibility: 'none',
+      'icon-image': ['match', ['get', 'cat'],
+        'heiau', 'marker-heiau', 'royal', 'marker-royal', 'church', 'marker-church',
+        'plantation', 'marker-plantation', 'flume', 'marker-flume', 'bridge', 'marker-bridge',
+        'lighthouse', 'marker-lighthouse', 'petroglyph', 'marker-petroglyph', 'abandoned', 'marker-abandoned',
+        'town', 'marker-town', 'natural', 'marker-natural', 'park', 'marker-natural', 'cave', 'marker-cave',
+        'ranch', 'marker-ranch', 'fishpond', 'marker-fishpond', 'battle', 'marker-battle', 'statue', 'marker-statue',
+        'trail', 'marker-trail', 'museum', 'marker-museum',
+        'marker-place'],
+      'icon-anchor': 'left', 'icon-allow-overlap': false, 'icon-size': ICON_SIZE.md,
+      'text-field': ['get', 'name'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 12, 12, 15, 14],
+      'text-font': ['Open Sans Semibold', 'Arial Unicode MS Regular'],
+      'text-anchor': 'left', 'text-offset': [1.3, 0], 'text-max-width': 9,
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 8,
+    },
+    paint: { 'text-color': '#7c4a12', 'text-halo-color': '#ffffff', 'text-halo-width': 1.8 },
+  });
+  wireLayerHover('heritage-icon', p => `<div style="font-weight:600;">${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:10px;">${escapeHtml(HERITAGE_CAT_LABEL[p.cat] || 'Historic site')} · click for the full story</div>`);
+  wireLayerCard('heritage-icon', p => ({ title: `${HERITAGE_CAT_ICON[p.cat] || '🏛️'} ${escapeHtml(p.name)}`, body: buildHeritageCardBody(p) }));
+
   // Meshtastic / LoRa mesh nodes — real community radios (solar repeaters on
   // ridgelines, pocket nodes) heard over MQTT. Keyless.
   map.addSource('meshtastic', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
@@ -2615,7 +2648,48 @@ const TWEMOJI = {
   power:     '26a1',    // ⚡
   globe:     '1f310',   // 🌐
   waterqual: '1f4a7',   // 💧
+  // Heritage / historical site categories
+  heiau:      '1f6d5',  // 🛕
+  royal:      '1f451',  // 👑
+  church:     '26ea',   // ⛪
+  plantation: '1f3ed',  // 🏭
+  flume:      '1f4a6',  // 💦
+  bridge:     '1f309',  // 🌉
+  lighthouse: '1f5fc',  // 🗼
+  petroglyph: '1faa8',  // 🪨
+  abandoned:  '1f3da',  // 🏚
+  town:       '1f3d8',  // 🏘
+  natural:    '1f3de',  // 🏞
+  cave:       '1f573',  // 🕳
+  ranch:      '1f404',  // 🐄
+  fishpond:   '1f41f',  // 🐟
+  battle:     '2694',   // ⚔
+  statue:     '1f5ff',  // 🗿
+  trail:      '1f97e',  // 🥾
+  museum:     '1f3db',  // 🏛 (shares sprite family with places)
 };
+const HERITAGE_CAT_LABEL = {
+  heiau: 'Ancient heiau / sacred site', royal: 'Royal / historic landmark', church: 'Historic church / mission',
+  plantation: 'Plantation-era site', flume: 'Flume / irrigation ditch', bridge: 'Historic bridge',
+  lighthouse: 'Lighthouse', petroglyph: 'Petroglyphs / rock art', abandoned: 'Abandoned / lava-buried',
+  town: 'Historic town', natural: 'Natural landmark', park: 'Historic park / preserve', cave: 'Lava tube / cave',
+  ranch: 'Historic ranch', fishpond: 'Ancient fishpond / village', battle: 'Battle / monument',
+  statue: 'Statue / stone / memorial', trail: 'Historic trail', museum: 'Museum / historic building',
+};
+const HERITAGE_CAT_ICON = {
+  heiau: '🛕', royal: '👑', church: '⛪', plantation: '🏭', flume: '💦', bridge: '🌉', lighthouse: '🗼',
+  petroglyph: '🪨', abandoned: '🏚️', town: '🏘️', natural: '🏞️', park: '🏞️', cave: '🕳️', ranch: '🐄',
+  fishpond: '🐟', battle: '⚔️', statue: '🗿', trail: '🥾', museum: '🏛️',
+};
+function buildHeritageCardBody(p) {
+  const img = p.photo ? `<img src="${escapeHtml(p.photo)}" style="width:100%;border-radius:6px;display:block;margin-bottom:8px;" loading="lazy" alt="${escapeHtml(p.name)}" onerror="this.style.display='none'"/>` : '';
+  const cat = `<div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#8b949e;margin-bottom:6px;">${escapeHtml(HERITAGE_CAT_LABEL[p.cat] || 'Historic site')}</div>`;
+  const note = p.note ? `<div style="font-size:12px;line-height:1.55;color:var(--text);margin-bottom:8px;">${escapeHtml(p.note)}</div>` : '';
+  const extract = p.extract ? `<div style="font-size:11.5px;line-height:1.55;color:#c9d1d9;border-top:1px solid #30363d;padding-top:8px;">${escapeHtml(p.extract)}</div>` : '';
+  const link = p.url ? `<div style="margin-top:8px;font-size:10px;"><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener" style="color:#58a6ff;">Read more on Wikipedia ↗</a></div>` : '';
+  const dir = (p.lat != null && p.lon != null) ? `<div style="margin-top:4px;font-size:10px;"><a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}" target="_blank" rel="noopener" style="color:#58a6ff;">Directions / satellite ↗</a></div>` : '';
+  return cat + img + note + extract + link + dir;
+}
 const ICON_PX = 40;
 const ICON_Z = (z0, s0, z1, s1, z2, s2) => ['interpolate', ['linear'], ['zoom'], z0, s0, z1, s1, z2, s2];
 const ICON_SIZE = {
@@ -4072,6 +4146,7 @@ async function fetchSpaceWeather() {
 
 // Places of interest — historical/notable sites from Wikipedia (photos+notes).
 let placesVisible = false;
+let heritageVisible = false;
 async function fetchPlaces() {
   try {
     const res = await fetch('/api/places');
@@ -4092,6 +4167,29 @@ function togglePlaces() {
     map.setLayoutProperty('places-icon', 'visibility', placesVisible ? 'visible' : 'none');
   }
   if (placesVisible && (!hawaiiList.places || !hawaiiList.places.length)) fetchPlaces();
+}
+
+// Heritage / historical sites — curated deep-dive atlas.
+async function fetchHeritage() {
+  try {
+    const res = await fetch('/api/heritage');
+    const data = await res.json();
+    hawaiiList.heritage = data.sites || [];
+    hawaiiBrowseRefresh();
+    if (!mapReady || !map.getSource('heritage')) return;
+    const feats = (data.sites || []).filter(s => s.lat != null && s.lon != null).map(s => ({
+      type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+      properties: { id: s.id, name: s.name, cat: s.cat, note: s.note || '', extract: s.extract || '',
+        photo: s.photo || '', url: s.url || '', lat: s.lat, lon: s.lon } }));
+    map.getSource('heritage').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
+}
+function toggleHeritage() {
+  heritageVisible = document.getElementById('showHeritage').checked;
+  if (mapReady && map.getLayer('heritage-icon')) {
+    map.setLayoutProperty('heritage-icon', 'visibility', heritageVisible ? 'visible' : 'none');
+  }
+  if (heritageVisible && (!hawaiiList.heritage || !hawaiiList.heritage.length)) fetchHeritage();
 }
 
 // Tsunami — PTWC bulletin status (keyless). Header badge, green normally, red
@@ -4737,7 +4835,7 @@ const hawaiiList = {
   localFuelPrices: {}, localFuelStations: [], localTrafficSensors: [], localLco: [], localInat: [],
   localNotes: {},
   summits: [], scanner: [], ocean: [], waterQuality: [], airquality: [], volcanoAlerts: [], volcanoCams: [], satellites: [], rainfall: [],
-  metars: [], alerts: [], wildfire: [], places: [], solar: [],
+  metars: [], alerts: [], wildfire: [], places: [], heritage: [], solar: [],
   facilities: { police: [], fire: [], ems: [], trauma: [] },
 };
 const hawaiiBrowse = { openCats: new Set(['radio']), openItems: new Set() };
@@ -5131,6 +5229,8 @@ function hawaiiItemBody(catId, item) {
         hawaiiDetailRow('⚗️', 'pH', n(item.ph, 2)) +
         hawaiiMapBtn(item.lon, item.lat, 12);
     }
+    case 'heritage':
+      return buildHeritageCardBody(item) + hawaiiMapBtn(item.lon, item.lat, 13);
     case 'volcano':
       if (item.kind === 'webcam') {
         return buildWebcamCardBody({ embedType: 'image', imageUrl: item.imageUrl, name: item.name, source: 'USGS HVO', pageUrl: 'https://www.usgs.gov/observatories/hvo/multimedia/webcams' }) +
@@ -5239,6 +5339,8 @@ function hawaiiCategories() {
     { id: 'satellites', icon: '🛰️', label: 'Satellites Overhead', items: hawaiiList.satellites },
     { id: 'places', icon: '🏛️', label: 'Historical & Notable Places',
       items: [...(hawaiiList.places || [])].sort((a, b) => String(a.title).localeCompare(b.title)) },
+    { id: 'heritage', icon: '🛕', label: 'Heritage & Ancient Sites',
+      items: [...(hawaiiList.heritage || [])].sort((a, b) => String(a.cat).localeCompare(b.cat) || String(a.name).localeCompare(b.name)) },
     { id: 'alerts', icon: '⚠️', label: 'Active NWS Alerts', items: hawaiiList.alerts },
     { id: 'quakes', icon: '🌎', label: 'Recent Earthquakes', items: [...allQuakes].sort((a, b) => b.time - a.time) },
     { id: 'wildfire', icon: '🔥', label: 'Wildfire Hotspots', items: hawaiiList.wildfire },
@@ -5291,6 +5393,7 @@ function hawaiiItemSummary(catId, item) {
     case 'satellites': return { icon: item.emoji || '🛰️', title: item.name, meta: item.overhead ? '🌺 over Hawaiʻi now' : `${Math.round(item.altKm)} km up · ${Math.round(item.distKm)} km away` };
     case 'rainfall': return { icon: (item.accum6hIn >= 1 ? '⛈️' : item.accum6hIn > 0.05 ? '🌧️' : '☁️'), title: item.name, meta: `${(+item.accum6hIn).toFixed(2)}" last 6h` };
     case 'places': { const e = { wreck:'🚢', battle:'⚔️', heiau:'🗿', dock:'⚓', water:'💦', historic:'🏛️', church:'⛪', observatory:'🔭', park:'🌲' }[item.kind] || '📍'; return { icon: e, title: item.title, meta: (item.extract || '').slice(0, 60) }; }
+    case 'heritage': return { icon: HERITAGE_CAT_ICON[item.cat] || '🏛️', title: item.name, meta: HERITAGE_CAT_LABEL[item.cat] || 'Historic site' };
     case 'alerts': return { icon: '⚠️', title: item.event, meta: item.areaDesc || '' };
     case 'quakes': return { icon: '🌋', title: `M${(+item.mag).toFixed(1)} — ${item.place}`, meta: new Date(item.time).toLocaleDateString() };
     case 'wildfire': return { icon: '🔥', title: 'Thermal hotspot', meta: item.props && item.props.confidence != null ? `confidence ${item.props.confidence}` : '' };
@@ -7513,7 +7616,7 @@ function positionMapCard() {
 const CARD_LAYERS = ['ocean-dot', 'marine-dot', 'aprs-icon', 'summits-dot', 'weather-stations-icon', 'aircraft-triangles', 'airquality-icon',
   'waterquality-icon', 'volcano-dot', 'metars-dot', 'repeaters-icon', 'infra-power-icon', 'infra-cell-icon', 'infra-net-icon',
   'local-fuel-icon', 'local-sensors-icon', 'local-lco-icon', 'local-inat-icon',
-  'rainfall-icon', 'satellites-icon', 'places-icon'];
+  'rainfall-icon', 'satellites-icon', 'places-icon', 'heritage-icon'];
 // Wire click-to-open-card on a layer. buildCard(props) -> { title, body }.
 function wireLayerCard(layerId, buildCard) {
   map.on('click', layerId, e => {
@@ -8670,6 +8773,7 @@ Promise.all([
   fetchSkyClock(),
   fetchTsunami(),
   fetchPlaces(),
+  fetchHeritage(),
   fetchSolar(),
   fetchMeshtastic(),
   fetchRepeaters(),

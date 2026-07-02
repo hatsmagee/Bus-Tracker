@@ -2329,6 +2329,7 @@ async function handleApi(url, res) {
         waterQuality: feed(waterQualityCache.length, waterQualityLastPollTs, waterQualityLastError),
         airquality: feed(airQualityCache.length, airQualityLastPollTs, airQualityLastError),
         scanner: feed(SCANNER_FEEDS.length, Date.now(), null),
+        heritage: feed(heritageCache.length, heritageLastPollTs, heritageLastError),
         solar: feed(solarCache.length, solarLastPollTs, solarLastError),
         satellites: feed(satelliteCache.length, satelliteLastPollTs, satelliteLastError),
       },
@@ -3092,6 +3093,12 @@ async function handleApi(url, res) {
   if (p === '/api/places') {
     return json(res, { ts: Date.now(), lastPollTs: placesLastPollTs, lastError: placesLastError,
       places: placesCache });
+  }
+
+  // ── HERITAGE / HISTORICAL SITES — curated + Wikipedia (keyless) ────────────
+  if (p === '/api/heritage') {
+    return json(res, { ts: Date.now(), lastPollTs: heritageLastPollTs, lastError: heritageLastError,
+      sites: heritageCache });
   }
 
   // ── TSUNAMI — PTWC bulletin status (keyless) ──────────────────────────────
@@ -5319,6 +5326,59 @@ async function pollPlaces() {
   } catch (e) { placesLastError = (e && e.message) || 'unknown error'; placesLastPollTs = Date.now(); }
 }
 
+// ─── HERITAGE / HISTORICAL SITES (curated + Wikipedia deep enrichment) ───────
+// A hand-curated atlas of Big Island heritage: ancient heiau, royal sites,
+// plantation towns, flumes/ditches, old bridges, lighthouses, petroglyphs,
+// lava-buried ghost towns, fishponds, ranches and famous natural landmarks.
+// Each curated site carries an accurate note; where a reliable Wikipedia
+// article exists we enrich it with the full lead-section write-up, a real
+// photo and a link. Keyless. Enriched daily and cached to disk so a throttled
+// or offline Wikipedia never empties the layer.
+const HERITAGE_SITES_PATH = path.join(__dirname, 'data', 'heritage-sites.json');
+const HERITAGE_CACHE_PATH = path.join(__dirname, 'data', 'heritage-cache.json');
+let HERITAGE_SITES = [];
+try { HERITAGE_SITES = (JSON.parse(fs.readFileSync(HERITAGE_SITES_PATH, 'utf8')).sites) || []; }
+catch (e) { HERITAGE_SITES = []; }
+let heritageCache = [];
+let heritageLastPollTs = null, heritageLastError = null;
+function loadHeritageCache() {
+  try {
+    const j = JSON.parse(fs.readFileSync(HERITAGE_CACHE_PATH, 'utf8'));
+    if (Array.isArray(j.sites) && j.sites.length) { heritageCache = j.sites; heritageLastPollTs = j.lastPollTs || null; }
+  } catch (e) { /* no cache yet */ }
+}
+async function pollHeritage() {
+  if (!HERITAGE_SITES.length) { heritageLastError = 'no curated sites'; return; }
+  const UA = 'heleon-tracker/1.0 (https://github.com/hatsmagee/Bus-Tracker)';
+  const wiki = (q) => fetchJson('en.wikipedia.org', `/w/api.php?${q}`, { 'User-Agent': UA });
+  const out = [];
+  for (const s of HERITAGE_SITES) {
+    let photo = null, extract = '', url = null;
+    if (s.wiki) {
+      const enc = encodeURIComponent(s.wiki.replace(/ /g, '_'));
+      for (let attempt = 0; attempt < 3 && !url; attempt++) {
+        try {
+          const j = await wiki(`action=query&format=json&redirects=1&prop=extracts%7Cpageimages%7Cinfo&inprop=url&piprop=thumbnail&pithumbsize=480&exintro=1&explaintext=1&titles=${enc}`);
+          const pages = (j.query && j.query.pages) || {};
+          const p = Object.values(pages)[0];
+          if (p && p.pageid) {
+            extract = (p.extract || '').replace(/\s+\n/g, '\n').trim();
+            photo = (p.thumbnail && p.thumbnail.source) || null;
+            url = p.fullurl || `https://en.wikipedia.org/wiki/${enc}`;
+          } else { url = `https://en.wikipedia.org/wiki/${enc}`; } // page missing — still link the search
+        } catch (e) { await new Promise(r => setTimeout(r, 700 * (attempt + 1))); }
+      }
+      await new Promise(r => setTimeout(r, 250)); // be gentle with Wikipedia
+    }
+    out.push({
+      id: s.wiki || s.name, name: s.name, cat: s.cat, lat: s.lat, lon: s.lon,
+      note: s.note || '', extract: extract.slice(0, 1200), photo, url,
+    });
+  }
+  heritageCache = out; heritageLastPollTs = Date.now(); heritageLastError = null;
+  try { fs.writeFileSync(HERITAGE_CACHE_PATH, JSON.stringify({ lastPollTs: heritageLastPollTs, sites: out })); } catch (e) { /* read-only fs */ }
+}
+
 // ─── TSUNAMI — Pacific Tsunami Warning Center bulletins (keyless Atom) ────────
 // PTWC's Pacific feed (PHEB = Hawaii/Pacific messages). Most of the time it
 // carries only info statements or "no threat"; a real WARNING/WATCH/ADVISORY is
@@ -5866,6 +5926,9 @@ const server = http.createServer((req, res) => {
   setInterval(pollTsunami, 5 * 60 * 1000);        // safety feed — check every 5 min
   pollPlaces();                                    // Wikipedia POIs (slow grid scan)
   setInterval(pollPlaces, 24 * 60 * 60 * 1000);   // very static — once a day
+  loadHeritageCache();                              // serve curated atlas instantly from disk
+  pollHeritage();                                   // enrich curated heritage sites from Wikipedia
+  setInterval(pollHeritage, 24 * 60 * 60 * 1000);  // heritage is static — refresh once a day
   pollSatellites();
   setInterval(pollSatellites, 20 * 1000); // ISS moves ~7.6 km/s — keep it fresh
   pollRepeaters();

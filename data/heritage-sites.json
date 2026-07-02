@@ -1,0 +1,613 @@
+{
+  "_comment": "Curated Big Island historical / ancient / heritage sites. Each entry: name (display), cat (icon category), lat/lon (map placement), note (accurate curated blurb), wiki (English Wikipedia article title used to auto-enrich a real photo, intro write-up, coordinates and link — leave null when no reliable article exists). Enriched by pollHeritage() in heleon-server.js and cached to data/heritage-cache.json. Categories: heiau, royal, church, plantation, flume, bridge, lighthouse, petroglyph, abandoned, town, natural, cave, ranch, fishpond, battle, statue, museum, park, trail.",
+  "sites": [
+    {
+      "name": "Puʻukoholā Heiau",
+      "cat": "heiau",
+      "lat": 20.0261,
+      "lon": -155.8217,
+      "wiki": "Puʻukoholā Heiau National Historic Site",
+      "note": "Massive war temple built by Kamehameha I in 1790–91 above Kawaihae to fulfill a prophecy that he would unify the Hawaiian Islands. A National Historic Site."
+    },
+    {
+      "name": "Moʻokini Heiau",
+      "cat": "heiau",
+      "lat": 20.2506,
+      "lon": -155.8869,
+      "wiki": "Mookini Heiau",
+      "note": "One of the oldest and most sacred luakini (sacrificial) heiau in Hawaiʻi, tradition dates it to 480 AD. A National Historic Landmark near ʻUpolu Point, North Kohala."
+    },
+    {
+      "name": "Puʻuhonua o Hōnaunau (City of Refuge)",
+      "cat": "heiau",
+      "lat": 19.4205,
+      "lon": -155.9103,
+      "wiki": "Puʻuhonua o Hōnaunau National Historical Park",
+      "note": "Ancient place of refuge where kapu-breakers and defeated warriors could be absolved. Contains the Hale o Keawe temple, royal grounds and reconstructed kiʻi (temple images)."
+    },
+    {
+      "name": "Ahuʻena Heiau",
+      "cat": "heiau",
+      "lat": 19.6394,
+      "lon": -155.9967,
+      "wiki": null,
+      "note": "Restored heiau at Kamakahonu, Kailua-Kona, where Kamehameha I spent his final years and died in 1819. A National Historic Landmark."
+    },
+    {
+      "name": "Hikiau Heiau",
+      "cat": "heiau",
+      "lat": 19.4796,
+      "lon": -155.9214,
+      "wiki": null,
+      "note": "Heiau at Kealakekua Bay where Captain Cook was received as the god Lono in 1779 and where the first Christian service in Hawaiʻi was read."
+    },
+    {
+      "name": "Waha‘ula Heiau (buried 1997)",
+      "cat": "abandoned",
+      "lat": 19.3349,
+      "lon": -155.0431,
+      "wiki": null,
+      "note": "Ancient luakini heiau in Puna, said to have introduced the strict kapu system. Its visitor area was overrun and the site surrounded by Kīlauea lava flows in 1989–1997."
+    },
+    {
+      "name": "Huliheʻe Palace",
+      "cat": "royal",
+      "lat": 19.6394,
+      "lon": -155.9944,
+      "wiki": "Huliheʻe Palace",
+      "note": "1838 former vacation home of Hawaiian royalty on Aliʻi Drive, Kailua-Kona, now a museum of Victorian-era Hawaiian monarchy artifacts."
+    },
+    {
+      "name": "Mokuʻaikaua Church",
+      "cat": "church",
+      "lat": 19.6396,
+      "lon": -155.9939,
+      "wiki": "Mokuʻaikaua Church",
+      "note": "Oldest Christian church in the Hawaiian Islands (congregation 1820, building 1837), built of lava rock and coral mortar with ʻōhiʻa and koa timbers."
+    },
+    {
+      "name": "Statue of Kamehameha I (Kapaʻau)",
+      "cat": "statue",
+      "lat": 20.234,
+      "lon": -155.8004,
+      "wiki": "Statues of Kamehameha I",
+      "note": "The original 1880 bronze of Kamehameha the Great, lost at sea then recovered, standing near his North Kohala birthplace."
+    },
+    {
+      "name": "Kamehameha I Birthplace (Kokoiki)",
+      "cat": "royal",
+      "lat": 20.2372,
+      "lon": -155.8036,
+      "wiki": null,
+      "note": "Traditional birthplace of Kamehameha the Great at Kokoiki, North Kohala, marked by stones near Moʻokini Heiau."
+    },
+    {
+      "name": "Lyman Museum & Mission House",
+      "cat": "museum",
+      "lat": 19.7223,
+      "lon": -155.0899,
+      "wiki": "Lyman House Memorial Museum",
+      "note": "1839 missionary home in Hilo, the oldest wood-frame building on the island, with a natural history and Hawaiian culture museum."
+    },
+    {
+      "name": "Palace Theater (Hilo)",
+      "cat": "museum",
+      "lat": 19.7276,
+      "lon": -155.0885,
+      "wiki": "Palace Theater (Hilo, Hawaii)",
+      "note": "Restored 1925 vaudeville-era movie palace in downtown Hilo, on the National Register of Historic Places."
+    },
+    {
+      "name": "Pacific Tsunami Museum",
+      "cat": "museum",
+      "lat": 19.7286,
+      "lon": -155.0886,
+      "wiki": "Pacific Tsunami Museum",
+      "note": "Housed in a 1930 former bank in Hilo, it memorializes the devastating 1946 and 1960 tsunamis that struck the Big Island."
+    },
+    {
+      "name": "ʻImiloa Astronomy Center",
+      "cat": "museum",
+      "lat": 19.702,
+      "lon": -155.0876,
+      "wiki": "ʻImiloa Astronomy Center",
+      "note": "Planetarium and museum in Hilo linking Hawaiian culture and voyaging traditions with Mauna Kea astronomy."
+    },
+    {
+      "name": "Kona Coffee Living History Farm",
+      "cat": "museum",
+      "lat": 19.5205,
+      "lon": -155.926,
+      "wiki": "Kona Coffee Living History Farm",
+      "note": "Preserved 1900s Uchida coffee farm in Captain Cook depicting the lives of Japanese immigrant coffee families."
+    },
+    {
+      "name": "Waipiʻo Valley",
+      "cat": "natural",
+      "lat": 20.1176,
+      "lon": -155.5903,
+      "wiki": "Waipiʻo Valley",
+      "note": "The 'Valley of the Kings' — a deep taro-farmed valley and ancient political/religious center of the island, home to Hiʻilawe Falls."
+    },
+    {
+      "name": "Waimanu Valley",
+      "cat": "natural",
+      "lat": 20.1497,
+      "lon": -155.6314,
+      "wiki": null,
+      "note": "Remote roadless valley north of Waipiʻo reached by the Muliwai (Z) Trail, with waterfalls and wilderness campsites."
+    },
+    {
+      "name": "Pololū Valley",
+      "cat": "natural",
+      "lat": 20.2058,
+      "lon": -155.7331,
+      "wiki": "Pololū Valley",
+      "note": "The northern end of the Kohala coastline's amphitheater valleys, with a steep switchback trail to a black-sand beach."
+    },
+    {
+      "name": "ʻAkaka Falls",
+      "cat": "natural",
+      "lat": 19.8536,
+      "lon": -155.1517,
+      "wiki": "ʻAkaka Falls State Park",
+      "note": "442-foot free-falling waterfall in a lush state park near Honomū, reached by a loop through bamboo and wild orchids."
+    },
+    {
+      "name": "Rainbow Falls (Waiānuenue)",
+      "cat": "natural",
+      "lat": 19.7196,
+      "lon": -155.1067,
+      "wiki": "Rainbow Falls (Hawaii)",
+      "note": "80-foot Wailuku River waterfall in Hilo; a cave behind it is said in legend to be the home of Hina, mother of Māui."
+    },
+    {
+      "name": "Boiling Pots & Peʻepeʻe Falls",
+      "cat": "natural",
+      "lat": 19.7266,
+      "lon": -155.1094,
+      "wiki": null,
+      "note": "A series of churning pools and cascades on the Wailuku River above Rainbow Falls, formed in stacked lava flows."
+    },
+    {
+      "name": "Kealakekua Bay",
+      "cat": "natural",
+      "lat": 19.4783,
+      "lon": -155.9269,
+      "wiki": "Kealakekua Bay",
+      "note": "Marine reserve and State Historical Park where Captain James Cook was killed in 1779; rich reef and spinner dolphins."
+    },
+    {
+      "name": "Captain Cook Monument",
+      "cat": "battle",
+      "lat": 19.4842,
+      "lon": -155.9319,
+      "wiki": null,
+      "note": "White obelisk at Kaʻawaloa marking the spot where Captain Cook died in 1779; the small plot is technically British soil."
+    },
+    {
+      "name": "Papakōlea (Green Sand Beach)",
+      "cat": "natural",
+      "lat": 18.9363,
+      "lon": -155.6469,
+      "wiki": "Papakōlea Beach",
+      "note": "One of only a handful of green-sand beaches on Earth, its olivine crystals eroding from a littoral cone near Ka Lae."
+    },
+    {
+      "name": "Ka Lae (South Point)",
+      "cat": "natural",
+      "lat": 18.9106,
+      "lon": -155.6807,
+      "wiki": "Ka Lae",
+      "note": "The southernmost point of the United States and one of the earliest Polynesian landfalls, with ancient canoe mooring holes bored in the rock."
+    },
+    {
+      "name": "Punaluʻu Black Sand Beach",
+      "cat": "natural",
+      "lat": 19.1358,
+      "lon": -155.5044,
+      "wiki": "Punaluʻu Beach",
+      "note": "Famous black-sand beach in Kaʻū where honu (green sea turtles) and hawksbills bask; site of an ancient fishing village and freshwater springs."
+    },
+    {
+      "name": "Mauna Kea",
+      "cat": "natural",
+      "lat": 19.8207,
+      "lon": -155.4681,
+      "wiki": "Mauna Kea",
+      "note": "At 13,803 ft the highest point in the Pacific and, measured from its ocean base, the tallest mountain on Earth; sacred summit and world astronomy site."
+    },
+    {
+      "name": "Mauna Loa",
+      "cat": "natural",
+      "lat": 19.4753,
+      "lon": -155.6083,
+      "wiki": "Mauna Loa",
+      "note": "The largest active volcano on Earth by volume, covering half of the Big Island; last erupted in 2022."
+    },
+    {
+      "name": "Kīlauea",
+      "cat": "natural",
+      "lat": 19.4213,
+      "lon": -155.2871,
+      "wiki": "Kīlauea",
+      "note": "One of the world's most active volcanoes and home of Pele; centerpiece of Hawaiʻi Volcanoes National Park."
+    },
+    {
+      "name": "Thurston Lava Tube (Nāhuku)",
+      "cat": "cave",
+      "lat": 19.4149,
+      "lon": -155.2385,
+      "wiki": null,
+      "note": "A walk-through 500-year-old lava tube in Hawaiʻi Volcanoes National Park, ringed by native rainforest."
+    },
+    {
+      "name": "Halemaʻumaʻu Crater",
+      "cat": "natural",
+      "lat": 19.4069,
+      "lon": -155.2811,
+      "wiki": "Halemaʻumaʻu",
+      "note": "The pit crater within Kīlauea caldera, traditional home of the volcano goddess Pele, which has held recent lava lakes."
+    },
+    {
+      "name": "Kaumana Caves",
+      "cat": "cave",
+      "lat": 19.6853,
+      "lon": -155.1497,
+      "wiki": "Kaumana Cave",
+      "note": "A lava tube formed by the 1881 Mauna Loa flow that nearly reached Hilo, now a county park you can descend into."
+    },
+    {
+      "name": "Kazumura Cave",
+      "cat": "cave",
+      "lat": 19.48,
+      "lon": -155.05,
+      "wiki": "Kazumura Cave",
+      "note": "The longest and deepest lava tube in the world (over 40 miles mapped) on Kīlauea's eastern flank near Kurtistown."
+    },
+    {
+      "name": "Puʻu Loa Petroglyphs",
+      "cat": "petroglyph",
+      "lat": 19.2969,
+      "lon": -155.1069,
+      "wiki": null,
+      "note": "The largest petroglyph field in Hawaiʻi (23,000+ images) along the Chain of Craters Road in Hawaiʻi Volcanoes NP; a boardwalk protects the carvings."
+    },
+    {
+      "name": "Puakō Petroglyph Preserve",
+      "cat": "petroglyph",
+      "lat": 19.9722,
+      "lon": -155.8447,
+      "wiki": null,
+      "note": "One of the largest petroglyph concentrations in the Pacific, with over 3,000 carvings in a kiawe forest in South Kohala."
+    },
+    {
+      "name": "Waikoloa Petroglyph Preserve",
+      "cat": "petroglyph",
+      "lat": 19.9231,
+      "lon": -155.8869,
+      "wiki": null,
+      "note": "The 'Malama Trail' petroglyph field along the ancient Kīʻilae/Māmalahoa trail near Waikoloa, with carvings from the 16th century onward."
+    },
+    {
+      "name": "Mauna Kea Adze Quarry",
+      "cat": "petroglyph",
+      "lat": 19.7833,
+      "lon": -155.4667,
+      "wiki": null,
+      "note": "A National Historic Landmark near the summit — the largest primitive stone-tool quarry in the world, where hard basalt was worked into adzes."
+    },
+    {
+      "name": "Laupāhoehoe Point",
+      "cat": "town",
+      "lat": 19.9836,
+      "lon": -155.2394,
+      "wiki": "Laupahoehoe, Hawaii",
+      "note": "A lava peninsula where the 1946 April Fools' tsunami killed 24 people, mostly schoolchildren and teachers; a memorial stands at the point."
+    },
+    {
+      "name": "Honokaʻa",
+      "cat": "town",
+      "lat": 20.0794,
+      "lon": -155.4686,
+      "wiki": "Honokaa, Hawaii",
+      "note": "Historic Hāmākua sugar-plantation town with a preserved main street, the 1930 Honokaʻa People's Theatre, and macadamia-nut heritage."
+    },
+    {
+      "name": "Pepeʻekeo",
+      "cat": "plantation",
+      "lat": 19.8339,
+      "lon": -155.1069,
+      "wiki": "Pepeekeo, Hawaii",
+      "note": "Former sugar town on the Hāmākua coast; its mill closed in 1994. The scenic 4-mile old Māmalahoa route passes here."
+    },
+    {
+      "name": "Hakalau",
+      "cat": "plantation",
+      "lat": 19.9006,
+      "lon": -155.1289,
+      "wiki": "Hakalau, Hawaii",
+      "note": "Old sugar-mill village in a steep gulch; the 1946 tsunami destroyed its mill and warehouses at the stream mouth."
+    },
+    {
+      "name": "Honomū",
+      "cat": "town",
+      "lat": 19.8681,
+      "lon": -155.1211,
+      "wiki": "Honomu, Hawaii",
+      "note": "Tiny former plantation town that is the gateway to ʻAkaka Falls, with a wooden 1920s main street and old Buddhist temple."
+    },
+    {
+      "name": "Pāʻauilo",
+      "cat": "plantation",
+      "lat": 20.0431,
+      "lon": -155.3722,
+      "wiki": "Paauilo, Hawaii",
+      "note": "Hāmākua plantation community; the Kaʻohe/Pāʻauilo area retains sugar-era homes, a store, and rail-grade remnants."
+    },
+    {
+      "name": "Pāhala",
+      "cat": "plantation",
+      "lat": 19.2003,
+      "lon": -155.4786,
+      "wiki": "Pahala, Hawaii",
+      "note": "Kaʻū sugar-mill town (mill closed 1996), now a coffee and macadamia center and the seismic 'Pāhala swarm' epicenter."
+    },
+    {
+      "name": "Hāwī",
+      "cat": "town",
+      "lat": 20.2413,
+      "lon": -155.8339,
+      "wiki": "Hawi, Hawaii",
+      "note": "North Kohala town that boomed with the Kohala Sugar Company (1863–1975) and reinvented itself as an arts village."
+    },
+    {
+      "name": "Kapaʻau",
+      "cat": "town",
+      "lat": 20.2331,
+      "lon": -155.8017,
+      "wiki": "Kapaau, Hawaii",
+      "note": "North Kohala civic town near Kamehameha's birthplace, home to the original Kamehameha statue and historic Nanbu buildings."
+    },
+    {
+      "name": "Kohala Ditch",
+      "cat": "flume",
+      "lat": 20.145,
+      "lon": -155.755,
+      "wiki": null,
+      "note": "A 1905–06 engineering marvel — 22+ miles of hand-dug tunnels and wooden flumes that carried mountain water to Kohala's cane fields; later the 'Flumin' Kohala' kayak ride."
+    },
+    {
+      "name": "Hāmākua Ditch (Upper)",
+      "cat": "flume",
+      "lat": 20.09,
+      "lon": -155.42,
+      "wiki": null,
+      "note": "Historic irrigation ditch-and-flume system tapping Hāmākua rainfall for the coast's sugar plantations."
+    },
+    {
+      "name": "Onomea Bay & Scenic Drive Bridges",
+      "cat": "bridge",
+      "lat": 19.8022,
+      "lon": -155.1044,
+      "wiki": null,
+      "note": "The old 4-mile Māmalahoa 'Scenic Drive' crosses early-1900s single-lane concrete bridges over jungle gulches beside a former landing."
+    },
+    {
+      "name": "Hakalau Bridge",
+      "cat": "bridge",
+      "lat": 19.9006,
+      "lon": -155.1275,
+      "wiki": null,
+      "note": "A tall highway bridge spanning Hakalau gulch on the Hāmākua coast, replacing the plantation-era crossing wiped out by the 1946 tsunami."
+    },
+    {
+      "name": "Wailuku River (Singing) Bridge",
+      "cat": "bridge",
+      "lat": 19.7276,
+      "lon": -155.0889,
+      "wiki": null,
+      "note": "The steel-grate 'Singing Bridge' over the Wailuku River in downtown Hilo, so named for the hum of tires on its deck."
+    },
+    {
+      "name": "Cape Kumukahi Light",
+      "cat": "lighthouse",
+      "lat": 19.5161,
+      "lon": -154.8114,
+      "wiki": "Cape Kumukahi Light",
+      "note": "Lighthouse at the easternmost point of Hawaiʻi, famous for surviving the 1960 Kīlauea eruption that buried the surrounding village of Kapoho."
+    },
+    {
+      "name": "Kauhola Point Light (demolished 2009)",
+      "cat": "abandoned",
+      "lat": 20.2497,
+      "lon": -155.7739,
+      "wiki": "Kauhola Point Light",
+      "note": "A 1933 reinforced-concrete lighthouse tower in North Kohala, one of Hawaiʻi's tallest, demolished in 2009 as the eroding point threatened it."
+    },
+    {
+      "name": "Ka Lae (South Point) Light",
+      "cat": "lighthouse",
+      "lat": 18.911,
+      "lon": -155.681,
+      "wiki": null,
+      "note": "A skeletal navigation light at the wind-scoured southern tip of the island, above ancient canoe-mooring holes and modern wind turbines."
+    },
+    {
+      "name": "Kalapana (buried 1990)",
+      "cat": "abandoned",
+      "lat": 19.363,
+      "lon": -154.995,
+      "wiki": "Kalapana, Hawaii",
+      "note": "Puna village and its famous Kaimū black-sand beach overrun by Kīlauea lava in 1990; the historic Star of the Sea 'Painted Church' was moved to safety."
+    },
+    {
+      "name": "Kaimū Beach (buried)",
+      "cat": "abandoned",
+      "lat": 19.3519,
+      "lon": -154.9994,
+      "wiki": null,
+      "note": "Once Hawaiʻi's most photographed black-sand beach, buried under 1990 lava; a new black beach and young coconut grove are forming atop the flow."
+    },
+    {
+      "name": "Kapoho (buried 1960 & 2018)",
+      "cat": "abandoned",
+      "lat": 19.5069,
+      "lon": -154.8419,
+      "wiki": "Kapoho, Hawaii",
+      "note": "Lower Puna town destroyed by a 1960 eruption and again in 2018, when the Kīlauea LERZ flow buried Kapoho Bay, Vacationland and the famed tide pools."
+    },
+    {
+      "name": "Puʻu ʻŌʻō (vent 1983–2018)",
+      "cat": "abandoned",
+      "lat": 19.3861,
+      "lon": -155.1058,
+      "wiki": "Puʻu ʻŌʻō",
+      "note": "The cinder-and-spatter cone on Kīlauea's East Rift Zone whose 35-year eruption (1983–2018) was one of the longest in recorded history before its 2018 collapse."
+    },
+    {
+      "name": "Royal Gardens Subdivision (buried)",
+      "cat": "abandoned",
+      "lat": 19.35,
+      "lon": -155.05,
+      "wiki": null,
+      "note": "A 1960s Puna subdivision on Kīlauea's flank slowly overrun by Puʻu ʻŌʻō lava flows; its last resident was evacuated in 2012."
+    },
+    {
+      "name": "Kaloko-Honokōhau NHP",
+      "cat": "fishpond",
+      "lat": 19.6786,
+      "lon": -156.0231,
+      "wiki": "Kaloko-Honokōhau National Historical Park",
+      "note": "Preserves ancient Hawaiian fishponds (loko iʻa), house sites, holua slide and petroglyphs on the Kona coast north of Kailua."
+    },
+    {
+      "name": "Lapakahi State Historical Park",
+      "cat": "fishpond",
+      "lat": 20.1786,
+      "lon": -155.9014,
+      "wiki": "Lapakahi State Historical Park",
+      "note": "A partially restored 600-year-old fishing village in North Kohala, with self-guided trails through house platforms, canoe sheds and salt pans."
+    },
+    {
+      "name": "Parker Ranch",
+      "cat": "ranch",
+      "lat": 20.0223,
+      "lon": -155.6681,
+      "wiki": "Parker Ranch",
+      "note": "Founded 1847 in Waimea, one of the oldest and largest cattle ranches in the U.S. and the cradle of Hawaiian paniolo (cowboy) culture."
+    },
+    {
+      "name": "Kahuā Ranch",
+      "cat": "ranch",
+      "lat": 20.13,
+      "lon": -155.79,
+      "wiki": null,
+      "note": "A working upcountry Kohala cattle and sheep ranch since the 1920s, high on the green slopes of the Kohala Mountains."
+    },
+    {
+      "name": "Ala Kahakai National Historic Trail",
+      "cat": "trail",
+      "lat": 19.68,
+      "lon": -156.025,
+      "wiki": "Ala Kahakai National Historic Trail",
+      "note": "A 175-mile coastal trail corridor tracing ancient shoreline footpaths past heiau, fishponds and villages along the west and south coasts."
+    },
+    {
+      "name": "Muliwai (Z) Trail",
+      "cat": "trail",
+      "lat": 20.13,
+      "lon": -155.62,
+      "wiki": null,
+      "note": "A strenuous switchbacking trail climbing out of Waipiʻo Valley and across gulches to remote Waimanu Valley."
+    },
+    {
+      "name": "Naha Stone",
+      "cat": "statue",
+      "lat": 19.7256,
+      "lon": -155.0872,
+      "wiki": "Naha Stone",
+      "note": "A massive stone in front of the Hilo Public Library that legend says only a true chief could move — a feat attributed to the young Kamehameha."
+    },
+    {
+      "name": "Coconut Island (Mokuola)",
+      "cat": "natural",
+      "lat": 19.7333,
+      "lon": -155.0703,
+      "wiki": "Coconut Island (Hawaii)",
+      "note": "A small islet in Hilo Bay, formerly a puʻuhonua (place of refuge) and healing site, now a footbridge-linked park."
+    },
+    {
+      "name": "Liliʻuokalani Gardens",
+      "cat": "park",
+      "lat": 19.7339,
+      "lon": -155.0736,
+      "wiki": "Liliʻuokalani Park and Gardens",
+      "note": "A 1917 Japanese-style garden on Hilo Bay, one of the largest outside Japan, honoring the island's Issei sugar laborers."
+    },
+    {
+      "name": "Hawaiʻi Volcanoes National Park",
+      "cat": "park",
+      "lat": 19.4194,
+      "lon": -155.2885,
+      "wiki": "Hawaii Volcanoes National Park",
+      "note": "A UNESCO World Heritage Site and International Biosphere Reserve spanning Kīlauea and Mauna Loa, from sea level to 13,681 ft."
+    },
+    {
+      "name": "Kaʻū Desert & Footprints",
+      "cat": "natural",
+      "lat": 19.36,
+      "lon": -155.34,
+      "wiki": "Kaū Desert",
+      "note": "An arid ashfall zone southwest of Kīlauea preserving 1790 footprints of warriors caught in a deadly explosive eruption."
+    },
+    {
+      "name": "Mauna Kea Observatories",
+      "cat": "natural",
+      "lat": 19.8238,
+      "lon": -155.4703,
+      "wiki": "Mauna Kea Observatories",
+      "note": "A cluster of the world's most powerful telescopes near the sacred 13,803-ft summit, prized for exceptionally clear, dry, dark skies."
+    },
+    {
+      "name": "Old Kona Airport",
+      "cat": "park",
+      "lat": 19.6486,
+      "lon": -156.0136,
+      "wiki": null,
+      "note": "Kailua-Kona's original 1949 airport runway, closed in 1970 and now a state recreation area with beaches and sports fields along the coast."
+    },
+    {
+      "name": "St. Benedict's Painted Church",
+      "cat": "church",
+      "lat": 19.4197,
+      "lon": -155.9,
+      "wiki": "St. Benedict's Catholic Church (Hōnaunau, Hawaii)",
+      "note": "A 1900s Kona hillside church whose interior was hand-painted by Father John Vélghe with biblical scenes and a trompe-l'oeil Gothic cathedral."
+    },
+    {
+      "name": "Star of the Sea Painted Church",
+      "cat": "church",
+      "lat": 19.4785,
+      "lon": -154.9522,
+      "wiki": null,
+      "note": "The 1928 'Painted Church' of Kalapana, moved out of the path of the 1990 lava flow and preserved for its illusionistic painted interior."
+    },
+    {
+      "name": "Kalāhuipuaʻa Fishponds & Trail",
+      "cat": "fishpond",
+      "lat": 19.935,
+      "lon": -155.872,
+      "wiki": null,
+      "note": "Ancient anchialine ponds, fishponds, lava-tube shelters and petroglyphs preserved amid the Mauna Lani resort in South Kohala."
+    },
+    {
+      "name": "Hulihuli / Puakō Tide Pools",
+      "cat": "natural",
+      "lat": 19.97,
+      "lon": -155.848,
+      "wiki": null,
+      "note": "An extensive shallow reef flat and tide-pool system off the old fishing hamlet of Puakō, rich in marine life."
+    }
+  ]
+}
