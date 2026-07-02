@@ -27,3 +27,8 @@ data/osm/hawaii-latest.osm.pbf
 data/osm/.tmp-highways.jsonl
 data/osm/road-alignment-report.json
 data/route-color-trace-report.json
+
+# Runtime data caches (refreshed by server pollers; not source)
+data/infrastructure-cache.json
+data/local-cache.json
+data/meshtastic-nodes.json

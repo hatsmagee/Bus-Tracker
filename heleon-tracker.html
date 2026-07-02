@@ -2945,7 +2945,12 @@ function renderStreamflowWheels() {
       const el = document.createElement('div');
       el.className = 'stream-gauge';
       el.innerHTML = `<div class="rig"></div><div class="meter-slot"></div><span class="rate"></span>`;
-      m = new maplibregl.Marker({ element: el, anchor: 'center' })
+      // Anchor at the element's LEFT edge, not its center: the row is
+      // [wheel][meter][rate] laid out horizontally, so centering the whole
+      // row would push the wheel (the thing that marks the gauge's spot) far
+      // to the left of the actual coordinate. Left-anchoring pins the wheel on
+      // the point and lets the meter + label trail off to the right.
+      m = new maplibregl.Marker({ element: el, anchor: 'left', offset: [-17, 0] })
         .setLngLat(f.geometry.coordinates).addTo(map);
       streamWheelMarkers[site] = m;
     }
