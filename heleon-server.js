@@ -3867,14 +3867,20 @@ async function pollSpaceWeather() {
   try {
     const j = await fetchJson('services.swpc.noaa.gov',
       '/products/noaa-planetary-k-index.json', { 'User-Agent': 'heleon-tracker' });
-    // First row is the header; data rows are [time_tag, Kp, a_running, station_count].
-    if (Array.isArray(j) && j.length > 1) {
-      const last = j[j.length - 1];
-      const kp = parseFloat(last[1]);
-      const level = kp >= 7 ? 'severe storm' : kp >= 5 ? 'geomagnetic storm'
-        : kp >= 4 ? 'active' : 'quiet';
-      spaceWxCache = { kp, level, at: last[0], auroraPossible: kp >= 5 };
-      spaceWxLastPollTs = Date.now(); spaceWxLastError = null;
+    // This product is an array of OBJECTS {time_tag, Kp, a_running, station_count}
+    // (not array-of-arrays). Take the most recent with a numeric Kp.
+    if (Array.isArray(j) && j.length) {
+      let last = null;
+      for (let i = j.length - 1; i >= 0; i--) {
+        if (j[i] && Number.isFinite(parseFloat(j[i].Kp))) { last = j[i]; break; }
+      }
+      if (last) {
+        const kp = parseFloat(last.Kp);
+        const level = kp >= 7 ? 'severe storm' : kp >= 5 ? 'geomagnetic storm'
+          : kp >= 4 ? 'active' : 'quiet';
+        spaceWxCache = { kp, level, at: last.time_tag, auroraPossible: kp >= 5 };
+        spaceWxLastPollTs = Date.now(); spaceWxLastError = null;
+      } else spaceWxLastError = 'no numeric Kp';
     } else spaceWxLastError = 'unexpected response';
   } catch (e) { spaceWxLastError = (e && e.message) || 'unknown error'; }
 }

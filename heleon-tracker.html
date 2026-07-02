@@ -696,6 +696,7 @@
     <div class="tab-content" id="tab-hawaii">
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showRadar" onchange="toggleRadar()"> Precipitation radar</label>
+        <label><input type="checkbox" id="showTopo" onchange="toggleTopography()"> ⛰️ Topography (elevation)</label>
       </div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showLava" onchange="toggleLava()"> Lava flow hazard zones</label>
@@ -1288,6 +1289,26 @@ function initMapLayers() {
     id: 'radar-layer', type: 'raster', source: 'radar',
     layout: { visibility: 'none' },
     paint: { 'raster-opacity': 0.55 },
+  }, 'stops-circle');
+
+  // ─── TOPOGRAPHY — hillshade from a keyless terrain DEM (AWS Terrarium) ─────
+  // Shows the island's elevation relief — Maunakea/Mauna Loa, the valleys, the
+  // coastline — as shaded topography under the data layers. Off by default;
+  // toggled from the Map tab. Terrarium terrain-RGB tiles are public/keyless.
+  map.addSource('terrain-dem', {
+    type: 'raster-dem', tileSize: 256, maxzoom: 14,
+    encoding: 'terrarium',
+    tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+  });
+  map.addLayer({
+    id: 'hillshade-layer', type: 'hillshade', source: 'terrain-dem',
+    layout: { visibility: 'none' },
+    paint: {
+      'hillshade-shadow-color': '#1a2332',
+      'hillshade-highlight-color': '#fdf6e3',
+      'hillshade-accent-color': '#3d5a3d',
+      'hillshade-exaggeration': 0.55,
+    },
   }, 'stops-circle');
 
   map.addSource('lava-zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
@@ -2724,6 +2745,7 @@ async function fetchAlerts() {
 // from RainViewer's own public endpoint (no server proxy needed, it's already
 // keyless/CORS-open) and point the raster source at the latest frame.
 let radarVisible = false;
+let _radarTilesSig = null;
 async function fetchRadarFrame() {
   try {
     const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
@@ -2731,14 +2753,38 @@ async function fetchRadarFrame() {
     const past = data.radar && data.radar.past;
     if (!past || !past.length) return;
     const frame = past[past.length - 1]; // most recent
-    const tiles = [`${data.host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`];
-    if (mapReady && map.getSource('radar')) map.getSource('radar').setTiles(tiles);
+    const url = `${data.host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`;
+    if (url === _radarTilesSig) return;   // same frame — nothing to do
+    _radarTilesSig = url;
+    if (!mapReady) return;
+    // Rebuild the raster source/layer with the new frame's tile URL. setTiles()
+    // on a source created with an empty `tiles:[]` array doesn't reliably kick
+    // off tile loading in MapLibre, which is why the radar showed nothing — so
+    // we recreate the source each frame instead (radar frames are ~10 min apart,
+    // so this is cheap) and keep the layer's current visibility.
+    const vis = map.getLayer('radar-layer')
+      ? map.getLayoutProperty('radar-layer', 'visibility') : (radarVisible ? 'visible' : 'none');
+    if (map.getLayer('radar-layer')) map.removeLayer('radar-layer');
+    if (map.getSource('radar')) map.removeSource('radar');
+    map.addSource('radar', { type: 'raster', tiles: [url], tileSize: 256 });
+    const beforeId = map.getLayer('stops-circle') ? 'stops-circle' : undefined;
+    map.addLayer({
+      id: 'radar-layer', type: 'raster', source: 'radar',
+      layout: { visibility: vis || 'none' },
+      paint: { 'raster-opacity': 0.55 },
+    }, beforeId);
   } catch (e) { /* leave last frame on screen */ }
 }
 function toggleRadar() {
   radarVisible = document.getElementById('showRadar').checked;
-  if (mapReady) map.setLayoutProperty('radar-layer', 'visibility', radarVisible ? 'visible' : 'none');
+  if (mapReady && map.getLayer('radar-layer')) map.setLayoutProperty('radar-layer', 'visibility', radarVisible ? 'visible' : 'none');
   if (radarVisible) fetchRadarFrame();
+}
+function toggleTopography() {
+  const on = document.getElementById('showTopo').checked;
+  if (mapReady && map.getLayer('hillshade-layer')) {
+    map.setLayoutProperty('hillshade-layer', 'visibility', on ? 'visible' : 'none');
+  }
 }
 
 // Wildfire / thermal hotspots (NASA VIIRS) — live, so refreshed alongside quakes/alerts.
