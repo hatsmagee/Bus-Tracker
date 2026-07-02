@@ -90,6 +90,19 @@ let agentRunInFlight = false;
 // doing. Capped so a long-lived process doesn't grow unbounded.
 const AGENT_LOG_MAX = 500;
 const agentLog = [];
+// Persist the agent log to a size-capped, rotated file so it survives restarts
+// but can never fill the disk (256 KB × 3 = <1 MB max). Lives under the agent
+// tmp dir (/tmp/agent on Render — ephemeral, which is fine).
+const logRotate = require('./scripts/lib/log-rotate');
+const AGENT_TMP_DIR = process.env.AGENT_TMP_DIR || (IS_RENDER ? '/tmp/agent' : path.join(__dirname, '.agent-tmp'));
+const AGENT_LOG_FILE = path.join(AGENT_TMP_DIR, 'agent.log');
+function loadAgentLogTail() {
+  for (const line of logRotate.tail(AGENT_LOG_FILE, AGENT_LOG_MAX)) {
+    const m = line.match(/^(\d+)\t(\w+)\t([\s\S]*)$/);
+    if (m) agentLog.push({ ts: +m[1], level: m[2], text: m[3] });
+  }
+  if (agentLog.length > AGENT_LOG_MAX) agentLog.splice(0, agentLog.length - AGENT_LOG_MAX);
+}
 // What the agent is doing right now — surfaced so the dashboard robot can hover
 // over the item it's working on and show a live status.
 let agentCurrent = { key: null, activity: 'idle', text: '', ts: null };
@@ -112,9 +125,12 @@ function agentParseActivity(text) {
 function agentLogPush(line, level = 'info') {
   const text = String(line).replace(/\s+$/, '');
   if (!text) return;
-  agentLog.push({ ts: Date.now(), level, text });
+  const ts = Date.now();
+  agentLog.push({ ts, level, text });
   if (agentLog.length > AGENT_LOG_MAX) agentLog.splice(0, agentLog.length - AGENT_LOG_MAX);
   agentParseActivity(text);
+  // Tab-separated so a restart can reparse the tail; rotation keeps it bounded.
+  logRotate.appendLine(AGENT_LOG_FILE, `${ts}\t${level}\t${text.replace(/\t/g, ' ')}`, { maxBytes: 256 * 1024, maxFiles: 3 });
 }
 
 // Server-side road-snapping (Valhalla map-matching, cached + auto-refreshing).
@@ -6412,6 +6428,19 @@ const server = http.createServer((req, res) => {
 // ─── BOOT ────────────────────────────────────────────────────────────────────
 (async () => {
   await openDb();
+
+  // Disk hygiene: load the (bounded) agent log tail, and sweep stale temp files
+  // so a light/ephemeral host (Render free tier) never fills up. Repeat daily.
+  loadAgentLogTail();
+  const sweepDisk = () => {
+    try {
+      logRotate.capFileSize(AGENT_LOG_FILE, 256 * 1024);
+      logRotate.cleanupStale(DATA_DIR, { patterns: [/\.tmp$/i, /\.log\.\d+$/], maxAgeMs: 24 * 60 * 60 * 1000 });
+      logRotate.cleanupStale(AGENT_TMP_DIR, { patterns: [/\.tmp$/i], maxAgeMs: 24 * 60 * 60 * 1000 });
+    } catch {}
+  };
+  sweepDisk();
+  setInterval(sweepDisk, 24 * 60 * 60 * 1000);
 
   const shapeCount = dbGet(`SELECT COUNT(*) as n FROM route_shapes`);
   if (!shapeCount || shapeCount.n === 0) {
