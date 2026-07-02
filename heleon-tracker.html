@@ -1027,6 +1027,36 @@ let showRouteShapes = true;
 let showStale = true;       // show last-known (faded) buses by default
 const STALE_THRESHOLD = 30; // minutes — match the server retain window
 
+// ─── WEBGL FALLBACK ────────────────────────────────────────────────────────────
+// If MapLibre can't create a WebGL context (old browser, hardware-disabled,
+// locked-down machine, kiosk mode), swap to a static OpenStreetMap iframe of
+// the island + a clear explanation. All list views still work — buses,
+// earthquakes, weather, places, etc. — they just don't have the live map
+// canvas. Keeps a working reference map so the page isn't broken.
+function installStaticFallback(reason) {
+  mapReady = false;
+  const el = document.getElementById('map');
+  if (!el) return;
+  const reasonTxt = reason
+    ? `<div style="margin-top:8px;font-size:11px;color:#8b949e;">${escapeHtml(String(reason).slice(0, 200))}</div>` : '';
+  el.innerHTML = `<div style="position:absolute;inset:0;background:var(--bg);color:var(--text);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;font-family:inherit;overflow:auto;">
+    <div style="font-size:48px;margin-bottom:12px;">🗺️</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:6px;">Live map unavailable</div>
+    <div style="font-size:13px;color:var(--muted);max-width:480px;line-height:1.5;">
+      Your browser couldn't initialize WebGL, so the live map can't render.
+      All the live data is still here — every bus, earthquake, weather station,
+      and historical place is in the sidebar lists (🚌 Buses, 🌋 Hawaiʻi, ⚙️ System).
+    </div>
+    <iframe title="Big Island reference map" src="https://www.openstreetmap.org/export/embed.html?bbox=-156.5%2C18.9%2C-154.6%2C20.4&layer=mapnik&marker=19.7063,-155.0608"
+      style="margin-top:16px;width:min(640px,90%);height:min(420px,55%);border:1px solid var(--border);border-radius:8px;background:#0a0e1a;"></iframe>
+    ${reasonTxt}
+    <div style="margin-top:12px;font-size:11px;color:var(--muted);max-width:520px;">
+      Map tiles by <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" style="color:#58a6ff;">OpenStreetMap</a>.
+      A WebGL-enabled browser (Chrome, Firefox, Safari, Edge) unlocks the full live experience.
+    </div>
+  </div>`;
+}
+
 // ─── MAP INIT ─────────────────────────────────────────────────────────────────
 function initMap() {
   try {
@@ -1039,7 +1069,12 @@ function initMap() {
       fadeDuration: 0,
     });
   } catch (e) {
+    // Synchronous constructor failure (e.g. WebGL truly unavailable in this
+    // JS engine). Install the static OpenStreetMap iframe fallback so the
+    // page still shows a recognizable island map + a clean message, and
+    // keeps every list view fully functional.
     console.error('[map] init failed:', e);
+    try { installStaticFallback(e && e.message); } catch (_) {}
     return;
   }
   try {
@@ -1089,6 +1124,13 @@ function initMap() {
   map.on('error', (e) => {
     // Suppress known MapLibre v4 bugs about listener arrays
     if (e?.error?.message?.includes('slice is not a function')) return;
+    // GPU context failure (old browser / hardware-disabled) — install the
+    // static OpenStreetMap iframe fallback so the page still shows a map.
+    if (e?.error?.message?.includes('Failed to initialize WebGL')
+        || e?.type === 'webglcontextcreationerror') {
+      try { installStaticFallback(e && e.error && e.error.message); } catch (_) {}
+      return;
+    }
     console.warn('[map]', e?.error?.message || e);
   });
 }
