@@ -1451,18 +1451,29 @@ function initMapLayers() {
   let vesselPopup = null;
   map.on('click', 'vessels-icon', e => {
     const p = e.features[0].properties;
+    const name = (p.name || '').trim();
+    const flag = mmsiFlag(p.mmsi);
+    const stName = shipTypeName(p.shipType);
+    const infoId = 'vinfo' + Math.random().toString(36).slice(2, 9);
+    const links = [
+      `<a href="https://www.vesselfinder.com/?mmsi=${encodeURIComponent(p.mmsi)}" target="_blank" rel="noopener" style="color:#58a6ff;">VesselFinder ↗</a>`,
+      `<a href="https://www.marinetraffic.com/en/ais/details/ships/mmsi:${encodeURIComponent(p.mmsi)}" target="_blank" rel="noopener" style="color:#58a6ff;">MarineTraffic ↗</a>`,
+    ];
     const html = `<div style="font-family:system-ui;font-size:12px;color:#e6edf3;">
-      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">⛵ ${escapeHtml(p.name) || 'Unknown vessel'}</div>
-      <div style="color:var(--muted);font-size:10px;margin-bottom:6px;">MMSI ${p.mmsi}${p.shipType ? ' · type ' + p.shipType : ''}</div>
+      <div style="font-weight:700;font-size:14px;margin-bottom:2px;">⛵ ${escapeHtml(name) || 'Unknown vessel'}</div>
+      <div style="color:var(--muted);font-size:10px;margin-bottom:6px;">MMSI ${p.mmsi}${flag ? ` · ${flag[1]} ${escapeHtml(flag[0])}` : ''}${stName ? ' · ' + escapeHtml(stName) : (p.shipType ? ' · type ' + p.shipType : '')}</div>
+      <div id="${infoId}" style="margin:2px 0;"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;">
         <div><span style="color:var(--muted);">Speed:</span> ${p.speedKts} kts</div>
         <div><span style="color:var(--muted);">Heading:</span> ${Math.round(p.heading)}°</div>
       </div>
       <div style="font-family:monospace;font-size:10px;color:var(--muted);margin-top:6px;">${(+p.lat).toFixed(4)}, ${(+p.lon).toFixed(4)}</div>
+      <div style="font-size:9.5px;margin-top:6px;">${links.join(' · ')}</div>
     </div>`;
     if (vesselPopup) vesselPopup.remove();
-    vesselPopup = new maplibregl.Popup({ offset: 12, maxWidth: '260px' })
+    vesselPopup = new maplibregl.Popup({ offset: 12, maxWidth: '280px' })
       .setLngLat(e.lngLat).setHTML(html).addTo(map);
+    if (name) fillVesselInfo(infoId, name);
   });
   wireLayerHover('vessels-icon', p => `
     <div style="font-weight:600;">⛵ ${escapeHtml(p.name) || 'Unknown vessel'}</div>
@@ -1542,9 +1553,20 @@ function initMapLayers() {
     const p = e.features[0].properties;
     const altFt = p.altM != null && p.altM !== '' ? Math.round(p.altM * 3.28084).toLocaleString() + ' ft' : '—';
     const speedKt = p.velMs != null && p.velMs !== '' ? Math.round(p.velMs * 1.94384) + ' kts' : '—';
+    const hex = (p.icao24 || '').toLowerCase();
+    const reg = (p.registration || '').toUpperCase();
+    const airline = airlineFromCallsign(p.callsign);
+    const typeReg = [p.type, reg].filter(Boolean).join(' · ');
+    const photoId = 'acp' + Math.random().toString(36).slice(2, 9);
+    const links = [
+      `<a href="https://www.flightradar24.com/data/aircraft/${encodeURIComponent(reg || hex)}" target="_blank" rel="noopener" style="color:#58a6ff;">Flightradar24 ↗</a>`,
+      `<a href="https://globe.adsbexchange.com/?icao=${encodeURIComponent(hex)}" target="_blank" rel="noopener" style="color:#58a6ff;">ADS-B Exchange ↗</a>`,
+    ];
     const html = `<div style="font-family:system-ui;font-size:12px;color:#e6edf3;">
       <div style="font-weight:700;font-size:14px;margin-bottom:2px;font-family:monospace;">✈️ ${escapeHtml(p.callsign) || p.icao24}</div>
-      <div style="color:var(--muted);font-size:10px;margin-bottom:6px;">${escapeHtml(p.country) || '?'} · ${p.icao24}</div>
+      <div style="color:var(--muted);font-size:10px;margin-bottom:6px;">${airline ? escapeHtml(airline) + ' · ' : ''}${escapeHtml(p.country) || '?'} · ${p.icao24}</div>
+      <div id="${photoId}" style="margin:2px 0;"></div>
+      ${typeReg ? `<div style="font-size:11px;margin-bottom:4px;"><span style="color:var(--muted);">Aircraft:</span> ${escapeHtml(typeReg)}</div>` : ''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;">
         <div><span style="color:var(--muted);">Altitude:</span> ${altFt}</div>
         <div><span style="color:var(--muted);">Speed:</span> ${speedKt}</div>
@@ -1552,10 +1574,12 @@ function initMapLayers() {
         <div><span style="color:var(--muted);">Status:</span> ${(p.onGround === true || p.onGround === 'true') ? 'On ground' : 'Airborne'}</div>
       </div>
       <div style="font-family:monospace;font-size:10px;color:var(--muted);margin-top:6px;">${(+p.lat).toFixed(4)}, ${(+p.lon).toFixed(4)}</div>
+      <div style="font-size:9.5px;margin-top:6px;">${links.join(' · ')}</div>
     </div>`;
     if (aircraftPopup) aircraftPopup.remove();
-    aircraftPopup = new maplibregl.Popup({ offset: 12, maxWidth: '280px' })
+    aircraftPopup = new maplibregl.Popup({ offset: 12, maxWidth: '300px' })
       .setLngLat(e.lngLat).setHTML(html).addTo(map);
+    if (hex || reg) fillAircraftPhoto(photoId, hex, reg);
   });
   wireLayerHover('aircraft-triangles', p => {
     const altFt = p.altM != null && p.altM !== '' ? Math.round(p.altM * 3.28084).toLocaleString() + ' ft' : '—';
@@ -3262,6 +3286,93 @@ function focusVessel(mmsi) {
   const v = allVessels.find(x => String(x.mmsi) === String(mmsi));
   if (!v || !mapReady) return;
   map.flyTo({ center: [v.lon, v.lat], zoom: 13 });
+}
+
+// ─── Ship / aircraft identity decoders + photo enrichment ────────────────────
+// Turn raw AIS/ADS-B codes into human context, and lazily attach a real photo
+// of the specific vessel/airframe (Planespotters, Wikipedia) plus history.
+function shipTypeName(code) {
+  const c = +code; if (!Number.isFinite(c) || c <= 0) return '';
+  if (c >= 20 && c <= 29) return 'Wing-in-ground craft';
+  if (c === 30) return 'Fishing vessel';
+  if (c === 31 || c === 32) return 'Towing vessel';
+  if (c === 33) return 'Dredger';
+  if (c === 34) return 'Dive vessel';
+  if (c === 35) return 'Military ops';
+  if (c === 36) return 'Sailing vessel';
+  if (c === 37) return 'Pleasure craft';
+  if (c >= 40 && c <= 49) return 'High-speed craft';
+  if (c === 50) return 'Pilot vessel';
+  if (c === 51) return 'Search & rescue';
+  if (c === 52) return 'Tug';
+  if (c === 53) return 'Port tender';
+  if (c === 54) return 'Anti-pollution';
+  if (c === 55) return 'Law enforcement';
+  if (c === 58) return 'Medical transport';
+  if (c >= 60 && c <= 69) return 'Passenger ship';
+  if (c >= 70 && c <= 79) return 'Cargo ship';
+  if (c >= 80 && c <= 89) return 'Tanker';
+  if (c >= 90 && c <= 99) return 'Other';
+  return '';
+}
+const MMSI_MID = {
+  '338': ['United States', '🇺🇸'], '366': ['United States', '🇺🇸'], '367': ['United States', '🇺🇸'],
+  '368': ['United States', '🇺🇸'], '369': ['United States', '🇺🇸'], '316': ['Canada', '🇨🇦'],
+  '431': ['Japan', '🇯🇵'], '432': ['Japan', '🇯🇵'], '440': ['South Korea', '🇰🇷'], '441': ['South Korea', '🇰🇷'],
+  '412': ['China', '🇨🇳'], '413': ['China', '🇨🇳'], '414': ['China', '🇨🇳'], '477': ['Hong Kong', '🇭🇰'],
+  '563': ['Singapore', '🇸🇬'], '564': ['Singapore', '🇸🇬'], '565': ['Singapore', '🇸🇬'], '566': ['Singapore', '🇸🇬'],
+  '636': ['Liberia', '🇱🇷'], '637': ['Liberia', '🇱🇷'], '538': ['Marshall Islands', '🇲🇭'],
+  '351': ['Panama', '🇵🇦'], '352': ['Panama', '🇵🇦'], '353': ['Panama', '🇵🇦'], '354': ['Panama', '🇵🇦'],
+  '355': ['Panama', '🇵🇦'], '356': ['Panama', '🇵🇦'], '357': ['Panama', '🇵🇦'], '370': ['Panama', '🇵🇦'],
+  '371': ['Panama', '🇵🇦'], '372': ['Panama', '🇵🇦'], '373': ['Panama', '🇵🇦'], '374': ['Panama', '🇵🇦'],
+  '249': ['Malta', '🇲🇹'], '256': ['Malta', '🇲🇹'], '215': ['Malta', '🇲🇹'], '229': ['Malta', '🇲🇹'],
+  '235': ['United Kingdom', '🇬🇧'], '232': ['United Kingdom', '🇬🇧'], '233': ['United Kingdom', '🇬🇧'],
+  '319': ['Cayman Islands', '🇰🇾'], '311': ['Bahamas', '🇧🇸'], '308': ['Bahamas', '🇧🇸'], '309': ['Bahamas', '🇧🇸'],
+  '205': ['Belgium', '🇧🇪'], '211': ['Germany', '🇩🇪'], '218': ['Germany', '🇩🇪'], '244': ['Netherlands', '🇳🇱'],
+  '245': ['Netherlands', '🇳🇱'], '246': ['Netherlands', '🇳🇱'], '257': ['Norway', '🇳🇴'], '258': ['Norway', '🇳🇴'],
+  '259': ['Norway', '🇳🇴'], '265': ['Sweden', '🇸🇪'], '266': ['Sweden', '🇸🇪'], '247': ['Italy', '🇮🇹'],
+  '227': ['France', '🇫🇷'], '228': ['France', '🇫🇷'], '224': ['Spain', '🇪🇸'], '209': ['Cyprus', '🇨🇾'],
+  '210': ['Cyprus', '🇨🇾'], '212': ['Cyprus', '🇨🇾'], '341': ['St Kitts & Nevis', '🇰🇳'],
+  '525': ['Indonesia', '🇮🇩'], '574': ['Vietnam', '🇻🇳'], '525 ': ['Indonesia', '🇮🇩'],
+};
+function mmsiFlag(mmsi) {
+  const s = String(mmsi || '').replace(/\D/g, '');
+  if (s.length < 3) return null;
+  return MMSI_MID[s.slice(0, 3)] || null;
+}
+const AIRLINE_ICAO = {
+  HAL: 'Hawaiian Airlines', AAL: 'American Airlines', UAL: 'United Airlines', DAL: 'Delta Air Lines',
+  SWA: 'Southwest Airlines', ASA: 'Alaska Airlines', JBU: 'JetBlue', NKS: 'Spirit', FFT: 'Frontier',
+  FDX: 'FedEx Express', UPS: 'UPS Airlines', GTI: 'Atlas Air', ABX: 'ABX Air', CKS: 'Kalitta Air',
+  ANA: 'All Nippon Airways', JAL: 'Japan Airlines', KAL: 'Korean Air', AAR: 'Asiana', CPA: 'Cathay Pacific',
+  QFA: 'Qantas', ANZ: 'Air New Zealand', JST: 'Jetstar', PAL: 'Philippine Airlines', CAL: 'China Airlines',
+  EVA: 'EVA Air', SIA: 'Singapore Airlines', ACA: 'Air Canada', WJA: 'WestJet', WestJet: 'WestJet',
+  MKU: 'Mokulele Airlines', KMK: 'Kamaka Air', OGG: 'Maui-based', AIP: 'Airline',
+  RCH: 'US Air Force (Reach)', CNV: 'US Navy', CFC: 'RCAF', CMB: 'US Military',
+};
+function airlineFromCallsign(cs) {
+  const m = (cs || '').trim().toUpperCase().match(/^([A-Z]{3})\d/);
+  return m ? (AIRLINE_ICAO[m[1]] || null) : null;
+}
+async function fillAircraftPhoto(id, hex, reg) {
+  try {
+    const d = await (await fetch(`/api/aircraft-photo?hex=${encodeURIComponent(hex || '')}&reg=${encodeURIComponent(reg || '')}`)).json();
+    const el = document.getElementById(id); if (!el) return;
+    if (d && d.photo) {
+      el.innerHTML = `<a href="${escapeHtml(d.link || '#')}" target="_blank" rel="noopener"><img src="${escapeHtml(d.photo)}" style="width:100%;border-radius:6px;display:block;margin:2px 0;"/></a>${d.photographer ? `<div style="font-size:9px;color:var(--muted);margin-top:1px;">📷 ${escapeHtml(d.photographer)} · Planespotters</div>` : ''}`;
+    }
+  } catch (e) { /* leave placeholder empty */ }
+}
+async function fillVesselInfo(id, name) {
+  try {
+    const d = await (await fetch(`/api/vessel-photo?name=${encodeURIComponent(name || '')}`)).json();
+    const el = document.getElementById(id); if (!el) return;
+    let h = '';
+    if (d && d.photo) h += `<img src="${escapeHtml(d.photo)}" style="width:100%;border-radius:6px;display:block;margin:2px 0 4px;"/>`;
+    if (d && d.extract) h += `<div style="font-size:11px;line-height:1.45;color:#c9d1d9;">${escapeHtml(d.extract)}</div>`;
+    if (d && d.wikiUrl) h += `<div style="font-size:9.5px;margin-top:3px;"><a href="${escapeHtml(d.wikiUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">Wikipedia ↗</a></div>`;
+    if (h) el.innerHTML = h;
+  } catch (e) { /* leave placeholder empty */ }
 }
 
 // ─── AIRCRAFT (OpenSky) ───────────────────────────────────────────────────

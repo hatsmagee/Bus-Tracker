@@ -3115,6 +3115,21 @@ async function handleApi(url, res) {
       timelines: timelinesCache });
   }
 
+  // ── AIRCRAFT PHOTO — Planespotters public API proxy (keyless, cached) ──────
+  // Photos of the specific airframe by ICAO 24-bit hex or registration, with
+  // photographer credit and a link back. Cached per-key to be a good citizen.
+  if (p === '/api/aircraft-photo') {
+    const hex = (q.get('hex') || '').trim().toLowerCase();
+    const reg = (q.get('reg') || '').trim().toUpperCase();
+    return getAircraftPhoto(hex, reg).then(d => json(res, d)).catch(e => json(res, { error: String(e.message || e) }));
+  }
+
+  // ── VESSEL INFO — Wikipedia photo + history for named ships (keyless) ──────
+  if (p === '/api/vessel-photo') {
+    const name = (q.get('name') || '').trim();
+    return getVesselInfo(name).then(d => json(res, d)).catch(e => json(res, { error: String(e.message || e) }));
+  }
+
   // ── TSUNAMI — PTWC bulletin status (keyless) ──────────────────────────────
   if (p === '/api/tsunami') {
     return json(res, { ts: Date.now(), lastPollTs: tsunamiLastPollTs, lastError: tsunamiLastError,
@@ -5442,6 +5457,76 @@ async function pollAssetMedia() {
   }
   assetMediaCache = out; assetMediaLastPollTs = Date.now(); assetMediaLastError = null;
   try { fs.writeFileSync(ASSET_MEDIA_CACHE_PATH, JSON.stringify({ lastPollTs: assetMediaLastPollTs, assets: out })); } catch (e) { /* read-only fs */ }
+}
+
+// ─── AIRCRAFT & VESSEL PHOTOS (keyless, cached proxies) ──────────────────────
+// Aircraft: Planespotters.net public photo API — photo of the specific airframe
+// by ICAO hex or registration, with photographer credit. Vessels: Wikipedia
+// summary for named ships (cruise ships, ferries, notable vessels). Both cached
+// in-memory (positive 7d, negative 12h) so we stay a good API citizen.
+const AIRPHOTO_UA = 'heleon-tracker/1.0 (+https://github.com/hatsmagee/Bus-Tracker)';
+const aircraftPhotoCache = new Map(); // key -> { at, data }
+async function getAircraftPhoto(hex, reg) {
+  const key = hex || reg;
+  if (!key) return { photo: null };
+  const c = aircraftPhotoCache.get(key);
+  const ttl = (c && c.data && c.data.photo) ? 7 * 24 * 3600 * 1000 : 12 * 3600 * 1000;
+  if (c && Date.now() - c.at < ttl) return c.data;
+  let data = { photo: null };
+  const paths = [];
+  if (hex) paths.push(`/pub/photos/hex/${encodeURIComponent(hex)}`);
+  if (reg) paths.push(`/pub/photos/reg/${encodeURIComponent(reg)}`);
+  for (const pth of paths) {
+    try {
+      const j = await fetchJson('api.planespotters.net', pth, { 'User-Agent': AIRPHOTO_UA, 'Accept': 'application/json' });
+      const ph = j && Array.isArray(j.photos) && j.photos[0];
+      if (ph) {
+        data = {
+          photo: (ph.thumbnail_large && ph.thumbnail_large.src) || (ph.thumbnail && ph.thumbnail.src) || null,
+          link: ph.link || null,
+          photographer: ph.photographer || null,
+        };
+        if (data.photo) break;
+      }
+    } catch (e) { /* try next path */ }
+  }
+  aircraftPhotoCache.set(key, { at: Date.now(), data });
+  return data;
+}
+const vesselInfoCache = new Map(); // name -> { at, data }
+async function getVesselInfo(name) {
+  if (!name || name.length < 3) return { photo: null };
+  const key = name.toUpperCase();
+  const c = vesselInfoCache.get(key);
+  const ttl = (c && c.data && (c.data.photo || c.data.extract)) ? 7 * 24 * 3600 * 1000 : 12 * 3600 * 1000;
+  if (c && Date.now() - c.at < ttl) return c.data;
+  let data = { photo: null };
+  // Search Wikipedia for a ship article matching the vessel name, then pull its
+  // lead image + extract. Try a couple of query shapes to catch "MV/MS" prefixes.
+  const candidates = [name, `${name} (ship)`, `MV ${name}`, `MS ${name}`];
+  for (const cand of candidates) {
+    try {
+      const enc = encodeURIComponent(cand.replace(/ /g, '_'));
+      const j = await fetchJson('en.wikipedia.org',
+        `/w/api.php?action=query&format=json&redirects=1&prop=pageimages%7Cextracts%7Cinfo&inprop=url&explaintext=1&exintro=1&exsentences=3&piprop=thumbnail&pithumbsize=480&titles=${enc}`,
+        { 'User-Agent': AIRPHOTO_UA });
+      const pg = Object.values((j.query && j.query.pages) || {})[0];
+      if (pg && !pg.missing) {
+        const ex = (pg.extract || '');
+        // Only accept if it actually reads like a ship, to avoid false matches.
+        if (/\b(ship|vessel|ferry|cruise|tanker|cargo|boat|liner|yacht|barge|tug|catamaran|schooner)\b/i.test(ex) || /\(ship\)/.test(cand)) {
+          data = {
+            photo: (pg.thumbnail && pg.thumbnail.source) || null,
+            extract: ex || null,
+            wikiUrl: pg.fullurl || null,
+          };
+          if (data.photo || data.extract) break;
+        }
+      }
+    } catch (e) { /* try next candidate */ }
+  }
+  vesselInfoCache.set(key, { at: Date.now(), data });
+  return data;
 }
 
 // ─── TIMELINES (curated deep histories + Wikipedia image resolution) ─────────
