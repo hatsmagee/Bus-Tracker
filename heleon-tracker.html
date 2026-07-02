@@ -3868,21 +3868,40 @@ function wayGeomIndex() {
 
 const PILLS_SRC = 'route-pills';
 const PILLS_LAYER = 'route-pills-symbol';
+
+// Place a label point slightly to the side of a road polyline so the pill
+// isn't buried under the colored road line. Alternates left/right by way id.
+function pillPointBesideWay(coords, wayId, offsetM = 14) {
+  if (!coords || coords.length < 2) return coords[0];
+  const i = Math.floor(coords.length / 2);
+  const mid = coords[i];
+  const a = coords[Math.max(0, i - 1)];
+  const b = coords[Math.min(coords.length - 1, i + 1)];
+  const brg = bearingDeg(a, b);
+  const side = (Number(wayId) % 2 === 0) ? 1 : -1;
+  const perp = ((brg + 90 * side) % 360) * Math.PI / 180;
+  const mLat = 111320;
+  const mLon = mLat * Math.cos(mid[1] * Math.PI / 180);
+  return [mid[0] + (offsetM * Math.sin(perp)) / mLon, mid[1] + (offsetM * Math.cos(perp)) / mLat];
+}
+
 // A point label at each labelled way's midpoint, text = its route short(s).
 function renderRoutePills(wayColors) {
   const idx = wayGeomIndex();
   if (!idx) return;
+  const z = mapReady ? map.getZoom() : 14;
+  const offsetM = z < 13 ? 11 : z < 15 ? 15 : 20;
   const feats = [];
   for (const [wid, cols] of wayColors) {
     const g = idx.get(wid) || idx.get(Number(wid));
     if (!g || g.lengthM < 180) continue;      // skip stubs — subtle, not everywhere
-    const mid = g.coords[Math.floor(g.coords.length / 2)];
+    const pt = pillPointBesideWay(g.coords, wid, offsetM);
     // Keep pills short: at most 3 shorts, then "+N" — a busy corridor shows
     // "10 · 1 · 2 +5", not an unreadable 11-route string.
     const shorts = cols.map(c => c.short);
     const label = shorts.length <= 3 ? shorts.join(' · ')
       : shorts.slice(0, 3).join(' · ') + ' +' + (shorts.length - 3);
-    feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: mid },
+    feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: pt },
       properties: { label, color: cols.length === 1 ? cols[0].color : '#37415a' } });
   }
   const data = { type: 'FeatureCollection', features: feats };
@@ -3897,15 +3916,16 @@ function renderRoutePills(wayColors) {
       'text-size': ['interpolate', ['linear'], ['zoom'], 12.5, 9, 16, 11],
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
       'symbol-placement': 'point',
-      'text-padding': 14,          // spread them out so they don't crowd
+      'text-anchor': 'center',
+      'text-padding': 18,
       'text-allow-overlap': false,
       'text-optional': true,
     },
     paint: {
       'text-color': '#ffffff',
       'text-halo-color': ['get', 'color'],
-      'text-halo-width': 2,
-      'text-opacity': 0.92,
+      'text-halo-width': 2.5,
+      'text-opacity': 0.95,
     },
   });
 }
