@@ -437,6 +437,360 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "summit:hpohaku": {
+      "title": "Hale Pōhaku",
+      "summary": "The Maunakea Observatories (MKO, also known as Mauna Kea Observatories) are a group of independent astronomical research facilities and large telescope observatories that are located at the summit of Mauna Kea on Hawaiʻi, United States.",
+      "history": [
+        {
+          "year": 1901,
+          "text": "Significantly predating the current observatories, there is evidence of active astronomy on Mauna Kea in the 1901 Land Office Map of the Island of Hawaii showing the \"Hawaii Astronomy Station\" near the Mauna Kea summit.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        },
+        {
+          "year": 1967,
+          "text": "The Astronomy Precinct was established in 1967 and is located on land protected by the Historical Preservation Act for its significance to Hawaiian culture.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        },
+        {
+          "year": 1970,
+          "text": "By 1970, two 24 in (0.6 m) telescopes had been constructed by the United States Air Force and Lowell Observatory.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        },
+        {
+          "year": 1973,
+          "text": "In 1973, Canada and France agreed to build the 3.6 m CFHT on Mauna Kea.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        },
+        {
+          "year": 1977,
+          "text": "This led the Department of Land and Natural Resources to prepare an initial management plan, drafted in 1977 and supplemented in 1980.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        },
+        {
+          "year": 1982,
+          "text": "In January 1982, the University of Hawaiʻi Board of Regents approved a plan to support the continued development of scientific facilities at the site.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Mauna_Kea_Summit_2021-06-16_33_%28cropped%29.jpg/330px-Mauna_Kea_Summit_2021-06-16_33_%28cropped%29.jpg",
+          "credit": "Wikipedia — Maunakea Observatories (CC/PD)",
+          "caption": "Maunakea Observatories"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        ],
+        "resolvedTitle": "Maunakea Observatories",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:37:57.638Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "summit:mlo": {
+      "title": "Mauna Loa Observatory",
+      "summary": "Mauna Loa Observatory (MLO) is an atmospheric baseline station on Mauna Loa on the island of Hawaiʻi, located in the US state of Hawaii. .",
+      "history": [
+        {
+          "year": 1951,
+          "text": "It was established on the northern flank of Mauna Loa at 3,394 meters (11,134 ft) after 1951–1954 efforts were unable to maintain a summit observatory at 4,100 meters (13,453 ft).",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        },
+        {
+          "year": 1956,
+          "text": "MLO was founded on June 28, 1956, as part of the US Weather Bureau.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        },
+        {
+          "year": 1958,
+          "text": "Continuous carbon dioxide measurements began in March of 1958 directed by Charles David Keeling from the Scripps Institute of Oceanography.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        },
+        {
+          "year": 1972,
+          "text": "MLO has been part of the National Oceanic and Atmospheric Administration (NOAA) Global Monitoring Laboratory (GML)'s Baseline Observatory network since 1972.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        },
+        {
+          "year": 2015,
+          "text": "The observatory's reading of a historic high in its daily recording of carbon dioxide emissions—400 parts per million, in 2015—was referenced by Pope Francis in his apostolic exhortation on the climate crisis, Laudate Deum. .",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        },
+        {
+          "year": 2022,
+          "text": "The access road was obstructed by lava flow from the 2022 eruption of Mauna Loa.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/NOAA_Mauna_Loa_Observatory_in_Hawaii.png/330px-NOAA_Mauna_Loa_Observatory_in_Hawaii.png",
+          "credit": "Wikipedia — Mauna Loa Observatory (CC/PD)",
+          "caption": "Mauna Loa Observatory"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        ],
+        "resolvedTitle": "Mauna Loa Observatory",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:37:59.309Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "lco:ogg": {
+      "title": "LCO Haleakalā (Maui)",
+      "summary": "Las Cumbres Observatory (LCO) is a network of astronomical observatories run by a non-profit private operating foundation directed by the technologist Wayne Rosing.",
+      "history": [
+        {
+          "year": 1993,
+          "text": "Rosing incorporated Las Cumbres Observatory in 1993 with the goal of aiding universities, observatories, and individuals in the acquisition and improvement of telescopes, optics, and instrumentation.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2005,
+          "text": "In 2005, Rosing established the global telescope version of Las Cumbres Observatory.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2012,
+          "text": "During 2012 and 2013, nine 1-meter telescopes were constructed and deployed to McDonald Observatory at Fort Davis, Texas; Cerro Tololo Interamerican Observatory (CTIO) in Chile; South African Astronomical Observatory (SAAO), near…",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2013,
+          "text": "In 2013, a board of directors was established and a president was hired to lead the organization.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2014,
+          "text": "Full science scheduling began on 1 May 2014, with the two 2-meter and nine 1-meter telescopes operating as a single, integrated, observatory.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2015,
+          "text": "During 2015 and 2016, seven 40-centimeter telescopes were deployed to CTIO, Haleakala Observatory, SSO, and to Teide Observatory on Tenerife in the Canary Islands.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/LCO-logo-sq-xl.jpg/330px-LCO-logo-sq-xl.jpg",
+          "credit": "Wikipedia — Las Cumbres Observatory (CC/PD)",
+          "caption": "Las Cumbres Observatory"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        ],
+        "resolvedTitle": "Las Cumbres Observatory",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:38:00.706Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "lco:lsc": {
+      "title": "LCO Cerro Tololo (Chile)",
+      "summary": "Las Cumbres Observatory (LCO) is a network of astronomical observatories run by a non-profit private operating foundation directed by the technologist Wayne Rosing.",
+      "history": [
+        {
+          "year": 1993,
+          "text": "Rosing incorporated Las Cumbres Observatory in 1993 with the goal of aiding universities, observatories, and individuals in the acquisition and improvement of telescopes, optics, and instrumentation.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2005,
+          "text": "In 2005, Rosing established the global telescope version of Las Cumbres Observatory.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2012,
+          "text": "During 2012 and 2013, nine 1-meter telescopes were constructed and deployed to McDonald Observatory at Fort Davis, Texas; Cerro Tololo Interamerican Observatory (CTIO) in Chile; South African Astronomical Observatory (SAAO), near…",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2013,
+          "text": "In 2013, a board of directors was established and a president was hired to lead the organization.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2014,
+          "text": "Full science scheduling began on 1 May 2014, with the two 2-meter and nine 1-meter telescopes operating as a single, integrated, observatory.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2015,
+          "text": "During 2015 and 2016, seven 40-centimeter telescopes were deployed to CTIO, Haleakala Observatory, SSO, and to Teide Observatory on Tenerife in the Canary Islands.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/LCO-logo-sq-xl.jpg/330px-LCO-logo-sq-xl.jpg",
+          "credit": "Wikipedia — Las Cumbres Observatory (CC/PD)",
+          "caption": "Las Cumbres Observatory"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        ],
+        "resolvedTitle": "Las Cumbres Observatory",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:40:57.324Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "lco:coj": {
+      "title": "LCO Siding Spring (Australia)",
+      "summary": "Las Cumbres Observatory (LCO) is a network of astronomical observatories run by a non-profit private operating foundation directed by the technologist Wayne Rosing.",
+      "history": [
+        {
+          "year": 1993,
+          "text": "Rosing incorporated Las Cumbres Observatory in 1993 with the goal of aiding universities, observatories, and individuals in the acquisition and improvement of telescopes, optics, and instrumentation.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2005,
+          "text": "In 2005, Rosing established the global telescope version of Las Cumbres Observatory.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2012,
+          "text": "During 2012 and 2013, nine 1-meter telescopes were constructed and deployed to McDonald Observatory at Fort Davis, Texas; Cerro Tololo Interamerican Observatory (CTIO) in Chile; South African Astronomical Observatory (SAAO), near…",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2013,
+          "text": "In 2013, a board of directors was established and a president was hired to lead the organization.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2014,
+          "text": "Full science scheduling began on 1 May 2014, with the two 2-meter and nine 1-meter telescopes operating as a single, integrated, observatory.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2015,
+          "text": "During 2015 and 2016, seven 40-centimeter telescopes were deployed to CTIO, Haleakala Observatory, SSO, and to Teide Observatory on Tenerife in the Canary Islands.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/LCO-logo-sq-xl.jpg/330px-LCO-logo-sq-xl.jpg",
+          "credit": "Wikipedia — Las Cumbres Observatory (CC/PD)",
+          "caption": "Las Cumbres Observatory"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        ],
+        "resolvedTitle": "Las Cumbres Observatory",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:40:58.917Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "lco:elp": {
+      "title": "LCO McDonald (Texas)",
+      "summary": "Las Cumbres Observatory (LCO) is a network of astronomical observatories run by a non-profit private operating foundation directed by the technologist Wayne Rosing.",
+      "history": [
+        {
+          "year": 1993,
+          "text": "Rosing incorporated Las Cumbres Observatory in 1993 with the goal of aiding universities, observatories, and individuals in the acquisition and improvement of telescopes, optics, and instrumentation.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2005,
+          "text": "In 2005, Rosing established the global telescope version of Las Cumbres Observatory.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2012,
+          "text": "During 2012 and 2013, nine 1-meter telescopes were constructed and deployed to McDonald Observatory at Fort Davis, Texas; Cerro Tololo Interamerican Observatory (CTIO) in Chile; South African Astronomical Observatory (SAAO), near…",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2013,
+          "text": "In 2013, a board of directors was established and a president was hired to lead the organization.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2014,
+          "text": "Full science scheduling began on 1 May 2014, with the two 2-meter and nine 1-meter telescopes operating as a single, integrated, observatory.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2015,
+          "text": "During 2015 and 2016, seven 40-centimeter telescopes were deployed to CTIO, Haleakala Observatory, SSO, and to Teide Observatory on Tenerife in the Canary Islands.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/LCO-logo-sq-xl.jpg/330px-LCO-logo-sq-xl.jpg",
+          "credit": "Wikipedia — Las Cumbres Observatory (CC/PD)",
+          "caption": "Las Cumbres Observatory"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        ],
+        "resolvedTitle": "Las Cumbres Observatory",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:41:00.145Z",
+        "reviewed": false
+      },
+      "status": "ok"
     }
   }
 }
