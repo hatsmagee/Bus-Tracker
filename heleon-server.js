@@ -2932,12 +2932,19 @@ async function handleApi(url, res) {
     const today = new Date();
     const doy = `${today.getMonth() + 1}-${today.getDate()}`;
     const out = {};
-    await Promise.all(feats.filter(f => f.properties.value != null).map(async f => {
+    await Promise.all(feats.map(async f => {
       const site = f.properties.site_no;
+      const readings = f.properties.readings || {};
+      let param = '00060', cur = f.properties.value, label = 'Flow', unit = 'ft³/s';
+      if (cur == null && readings.gageHeight) {
+        param = '00065'; cur = readings.gageHeight.value; label = 'Gage height'; unit = 'ft';
+      }
+      if (cur == null) return;
       try {
-        const s = await usgsDailyStats(site, '00060');
+        const s = await usgsDailyStats(site, param);
         const d = s.byDoy[doy] || null;
         out[site] = {
+          param, label, unit, current: cur,
           allMin: s.allMin, allMax: s.allMax, allMinYr: s.allMinYr, allMaxYr: s.allMaxYr,
           beginYr: s.beginYr, endYr: s.endYr,
           todayMin: d && d.min, todayMax: d && d.max, todayMedian: d && d.p50, todayP10: d && d.p10, todayP90: d && d.p90,
@@ -3992,20 +3999,40 @@ async function pollMeshtastic() {
 // refreshed daily.
 let repeaterCache = [];
 let repeaterLastPollTs = null, repeaterLastError = null;
+// Curated listen links — most VHF/UHF repeaters have no public HTTP audio; these
+// are the best keyless options we can offer when someone clicks a tower.
+const HAWAII_HAM_BROADCASTIFY = 'https://www.broadcastify.com/listen/feed/27598';
+const KIWISDR_MAP = 'https://rx.kiwisdr.com/';
+function repeaterListenMeta(r) {
+  const g = String(r.group || '').toUpperCase();
+  const node = r.internet_node || '';
+  const meta = {
+    irlpStatus: (g === 'IRLP' && node) ? `https://status.irlp.net/?node=${node}` : '',
+    listenStream: '',
+    hoselineUrl: (g.includes('DMR') || g.includes('MMDVM')) ? 'https://hose.brandmeister.network/' : '',
+    broadcastifyUrl: HAWAII_HAM_BROADCASTIFY,
+    kiwisdrUrl: KIWISDR_MAP,
+  };
+  return meta;
+}
 async function pollRepeaters() {
   try {
     const j = await fetchJson('hearham.com', '/api/repeaters/v1', { 'User-Agent': 'heleon-tracker' });
     if (!Array.isArray(j)) { repeaterLastError = 'unexpected response'; return; }
     repeaterCache = j
       .filter(r => r.latitude > 18.5 && r.latitude < 20.6 && r.longitude > -156.5 && r.longitude < -154.4)
-      .map(r => ({
-        callsign: r.callsign, lat: r.latitude, lon: r.longitude,
-        city: r.city, mode: r.mode, group: r.group,
-        freqMhz: r.frequency / 1e6, offsetMhz: r.offset / 1e6,
-        tone: r.decode || r.encode || '', internetNode: r.internet_node || '',
-        description: (r.description || '').slice(0, 120),
-        operational: r.operational !== 0,
-      }));
+      .map(r => {
+        const listen = repeaterListenMeta(r);
+        return {
+          callsign: r.callsign, lat: r.latitude, lon: r.longitude,
+          city: r.city, mode: r.mode, group: r.group,
+          freqMhz: r.frequency / 1e6, offsetMhz: r.offset / 1e6,
+          tone: r.decode || r.encode || '', internetNode: r.internet_node || '',
+          description: (r.description || '').slice(0, 120),
+          operational: r.operational !== 0,
+          ...listen,
+        };
+      });
     repeaterLastPollTs = Date.now(); repeaterLastError = null;
   } catch (e) { repeaterLastError = e.message; }
 }

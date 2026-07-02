@@ -159,6 +159,13 @@
     background:#fde047; opacity:.85; pointer-events:none; }
   .stream-level-meter .needle { position:absolute; left:-2px; right:-2px; height:3px;
     background:#fef9c3; box-shadow:0 0 3px rgba(0,0,0,.55); pointer-events:none; }
+  .stream-level-meter .cap, .stream-level-meter .floor { position:absolute; left:-14px; right:-14px;
+    font-size:7px; font-weight:700; color:#e0f2fe; text-align:center; line-height:1; pointer-events:none; }
+  .stream-level-meter .cap { top:1px; }
+  .stream-level-meter .floor { bottom:0; }
+  .stream-level-meter .now-tag { position:absolute; right:-20px; font-size:7px; font-weight:800;
+    color:#fef08a; transform:translateY(50%); white-space:nowrap; pointer-events:none; }
+  .stream-wheel .rate .tag-now { color:#0369a1; font-weight:800; margin-right:2px; }
   .gauge-chart-wrap { margin-top:10px; }
   .gauge-chart { width:100%; height:120px; display:block; background:#0d1117;
     border-radius:8px; border:1px solid #30363d; }
@@ -874,6 +881,9 @@ function initMap() {
 }
 
 function initMapLayers() {
+  // Emoji symbol layers need a font stack that includes color glyphs; without this
+  // MapLibre renders nothing (looks like missing markers).
+  const EMOJI_FONT = ['Open Sans Bold', 'Arial Unicode MS Bold'];
   // Route shapes' source AND layer are both created lazily inside
   // renderRouteShapes() itself (it needs the feature list up front to size the
   // GeoJSON, and re-uses the same source/layer ID across renders via setData).
@@ -990,39 +1000,21 @@ function initMapLayers() {
   // per-feature. Same pattern as the bus-ahead chevrons.
   map.addSource('vessels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
-    id: 'vessels-circle', type: 'circle', source: 'vessels',
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 3, 12, 5, 15, 7],
-      'circle-color': '#0a2540',
-      'circle-stroke-width': 1.5,
-      'circle-stroke-color': '#ffffff',
-      'circle-opacity': 0.9,
-    }
-  });
-  // Add a vessel-heading chevron symbol on top, rotated per-feature
-  if (!map.hasImage('vessel-chevron')) {
-    map.addImage('vessel-chevron', makeVesselChevronIcon(), { pixelRatio: 2, sdf: true });
-  }
-  map.addLayer({
-    id: 'vessels-heading', type: 'symbol', source: 'vessels',
+    id: 'vessels-icon', type: 'symbol', source: 'vessels',
     layout: {
-      'icon-image': 'vessel-chevron',
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.6, 12, 0.85, 15, 1.1],
-      'icon-rotate': ['get', 'heading'],
-      'icon-rotation-alignment': 'map',
-      'icon-allow-overlap': true,
-      'icon-ignore-placement': true,
+      'text-field': '⛵',
+      'text-size': ['interpolate', ['linear'], ['zoom'], 8, 14, 12, 18, 15, 22],
+      'text-font': EMOJI_FONT,
+      'text-rotate': ['get', 'heading'],
+      'text-rotation-alignment': 'map',
+      'text-allow-overlap': true,
+      'text-ignore-placement': true,
     },
-    paint: {
-      'icon-color': '#ffffff',
-      'icon-opacity': 0.95,
-      'icon-halo-color': '#0a2540',
-      'icon-halo-width': 0.5,
-    }
+    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
   // Tooltip for vessel clicks
   let vesselPopup = null;
-  map.on('click', 'vessels-circle', e => {
+  map.on('click', 'vessels-icon', e => {
     const p = e.features[0].properties;
     const html = `<div style="font-family:system-ui;font-size:12px;color:#e6edf3;">
       <div style="font-weight:700;font-size:14px;margin-bottom:4px;">⛵ ${escapeHtml(p.name) || 'Unknown vessel'}</div>
@@ -1037,7 +1029,7 @@ function initMapLayers() {
     vesselPopup = new maplibregl.Popup({ offset: 12, maxWidth: '260px' })
       .setLngLat(e.lngLat).setHTML(html).addTo(map);
   });
-  wireLayerHover('vessels-circle', p => `
+  wireLayerHover('vessels-icon', p => `
     <div style="font-weight:600;">⛵ ${escapeHtml(p.name) || 'Unknown vessel'}</div>
     <div style="color:var(--muted);font-size:11px;">${p.speedKts} kts · heading ${Math.round(p.heading)}°</div>`);
 
@@ -1153,16 +1145,17 @@ function initMapLayers() {
 
   map.addSource('earthquakes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
-    id: 'earthquakes-circle', type: 'circle', source: 'earthquakes',
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['get', 'mag'], 1.5, 3, 3, 6, 5, 12, 7, 18],
-      'circle-color': ['interpolate', ['linear'], ['get', 'mag'], 1.5, '#fde047', 3, '#f97316', 5, '#dc2626'],
-      'circle-opacity': 0.55,
-      'circle-stroke-width': 1,
-      'circle-stroke-color': '#000000',
+    id: 'earthquakes-icon', type: 'symbol', source: 'earthquakes',
+    layout: {
+      'text-field': ['concat', '🌎 M', ['to-string', ['get', 'mag']]],
+      'text-size': ['interpolate', ['linear'], ['get', 'mag'], 1.5, 11, 3, 14, 5, 18, 7, 22],
+      'text-font': EMOJI_FONT,
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
     },
+    paint: { 'text-color': ['interpolate', ['linear'], ['get', 'mag'], 1.5, '#fde047', 3, '#f97316', 5, '#dc2626'],
+      'text-halo-color': '#000000', 'text-halo-width': 1.5 },
   });
-  wireLayerHover('earthquakes-circle', p => `
+  wireLayerHover('earthquakes-icon', p => `
     <div style="font-weight:600;">🌎 M${(+p.mag).toFixed(1)} — ${escapeHtml(p.place)}</div>
     <div style="color:var(--muted);font-size:11px;">${new Date(+p.time).toLocaleString()} · depth ${(+p.depthKm).toFixed(1)} km</div>`);
 
@@ -1171,16 +1164,16 @@ function initMapLayers() {
   // popup says "thermal hotspot" rather than assuming fire.
   map.addSource('wildfire', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
-    id: 'wildfire-circle', type: 'circle', source: 'wildfire',
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['get', 'frp'], 0, 4, 50, 8, 200, 14],
-      'circle-color': '#f97316',
-      'circle-opacity': 0.5,
-      'circle-stroke-width': 1,
-      'circle-stroke-color': '#7c2d12',
+    id: 'wildfire-icon', type: 'symbol', source: 'wildfire',
+    layout: {
+      'text-field': '🔥',
+      'text-size': ['interpolate', ['linear'], ['get', 'frp'], 0, 12, 50, 16, 200, 22],
+      'text-font': EMOJI_FONT,
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 3,
     },
+    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
   });
-  wireLayerHover('wildfire-circle', p => `
+  wireLayerHover('wildfire-icon', p => `
     <div style="font-weight:600;">🔥 Thermal hotspot (satellite)</div>
     <div style="color:var(--muted);font-size:11px;">FRP ${(+p.frp).toFixed(1)} MW · confidence ${escapeHtml(p.confidence)} · ${p.hours_old}h old</div>
     <div style="color:var(--muted);font-size:10px;">Detected by NASA VIIRS — may be wildfire OR active lava (Kīlauea), not confirmed either way.</div>`);
@@ -1259,30 +1252,16 @@ function initMapLayers() {
   // Island station. Big readable temp label, click for full popup.
   map.addSource('weather-stations', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
-    id: 'weather-stations-label', type: 'symbol', source: 'weather-stations',
+    id: 'weather-stations-icon', type: 'symbol', source: 'weather-stations',
     layout: {
-      'text-field': ['concat', ['to-string', ['round', ['get', 'temperatureC']]], '°'],
-      'text-size': 12,
-      'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-      'text-allow-overlap': false,
-      'text-offset': [0, 0],
+      'text-field': ['concat', '🌡️ ', ['to-string', ['round', ['get', 'temperatureC']]], '°'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 12, 14],
+      'text-font': EMOJI_FONT,
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
     },
-    paint: {
-      'text-color': '#0c4a6e',
-      'text-halo-color': '#ffffff',
-      'text-halo-width': 2,
-    },
+    paint: { 'text-color': '#0c4a6e', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
-  map.addLayer({
-    id: 'weather-stations-dot', type: 'circle', source: 'weather-stations',
-    paint: {
-      'circle-radius': 3,
-      'circle-color': '#0ea5e9',
-      'circle-stroke-width': 1.5,
-      'circle-stroke-color': '#ffffff',
-    },
-  });
-  wireLayerHover('weather-stations-dot', p => {
+  wireLayerHover('weather-stations-icon', p => {
     const t = p.temperatureC != null ? `${(+p.temperatureC).toFixed(1)}°C` : '—';
     const h = p.humidity != null ? `${Math.round(+p.humidity)}%` : '—';
     const w = p.windSpeedKmh != null ? `${(+p.windSpeedKmh).toFixed(1)} km/h` : '—';
@@ -1290,7 +1269,7 @@ function initMapLayers() {
       <div style="color:var(--muted);font-size:11px;">${t} · ${h} RH · ${w} wind</div>
       <div style="color:var(--muted);font-size:10px;">NWS ${escapeHtml(p.stationId)} · ${p.elevation ? Math.round(+p.elevation) + ' m' : '?'} elev · ${p.timestamp ? new Date(p.timestamp).toLocaleString() : '—'}</div>`;
   });
-  wireLayerCard('weather-stations-dot', p => {
+  wireLayerCard('weather-stations-icon', p => {
     const rows = [];
     const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
     const thermo = p.temperatureC != null ? weatherThermometerHtml(+p.temperatureC) : '';
@@ -1351,25 +1330,18 @@ function initMapLayers() {
   // busy area doesn't turn to mush. Populates in production.
   map.addSource('aprs', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
-    id: 'aprs-circle', type: 'circle', source: 'aprs',
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 5, 12, 8],
-      'circle-color': '#16a34a', 'circle-opacity': 0.85,
-      'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff',
-    },
-  });
-  map.addLayer({
-    id: 'aprs-dot', type: 'symbol', source: 'aprs',
+    id: 'aprs-icon', type: 'symbol', source: 'aprs',
     layout: {
       'text-field': ['match', ['get', 'kind'], 'vehicle', '🚗', 'weather', '🌤', 'boat', '⛵', '📻'],
-      'text-size': ['interpolate', ['linear'], ['zoom'], 8, 12, 14, 18],
-      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 8, 14, 14, 20],
+      'text-font': EMOJI_FONT,
       'text-allow-overlap': true, 'text-ignore-placement': true,
     },
+    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
-  wireLayerHover('aprs-circle', p => `<div style="font-weight:600;font-family:monospace;">📻 ${escapeHtml(p.call)}</div>
+  wireLayerHover('aprs-icon', p => `<div style="font-weight:600;font-family:monospace;">📻 ${escapeHtml(p.call)}</div>
     <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.kind)}${p.comment ? ' · ' + escapeHtml(p.comment) : ''}</div>`);
-  wireLayerCard('aprs-circle', p => ({ title: `📻 ${p.call}`,
+  wireLayerCard('aprs-icon', p => ({ title: `📻 ${p.call}`,
     body: `<div style="padding:2px 0;"><span style="color:#8b949e;">Type</span> · <b>${escapeHtml(p.kind)}</b></div>${p.comment ? `<div style="margin-top:4px;color:#c9d1d9;">${escapeHtml(p.comment)}</div>` : ''}` }));
 
   // Air quality / vog — sampled Big Island towns (Open-Meteo, keyless). A dot
@@ -1377,22 +1349,21 @@ function initMapLayers() {
   // Kona/Ka'ū worst. Always on. Circle (not emoji) so the color IS the signal.
   map.addSource('airquality', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
-    id: 'airquality-dot', type: 'circle', source: 'airquality',
+    id: 'airquality-icon', type: 'symbol', source: 'airquality',
+    layout: {
+      'text-field': ['concat', '🌫️ ', ['to-string', ['get', 'usAqi']]],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 12, 14],
+      'text-font': EMOJI_FONT,
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+    },
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 7, 12, 12],
-      'circle-color': ['step', ['get', 'usAqi'], '#00e400', 51, '#ffff00', 101, '#ff7e00', 151, '#ff0000', 201, '#8f3f97', 301, '#7e0023'],
-      'circle-opacity': 0.55, 'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff',
+      'text-color': ['step', ['get', 'usAqi'], '#15803d', 51, '#ca8a04', 101, '#ea580c', 151, '#dc2626', 201, '#a21caf', 301, '#7e0023'],
+      'text-halo-color': '#ffffff', 'text-halo-width': 2,
     },
   });
-  map.addLayer({
-    id: 'airquality-label', type: 'symbol', source: 'airquality',
-    layout: { 'text-field': ['to-string', ['get', 'usAqi']], 'text-size': 10,
-      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'], 'text-allow-overlap': false, 'text-optional': true },
-    paint: { 'text-color': '#111827', 'text-halo-color': '#ffffff', 'text-halo-width': 1.2 },
-  });
-  wireLayerHover('airquality-dot', p => `<div style="font-weight:600;">🌫️ ${escapeHtml(p.name)} air</div>
+  wireLayerHover('airquality-icon', p => `<div style="font-weight:600;">🌫️ ${escapeHtml(p.name)} air</div>
     <div style="color:var(--muted);font-size:11px;">AQI ${p.usAqi} · click for vog details</div>`);
-  wireLayerCard('airquality-dot', p => {
+  wireLayerCard('airquality-icon', p => {
     const rows = [];
     const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
     const cat = a => a <= 50 ? 'Good' : a <= 100 ? 'Moderate' : a <= 150 ? 'Unhealthy (sensitive)' : a <= 200 ? 'Unhealthy' : a <= 300 ? 'Very unhealthy' : 'Hazardous';
@@ -1471,25 +1442,18 @@ function initMapLayers() {
   // ridgelines, pocket nodes) heard over MQTT. Keyless.
   map.addSource('meshtastic', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
-    id: 'meshtastic-circle', type: 'circle', source: 'meshtastic',
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 6, 12, 9],
-      'circle-color': '#7c3aed', 'circle-opacity': 0.9,
-      'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
-    },
-  });
-  map.addLayer({
-    id: 'meshtastic-dot', type: 'symbol', source: 'meshtastic',
+    id: 'meshtastic-icon', type: 'symbol', source: 'meshtastic',
     layout: {
       'text-field': '📶',
-      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 13, 16],
-      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 14, 13, 18],
+      'text-font': EMOJI_FONT,
       'text-allow-overlap': true, 'text-ignore-placement': true,
     },
+    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
-  wireLayerHover('meshtastic-circle', p => `<div style="font-weight:600;">📶 ${escapeHtml(p.name)}</div>
+  wireLayerHover('meshtastic-icon', p => `<div style="font-weight:600;">📶 ${escapeHtml(p.name)}</div>
     <div style="color:var(--muted);font-size:10px;">LoRa mesh node · click for details</div>`);
-  wireLayerCard('meshtastic-circle', p => {
+  wireLayerCard('meshtastic-icon', p => {
     const rows = [];
     const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
     if (p.hwName) row('Hardware', p.hwName);
@@ -1505,25 +1469,18 @@ function initMapLayers() {
   // default behind the APRS/ham toggle... shown always for now, collision-thinned.
   map.addSource('repeaters', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
-    id: 'repeaters-circle', type: 'circle', source: 'repeaters',
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 4, 11, 7, 13, 9],
-      'circle-color': '#ea580c', 'circle-opacity': 0.8,
-      'circle-stroke-width': 1.2, 'circle-stroke-color': '#ffffff',
-    },
-  });
-  map.addLayer({
-    id: 'repeaters-dot', type: 'symbol', source: 'repeaters',
+    id: 'repeaters-icon', type: 'symbol', source: 'repeaters',
     layout: {
-      'text-field': '📡',
-      'text-size': ['interpolate', ['linear'], ['zoom'], 9, 10, 13, 14],
-      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 2,
+      'text-field': ['concat', '📡 ', ['to-string', ['get', 'freqMhz']]],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 10, 11, 12, 13, 14],
+      'text-font': EMOJI_FONT,
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 3,
     },
+    paint: { 'text-color': '#9a3412', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
-  wireLayerHover('repeaters-circle', p => `<div style="font-weight:600;font-family:monospace;">📡 ${escapeHtml(p.callsign)}</div>
+  wireLayerHover('repeaters-icon', p => `<div style="font-weight:600;font-family:monospace;">📡 ${escapeHtml(p.callsign)}</div>
     <div style="color:var(--muted);font-size:11px;">${p.freqMhz} MHz · ${escapeHtml(p.mode || 'FM')} · click for details</div>`);
-  wireLayerCard('repeaters-circle', p => {
+  wireLayerCard('repeaters-icon', p => {
     const rows = [];
     const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
     row('Frequency', `${p.freqMhz} MHz`);
@@ -1531,7 +1488,23 @@ function initMapLayers() {
     if (p.tone) row('Tone', p.tone);
     if (p.mode) row('Mode', p.mode);
     if (p.city) row('Location', p.city);
-    return { title: `📡 ${p.callsign} repeater`, body: rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">hearham.com open repeater directory</div>` };
+    let listen = '';
+    if (p.listenStream) {
+      listen = `<div style="margin-top:10px;"><div style="font-size:10px;color:#8b949e;margin-bottom:4px;">🔊 Live stream</div>
+        <audio controls preload="none" style="width:100%;height:32px;" src="${escapeHtml(p.listenStream)}"></audio></div>`;
+    }
+    const links = [];
+    if (p.irlpStatus) links.push(`<a href="${escapeHtml(p.irlpStatus)}" target="_blank" rel="noopener" style="color:#58a6ff;">IRLP node status</a>`);
+    if (p.hoselineUrl) links.push(`<a href="${escapeHtml(p.hoselineUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">DMR Hoseline</a>`);
+    if (p.broadcastifyUrl) links.push(`<a href="${escapeHtml(p.broadcastifyUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">Hawaii linked nets (Broadcastify)</a>`);
+    if (p.kiwisdrUrl) links.push(`<a href="${escapeHtml(p.kiwisdrUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">HF KiwiSDR map (not VHF)</a>`);
+    if (links.length) {
+      listen += `<div style="margin-top:8px;font-size:11px;display:flex;flex-direction:column;gap:4px;">${links.join('')}</div>`;
+    }
+    if (!listen) {
+      listen = `<div style="margin-top:8px;font-size:10px;color:#8b949e;line-height:1.45;">No public VHF audio stream for this tower. Program your radio with the settings above, or use a linked internet node (IRLP/DMR/AllStar) if available.</div>`;
+    }
+    return { title: `📡 ${p.callsign} repeater`, body: rows.join('') + listen + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">hearham.com · most repeaters need a radio — streams are rare</div>` };
   });
 
   // Summit observatories (Maunakea CFHT tower, Mauna Loa NOAA) — live conditions
@@ -1569,23 +1542,25 @@ function initMapLayers() {
 
   // Public-safety facility markers — static reference locations, off by
   // default so they don't clutter the map; toggled from the Hawaiʻi tab.
+  const FACILITY_EMOJI = { police: '🚓', fire: '🚒', ems: '🚑', trauma: '🏥' };
   ['police', 'fire', 'ems', 'trauma'].forEach(kind => {
     map.addSource(`facility-${kind}`, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
-      id: `facility-${kind}-circle`, type: 'circle', source: `facility-${kind}`,
-      layout: { visibility: 'none' },
-      paint: {
-        'circle-radius': 5,
-        'circle-color': { police: '#1d4ed8', fire: '#dc2626', ems: '#16a34a', trauma: '#7c3aed' }[kind],
-        'circle-stroke-width': 1.5,
-        'circle-stroke-color': '#ffffff',
+      id: `facility-${kind}-icon`, type: 'symbol', source: `facility-${kind}`,
+      layout: {
+        visibility: 'none',
+        'text-field': FACILITY_EMOJI[kind],
+        'text-size': 14,
+        'text-font': EMOJI_FONT,
+        'text-allow-overlap': false, 'text-optional': true,
       },
+      paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
     });
   });
-  wireLayerHover('facility-police-circle', p => `<div style="font-weight:600;">🚓 ${escapeHtml(p.name || 'Police station')}</div><div style="color:var(--muted);font-size:11px;">${escapeHtml(p.address || '')}</div>`);
-  wireLayerHover('facility-fire-circle', p => `<div style="font-weight:600;">🚒 ${escapeHtml(p.name || 'Fire station')}</div>`);
-  wireLayerHover('facility-ems-circle', p => `<div style="font-weight:600;">🚑 ${escapeHtml(p.unit_name || 'EMS station')}</div><div style="color:var(--muted);font-size:11px;">${escapeHtml(p.address || '')}</div>`);
-  wireLayerHover('facility-trauma-circle', p => `<div style="font-weight:600;">🏥 ${escapeHtml(p.facility_name || 'Trauma center')}</div><div style="color:var(--muted);font-size:11px;">Level ${escapeHtml(String(p.trauma_level || '?'))} · ${escapeHtml(p.address || '')}</div>`);
+  wireLayerHover('facility-police-icon', p => `<div style="font-weight:600;">🚓 ${escapeHtml(p.name || 'Police station')}</div><div style="color:var(--muted);font-size:11px;">${escapeHtml(p.address || '')}</div>`);
+  wireLayerHover('facility-fire-icon', p => `<div style="font-weight:600;">🚒 ${escapeHtml(p.name || 'Fire station')}</div>`);
+  wireLayerHover('facility-ems-icon', p => `<div style="font-weight:600;">🚑 ${escapeHtml(p.unit_name || 'EMS station')}</div><div style="color:var(--muted);font-size:11px;">${escapeHtml(p.address || '')}</div>`);
+  wireLayerHover('facility-trauma-icon', p => `<div style="font-weight:600;">🏥 ${escapeHtml(p.facility_name || 'Trauma center')}</div><div style="color:var(--muted);font-size:11px;">Level ${escapeHtml(String(p.trauma_level || '?'))} · ${escapeHtml(p.address || '')}</div>`);
 
   // Stop hover + click tooltip — hover for desktop, click/tap for mobile.
   let stopHoverPopup = null;
@@ -2301,13 +2276,17 @@ function streamLevelMeterHtml(cur, stats) {
   if (!stats || stats.allMin == null || stats.allMax == null || cur == null) return '';
   const pct = levelPct(cur, stats.allMin, stats.allMax);
   if (pct == null) return '';
+  const unit = stats.unit || 'ft³/s';
   const medPct = stats.todayMedian != null ? levelPct(stats.todayMedian, stats.allMin, stats.allMax) : null;
-  const tip = `All-time ${stats.allMin.toFixed(0)}–${stats.allMax.toFixed(0)} ft³/s (${stats.beginYr || '?'}–${stats.endYr || '?'})` +
-    (stats.todayMedian != null ? ` · today median ${stats.todayMedian.toFixed(0)}` : '');
+  const fmt = v => (+v).toFixed(Math.abs(v) < 10 ? 1 : 0);
+  const tip = `Record low ${fmt(stats.allMin)} · NOW ${fmt(cur)} · record high ${fmt(stats.allMax)} ${unit}`;
   return `<div class="stream-level-meter" title="${escapeHtml(tip)}">
+    <div class="cap">REC ${fmt(stats.allMax)}</div>
     <div class="fill" style="height:${(pct * 100).toFixed(1)}%"></div>
-    ${medPct != null ? `<div class="median" style="bottom:${(medPct * 100).toFixed(1)}%"></div>` : ''}
+    ${medPct != null ? `<div class="median" style="bottom:${(medPct * 100).toFixed(1)}%" title="Today median ${fmt(stats.todayMedian)}"></div>` : ''}
     <div class="needle" style="bottom:${(pct * 100).toFixed(1)}%"></div>
+    <div class="now-tag" style="bottom:${(pct * 100).toFixed(1)}%">NOW</div>
+    <div class="floor">REC ${fmt(stats.allMin)}</div>
   </div>`;
 }
 function weatherThermometerHtml(tempC) {
@@ -2361,27 +2340,32 @@ function drawGaugeHistoryChart(canvas, series) {
   ctx.fillText(ymin.toFixed(0), x0 + 2, y1 - 2);
 }
 async function openStreamGaugeCard(site, props, coords) {
-  const cfs = props.value != null ? +props.value : null;
-  const stats = streamflowStats[site];
-  const readings = props.readings || {};
+  const readings = propReadings(props);
+  const stats = streamflowStats[site] || {};
+  const param = stats.param || (props.value != null ? '00060' : '00065');
+  const unit = stats.unit || (param === '00065' ? 'ft' : 'ft³/s');
+  const label = stats.label || (param === '00065' ? 'Gage height' : 'Discharge');
+  const cur = stats.current != null ? +stats.current : (props.value != null ? +props.value : (readings.gageHeight ? +readings.gageHeight.value : null));
   const fmt = r => `${(+r.value).toFixed(Math.abs(r.value) < 10 ? 1 : 0)} ${r.unit}`;
   const rows = [];
   const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
-  if (cfs != null) row('Discharge', `${cfs.toFixed(cfs < 10 ? 1 : 0)} ft³/s`);
+  if (cur != null) row(`CURRENT ${label.toLowerCase()}`, `${cur.toFixed(Math.abs(cur) < 10 ? 1 : 0)} ${unit}`);
   for (const [key, r] of Object.entries(readings)) {
-    if (key === 'discharge') continue;
+    if (key === 'discharge' && param === '00060') continue;
+    if (key === 'gageHeight' && param === '00065') continue;
     row(r.label, fmt(r));
   }
-  if (stats && stats.allMin != null) {
-    row('All-time min', `${stats.allMin.toFixed(0)} ft³/s (${stats.allMinYr || '?'})`);
-    row('All-time max', `${stats.allMax.toFixed(0)} ft³/s (${stats.allMaxYr || '?'})`);
-    if (stats.todayMedian != null) row('Today median', `${stats.todayMedian.toFixed(0)} ft³/s`);
+  if (stats.allMin != null) {
+    row('RECORD LOW (all-time)', `${stats.allMin.toFixed(Math.abs(stats.allMin) < 10 ? 1 : 0)} ${unit}${stats.allMinYr ? ' (' + stats.allMinYr + ')' : ''}`);
+    row('RECORD HIGH (all-time)', `${stats.allMax.toFixed(Math.abs(stats.allMax) < 10 ? 1 : 0)} ${unit}${stats.allMaxYr ? ' (' + stats.allMaxYr + ')' : ''}`);
+    if (stats.beginYr) row('Period of record', `${stats.beginYr}–${stats.endYr || 'present'}`);
+    if (stats.todayMedian != null) row('Today median', `${stats.todayMedian.toFixed(Math.abs(stats.todayMedian) < 10 ? 1 : 0)} ${unit}`);
     if (stats.todayP10 != null && stats.todayP90 != null) {
-      row('Today normal', `${stats.todayP10.toFixed(0)}–${stats.todayP90.toFixed(0)} ft³/s`);
+      row('Today normal range', `${stats.todayP10.toFixed(0)}–${stats.todayP90.toFixed(0)} ${unit}`);
     }
   }
-  const meter = cfs != null && stats ? streamLevelMeterHtml(cfs, stats) : '';
-  const body = (meter ? `<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">${meter}<div style="flex:1;font-size:10px;color:#8b949e;line-height:1.4;">Vertical bar = current discharge vs all-time range. Yellow tick = today's median.</div></div>` : '') +
+  const meter = cur != null && stats.allMin != null ? streamLevelMeterHtml(cur, stats) : '';
+  const body = (meter ? `<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">${meter}<div style="flex:1;font-size:10px;color:#8b949e;line-height:1.45;"><b style="color:#e6edf3;">NOW</b> = yellow marker · top/bottom = <b style="color:#e6edf3;">record high/low</b> · gold line = today's median for this calendar day.</div></div>` : '') +
     (rows.join('') || '<div style="color:#8b949e;">No current reading.</div>') +
     `<div class="gauge-chart-wrap"><canvas class="gauge-chart"></canvas><div class="gauge-range-btns">
       <button type="button" data-range="week">Week</button>
@@ -2395,13 +2379,18 @@ async function openStreamGaugeCard(site, props, coords) {
   const loadRange = async range => {
     mapCard.querySelectorAll('.gauge-range-btns button').forEach(b => b.classList.toggle('active', b.dataset.range === range));
     try {
-      const res = await fetch(`/api/gauge-history?site=${encodeURIComponent(site)}&range=${encodeURIComponent(range)}`);
+      const res = await fetch(`/api/gauge-history?site=${encodeURIComponent(site)}&param=${encodeURIComponent(param)}&range=${encodeURIComponent(range)}`);
       const data = await res.json();
       drawGaugeHistoryChart(canvas, data.series);
     } catch (e) { drawGaugeHistoryChart(canvas, []); }
   };
   mapCard.querySelectorAll('.gauge-range-btns button').forEach(b => { b.onclick = () => loadRange(b.dataset.range); });
   loadRange('year');
+}
+function propReadings(p) {
+  let r = p.readings;
+  if (typeof r === 'string') { try { r = JSON.parse(r); } catch { r = {}; } }
+  return r || {};
 }
 
 // Map a discharge (ft³/s) to a wheel spin duration (seconds/rev): trickle spins
@@ -2471,15 +2460,16 @@ function renderStreamflowWheels() {
     // Pick the headline reading: discharge if present, else the first other
     // reading the gauge does report (gage height, water temp, …) — never "—"
     // if ANY data exists.
-    const readings = p.readings || {};
+    const readings = propReadings(p);
+    const stats = streamflowStats[site];
     const fmt = r => `${(+r.value).toFixed(Math.abs(r.value) < 10 ? 1 : 0)} ${r.unit}`;
     let rateTxt;
-    if (hasFlow) rateTxt = fmt({ value: cfs, unit: 'ft³/s' });
+    if (hasFlow) rateTxt = `<span class="tag-now">NOW</span> ${fmt({ value: cfs, unit: 'ft³/s' })}`;
+    else if (readings.gageHeight) rateTxt = `<span class="tag-now">NOW</span> ${fmt(readings.gageHeight)}`;
     else {
       const other = Object.values(readings)[0];
-      rateTxt = other ? `${other.label}: ${fmt(other)}` : '—';
+      rateTxt = other ? `<span class="tag-now">NOW</span> ${other.label}: ${fmt(other)}` : '—';
     }
-    // Full multi-line readout for the title/hover.
     const allTxt = Object.values(readings).map(r => `${r.label}: ${fmt(r)}`).join(' · ') || 'no current reading';
     let m = streamWheelMarkers[site];
     if (!m) {
@@ -2493,7 +2483,8 @@ function renderStreamflowWheels() {
     }
     const el = m.getElement();
     const meterSlot = el.querySelector('.meter-slot');
-    if (meterSlot) meterSlot.innerHTML = hasFlow ? streamLevelMeterHtml(cfs, streamflowStats[site]) : '';
+    const meterCur = hasFlow ? cfs : (stats && stats.current != null ? stats.current : (readings.gageHeight ? readings.gageHeight.value : null));
+    if (meterSlot) meterSlot.innerHTML = meterCur != null && stats ? streamLevelMeterHtml(+meterCur, stats) : '';
     // Gauges with no discharge read as SECONDARY: shrink them so they don't
     // crowd the flowing wheels, and don't animate a stream that isn't measured.
     el.classList.toggle('no-flow', !hasFlow);
@@ -2506,8 +2497,7 @@ function renderStreamflowWheels() {
     wheel.style.animationPlayState = spin ? 'running' : 'paused';
     stream.style.animationDuration = streamSec ? `${streamSec.toFixed(2)}s` : '0s';
     stream.style.animationPlayState = streamSec ? 'running' : 'paused';
-    el.querySelector('.rate').textContent = rateTxt;
-    el.title = `${p.name || 'USGS gauge'} — ${rateTxt}`;
+    el.querySelector('.rate').innerHTML = rateTxt;
     m.setLngLat(f.geometry.coordinates);
   }
   // Remove markers for gauges no longer present/visible.
@@ -2618,8 +2608,14 @@ async function fetchRepeaters() {
     if (!mapReady || !map.getSource('repeaters')) return;
     const feats = (data.repeaters || []).filter(r => r.lat && r.lon).map(r => ({
       type: 'Feature', geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
-      properties: { callsign: r.callsign, freqMhz: r.freqMhz, offsetMhz: r.offsetMhz,
-        tone: r.tone || '', mode: r.mode || 'FM', city: r.city || '' } }));
+      properties: {
+        callsign: r.callsign, freqMhz: r.freqMhz, offsetMhz: r.offsetMhz,
+        tone: r.tone || '', mode: r.mode || 'FM', city: r.city || '',
+        group: r.group || '', internetNode: r.internetNode || '',
+        irlpStatus: r.irlpStatus || '', listenStream: r.listenStream || '',
+        hoselineUrl: r.hoselineUrl || '', broadcastifyUrl: r.broadcastifyUrl || '',
+        kiwisdrUrl: r.kiwisdrUrl || '',
+      } }));
     map.getSource('repeaters').setData({ type: 'FeatureCollection', features: feats });
   } catch (e) { /* keep last */ }
 }
@@ -2672,7 +2668,7 @@ function toggleWeatherStations() {
   weatherStationsVisible = document.getElementById('showWeatherStations').checked;
   if (mapReady) {
     const v = weatherStationsVisible ? 'visible' : 'none';
-    for (const id of ['weather-stations-dot', 'weather-stations-label']) {
+    for (const id of ['weather-stations-icon']) {
       if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
     }
   }
@@ -2682,7 +2678,7 @@ function toggleWeatherStations() {
 async function toggleFacility(kind) {
   const checked = document.getElementById(`show-${kind}`).checked;
   if (!mapReady) return;
-  map.setLayoutProperty(`facility-${kind}-circle`, 'visibility', checked ? 'visible' : 'none');
+  map.setLayoutProperty(`facility-${kind}-icon`, 'visibility', checked ? 'visible' : 'none');
   if (checked && !facilityLoaded[kind]) {
     try {
       const data = await (await fetch(`/api/facilities/${kind}`)).json();
@@ -4704,8 +4700,8 @@ function positionMapCard() {
 }
 
 // Layers whose features open a click-card (and whose empty-space click closes it).
-const CARD_LAYERS = ['ocean-dot', 'aprs-circle', 'summits-dot', 'weather-stations-dot', 'aircraft-triangles', 'airquality-dot',
-  'volcano-dot', 'metars-dot', 'meshtastic-circle', 'repeaters-circle'];
+const CARD_LAYERS = ['ocean-dot', 'aprs-icon', 'summits-dot', 'weather-stations-icon', 'aircraft-triangles', 'airquality-icon',
+  'volcano-dot', 'metars-dot', 'meshtastic-icon', 'repeaters-icon'];
 // Wire click-to-open-card on a layer. buildCard(props) -> { title, body }.
 function wireLayerCard(layerId, buildCard) {
   map.on('click', layerId, e => {
