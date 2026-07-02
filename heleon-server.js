@@ -4736,7 +4736,13 @@ function connectAprs() {
     aprsSock.setEncoding('utf8');
     let buf = '';
     aprsSock.on('connect', () => {
-      aprsSock.write('user HELEON-RO pass -1 vers heleon 1.0 filter b/18.80/-160.80/22.60/-154.20\r\n');
+      // APRS-IS area filter. The `b/` box is NW-corner first (max lat, min lon)
+      // then SE-corner (min lat, max lon) — the previous string had the
+      // latitudes inverted (18.8 before 22.6), which matches an empty box, so
+      // the feed silently delivered nothing. Also add a wide radius filter
+      // (r/lat/lon/dist-km) as a belt-and-suspenders so we still get packets if
+      // a server is fussy about box syntax.
+      aprsSock.write('user HELEON-RO pass -1 vers heleon 1.0 filter b/22.60/-160.80/18.80/-154.20 r/20.0/-157.0/400\r\n');
     });
     aprsSock.on('data', d => {
       buf += d; const parts = buf.split('\n'); buf = parts.pop();
