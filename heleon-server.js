@@ -5096,9 +5096,10 @@ async function pollPlaces() {
       } catch (e) { /* skip this enrichment batch */ }
       await new Promise(r => setTimeout(r, 120));
     }
-    if (out.length) { placesCache = out; placesLastPollTs = Date.now(); placesLastError = null; }
-    else placesLastError = 'no places';
-  } catch (e) { placesLastError = (e && e.message) || 'unknown error'; }
+    placesLastPollTs = Date.now();
+    if (out.length) { placesCache = out; placesLastError = null; }
+    else placesLastError = `no places (found ${found.size} geo, ${ids.length} ids)`;
+  } catch (e) { placesLastError = (e && e.message) || 'unknown error'; placesLastPollTs = Date.now(); }
 }
 
 // ─── TSUNAMI — Pacific Tsunami Warning Center bulletins (keyless Atom) ────────
