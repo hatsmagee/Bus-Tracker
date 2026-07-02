@@ -1529,7 +1529,7 @@ function initMapLayers() {
   map.addLayer({
     id: 'repeaters-icon', type: 'symbol', source: 'repeaters',
     layout: {
-      'text-field': ['concat', '📡 ', ['to-string', ['get', 'freqMhz']]],
+      'text-field': ['concat', ['get', 'icon'], ' ', ['get', 'callsign']],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, 10, 11, 12, 13, 14],
       'text-font': EMOJI_FONT,
       'text-allow-overlap': false, 'text-optional': true, 'text-padding': 3,
@@ -1537,34 +1537,37 @@ function initMapLayers() {
     paint: { 'text-color': '#9a3412', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
   wireLayerHover('repeaters-icon', p => {
+    const icon = p.icon || '📡';
     const blurb = p.typeLabel || p.group || 'Ham repeater';
     const desc = (p.description || '').split('\n').find(l => l.trim() && !/^https?:/i.test(l.trim())) || '';
-    return `<div style="font-weight:600;font-family:monospace;">📡 ${escapeHtml(p.callsign)}</div>
-    <div style="color:var(--muted);font-size:11px;">${escapeHtml(blurb)}</div>
-    <div style="color:var(--muted);font-size:10px;">${p.freqMhz} MHz · click for details</div>
-    ${desc ? `<div style="color:#8b949e;font-size:10px;margin-top:3px;max-width:220px;">${escapeHtml(desc.slice(0, 90))}${desc.length > 90 ? '…' : ''}</div>` : ''}`;
+    return `<div style="font-weight:600;font-family:monospace;">${icon} ${escapeHtml(p.callsign)}</div>
+    <div style="color:var(--muted);font-size:11px;">${icon} ${escapeHtml(blurb)}</div>
+    <div style="color:var(--muted);font-size:10px;">📻 ${p.freqMhz} MHz · 👆 click for details</div>
+    ${desc ? `<div style="color:#8b949e;font-size:10px;margin-top:3px;max-width:220px;">📝 ${escapeHtml(desc.slice(0, 90))}${desc.length > 90 ? '…' : ''}</div>` : ''}`;
   });
   wireLayerCard('repeaters-icon', p => {
+    const icon = p.icon || '📡';
     const rows = [];
-    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;text-align:right;">${v}</span></div>`);
-    if (p.typeLabel) row('Type', escapeHtml(p.typeLabel));
-    if (p.group) row('Network', escapeHtml(p.group));
-    if (p.internetNode) row('Internet node', escapeHtml(p.internetNode));
-    row('Frequency', `${p.freqMhz} MHz`);
-    if (p.offsetMhz != null && p.offsetMhz !== '' && +p.offsetMhz !== 0) row('Offset', `${+p.offsetMhz > 0 ? '+' : ''}${p.offsetMhz} MHz`);
+    const row = (e, k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${e} ${k}</span><span style="font-weight:600;text-align:right;">${v}</span></div>`);
+    if (p.typeLabel) row(icon, 'Type', escapeHtml(p.typeLabel));
+    if (p.group) row('🕸️', 'Network', escapeHtml(p.group));
+    if (p.internetNode) row('🌐', 'Internet node', escapeHtml(p.internetNode));
+    row('📻', 'Frequency', `${p.freqMhz} MHz`);
+    if (p.offsetMhz != null && p.offsetMhz !== '' && +p.offsetMhz !== 0) row('↕️', 'Offset', `${+p.offsetMhz > 0 ? '+' : ''}${p.offsetMhz} MHz`);
     if (p.encodeTone && p.decodeTone && p.encodeTone !== p.decodeTone) {
-      row('TX tone', p.encodeTone);
-      row('RX tone', p.decodeTone);
-    } else if (p.tone) row('Tone', p.tone);
-    if (p.mode) row('Mode', p.mode);
-    if (p.power) row('Power', escapeHtml(p.power));
-    if (p.city) row('Location', escapeHtml(p.city));
-    if (p.restriction) row('Access', escapeHtml(p.restriction));
-    row('Status', p.operational === false || p.operational === 'false' ? 'Off air' : 'Operational');
+      row('🔊', 'TX tone', p.encodeTone);
+      row('🎧', 'RX tone', p.decodeTone);
+    } else if (p.tone) row('🔊', 'Tone', p.tone);
+    if (p.mode) row('📡', 'Mode', p.mode);
+    if (p.power) row('⚡', 'Power', escapeHtml(p.power));
+    if (p.city) row('📍', 'Location', escapeHtml(p.city));
+    if (p.restriction) row('🔒', 'Access', escapeHtml(p.restriction));
+    row(p.operational === false || p.operational === 'false' ? '🔴' : '🟢', 'Status',
+      p.operational === false || p.operational === 'false' ? 'Off air' : 'On air');
     let about = '';
     if (p.description) {
       about = `<div style="margin-top:10px;padding:8px 10px;background:#0d1117;border:1px solid #30363d;border-radius:8px;">
-        <div style="font-size:10px;font-weight:700;color:#8b949e;margin-bottom:4px;">About this site</div>
+        <div style="font-size:10px;font-weight:700;color:#8b949e;margin-bottom:4px;">📝 About this site</div>
         <div style="font-size:11px;color:#c9d1d9;line-height:1.5;white-space:pre-wrap;">${escapeHtml(p.description)}</div></div>`;
     }
     let listen = '';
@@ -1572,23 +1575,23 @@ function initMapLayers() {
       listen = `<div class="repeater-stream" style="margin-top:10px;padding:10px;background:#0d1117;border:1px solid #30363d;border-radius:8px;">
         <div style="font-size:10px;color:#8b949e;margin-bottom:6px;">🔊 ${escapeHtml(p.listenLabel || 'Live stream')}</div>
         <div class="stream-ctrl">
-          <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(p.listenStream)}">▶ Play</button>
-          <button type="button" class="stream-stop-btn" disabled>■ Stop</button>
+          <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(p.listenStream)}">▶️ Play</button>
+          <button type="button" class="stream-stop-btn" disabled>⏹️ Stop</button>
           <span class="stream-status">Ready — tap Play</span>
         </div></div>`;
     }
     const links = [];
-    if (p.irlpStatus) links.push(`<a href="${escapeHtml(p.irlpStatus)}" target="_blank" rel="noopener" style="color:#58a6ff;">IRLP node status</a>`);
-    if (p.hoselineUrl) links.push(`<a href="${escapeHtml(p.hoselineUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">DMR Hoseline (talkgroups)</a>`);
-    if (p.broadcastifyUrl) links.push(`<a href="${escapeHtml(p.broadcastifyUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">Broadcastify page</a>`);
-    if (p.kiwisdrUrl) links.push(`<a href="${escapeHtml(p.kiwisdrUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">HF KiwiSDR map (not VHF)</a>`);
+    if (p.irlpStatus) links.push(`<a href="${escapeHtml(p.irlpStatus)}" target="_blank" rel="noopener" style="color:#58a6ff;">🌐 IRLP node status</a>`);
+    if (p.hoselineUrl) links.push(`<a href="${escapeHtml(p.hoselineUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">📟 DMR Hoseline (talkgroups)</a>`);
+    if (p.broadcastifyUrl) links.push(`<a href="${escapeHtml(p.broadcastifyUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">🔊 Broadcastify page</a>`);
+    if (p.kiwisdrUrl) links.push(`<a href="${escapeHtml(p.kiwisdrUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">🥝 HF KiwiSDR map (not VHF)</a>`);
     if (links.length) {
       listen += `<div style="margin-top:8px;font-size:11px;display:flex;flex-direction:column;gap:4px;">${links.join('')}</div>`;
     }
     if (!listen) {
       listen = `<div style="margin-top:8px;font-size:10px;color:#8b949e;line-height:1.45;">No public audio stream for this tower. Program your radio with the settings above.</div>`;
     }
-    return { title: `📡 ${p.callsign} repeater`, body: rows.join('') + about + listen + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">hearham.com · stream is Hawaiʻi linked nets, not this tower alone</div>` };
+    return { title: `${icon} ${p.callsign} repeater`, body: rows.join('') + about + listen + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">ℹ️ hearham.com · stream is Hawaiʻi linked nets, not this tower alone</div>` };
   });
 
   // Summit observatories (Maunakea CFHT tower, Mauna Loa NOAA) — live conditions
@@ -2821,7 +2824,7 @@ async function fetchRepeaters() {
         callsign: r.callsign, freqMhz: r.freqMhz, offsetMhz: r.offsetMhz,
         tone: r.tone || '', encodeTone: r.encodeTone || '', decodeTone: r.decodeTone || '',
         mode: r.mode || 'FM', city: r.city || '', group: r.group || '',
-        typeLabel: r.typeLabel || '', description: r.description || '',
+        icon: r.icon || '📡', typeLabel: r.typeLabel || '', description: r.description || '',
         power: r.power || '', restriction: r.restriction || '',
         operational: r.operational !== false, internetNode: r.internetNode || '',
         irlpStatus: r.irlpStatus || '', listenStream: r.listenStream || '',
@@ -2906,24 +2909,28 @@ async function toggleFacility(kind) {
 // "Access-Control-Allow-Origin: *" so the browser can stream cross-origin.
 const RADIO_STATIONS = [
   {
+    icon: '📰',
     name: 'HPR-1 News & Talk',
     kind: 'Hawaiʻi Public Radio · Hilo/Kona',
     desc: 'NPR member station — local news, talk, and national programming for Hawaiʻi Island. KHPR 91.1 FM Hilo / 89.1 Kona.',
     url: 'https://khpr-ice.streamguys1.com/khpr2.mp3',
   },
   {
+    icon: '🎻',
     name: 'HPR-2 Classical',
     kind: 'Hawaiʻi Public Radio',
     desc: 'Classical music and fine arts programming from Hawaiʻi Public Radio\'s second channel.',
     url: 'https://khpr-ice.streamguys1.com/kipo2.mp3',
   },
   {
+    icon: '🗣️',
     name: 'KKOA',
     kind: 'Kailua-Kona · 1220 AM',
     desc: 'Local Kona talk radio — news, sports, and community programming on the west side of Hawaiʻi Island.',
     url: 'https://radio.securenetsystems.net/v5/KKOA',
   },
   {
+    icon: '📡',
     name: 'Hawaiʻi Linked Ham Nets',
     kind: 'Amateur radio · statewide',
     desc: 'Live scanner feed of linked VHF/UHF ham repeaters and nets across Hawaiʻi (Broadcastify). Same stream used on repeater map cards.',
@@ -3006,14 +3013,14 @@ function renderRadioList() {
   if (!el) return;
   el.innerHTML = RADIO_STATIONS.map(s => `
     <div class="vessel-row" style="align-items:flex-start;">
-      <div class="vessel-icon">📻</div>
+      <div class="vessel-icon">${s.icon || '📻'}</div>
       <div class="vessel-info" style="min-width:0;">
-        <div class="vessel-name">${escapeHtml(s.name)}</div>
-        <div class="vessel-meta"><span>${escapeHtml(s.kind)}</span></div>
-        ${s.desc ? `<div style="font-size:10px;color:var(--muted);line-height:1.45;margin-top:4px;">${escapeHtml(s.desc)}</div>` : ''}
+        <div class="vessel-name">${s.icon || '📻'} ${escapeHtml(s.name)}</div>
+        <div class="vessel-meta"><span>📍 ${escapeHtml(s.kind)}</span></div>
+        ${s.desc ? `<div style="font-size:10px;color:var(--muted);line-height:1.45;margin-top:4px;">📝 ${escapeHtml(s.desc)}</div>` : ''}
         <div class="stream-ctrl" style="margin-top:6px;">
-          <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(s.url)}">▶ Play</button>
-          <button type="button" class="stream-stop-btn" disabled>■ Stop</button>
+          <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(s.url)}">▶️ Play</button>
+          <button type="button" class="stream-stop-btn" disabled>⏹️ Stop</button>
         </div>
       </div>
     </div>`).join('');

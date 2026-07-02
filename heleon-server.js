@@ -4213,6 +4213,18 @@ function repeaterGroupLabel(group, mode) {
   if (g.toLowerCase().includes('echolink')) return `${m} repeater with EchoLink`;
   return `${g} ${m} repeater`;
 }
+function repeaterTypeEmoji(group, mode) {
+  const g = String(group || '').trim().toLowerCase();
+  const m = String(mode || '').trim().toLowerCase();
+  if (g === 'dmr' || g.includes('mmdvm')) return '📟';
+  if (g === 'irlp') return '🌐';
+  if (g === 'allstar') return '🔗';
+  if (g.includes('echolink')) return '📞';
+  if (m.includes('dstar') || m.includes('d-star')) return '✨';
+  if (m.includes('fusion') || m.includes('c4fm')) return '🎛️';
+  if (m.includes('nxdn')) return '🔷';
+  return '📡';
+}
 function repeaterListenMeta(r) {
   const g = String(r.group || '').toUpperCase();
   const node = r.internet_node || '';
@@ -4240,6 +4252,7 @@ async function pollRepeaters() {
         return {
           callsign: r.callsign, lat: r.latitude, lon: r.longitude,
           city: r.city, mode: r.mode, group: r.group || '',
+          icon: repeaterTypeEmoji(r.group, r.mode),
           typeLabel: repeaterGroupLabel(r.group, r.mode),
           freqMhz: r.frequency / 1e6, offsetMhz: r.offset / 1e6,
           tone: r.decode || r.encode || '',
