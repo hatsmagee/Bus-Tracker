@@ -1594,6 +1594,12 @@ function initMapLayers() {
     // DART tsunami buoy: deep-ocean water-column height — a sudden deviation is
     // how the Pacific Tsunami Warning Center detects a passing tsunami.
     if (r.waterColumnM != null) row('Water column', `${(+r.waterColumnM).toFixed(3)} m` + (r.at ? ` (${r.at})` : ''));
+    // Predicted next high/low (NOAA CO-OPS forward-looking) for tide stations.
+    if (p.tideNext) {
+      const tn = p.tideNext;
+      row(tn.type === 'H' ? 'Next high tide' : 'Next low tide',
+        `${(+tn.v).toFixed(1)} ft · ${tn.t ? tn.t.slice(0,16).replace('T',' ') + ' UT' : ''}`);
+    }
     // Next high/low tide predictions, when the station provides them.
     if (r.tides) {
       try {
@@ -3884,8 +3890,15 @@ async function fetchRepeaters() {
 // Ocean stations (NDBC buoys + NOAA tides). Always on.
 async function fetchOcean() {
   try {
-    const res = await fetch('/api/ocean');
+    const [res, predRes] = await Promise.all([
+      fetch('/api/ocean'),
+      fetch('/api/tides-predicted').catch(() => null),
+    ]);
     const data = await res.json();
+    const predData = predRes ? await predRes.json() : { stations: [] };
+    // Predictions keyed by station name → lookup helper.
+    const predByName = {};
+    for (const ts of (predData.stations || [])) predByName[ts.name] = ts;
     hawaiiList.ocean = (data.stations || []).map((s, i) => ({ id: String(i), ...s }));
     recordHealth('ocean', data, (data.stations || []).length);
     hawaiiBrowseRefresh();
@@ -3897,8 +3910,14 @@ async function fetchOcean() {
       if (r.waveHtM != null) badge = `${(+r.waveHtM).toFixed(1)}m`;
       else if (r.waterLevelFt != null) badge = `${(+r.waterLevelFt).toFixed(1)}ft`;
       else if (r.waterTempC != null) badge = `${(+r.waterTempC).toFixed(0)}°C`;
+      // For tide stations, also surface the next predicted high/low.
+      const pred = predByName[s.name];
       return { type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
-        properties: { name: s.name, kind: s.kind, icon, badge, readings: JSON.stringify(r) } };
+        properties: {
+          name: s.name, kind: s.kind, icon, badge, readings: JSON.stringify(r),
+          tideNext: pred && pred.next ? pred.next : null,
+          tideUpcoming: pred && pred.upcoming ? JSON.stringify(pred.upcoming) : '[]',
+        } };
     });
     map.getSource('ocean').setData({ type: 'FeatureCollection', features: feats });
   } catch (e) { /* keep last */ }

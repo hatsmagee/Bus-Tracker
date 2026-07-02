@@ -3144,6 +3144,10 @@ async function handleApi(url, res) {
   }
 
   // ── LOCAL: fuel, traffic, telescopes, community sightings ───────────────────
+  if (p === '/api/tides-predicted') {
+    return json(res, { ts: Date.now(), lastPollTs: tidePredLastPollTs, lastError: tidePredLastError,
+      ...tidePredCache });
+  }
   if (p === '/api/local') {
     if (!localLastPollTs && !localPollInFlight) pollLocal();
     return json(res, { ts: Date.now(), lastPollTs: localLastPollTs, lastError: localLastError, ...localCache });
@@ -4261,6 +4265,40 @@ async function pollMarine() {
     marineLastPollTs = Date.now();
     marineLastError = null;
   } catch (e) { marineLastError = e.message; }
+}
+
+// ─── TIDE PREDICTIONS — NOAA CO-OPS forward-looking (keyless) ─────────────────
+// High/low tide forecasts for the Big Island gauges (Hilo 1617760, Kawaihae
+// 1617433). Keyless, updated daily. Drives a small "next high tide" badge on
+// the ocean stations — useful for fishing, harbor, paddling, safety.
+const TIDE_PRED_STATIONS = [
+  { id: '1617760', name: 'Hilo',     lat: 19.7303, lon: -155.0569 },
+  { id: '1617433', name: 'Kawaihae', lat: 20.0367, lon: -155.8297 },
+];
+let tidePredCache = { stations: [] };
+let tidePredLastPollTs = null, tidePredLastError = null;
+async function pollTidePredictions() {
+  try {
+    const stations = [];
+    for (const ts of TIDE_PRED_STATIONS) {
+      try {
+        const j = await fetchJson('api.tidesandcurrents.noaa.gov',
+          `/api/prod/datagetter?station=${ts.id}&product=predictions&datum=MLLW&interval=hilo&units=english&time_zone=gmt&format=json&range=48`,
+          { 'User-Agent': 'heleon-tracker' });
+        const preds = j.predictions || [];
+        // Find the next high tide from "now" (server time).
+        const nowIso = new Date().toISOString();
+        const upcoming = preds.filter(p => p.t && p.t.replace(' ', 'T') + 'Z' >= nowIso).slice(0, 6);
+        stations.push({
+          id: ts.id, name: ts.name, lat: ts.lat, lon: ts.lon,
+          next: upcoming[0] || null,
+          upcoming: upcoming,
+        });
+      } catch (e) { /* skip this station */ }
+    }
+    if (stations.length) { tidePredCache = { stations }; tidePredLastPollTs = Date.now(); tidePredLastError = null; }
+    else tidePredLastError = 'no predictions';
+  } catch (e) { tidePredLastError = (e && e.message) || 'unknown error'; }
 }
 
 async function pollFishingSummary() {
@@ -5635,6 +5673,8 @@ const server = http.createServer((req, res) => {
   setInterval(pollAirQuality, 15 * 60 * 1000);
   pollSolar();
   setInterval(pollSolar, 15 * 60 * 1000);
+  pollTidePredictions();
+  setInterval(pollTidePredictions, 24 * 60 * 60 * 1000);   // tide tables change daily
   setInterval(pollVolcano, 15 * 60 * 1000);
   setInterval(pollMetars, 10 * 60 * 1000);
   setInterval(pollMeshtastic, 30 * 60 * 1000);
