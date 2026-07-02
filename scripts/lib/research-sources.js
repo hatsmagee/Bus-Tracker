@@ -3,7 +3,25 @@
 const https = require('https');
 const { URL } = require('url');
 
-function fetchText(url, { timeoutMs = 30000, headers = {} } = {}) {
+// Global request pacer — serialize outbound calls with a minimum gap so a
+// research cycle (many Wikipedia/Commons calls in a row) never bursts hard
+// enough to get throttled. Research runs sequentially, so this simple time gate
+// is enough.
+let _lastReq = 0;
+const MIN_GAP_MS = parseInt(process.env.RESEARCH_MIN_GAP_MS || '350', 10);
+function pace() {
+  const now = Date.now();
+  const wait = Math.max(0, _lastReq + MIN_GAP_MS - now);
+  _lastReq = now + wait;
+  return wait ? new Promise(r => setTimeout(r, wait)) : Promise.resolve();
+}
+
+// Wikimedia's API policy requires a descriptive User-Agent (generic strings get
+// throttled/blocked). Identify the app with a contact URL.
+const USER_AGENT = process.env.RESEARCH_USER_AGENT
+  || 'HeleonTracker/1.0 (https://bus-tracker-a36o.onrender.com; big-island-map-agent) node.js';
+
+function fetchTextOnce(url, { timeoutMs = 30000, headers = {} } = {}) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const mod = u.protocol === 'https:' ? https : require('http');
@@ -12,13 +30,16 @@ function fetchText(url, { timeoutMs = 30000, headers = {} } = {}) {
       port: u.port || (u.protocol === 'https:' ? 443 : 80),
       path: u.pathname + u.search,
       method: 'GET',
-      headers: { 'User-Agent': 'heleon-tracker-agent', ...headers },
+      headers: { 'User-Agent': USER_AGENT, 'Accept-Encoding': 'identity', ...headers },
     }, res => {
       const chunks = [];
       res.on('data', d => chunks.push(d));
       res.on('end', () => {
         if (res.statusCode >= 400) {
-          reject(new Error(`GET ${url} ${res.statusCode}`));
+          const err = new Error(`GET ${url} ${res.statusCode}`);
+          err.status = res.statusCode;
+          err.retryAfter = parseInt(res.headers['retry-after'], 10) || 0;
+          reject(err);
           return;
         }
         resolve(Buffer.concat(chunks).toString('utf8'));
@@ -30,7 +51,27 @@ function fetchText(url, { timeoutMs = 30000, headers = {} } = {}) {
   });
 }
 
-function headUrl(url, { timeoutMs = 15000 } = {}) {
+// Paced fetch with backoff on transient throttling (429/503).
+async function fetchText(url, opts = {}) {
+  const retries = 3;
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    await pace();
+    try {
+      return await fetchTextOnce(url, opts);
+    } catch (e) {
+      lastErr = e;
+      const transient = e && (e.status === 429 || e.status === 503 || /timeout/.test(e.message || ''));
+      if (!transient || attempt === retries) throw e;
+      const backoff = (e.retryAfter ? e.retryAfter * 1000 : 0) || (800 * Math.pow(2, attempt));
+      await new Promise(r => setTimeout(r, backoff));
+    }
+  }
+  throw lastErr;
+}
+
+async function headUrl(url, { timeoutMs = 15000 } = {}) {
+  await pace();
   return new Promise((resolve, reject) => {
     const u = new URL(url);
     const mod = u.protocol === 'https:' ? https : require('http');
@@ -39,7 +80,7 @@ function headUrl(url, { timeoutMs = 15000 } = {}) {
       port: u.port || (u.protocol === 'https:' ? 443 : 80),
       path: u.pathname + u.search,
       method: 'HEAD',
-      headers: { 'User-Agent': 'heleon-tracker-agent' },
+      headers: { 'User-Agent': USER_AGENT },
     }, res => {
       res.resume();
       resolve({ status: res.statusCode, contentType: res.headers['content-type'] || '' });
@@ -84,7 +125,7 @@ async function jinaRead(url) {
 async function wikiSearch(query) {
   const params = new URLSearchParams({
     action: 'query', list: 'search', srsearch: query,
-    srlimit: '5', format: 'json', origin: '*',
+    srlimit: '5', format: 'json',
   });
   const text = await fetchText(`https://en.wikipedia.org/w/api.php?${params}`);
   const j = JSON.parse(text);
@@ -103,18 +144,25 @@ async function wikiSummary(title) {
   };
 }
 
-// Plain-text intro extract for a known article title — the main source text.
-async function wikiExtract(title) {
+// Plain-text extract for a known article title. Defaults to a generous slice of
+// the article (not just the intro) so there's enough dated text to build a real
+// history timeline from.
+async function wikiExtract(title, { chars = 8000 } = {}) {
+  // NOTE: the TextExtracts `exchars` param is capped at ~1200 by MediaWiki, far
+  // too little to build a timeline from. Request the full plain-text article
+  // (no exintro / exchars) and slice in JS to keep enough dated content.
   const params = new URLSearchParams({
-    action: 'query', prop: 'extracts', exintro: '1', explaintext: '1',
-    redirects: '1', titles: title, format: 'json', origin: '*',
+    action: 'query', prop: 'extracts', explaintext: '1',
+    redirects: '1', titles: title, format: 'json',
   });
   const text = await fetchText(`https://en.wikipedia.org/w/api.php?${params}`);
   const j = JSON.parse(text);
   const pages = (j.query && j.query.pages) ? Object.values(j.query.pages) : [];
   const page = pages.find(p => p.extract);
-  return page ? { title: page.title, extract: page.extract } : null;
+  if (!page) return null;
+  return { title: page.title, extract: String(page.extract).slice(0, chars) };
 }
+
 
 async function commonsImage(searchTerm) {
   const params = new URLSearchParams({
@@ -126,7 +174,6 @@ async function commonsImage(searchTerm) {
     iiprop: 'url|extmetadata',
     iiurlwidth: '800',
     format: 'json',
-    origin: '*',
   });
   const text = await fetchText(`https://commons.wikimedia.org/w/api.php?${params}`);
   const j = JSON.parse(text);
@@ -149,67 +196,114 @@ async function commonsImage(searchTerm) {
   return null;
 }
 
+function countYears(s) {
+  return new Set((String(s || '').match(/\b(1[789]\d\d|20\d\d)\b/g) || [])).size;
+}
+
+function tokenize(s) {
+  return String(s || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+// Generic geography/category words that don't identify a specific article, so
+// they shouldn't count toward matching a candidate Wikipedia page.
+const GENERIC_TOKENS = new Set([
+  'maunakea', 'mauna', 'kea', 'loa', 'hawaii', 'hawaiian', 'island', 'big',
+  'telescope', 'telescopes', 'observatory', 'observatories', 'station', 'facility',
+  'the', 'of', 'and', 'for', 'north', 'south', 'east', 'west', 'park', 'ride',
+  'hele', 'transit', 'history', 'airport', 'mid', 'level', 'noaa', 'usgs', 'hvo',
+]);
+
+function distinctiveTokens(item) {
+  return new Set(
+    tokenize(`${item.title || ''} ${item.researchQuery || ''}`)
+      .filter(t => t.length > 2 && !GENERIC_TOKENS.has(t))
+  );
+}
+
+// How strongly a candidate article title matches the item's distinctive terms.
+function relevanceScore(candidateTitle, distinctSet) {
+  const ct = new Set(tokenize(candidateTitle));
+  let s = 0;
+  for (const d of distinctSet) if (ct.has(d)) s++;
+  return s;
+}
+
+// Generic umbrella pages that aren't about a specific item. When a title search
+// lands on one of these we try the curated research query instead.
+function isUmbrella(title) {
+  const t = String(title || '').toLowerCase().trim();
+  return t.startsWith('list of')
+    || ['maunakea observatories', 'mauna kea observatories', 'mauna kea', 'mauna loa'].includes(t);
+}
+
+async function addArticle(title, acc) {
+  const ex = await wikiExtract(title).catch(() => null);
+  if (!ex || !ex.extract || ex.extract.length < 200) return 0;
+  if (!acc.resolvedTitle) acc.resolvedTitle = ex.title;
+  acc.sourceText += `\n\n--- Wikipedia: ${ex.title} ---\n${ex.extract}`;
+  try {
+    const sum = await wikiSummary(ex.title);
+    if (sum.url) acc.sources.push(sum.url);
+    if (sum.thumbnail) acc.photos.push({ url: sum.thumbnail, credit: `Wikipedia — ${ex.title} (CC/PD)`, caption: ex.title });
+  } catch {
+    acc.sources.push(`https://en.wikipedia.org/wiki/${encodeURIComponent(ex.title.replace(/ /g, '_'))}`);
+  }
+  return countYears(ex.extract);
+}
+
+// Wikipedia-primary, keyless research. Lean and paced: one relevance-ranked
+// search on the specific title, the top article, and a second one only if the
+// top is thin on dated content. Plus a license-safe Commons photo. Kept to a
+// handful of calls per item so a full cycle doesn't get rate-limited.
 async function researchItem(item) {
   const query = item.researchQuery || item.title || item.name;
-  const sources = [];
-  const photos = [];
-  let sourceText = '';
-  let resolvedTitle = null;
+  const acc = { sources: [], photos: [], sourceText: '', resolvedTitle: null };
 
-  // 1) Wikipedia is the reliable, keyless backbone: search resolves the loose
-  //    query to a real article, then we pull its intro extract + summary.
-  try {
-    const titles = await wikiSearch(query);
-    for (const title of titles.slice(0, 2)) {
-      const ex = await wikiExtract(title).catch(() => null);
-      if (ex && ex.extract && ex.extract.length > 120) {
-        if (!resolvedTitle) resolvedTitle = ex.title;
-        sourceText += `\n\n--- Wikipedia: ${ex.title} ---\n${ex.extract}`;
-        try {
-          const sum = await wikiSummary(ex.title);
-          if (sum.url) sources.push(sum.url);
-          if (sum.thumbnail) photos.push({
-            url: sum.thumbnail,
-            credit: `Wikipedia — ${ex.title} (CC/PD)`,
-            caption: ex.title,
-          });
-        } catch {
-          sources.push(`https://en.wikipedia.org/wiki/${encodeURIComponent(ex.title.replace(/ /g, '_'))}`);
-        }
-      }
-    }
-  } catch {}
+  // Resolve the right article. Wikipedia's own relevance ranking on the item's
+  // specific title is correct for most named landmarks. Only when the top hit is
+  // a generic umbrella page (e.g. "Maunakea Observatories") or shares no
+  // distinctive term with the item do we fall back to the curated research
+  // query — and even then we only accept a query hit that's non-generic and (for
+  // items with distinctive terms) actually related. This keeps content real and
+  // on-topic rather than mislabeling one facility with another's history.
+  const titleDistinct = distinctiveTokens({ title: item.title });
+  let tHits = [];
+  try { tHits = await wikiSearch(item.title || query); } catch {}
+  let primary = tHits[0] || null;
 
-  // 2) DuckDuckGo instant answers as a supplementary source (best-effort; its
-  //    Instant Answer API is sparse, so we never depend on it).
-  try {
-    const hits = await ddgSearch(`${query} Hawaii history`);
-    for (const h of hits.slice(0, 3)) {
-      if (!h.url) continue;
-      sources.push(h.url);
-      try {
-        const body = await jinaRead(h.url);
-        sourceText += `\n\n--- ${h.title} (${h.url}) ---\n${body.slice(0, 2500)}`;
-      } catch {
-        if (h.snippet) sourceText += `\n\n--- ${h.title} ---\n${h.snippet}`;
-      }
-    }
-  } catch {}
+  const needFallback = !primary || isUmbrella(primary)
+    || (titleDistinct.size > 0 && relevanceScore(primary, titleDistinct) === 0);
 
-  // 3) A license-safe Commons photo, seeded with the resolved article title for
-  //    a better match than the raw query.
-  const photo = await commonsImage(resolvedTitle || query).catch(() => null);
-  if (photo) photos.push(photo);
+  let qHits = [];
+  if (needFallback && (item.researchQuery && item.researchQuery !== item.title)) {
+    try { qHits = await wikiSearch(item.researchQuery); } catch {}
+    const cand = titleDistinct.size > 0
+      ? qHits.find(h => !isUmbrella(h) && relevanceScore(h, titleDistinct) > 0)
+      : qHits.find(h => !isUmbrella(h));
+    if (cand) primary = cand;
+    else if (!primary) primary = qHits[0] || null;
+  }
 
-  // De-dupe photos by url.
+  const ordered = [...new Set([primary, ...tHits, ...qHits].filter(Boolean))];
+  let years = primary ? await addArticle(primary, acc) : 0;
+  // Pull a second, still-related article only when the first is thin on dates.
+  if (years < 2) {
+    const second = ordered.find(t => t !== primary
+      && (titleDistinct.size === 0 || relevanceScore(t, titleDistinct) > 0));
+    if (second) years += await addArticle(second, acc);
+  }
+
+  const photo = await commonsImage(acc.resolvedTitle || query).catch(() => null);
+  if (photo) acc.photos.push(photo);
+
   const seen = new Set();
-  const candidatePhotos = photos.filter(p => p && p.url && !seen.has(p.url) && seen.add(p.url));
+  const candidatePhotos = acc.photos.filter(p => p && p.url && !seen.has(p.url) && seen.add(p.url));
 
   return {
     query,
-    resolvedTitle,
-    sourceText: sourceText.trim(),
-    sources: [...new Set(sources.filter(Boolean))],
+    resolvedTitle: acc.resolvedTitle,
+    sourceText: acc.sourceText.trim(),
+    sources: [...new Set(acc.sources.filter(Boolean))],
     candidatePhotos,
   };
 }

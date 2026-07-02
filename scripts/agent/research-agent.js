@@ -17,14 +17,25 @@ function agentEnabled() {
   return process.env.AGENT_ENABLED === '1' || process.env.AGENT_ENABLED === 'true';
 }
 
-// Split source text into clean sentences, dropping our "--- marker ---" lines.
+// Split source text into clean sentences, dropping our "--- marker ---" lines
+// and Wikipedia "== Section ==" headers (turned into sentence breaks so a
+// heading never merges into the sentence that follows it).
 function sentencesOf(text) {
   return String(text || '')
     .replace(/---[^\n]*---/g, ' ')
+    .replace(/={2,}[^=\n]+={2,}/g, ' . ')
     .replace(/\s+/g, ' ')
     .split(/(?<=[.!?])\s+(?=[A-Z0-9"'(])/)
-    .map(s => s.trim())
+    .map(s => s.trim().replace(/^[.\s]+/, ''))
     .filter(s => s.length > 25);
+}
+
+// Trim to a max length at a word boundary so we never cut mid-word.
+function clip(s, max) {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const sp = cut.lastIndexOf(' ');
+  return (sp > max * 0.6 ? cut.slice(0, sp) : cut).trimEnd() + '…';
 }
 
 // Deterministically build a history timeline from real, sourced sentences that
@@ -44,8 +55,7 @@ function deriveHistory(research) {
     if (year < 1700 || year > new Date().getFullYear() + 1) continue;
     if (seenYears.has(year)) continue;
     seenYears.add(year);
-    const text = sentence.length > 240 ? sentence.slice(0, 237).trimEnd() + '…' : sentence;
-    out.push({ year, text, source: src });
+    out.push({ year, text: clip(sentence, 240), source: src });
     if (out.length >= 6) break;
   }
   return out.sort((a, b) => a.year - b.year);
@@ -62,7 +72,7 @@ function deriveSummary(research) {
     summary = summary ? `${summary} ${s}` : s;
     if (summary.length > 80) break;
   }
-  return summary.length > 320 ? summary.slice(0, 317).trimEnd() + '…' : summary;
+  return clip(summary, 320);
 }
 
 // Optional LLM polish for the summary only (a short, easy task). Best-effort:
@@ -95,7 +105,7 @@ async function synthesizeEntry(item, research) {
   if (!summary) summary = `${item.title} — see sources for details.`;
 
   const entry = {
-    title: research.resolvedTitle || item.title,
+    title: item.title,
     summary,
     history,
     photos: (research.candidatePhotos || []).slice(0, 3).map(p => ({
@@ -104,6 +114,7 @@ async function synthesizeEntry(item, research) {
     links: research.sources.slice(0, 4).map(u => ({ label: 'Source', url: u })),
     provenance: {
       sources: research.sources,
+      resolvedTitle: research.resolvedTitle || null,
       model,
       generatedAt: new Date().toISOString(),
       reviewed: false,
@@ -129,10 +140,16 @@ async function runResearchCycle({ budget = BUDGET, force = false } = {}) {
     return { ok: false, error: 'circuit breaker open — manual reset required' };
   }
 
-  const hb = await heartbeat();
-  if (!hb.ok) {
-    recordFailure(state, `horde down: ${hb.error}`);
-    return { ok: false, error: `AI Horde unavailable: ${hb.error}` };
+  // Synthesis is deterministic (extract-based) and only touches the LLM to
+  // polish summaries when an AI Horde key is configured. So only require the
+  // Horde to be up in that case — otherwise a Horde outage shouldn't stop the
+  // continuous, source-driven enrichment.
+  if (process.env.AIHORDE_API_KEY) {
+    const hb = await heartbeat();
+    if (!hb.ok) {
+      recordFailure(state, `horde down: ${hb.error}`);
+      return { ok: false, error: `AI Horde unavailable: ${hb.error}` };
+    }
   }
 
   // audit() returns { report, queue } where `queue` is an ARRAY of work items.
