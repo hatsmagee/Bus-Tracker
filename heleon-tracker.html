@@ -2328,7 +2328,10 @@ function initMapLayers() {
     if (p.unitCount > 1) row('OSM units', String(p.unitCount));
     if (p.note) row('Notes', escapeHtml(p.note));
     row('Data', 'Static — no live output');
-    return { title: `${p.icon || fuelEmoji(p.fuel)} ${p.name}`, body: rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Hawaiian Electric does not publish real-time island grid MW. Annual fuel mix is in the Hawaiʻi browser.</div>` };
+    const m = assetMedia(p.id, p.name);
+    const img = m && m.photo ? `<img src="${escapeHtml(m.photo)}" style="width:100%;border-radius:6px;display:block;margin-bottom:8px;" loading="lazy" alt="${escapeHtml(p.name)}" onerror="this.style.display='none'"/>` : '';
+    const link = m && m.url ? `<div style="color:#8b949e;font-size:10px;margin-top:8px;"><a href="${escapeHtml(m.url)}" target="_blank" rel="noopener" style="color:#58a6ff;">More on this plant ↗</a></div>` : '';
+    return { title: `${p.icon || fuelEmoji(p.fuel)} ${p.name}`, body: img + rows.join('') + link + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Hawaiian Electric does not publish real-time island grid MW. Annual fuel mix is in the Hawaiʻi browser.</div>` };
   });
   wireLayerHover('infra-subs-circle', p => `<div style="font-weight:600;">⚡ ${escapeHtml(p.name)}</div>
     <div style="color:var(--muted);font-size:10px;">${p.voltage ? escapeHtml(p.voltage) + ' · ' : ''}substation</div>`);
@@ -2681,6 +2684,20 @@ const HERITAGE_CAT_ICON = {
   petroglyph: '🪨', abandoned: '🏚️', town: '🏘️', natural: '🏞️', park: '🏞️', cave: '🕳️', ranch: '🐄',
   fishpond: '🐟', battle: '⚔️', statue: '🗿', trail: '🥾', museum: '🏛️',
 };
+// Verified real photos + links for a handful of named fixed assets (power
+// plants, notable facilities) that have a genuine public image, keyed by id or
+// a name substring. Keyless Wikimedia URLs. Extend as verified images appear.
+const ASSET_MEDIA = {
+  pgv: { photo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Puna_Geothermal_plant.webp/500px-Puna_Geothermal_plant.webp.png', url: 'https://en.wikipedia.org/wiki/Puna_Geothermal_Venture' },
+};
+const ASSET_MEDIA_NAME = [
+  { re: /puna geothermal/i, photo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Puna_Geothermal_plant.webp/500px-Puna_Geothermal_plant.webp.png', url: 'https://en.wikipedia.org/wiki/Puna_Geothermal_Venture' },
+];
+function assetMedia(id, name) {
+  if (id && ASSET_MEDIA[id]) return ASSET_MEDIA[id];
+  if (name) { for (const m of ASSET_MEDIA_NAME) if (m.re.test(name)) return m; }
+  return null;
+}
 function buildHeritageCardBody(p) {
   const img = p.photo ? `<img src="${escapeHtml(p.photo)}" style="width:100%;border-radius:6px;display:block;margin-bottom:8px;" loading="lazy" alt="${escapeHtml(p.name)}" onerror="this.style.display='none'"/>` : '';
   const cat = `<div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#8b949e;margin-bottom:6px;">${escapeHtml(HERITAGE_CAT_LABEL[p.cat] || 'Historic site')}</div>`;
