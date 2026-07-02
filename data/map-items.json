@@ -791,6 +791,124 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "lco:tfn": {
+      "title": "LCO Teide (Canary Islands)",
+      "summary": "Las Cumbres Observatory (LCO) is a network of astronomical observatories run by a non-profit private operating foundation directed by the technologist Wayne Rosing.",
+      "history": [
+        {
+          "year": 1993,
+          "text": "Rosing incorporated Las Cumbres Observatory in 1993 with the goal of aiding universities, observatories, and individuals in the acquisition and improvement of telescopes, optics, and instrumentation.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2005,
+          "text": "In 2005, Rosing established the global telescope version of Las Cumbres Observatory.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2012,
+          "text": "During 2012 and 2013, nine 1-meter telescopes were constructed and deployed to McDonald Observatory at Fort Davis, Texas; Cerro Tololo Interamerican Observatory (CTIO) in Chile; South African Astronomical Observatory (SAAO), near…",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2013,
+          "text": "In 2013, a board of directors was established and a president was hired to lead the organization.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2014,
+          "text": "Full science scheduling began on 1 May 2014, with the two 2-meter and nine 1-meter telescopes operating as a single, integrated, observatory.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2015,
+          "text": "During 2015 and 2016, seven 40-centimeter telescopes were deployed to CTIO, Haleakala Observatory, SSO, and to Teide Observatory on Tenerife in the Canary Islands.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/LCO-logo-sq-xl.jpg/330px-LCO-logo-sq-xl.jpg",
+          "credit": "Wikipedia — Las Cumbres Observatory (CC/PD)",
+          "caption": "Las Cumbres Observatory"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        ],
+        "resolvedTitle": "Las Cumbres Observatory",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:48:46.652Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "lco:sqa": {
+      "title": "LCO Sutherland (South Africa)",
+      "summary": "Las Cumbres Observatory (LCO) is a network of astronomical observatories run by a non-profit private operating foundation directed by the technologist Wayne Rosing.",
+      "history": [
+        {
+          "year": 1993,
+          "text": "Rosing incorporated Las Cumbres Observatory in 1993 with the goal of aiding universities, observatories, and individuals in the acquisition and improvement of telescopes, optics, and instrumentation.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2005,
+          "text": "In 2005, Rosing established the global telescope version of Las Cumbres Observatory.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2012,
+          "text": "During 2012 and 2013, nine 1-meter telescopes were constructed and deployed to McDonald Observatory at Fort Davis, Texas; Cerro Tololo Interamerican Observatory (CTIO) in Chile; South African Astronomical Observatory (SAAO), near…",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2013,
+          "text": "In 2013, a board of directors was established and a president was hired to lead the organization.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2014,
+          "text": "Full science scheduling began on 1 May 2014, with the two 2-meter and nine 1-meter telescopes operating as a single, integrated, observatory.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        },
+        {
+          "year": 2015,
+          "text": "During 2015 and 2016, seven 40-centimeter telescopes were deployed to CTIO, Haleakala Observatory, SSO, and to Teide Observatory on Tenerife in the Canary Islands.",
+          "source": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/LCO-logo-sq-xl.jpg/330px-LCO-logo-sq-xl.jpg",
+          "credit": "Wikipedia — Las Cumbres Observatory (CC/PD)",
+          "caption": "Las Cumbres Observatory"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Las_Cumbres_Observatory"
+        ],
+        "resolvedTitle": "Las Cumbres Observatory",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:48:47.897Z",
+        "reviewed": false
+      },
+      "status": "ok"
     }
   }
 }
