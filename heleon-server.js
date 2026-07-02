@@ -169,6 +169,15 @@ function agentParseActivity(text) {
   } else if (/run finished/.test(text)) {
     agentCurrent = { key: null, activity: 'idle', text: text.trim(), coord: null, ts: Date.now() };
   }
+  // Capture the research cycle's structured result so the batch-publish logic
+  // can decide whether to flush the tail.
+  const rm = text.match(/\[research\]\s+(\{.*\})/);
+  if (rm) {
+    try {
+      const r = JSON.parse(rm[1]);
+      agentLastResearch = { enriched: r.enriched, queueRemaining: r.queueRemaining, ts: Date.now() };
+    } catch {}
+  }
 }
 function agentLogPush(line, level = 'info') {
   const text = String(line).replace(/\s+$/, '');
@@ -181,13 +190,23 @@ function agentLogPush(line, level = 'info') {
   logRotate.appendLine(AGENT_LOG_FILE, `${ts}\t${level}\t${text.replace(/\t/g, ' ')}`, { maxBytes: 256 * 1024, maxFiles: 3 });
 }
 
-// Does the staged candidates file hold any items awaiting publish?
-function hasStagedWork() {
+// How many candidates are staged and awaiting a gated publish?
+function stagedCount() {
   try {
     const doc = JSON.parse(fs.readFileSync(MAP_ITEMS_STAGED_PATH, 'utf8'));
-    return !!(doc && doc.items && Object.keys(doc.items).length);
-  } catch { return false; }
+    return (doc && doc.items) ? Object.keys(doc.items).length : 0;
+  } catch { return 0; }
 }
+function hasStagedWork() { return stagedCount() > 0; }
+
+// Batch publishing: only auto-publish (which triggers a full redeploy) once
+// enough work has accumulated, so we don't redeploy after every single item.
+// Default is small so progress is visible; override with AGENT_PUBLISH_MIN.
+const AGENT_PUBLISH_MIN = Math.max(1, parseInt(process.env.AGENT_PUBLISH_MIN, 10) || 4);
+// Result of the most recent research cycle (parsed from its stdout), used to
+// flush the tail: if a cycle enriched nothing new but staged work remains, we
+// publish it rather than leaving it stranded below the batch threshold.
+let agentLastResearch = { enriched: null, queueRemaining: null, ts: null };
 
 // Spawn a research/publish run as a child process, streaming its output into the
 // rotating agent log. Shared by the manual endpoint and the always-on loop.
@@ -214,12 +233,20 @@ function spawnAgent(mode) {
     agentLogPush(`── ${mode} run finished (exit ${code}) ──`, 'start');
     agentRunInFlight = false;
     if (mode === 'publish') loadMapItems();
-    // After a clean research cycle, if there is staged work, chain into a gated
-    // publish so the app can deploy itself whenever — the pre-push gate is what
-    // makes this safe.
-    if (mode === 'research' && code === 0 && AGENT_ENABLED && AGENT_AUTO_PUBLISH && hasStagedWork()) {
-      agentLogPush('staged work detected → running gated publish', 'start');
-      setImmediate(() => spawnAgent('publish'));
+    // After a clean research cycle, decide whether to chain into a gated publish.
+    // We batch: publish once enough is staged (AGENT_PUBLISH_MIN) so we don't
+    // redeploy per item; but also flush the tail when a cycle enriched nothing
+    // new yet staged work remains, so nothing gets stranded. The pre-push gate
+    // (tests + smoke + boot) is what makes deploying safe.
+    if (mode === 'research' && code === 0 && AGENT_ENABLED && AGENT_AUTO_PUBLISH) {
+      const n = stagedCount();
+      const noNewProgress = agentLastResearch.enriched === 0;
+      if (n > 0 && (n >= AGENT_PUBLISH_MIN || noNewProgress)) {
+        agentLogPush(`staged ${n} item(s) → running gated publish`, 'start');
+        setImmediate(() => spawnAgent('publish'));
+      } else if (n > 0) {
+        agentLogPush(`staged ${n}/${AGENT_PUBLISH_MIN} — accumulating before publish`, 'info');
+      }
     }
   });
   return { ok: true, started: true, mode, pid: child.pid };
@@ -2498,8 +2525,10 @@ async function handleApi(url, res, req) {
     } catch { out.staged = { count: 0, keys: [] }; }
     out.config = {
       autoPublish: AGENT_AUTO_PUBLISH,
+      publishMin: AGENT_PUBLISH_MIN,
       researchIntervalMs: AGENT_RESEARCH_INTERVAL,
       itemBudget: parseInt(process.env.AGENT_ITEM_BUDGET || '3', 10),
+      lastResearch: agentLastResearch,
       staleDays: parseInt(process.env.AGENT_STALE_DAYS || '90', 10),
       aihordeKey: process.env.AIHORDE_API_KEY ? 'set' : 'anonymous',
       githubConfigured: !!(process.env.AGENT_GITHUB_TOKEN && process.env.AGENT_GITHUB_REPO),

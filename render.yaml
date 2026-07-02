@@ -28,6 +28,11 @@ services:
         value: "false"
       - key: AGENT_AUTO_PUBLISH
         value: "true"
+      # Batch enrichments: wait until this many items are staged before an
+      # auto-publish (each publish triggers a redeploy). The tail is flushed
+      # automatically when a cycle finds nothing new. Keeps deploys infrequent.
+      - key: AGENT_PUBLISH_MIN
+        value: "4"
       - key: AGENT_RESEARCH_INTERVAL
         value: "600000"
       - key: AGENT_GITHUB_TOKEN
