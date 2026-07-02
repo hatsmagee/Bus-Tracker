@@ -4199,6 +4199,20 @@ let repeaterLastPollTs = null, repeaterLastError = null;
 const HAWAII_HAM_BROADCASTIFY_PAGE = 'https://www.broadcastify.com/listen/feed/27598';
 const HAWAII_HAM_STREAM = 'https://broadcastify.cdnstream1.com/27598';
 const KIWISDR_MAP = 'https://rx.kiwisdr.com/';
+function cleanRepeaterDescription(s) {
+  if (!s) return '';
+  return String(s).replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\r/g, '').trim().slice(0, 900);
+}
+function repeaterGroupLabel(group, mode) {
+  const g = String(group || '').trim();
+  const m = String(mode || 'FM').trim();
+  if (!g) return `${m} amateur voice repeater`;
+  if (g === 'IRLP') return `${m} repeater with IRLP internet linking`;
+  if (g === 'DMR') return 'DMR digital repeater on BrandMeister';
+  if (g.toLowerCase() === 'allstar') return `${m} repeater on the AllStar linking network`;
+  if (g.toLowerCase().includes('echolink')) return `${m} repeater with EchoLink`;
+  return `${g} ${m} repeater`;
+}
 function repeaterListenMeta(r) {
   const g = String(r.group || '').toUpperCase();
   const node = r.internet_node || '';
@@ -4222,12 +4236,18 @@ async function pollRepeaters() {
       .filter(r => r.latitude > 18.5 && r.latitude < 20.6 && r.longitude > -156.5 && r.longitude < -154.4)
       .map(r => {
         const listen = repeaterListenMeta(r);
+        const desc = cleanRepeaterDescription(r.description);
         return {
           callsign: r.callsign, lat: r.latitude, lon: r.longitude,
-          city: r.city, mode: r.mode, group: r.group,
+          city: r.city, mode: r.mode, group: r.group || '',
+          typeLabel: repeaterGroupLabel(r.group, r.mode),
           freqMhz: r.frequency / 1e6, offsetMhz: r.offset / 1e6,
-          tone: r.decode || r.encode || '', internetNode: r.internet_node || '',
-          description: (r.description || '').slice(0, 120),
+          tone: r.decode || r.encode || '',
+          encodeTone: r.encode || '', decodeTone: r.decode || '',
+          internetNode: r.internet_node || '',
+          description: desc,
+          power: r.power && r.power !== 'unknown' ? r.power : '',
+          restriction: (r.restriction || '').trim(),
           operational: r.operational !== 0,
           ...listen,
         };

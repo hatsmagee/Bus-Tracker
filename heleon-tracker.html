@@ -1536,16 +1536,37 @@ function initMapLayers() {
     },
     paint: { 'text-color': '#9a3412', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
-  wireLayerHover('repeaters-icon', p => `<div style="font-weight:600;font-family:monospace;">📡 ${escapeHtml(p.callsign)}</div>
-    <div style="color:var(--muted);font-size:11px;">${p.freqMhz} MHz · ${escapeHtml(p.mode || 'FM')} · click for details</div>`);
+  wireLayerHover('repeaters-icon', p => {
+    const blurb = p.typeLabel || p.group || 'Ham repeater';
+    const desc = (p.description || '').split('\n').find(l => l.trim() && !/^https?:/i.test(l.trim())) || '';
+    return `<div style="font-weight:600;font-family:monospace;">📡 ${escapeHtml(p.callsign)}</div>
+    <div style="color:var(--muted);font-size:11px;">${escapeHtml(blurb)}</div>
+    <div style="color:var(--muted);font-size:10px;">${p.freqMhz} MHz · click for details</div>
+    ${desc ? `<div style="color:#8b949e;font-size:10px;margin-top:3px;max-width:220px;">${escapeHtml(desc.slice(0, 90))}${desc.length > 90 ? '…' : ''}</div>` : ''}`;
+  });
   wireLayerCard('repeaters-icon', p => {
     const rows = [];
-    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;text-align:right;">${v}</span></div>`);
+    if (p.typeLabel) row('Type', escapeHtml(p.typeLabel));
+    if (p.group) row('Network', escapeHtml(p.group));
+    if (p.internetNode) row('Internet node', escapeHtml(p.internetNode));
     row('Frequency', `${p.freqMhz} MHz`);
     if (p.offsetMhz != null && p.offsetMhz !== '' && +p.offsetMhz !== 0) row('Offset', `${+p.offsetMhz > 0 ? '+' : ''}${p.offsetMhz} MHz`);
-    if (p.tone) row('Tone', p.tone);
+    if (p.encodeTone && p.decodeTone && p.encodeTone !== p.decodeTone) {
+      row('TX tone', p.encodeTone);
+      row('RX tone', p.decodeTone);
+    } else if (p.tone) row('Tone', p.tone);
     if (p.mode) row('Mode', p.mode);
-    if (p.city) row('Location', p.city);
+    if (p.power) row('Power', escapeHtml(p.power));
+    if (p.city) row('Location', escapeHtml(p.city));
+    if (p.restriction) row('Access', escapeHtml(p.restriction));
+    row('Status', p.operational === false || p.operational === 'false' ? 'Off air' : 'Operational');
+    let about = '';
+    if (p.description) {
+      about = `<div style="margin-top:10px;padding:8px 10px;background:#0d1117;border:1px solid #30363d;border-radius:8px;">
+        <div style="font-size:10px;font-weight:700;color:#8b949e;margin-bottom:4px;">About this site</div>
+        <div style="font-size:11px;color:#c9d1d9;line-height:1.5;white-space:pre-wrap;">${escapeHtml(p.description)}</div></div>`;
+    }
     let listen = '';
     if (p.listenStream) {
       listen = `<div class="repeater-stream" style="margin-top:10px;padding:10px;background:#0d1117;border:1px solid #30363d;border-radius:8px;">
@@ -1567,7 +1588,7 @@ function initMapLayers() {
     if (!listen) {
       listen = `<div style="margin-top:8px;font-size:10px;color:#8b949e;line-height:1.45;">No public audio stream for this tower. Program your radio with the settings above.</div>`;
     }
-    return { title: `📡 ${p.callsign} repeater`, body: rows.join('') + listen + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">hearham.com · stream is Hawaiʻi linked nets, not this tower alone</div>` };
+    return { title: `📡 ${p.callsign} repeater`, body: rows.join('') + about + listen + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">hearham.com · stream is Hawaiʻi linked nets, not this tower alone</div>` };
   });
 
   // Summit observatories (Maunakea CFHT tower, Mauna Loa NOAA) — live conditions
@@ -2798,8 +2819,11 @@ async function fetchRepeaters() {
       type: 'Feature', geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
       properties: {
         callsign: r.callsign, freqMhz: r.freqMhz, offsetMhz: r.offsetMhz,
-        tone: r.tone || '', mode: r.mode || 'FM', city: r.city || '',
-        group: r.group || '', internetNode: r.internetNode || '',
+        tone: r.tone || '', encodeTone: r.encodeTone || '', decodeTone: r.decodeTone || '',
+        mode: r.mode || 'FM', city: r.city || '', group: r.group || '',
+        typeLabel: r.typeLabel || '', description: r.description || '',
+        power: r.power || '', restriction: r.restriction || '',
+        operational: r.operational !== false, internetNode: r.internetNode || '',
         irlpStatus: r.irlpStatus || '', listenStream: r.listenStream || '',
         listenLabel: r.listenLabel || '', hoselineUrl: r.hoselineUrl || '',
         broadcastifyUrl: r.broadcastifyUrl || '', kiwisdrUrl: r.kiwisdrUrl || '',
@@ -2881,9 +2905,30 @@ async function toggleFacility(kind) {
 // play in an <audio> element. Each station's URL is verified to send
 // "Access-Control-Allow-Origin: *" so the browser can stream cross-origin.
 const RADIO_STATIONS = [
-  { name: 'HPR-1 News & Talk', kind: 'Hawaiʻi Public Radio (Hilo)', url: 'https://khpr-ice.streamguys1.com/khpr2.mp3' },
-  { name: 'HPR-2 Classical', kind: 'Hawaiʻi Public Radio', url: 'https://khpr-ice.streamguys1.com/kipo2.mp3' },
-  { name: 'KKOA', kind: 'Kona (1220 AM)', url: 'https://radio.securenetsystems.net/v5/KKOA' },
+  {
+    name: 'HPR-1 News & Talk',
+    kind: 'Hawaiʻi Public Radio · Hilo/Kona',
+    desc: 'NPR member station — local news, talk, and national programming for Hawaiʻi Island. KHPR 91.1 FM Hilo / 89.1 Kona.',
+    url: 'https://khpr-ice.streamguys1.com/khpr2.mp3',
+  },
+  {
+    name: 'HPR-2 Classical',
+    kind: 'Hawaiʻi Public Radio',
+    desc: 'Classical music and fine arts programming from Hawaiʻi Public Radio\'s second channel.',
+    url: 'https://khpr-ice.streamguys1.com/kipo2.mp3',
+  },
+  {
+    name: 'KKOA',
+    kind: 'Kailua-Kona · 1220 AM',
+    desc: 'Local Kona talk radio — news, sports, and community programming on the west side of Hawaiʻi Island.',
+    url: 'https://radio.securenetsystems.net/v5/KKOA',
+  },
+  {
+    name: 'Hawaiʻi Linked Ham Nets',
+    kind: 'Amateur radio · statewide',
+    desc: 'Live scanner feed of linked VHF/UHF ham repeaters and nets across Hawaiʻi (Broadcastify). Same stream used on repeater map cards.',
+    url: 'https://broadcastify.cdnstream1.com/27598',
+  },
 ];
 let audioEl = null;
 let mapStreamAudio = null;
@@ -2894,7 +2939,7 @@ function stopMapStream() {
     mapStreamAudio.src = '';
     mapStreamAudio = null;
   }
-  document.querySelectorAll('.repeater-stream').forEach(wrap => {
+  document.querySelectorAll('.stream-ctrl').forEach(wrap => {
     const play = wrap.querySelector('.stream-play-btn');
     const stop = wrap.querySelector('.stream-stop-btn');
     const status = wrap.querySelector('.stream-status');
@@ -2906,7 +2951,7 @@ function stopMapStream() {
 
 function wireRepeaterStreamControls(root) {
   if (!root) return;
-  root.querySelectorAll('.repeater-stream').forEach(wrap => {
+  root.querySelectorAll('.stream-ctrl').forEach(wrap => {
     const playBtn = wrap.querySelector('.stream-play-btn');
     const stopBtn = wrap.querySelector('.stream-stop-btn');
     const status = wrap.querySelector('.stream-status');
@@ -2919,25 +2964,25 @@ function wireRepeaterStreamControls(root) {
       if (audioEl) { audioEl.pause(); audioEl = null; }
       mapStreamAudio = new Audio(url);
       mapStreamAudio.crossOrigin = 'anonymous';
-      status.textContent = 'Connecting…';
+      if (status) status.textContent = 'Connecting…';
       playBtn.disabled = true;
       stopBtn.disabled = false;
-      mapStreamAudio.onplaying = () => { status.textContent = 'Playing live'; };
-      mapStreamAudio.onwaiting = () => { status.textContent = 'Buffering…'; };
+      mapStreamAudio.onplaying = () => { if (status) status.textContent = 'Playing live'; };
+      mapStreamAudio.onwaiting = () => { if (status) status.textContent = 'Buffering…'; };
       mapStreamAudio.onerror = () => {
-        status.textContent = 'Stream unavailable';
+        if (status) status.textContent = 'Stream unavailable';
         playBtn.disabled = false;
         stopBtn.disabled = true;
         mapStreamAudio = null;
       };
       mapStreamAudio.onended = () => {
-        status.textContent = 'Ended';
+        if (status) status.textContent = 'Ended';
         playBtn.disabled = false;
         stopBtn.disabled = true;
         mapStreamAudio = null;
       };
       mapStreamAudio.play().catch(() => {
-        status.textContent = 'Tap Play again if blocked';
+        if (status) status.textContent = 'Tap Play again if blocked';
         playBtn.disabled = false;
         stopBtn.disabled = true;
       });
@@ -2960,14 +3005,19 @@ function renderRadioList() {
   const el = document.getElementById('radioList');
   if (!el) return;
   el.innerHTML = RADIO_STATIONS.map(s => `
-    <div class="vessel-row" onclick="pickStream('${s.url}')">
+    <div class="vessel-row" style="align-items:flex-start;">
       <div class="vessel-icon">📻</div>
-      <div class="vessel-info">
+      <div class="vessel-info" style="min-width:0;">
         <div class="vessel-name">${escapeHtml(s.name)}</div>
         <div class="vessel-meta"><span>${escapeHtml(s.kind)}</span></div>
+        ${s.desc ? `<div style="font-size:10px;color:var(--muted);line-height:1.45;margin-top:4px;">${escapeHtml(s.desc)}</div>` : ''}
+        <div class="stream-ctrl" style="margin-top:6px;">
+          <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(s.url)}">▶ Play</button>
+          <button type="button" class="stream-stop-btn" disabled>■ Stop</button>
+        </div>
       </div>
-      <div class="vessel-coord">▶</div>
     </div>`).join('');
+  wireRepeaterStreamControls(el);
 }
 
 // Learned/observed stops (places buses repeatedly dwell that aren't official).
