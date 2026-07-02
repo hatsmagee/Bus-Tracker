@@ -1118,6 +1118,9 @@ function initMap() {
   window.map = map; // expose for debugging / console tooling
   map.on('load', () => {
     mapReady = true;
+    // Register Twemoji marker images first (async), so any layer that needs
+    // them resolves quickly. ensureMarkerImages() is idempotent.
+    try { ensureMarkerImages(); } catch (e) {}
     try { initTerrainRelief(); } catch (e) { console.error('[map] terrain:', e); }
     try { initMapLayers(); } catch (e) { console.error('[map] layers:', e); }
     try { renderMarkers(); } catch (e) { console.error('[map] markers:', e); }
@@ -1317,13 +1320,12 @@ function initMapLayers() {
   map.addLayer({
     id: 'vessels-icon', type: 'symbol', source: 'vessels',
     layout: {
-      'text-field': '⛵',
-      'text-size': ['interpolate', ['linear'], ['zoom'], 8, 14, 12, 18, 15, 22],
-      'text-font': EMOJI_FONT,
-      'text-rotate': ['get', 'heading'],
-      'text-rotation-alignment': 'map',
-      'text-allow-overlap': true,
-      'text-ignore-placement': true,
+      'icon-image': 'marker-vessel',
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.7, 12, 0.9, 15, 1.1],
+      'icon-rotate': ['get', 'heading'],
+      'icon-rotation-alignment': 'map',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
     },
     paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
@@ -1353,9 +1355,13 @@ function initMapLayers() {
   map.addLayer({
     id: 'hibike-icon', type: 'symbol', source: 'hibike',
     layout: {
-      'text-field': ['concat', '🚲 ', ['get', 'bikes']],
+      'icon-image': 'marker-hibike', 'icon-anchor': 'left', 'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.6, 14, 0.8],
+      'text-field': ['get', 'bikes'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 10, 11, 14, 14],
       'text-font': EMOJI_FONT,
+      'text-anchor': 'left', 'text-offset': [1.3, 0],
       'text-allow-overlap': true,
       'text-ignore-placement': true,
     },
@@ -1513,9 +1519,12 @@ function initMapLayers() {
   map.addLayer({
     id: 'earthquakes-icon', type: 'symbol', source: 'earthquakes',
     layout: {
-      'text-field': ['concat', '🌎 M', ['to-string', ['get', 'mag']]],
+      'icon-image': 'marker-quake', 'icon-anchor': 'left', 'icon-allow-overlap': false,
+      'icon-size': ['interpolate', ['linear'], ['get', 'mag'], 1.5, 0.45, 3, 0.55, 5, 0.7, 7, 0.85],
+      'text-field': ['concat', 'M', ['to-string', ['get', 'mag']]],
       'text-size': ['interpolate', ['linear'], ['get', 'mag'], 1.5, 11, 3, 14, 5, 18, 7, 22],
       'text-font': EMOJI_FONT,
+      'text-anchor': 'left', 'text-offset': [1.4, 0],
       'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
     },
     paint: { 'text-color': ['interpolate', ['linear'], ['get', 'mag'], 1.5, '#fde047', 3, '#f97316', 5, '#dc2626'],
@@ -1609,13 +1618,17 @@ function initMapLayers() {
   map.addLayer({
     id: 'weather-stations-icon', type: 'symbol', source: 'weather-stations',
     layout: {
-      // Lead with a live sky-condition glyph (☀️/⛅/🌧️…) so the marker reads as
-      // a little weather icon, not a bare number. Falls back to 🌡️ when no
-      // description. Temperature follows in °C.
-      'text-field': ['concat', ['coalesce', ['get', 'wxIcon'], '🌡️'], ' ',
+      // Real Twemoji thermometer image + temperature text. Twemoji renders on
+      // every system; falls back to a sky-condition emoji inside the text
+      // for a richer reading (☀️/🌧️/⛅…) when one is reported.
+      'icon-image': 'marker-weather', 'icon-anchor': 'left', 'icon-allow-overlap': false,
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.55, 12, 0.7],
+      'text-field': ['concat',
+        ['coalesce', ['get', 'wxIcon'], ''], ' ',
         ['case', ['has', 'temperatureC'], ['concat', ['to-string', ['round', ['get', 'temperatureC']]], '°'], '']],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 12, 14],
       'text-font': EMOJI_FONT,
+      'text-anchor': 'left', 'text-offset': [1.4, 0],
       'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
     },
     paint: { 'text-color': '#0c4a6e', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
@@ -1739,9 +1752,12 @@ function initMapLayers() {
   map.addLayer({
     id: 'airquality-icon', type: 'symbol', source: 'airquality',
     layout: {
-      'text-field': ['concat', '🌫️ ', ['to-string', ['get', 'usAqi']]],
+      'icon-image': 'marker-aqi', 'icon-anchor': 'left', 'icon-allow-overlap': false,
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.55, 12, 0.7],
+      'text-field': ['to-string', ['get', 'usAqi']],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 12, 14],
       'text-font': EMOJI_FONT,
+      'text-anchor': 'left', 'text-offset': [1.4, 0],
       'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
     },
     paint: {
@@ -1769,9 +1785,12 @@ function initMapLayers() {
   map.addLayer({
     id: 'volcano-dot', type: 'symbol', source: 'volcano',
     layout: {
-      'text-field': ['case', ['==', ['get', 'kind'], 'alert'], ['concat', '🌋 ', ['get', 'badge']], '📷'],
+      'icon-image': 'marker-volcano', 'icon-anchor': 'left', 'icon-allow-overlap': false,
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.55, 12, 0.7],
+      'text-field': ['case', ['==', ['get', 'kind'], 'alert'], ['get', 'badge'], 'cam'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, ['case', ['==', ['get', 'kind'], 'alert'], 13, 10], 12, ['case', ['==', ['get', 'kind'], 'alert'], 16, 14]],
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-anchor': 'left', 'text-offset': [1.3, 0],
       'text-allow-overlap': false, 'text-optional': true, 'text-padding': 5,
     },
     paint: { 'text-color': ['match', ['get', 'color'], 'RED', '#dc2626', 'ORANGE', '#ea580c', 'YELLOW', '#ca8a04', '#6b7280'],
@@ -1800,9 +1819,12 @@ function initMapLayers() {
   map.addLayer({
     id: 'metars-dot', type: 'symbol', source: 'metars',
     layout: {
-      'text-field': ['concat', '🛩 ', ['get', 'icao']],
+      'icon-image': 'marker-metar', 'icon-anchor': 'left', 'icon-allow-overlap': false,
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.5, 12, 0.65],
+      'text-field': ['get', 'icao'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, 10, 12, 13],
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-anchor': 'left', 'text-offset': [1.3, 0],
       'text-allow-overlap': false, 'text-optional': true, 'text-padding': 5,
     },
     paint: { 'text-color': ['match', ['get', 'fltCat'], 'VFR', '#15803d', 'MVFR', '#1d4ed8', 'IFR', '#dc2626', 'LIFR', '#a21caf', '#6b7280'],
@@ -1845,6 +1867,9 @@ function initMapLayers() {
   map.addLayer({
     id: 'satellites-icon', type: 'symbol', source: 'satellites',
     layout: {
+      'icon-image': 'marker-satellite', 'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 3, 0.7, 8, 1.0],
       'text-field': ['get', 'emoji'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 3, 16, 8, 24],
       'text-font': EMOJI_FONT,
@@ -1875,9 +1900,9 @@ function initMapLayers() {
   map.addLayer({
     id: 'rainfall-icon', type: 'symbol', source: 'rainfall',
     layout: {
-      'text-field': ['concat',
-        ['case', ['>=', ['get', 'accum6hIn'], 1], '⛈️', ['>', ['get', 'accum6hIn'], 0.05], '🌧️', '☁️'],
-        ' ', ['to-string', ['get', 'accum6hIn']], '"'],
+      'icon-image': 'marker-rainfall', 'icon-anchor': 'left', 'icon-allow-overlap': false,
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.55, 12, 0.7],
+      'text-field': ['concat', ['to-string', ['get', 'accum6hIn']], '"'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 12, 14],
       'text-font': EMOJI_FONT,
       'text-allow-overlap': false, 'text-optional': true, 'text-padding': 5,
@@ -1905,11 +1930,14 @@ function initMapLayers() {
     minzoom: 9,
     layout: {
       visibility: 'none',
+      'icon-image': 'marker-place', 'icon-anchor': 'left', 'icon-allow-overlap': false,
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.65, 14, 0.9],
       'text-field': ['match', ['get', 'kind'],
         'wreck', '🚢', 'battle', '⚔️', 'heiau', '🗿', 'dock', '⚓', 'water', '💦',
         'historic', '🏛️', 'church', '⛪', 'observatory', '🔭', 'park', '🌲', '📍'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 9, 13, 14, 18],
       'text-font': EMOJI_FONT,
+      'text-anchor': 'left', 'text-offset': [1.3, 0],
       'text-allow-overlap': false, 'text-optional': true, 'text-padding': 6,
     },
     paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 },
@@ -1929,9 +1957,13 @@ function initMapLayers() {
   map.addLayer({
     id: 'meshtastic-icon', type: 'symbol', source: 'meshtastic',
     layout: {
-      'text-field': ['concat', '📶 ', ['get', 'badge']],
+      'icon-image': 'marker-meshtastic', 'icon-anchor': 'left', 'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.55, 13, 0.7],
+      'text-field': ['get', 'badge'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 13, 15],
       'text-font': EMOJI_FONT,
+      'text-anchor': 'left', 'text-offset': [1.3, 0],
       'text-allow-overlap': true, 'text-ignore-placement': true,
     },
     paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
@@ -1958,12 +1990,18 @@ function initMapLayers() {
   map.addLayer({
     id: 'repeaters-icon', type: 'symbol', source: 'repeaters',
     layout: {
-      'text-field': ['concat', ['get', 'icon'], ' ', ['get', 'callsign']],
+      // Real Twemoji image next to the callsign so it renders on every system
+      // (no missing-font text). Text is the callsign only, anchored to the
+      // right of the icon. Calm navy color instead of alarming red.
+      'icon-image': 'marker-repeater', 'icon-anchor': 'left', 'icon-allow-overlap': false,
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.5, 11, 0.6, 13, 0.7],
+      'text-field': ['get', 'callsign'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, 10, 11, 12, 13, 14],
       'text-font': EMOJI_FONT,
-      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 3,
+      'text-anchor': 'left', 'text-offset': [1.4, 0],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
     },
-    paint: { 'text-color': '#9a3412', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+    paint: { 'text-color': '#1e3a8a', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
   wireLayerHover('repeaters-icon', p => {
     const icon = p.icon || '📡';
@@ -2407,6 +2445,55 @@ function makeVesselChevronIcon() {
 // Aircraft triangle — points up (heading=0 = north). Filled triangle so it's
 // recognisably an aircraft silhouette and rotated to point along the true
 // track. White/yellow tinted by layer paint (icon-color).
+// Load beautiful Twemoji SVG icons (vendored in data/twemoji/) for every
+// map-marker kind, then register them as MapLibre `icon-image` sprites. Every
+// layer's callsign / value on the map gets a real, well-designed, always-
+// rendering Twemoji icon next to it — Twemoji renders identically on every
+// system (no missing emoji-font problem). Vendored (no CDN at runtime) so
+// this page can run behind firewalls and off the open internet.
+const TWEMOJI = {
+  repeater:  '1f4e1',   // 📡
+  weather:   '1f321',   // 🌡
+  quake:     '1f30d',   // 🌎
+  aqi:       '1f32b',   // 🌫
+  vessel:    '1f6a4',   // ⛴
+  hibike:    '1f6b2',   // 🚲
+  satellite: '1f6f0',   // 🛰
+  volcano:   '1f30b',   // 🌋
+  metar:     '2708',    // ✈
+  rainfall:  '1f327',   // 🌧
+  meshtastic:'1f4f6',   // 📶
+  place:     '1f3db',   // 🏛
+};
+const _iconReady = { p: null };
+function loadMarkerImage(kind) {
+  const codepoint = TWEMOJI[kind];
+  if (!codepoint) return Promise.resolve(null);
+  // Vendored Twemoji SVG (committed to data/twemoji/). Same-origin fetch so
+  // this works fully offline / behind firewalls. Rendered to ImageData via
+  // an <img> + canvas so MapLibre can use it as a sprite.
+  return new Promise((resolve) => {
+    const img = new Image(32, 32);
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = 32; c.height = 32;
+      const x = c.getContext('2d');
+      x.clearRect(0, 0, 32, 32);
+      x.drawImage(img, 0, 0, 32, 32);
+      try { map.addImage(`marker-${kind}`, x.getImageData(0, 0, 32, 32), { pixelRatio: 2 }); resolve(true); }
+      catch (e) { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = `/data/twemoji/${codepoint}.svg`;
+  });
+}
+function ensureMarkerImages() {
+  if (!map || !map.hasImage) return Promise.resolve();
+  if (_iconReady.p) return _iconReady.p;
+  _iconReady.p = Promise.all(Object.keys(TWEMOJI).map(loadMarkerImage));
+  return _iconReady.p;
+}
+
 function makeAircraftIcon() {
   const s = 48, c = document.createElement('canvas');
   c.width = s; c.height = s;
@@ -2570,7 +2657,8 @@ function renderHubMarkers() {
     map.addLayer({
       id: 'hubs-label', type: 'symbol', source: 'hubs', minzoom: 10,
       layout: { 'text-field': ['concat', '🚌 ', ['get', 'name']], 'text-size': 11, 'text-offset': [0, 1.2],
-                'text-anchor': 'top', 'text-font': ['Noto Sans Bold'] },
+                'text-anchor': 'top', 'text-font': ['Noto Sans Bold'],
+                'text-allow-overlap': false, 'text-optional': true, 'text-padding': 6 },
       paint: { 'text-color': '#0d1117', 'text-halo-color': '#fff', 'text-halo-width': 1.5 }
     });
     // Click → popup listing the routes that meet at this hub.
@@ -7247,6 +7335,35 @@ function deOverlapMarkers() {
         markers[c.id].marker.setOffset([Math.cos(ang) * R, Math.sin(ang) * R]);
         used.add(c.id);
       });
+    }
+  }
+
+  // Now declutter the OTHER DOM marker sets (streamflow wheels, wind turbines,
+  // solar suns) against each other. Each cluster gets fanned out into a tiny
+  // ring so the icons never visually pile on top of each other. Buses are
+  // skipped here — their dynamic motion places them before this pass anyway.
+  for (const dict of [Object.values(streamWheelMarkers || {}), Object.values(windTurbineMarkers || {}), Object.values(solarMarkers || {})]) {
+    if (!dict.length) continue;
+    const pts2 = dict.map(m => { const p = map.project(m.getLngLat()); return { m, x: p.x, y: p.y }; });
+    const used2 = new Set(); const THRESH2 = 30; // px
+    for (let i = 0; i < pts2.length; i++) {
+      if (used2.has(i)) continue;
+      const cluster = [i];
+      for (let j = i + 1; j < pts2.length; j++) {
+        if (used2.has(j)) continue;
+        if (Math.hypot(pts2[i].x - pts2[j].x, pts2[i].y - pts2[j].y) < THRESH2) cluster.push(j);
+      }
+      if (cluster.length === 1) {
+        pts2[i].m.setOffset([0, 0]);
+        used2.add(i);
+      } else {
+        const R2 = 18;
+        cluster.forEach((idx, k) => {
+          const ang = (2 * Math.PI * k) / cluster.length - Math.PI / 2;
+          pts2[idx].m.setOffset([Math.cos(ang) * R2, Math.sin(ang) * R2]);
+          used2.add(idx);
+        });
+      }
     }
   }
 }
