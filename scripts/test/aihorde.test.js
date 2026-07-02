@@ -23,6 +23,19 @@ module.exports = {
   'extractJson parses embedded json'() {
     assert.strictEqual(extractJson('noise {"c":3} more').c, 3);
   },
+  'extractJson strips trailing commas'() {
+    const o = extractJson('{"a":1,"b":[1,2,],}');
+    assert.deepStrictEqual(o, { a: 1, b: [1, 2] });
+  },
+  'extractJson repairs a truncated object'() {
+    const o = extractJson('{"title":"Keck","history":[{"year":1992,"text":"first light","source":"wiki"}');
+    assert.strictEqual(o.title, 'Keck');
+    assert.strictEqual(o.history[0].year, 1992);
+  },
+  'extractJson repairs a truncated string'() {
+    const o = extractJson('{"title":"Keck","summary":"a great');
+    assert.strictEqual(o.title, 'Keck');
+  },
   'extractJson throws on non-json'() {
     assert.throws(() => extractJson('no json here'));
   },

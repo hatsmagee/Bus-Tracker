@@ -2,7 +2,7 @@
 
 const { audit } = require('../audit-map-items');
 const { researchItem } = require('../lib/research-sources');
-const { generateText, extractJson, heartbeat } = require('../lib/aihorde');
+const { generateText, heartbeat } = require('../lib/aihorde');
 const { validateEntry } = require('../lib/map-items-schema');
 const { readJsonFile, writeJsonFile, emptyDoc } = require('../lib/map-items-schema');
 const { checkNoKeysGuard } = require('../lib/no-keys-guard');
@@ -17,52 +17,91 @@ function agentEnabled() {
   return process.env.AGENT_ENABLED === '1' || process.env.AGENT_ENABLED === 'true';
 }
 
-function buildPrompt(item, research) {
-  return `You are a factual research editor for a Hawaiʻi Island map encyclopedia.
-Use ONLY the SOURCE TEXT below. If sources are insufficient, respond with exactly: {"skip":true,"reason":"insufficient sources"}
-
-Output strict JSON only (no markdown fences):
-{
-  "title": "display name",
-  "summary": "1-2 sentences",
-  "history": [{"year": 1990, "text": "event", "source": "url or name"}],
-  "photos": [{"url": "https://...", "credit": "author — license", "caption": "..."}],
-  "links": [{"label": "...", "url": "..."}]
+// Split source text into clean sentences, dropping our "--- marker ---" lines.
+function sentencesOf(text) {
+  return String(text || '')
+    .replace(/---[^\n]*---/g, ' ')
+    .replace(/\s+/g, ' ')
+    .split(/(?<=[.!?])\s+(?=[A-Z0-9"'(])/)
+    .map(s => s.trim())
+    .filter(s => s.length > 25);
 }
 
-Rules:
-- Every history entry needs a real year and a source from the provided text/URLs.
-- Only include photos from the CANDIDATE PHOTOS list (do not invent URLs).
-- Do not fabricate facts, dates, or URLs.
-- Minimum 2 history entries if not skipping.
+// Deterministically build a history timeline from real, sourced sentences that
+// mention a year (1700–2099). No fabrication — every entry is a real sentence
+// from the researched sources, tagged with the best source URL. This is what
+// makes enrichment reliable without depending on a weak free-tier LLM.
+function deriveHistory(research) {
+  const src = research.sources[0] || (research.resolvedTitle
+    ? `https://en.wikipedia.org/wiki/${encodeURIComponent(research.resolvedTitle.replace(/ /g, '_'))}`
+    : '');
+  const seenYears = new Set();
+  const out = [];
+  for (const sentence of sentencesOf(research.sourceText)) {
+    const m = sentence.match(/\b(1[789]\d\d|20\d\d)\b/);
+    if (!m) continue;
+    const year = parseInt(m[1], 10);
+    if (year < 1700 || year > new Date().getFullYear() + 1) continue;
+    if (seenYears.has(year)) continue;
+    seenYears.add(year);
+    const text = sentence.length > 240 ? sentence.slice(0, 237).trimEnd() + '…' : sentence;
+    out.push({ year, text, source: src });
+    if (out.length >= 6) break;
+  }
+  return out.sort((a, b) => a.year - b.year);
+}
 
-ITEM KEY: ${item.key}
-ITEM TITLE: ${item.title}
+// A concise summary from the Wikipedia extract (first 1–2 sentences), falling
+// back to the first substantive sentence of any source.
+function deriveSummary(research) {
+  const wiki = research.sourceText.match(/--- Wikipedia:[^\n]*---\n([\s\S]*?)(?:\n\n---|$)/);
+  const base = wiki ? wiki[1] : research.sourceText;
+  const sents = sentencesOf(base);
+  let summary = '';
+  for (const s of sents) {
+    summary = summary ? `${summary} ${s}` : s;
+    if (summary.length > 80) break;
+  }
+  return summary.length > 320 ? summary.slice(0, 317).trimEnd() + '…' : summary;
+}
 
-SOURCE URLS:
-${research.sources.join('\n')}
-
-SOURCE TEXT:
-${research.sourceText.slice(0, 9000)}
-
-CANDIDATE PHOTOS:
-${JSON.stringify(research.candidatePhotos, null, 2)}
-`;
+// Optional LLM polish for the summary only (a short, easy task). Best-effort:
+// any failure falls back to the deterministic summary. Kept tiny to fit the
+// keyless AI Horde budget.
+async function polishSummary(item, research, fallback) {
+  try {
+    const prompt = `In ONE factual sentence, summarize "${item.title}" using only this text. No preamble.\n\n${research.sourceText.slice(0, 1200)}`;
+    const { text } = await generateText(prompt, { maxLength: 120 });
+    const line = String(text || '').replace(/\s+/g, ' ').trim().replace(/^["']|["']$/g, '');
+    if (line.length > 40 && line.length < 400) return line;
+  } catch { /* fall back */ }
+  return fallback;
 }
 
 async function synthesizeEntry(item, research) {
-  const { text, model } = await generateText(buildPrompt(item, research), { maxLength: 1200 });
-  const parsed = extractJson(text);
-  if (parsed.skip) return { skip: true, reason: parsed.reason || 'insufficient sources' };
+  const history = deriveHistory(research);
+  if (history.length < 2) {
+    return { skip: true, reason: `only ${history.length} dated events found in sources` };
+  }
+
+  let summary = deriveSummary(research);
+  let model = 'deterministic';
+  // Only spend an LLM call to improve the summary when a key is configured
+  // (anonymous generation is slow); otherwise the extract-based summary is used.
+  if (process.env.AIHORDE_API_KEY) {
+    const polished = await polishSummary(item, research, summary);
+    if (polished !== summary) { summary = polished; model = 'aihorde+extract'; }
+  }
+  if (!summary) summary = `${item.title} — see sources for details.`;
 
   const entry = {
-    title: parsed.title || item.title,
-    summary: parsed.summary || '',
-    history: Array.isArray(parsed.history) ? parsed.history : [],
-    photos: Array.isArray(parsed.photos) ? parsed.photos : research.candidatePhotos.map(p => ({
+    title: research.resolvedTitle || item.title,
+    summary,
+    history,
+    photos: (research.candidatePhotos || []).slice(0, 3).map(p => ({
       url: p.url, credit: p.credit, caption: p.caption || item.title,
     })),
-    links: Array.isArray(parsed.links) ? parsed.links : research.sources.slice(0, 3).map(u => ({ label: 'Source', url: u })),
+    links: research.sources.slice(0, 4).map(u => ({ label: 'Source', url: u })),
     provenance: {
       sources: research.sources,
       model,
@@ -74,7 +113,6 @@ async function synthesizeEntry(item, research) {
 
   const errs = validateEntry(item.key, entry);
   if (errs.length) throw new Error(`validation: ${errs.join('; ')}`);
-  if (entry.history.length < 2) throw new Error('validation: fewer than 2 history entries');
   return { entry };
 }
 
@@ -97,8 +135,10 @@ async function runResearchCycle({ budget = BUDGET, force = false } = {}) {
     return { ok: false, error: `AI Horde unavailable: ${hb.error}` };
   }
 
+  // audit() returns { report, queue } where `queue` is an ARRAY of work items.
   const { queue } = audit();
-  const work = (queue.items || []).slice(0, budget);
+  const queueItems = Array.isArray(queue) ? queue : (queue.items || []);
+  const work = queueItems.slice(0, budget);
   if (!work.length) {
     state.lastResearchAt = new Date().toISOString();
     saveState(state);
@@ -136,7 +176,7 @@ async function runResearchCycle({ budget = BUDGET, force = false } = {}) {
   state.lastTopic = results.length ? results[results.length - 1] : state.lastTopic;
   saveState(state);
 
-  return { ok: true, enriched: results.length, keys: results, queueRemaining: Math.max(0, (queue.items || []).length - work.length) };
+  return { ok: true, enriched: results.length, keys: results, queueRemaining: Math.max(0, queueItems.length - work.length) };
 }
 
 if (require.main === module) {

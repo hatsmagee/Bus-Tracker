@@ -85,13 +85,18 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-async function generateText(prompt, { model, maxLength = 800, temperature = 0.4 } = {}) {
+async function generateText(prompt, { model, maxLength = 512, temperature = 0.4, maxContext } = {}) {
   const chosen = model || await pickModel();
+  // AI Horde charges kudos up-front scaled by max_context_length; anonymous
+  // (keyless) clients are rejected (403 KudosUpfront) for large requests. With a
+  // key you can afford more. Keep the default small so keyless research works.
+  const hasKey = !!process.env.AIHORDE_API_KEY;
+  const ctx = maxContext || (hasKey ? 4096 : 1024);
   const submit = await req('POST', '/generate/text/async', {
     prompt,
     models: [chosen],
     params: {
-      max_context_length: 4096,
+      max_context_length: ctx,
       max_length: maxLength,
       temperature,
       top_p: 0.9,
@@ -99,7 +104,7 @@ async function generateText(prompt, { model, maxLength = 800, temperature = 0.4 
       n: 1,
     },
     trusted_workers: true,
-    slow_workers: false,
+    slow_workers: true,
   });
   const jobId = submit.id;
   if (!jobId) throw new Error(`horde: no job id: ${JSON.stringify(submit).slice(0, 200)}`);
@@ -122,18 +127,70 @@ async function generateText(prompt, { model, maxLength = 800, temperature = 0.4 
   throw new Error(`horde: job ${jobId} timed out after ${TIMEOUT_MS}ms`);
 }
 
+// Best-effort trailing-comma cleanup + truncation repair so we can recover a
+// usable object from a weak/truncated model response (common on the free tier).
+function repairJson(s) {
+  let t = s.replace(/,\s*([}\]])/g, '$1');
+  // If brackets are unbalanced (truncated output), close them in order.
+  const stack = [];
+  let inStr = false, esc = false;
+  for (const ch of t) {
+    if (esc) { esc = false; continue; }
+    if (ch === '\\') { esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{' || ch === '[') stack.push(ch);
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+  if (inStr) t += '"';
+  // Drop a dangling `"key":` or trailing comma before closing.
+  t = t.replace(/,\s*$/, '').replace(/"\s*[\w-]*"?\s*:\s*$/, '').replace(/,\s*$/, '');
+  while (stack.length) {
+    const open = stack.pop();
+    t += open === '{' ? '}' : ']';
+  }
+  return t;
+}
+
+// Return the first balanced {...} object substring starting at `from`, or null.
+// Handles trailing prose after valid JSON (common: model emits JSON then adds a
+// "Correction:" note).
+function firstBalancedObject(s, from = 0) {
+  const start = s.indexOf('{', from);
+  if (start < 0) return null;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i];
+    if (esc) { esc = false; continue; }
+    if (ch === '\\') { esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') { depth--; if (depth === 0) return s.slice(start, i + 1); }
+  }
+  return s.slice(start); // unbalanced/truncated — let repairJson finish it
+}
+
 function extractJson(text) {
   const raw = String(text || '').trim();
   const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   const candidate = fence ? fence[1].trim() : raw;
-  try {
-    return JSON.parse(candidate);
-  } catch {
-    const start = candidate.indexOf('{');
-    const end = candidate.lastIndexOf('}');
-    if (start >= 0 && end > start) return JSON.parse(candidate.slice(start, end + 1));
-    throw new Error('horde: could not parse JSON from model output');
+  const tryParse = s => { try { return JSON.parse(s); } catch { return undefined; } };
+
+  let out = tryParse(candidate);
+  if (out !== undefined) return out;
+
+  const balanced = firstBalancedObject(candidate);
+  if (balanced != null) {
+    out = tryParse(balanced);
+    if (out !== undefined) return out;
+    out = tryParse(repairJson(balanced));
+    if (out !== undefined) return out;
   }
+  out = tryParse(repairJson(candidate));
+  if (out !== undefined) return out;
+
+  throw new Error(`horde: could not parse JSON from model output: ${raw.slice(0, 240).replace(/\s+/g, ' ')}`);
 }
 
 module.exports = {

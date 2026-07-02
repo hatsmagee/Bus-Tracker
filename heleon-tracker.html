@@ -3540,7 +3540,9 @@ function ensureAgentRobot() {
   if (agentRobotMarker || !mapReady || typeof maplibregl === 'undefined') return;
   const el = document.createElement('div');
   el.textContent = '🤖';
-  el.style.cssText = 'font-size:26px;cursor:pointer;line-height:1;filter:drop-shadow(0 0 5px rgba(88,166,255,.9));transition:transform .5s ease,opacity .5s;';
+  // Small head; a subtle glow + slow pulse so it reads as "working" without
+  // dominating the map. Hidden by default until it has a real place to be.
+  el.style.cssText = 'font-size:15px;cursor:pointer;line-height:1;display:none;filter:drop-shadow(0 0 3px rgba(88,166,255,.9));transition:opacity .4s ease;';
   el.title = '🤖 Research robot';
   el.onclick = () => { switchTab('agent'); if (agentRobotMarker) map.flyTo({ center: agentRobotMarker.getLngLat(), zoom: Math.max(map.getZoom(), 9) }); };
   agentRobotMarker = new maplibregl.Marker({ element: el, anchor: 'center' })
@@ -3552,14 +3554,23 @@ async function refreshAgentRobot() {
   try { s = await (await fetch('/api/agent/status')).json(); } catch { return; }
   ensureAgentRobot();
   if (!agentRobotMarker) return;
-  const cur = s.current || { activity: 'idle', text: '' };
-  const coord = resolveLoreKeyCoord(cur.key);
-  if (coord) { agentRobotState.lon = coord[0]; agentRobotState.lat = coord[1]; agentRobotMarker.setLngLat(coord); }
+  const cur = s.current || { activity: 'idle', text: '', coord: null };
   const el = agentRobotMarker.getElement();
-  const working = s.runInFlight || (cur.activity && cur.activity !== 'idle');
-  el.style.opacity = working ? '1' : '0.4';
-  el.style.transform = working ? 'scale(1.2)' : 'scale(0.85)';
-  el.title = '🤖 ' + (cur.text || (s.enabled ? 'Idle — waiting for work' : 'Agent disabled'));
+  // Trust the server's on-island coord for the item it's actually researching.
+  // No coord (idle, off-island buoy, satellite, category) → hide the robot so it
+  // never darts to random or off-map spots.
+  const coord = Array.isArray(cur.coord) ? cur.coord : null;
+  const working = s.runInFlight && cur.activity === 'researching';
+  if (coord && working) {
+    agentRobotState.lon = coord[0]; agentRobotState.lat = coord[1];
+    agentRobotMarker.setLngLat(coord);
+    el.style.display = 'block';
+    el.style.opacity = '1';
+    el.title = '🤖 ' + (cur.text || 'Researching…');
+  } else {
+    el.style.opacity = '0';
+    setTimeout(() => { if (el.style.opacity === '0') el.style.display = 'none'; }, 400);
+  }
 }
 
 async function refreshAgentWork() {

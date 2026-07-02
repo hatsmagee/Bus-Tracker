@@ -33,3 +33,8 @@ data/infrastructure-cache.json
 data/local-cache.json
 data/meshtastic-nodes.json
 .agent-tmp/
+
+# Agent working state — staged candidates before a gated publish merges them
+# into data/map-items.json (the published source of truth). Never committed.
+data/map-items.staged.json
+data/map-items.bootcheck.json

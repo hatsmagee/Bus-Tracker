@@ -78,6 +78,19 @@ async function jinaRead(url) {
   return text.slice(0, 12000);
 }
 
+// Full-text Wikipedia search — resolves a loose query (e.g. "CFHT Maunakea") to
+// the best-matching real article title. The plain REST summary endpoint needs an
+// exact title, so this is what makes research actually find pages.
+async function wikiSearch(query) {
+  const params = new URLSearchParams({
+    action: 'query', list: 'search', srsearch: query,
+    srlimit: '5', format: 'json', origin: '*',
+  });
+  const text = await fetchText(`https://en.wikipedia.org/w/api.php?${params}`);
+  const j = JSON.parse(text);
+  return ((j.query && j.query.search) || []).map(s => s.title);
+}
+
 async function wikiSummary(title) {
   const slug = encodeURIComponent(String(title).replace(/ /g, '_'));
   const text = await fetchText(`https://en.wikipedia.org/api/rest_v1/page/summary/${slug}`);
@@ -88,6 +101,19 @@ async function wikiSummary(title) {
     url: j.content_urls && j.content_urls.desktop && j.content_urls.desktop.page,
     thumbnail: j.thumbnail && j.thumbnail.source,
   };
+}
+
+// Plain-text intro extract for a known article title — the main source text.
+async function wikiExtract(title) {
+  const params = new URLSearchParams({
+    action: 'query', prop: 'extracts', exintro: '1', explaintext: '1',
+    redirects: '1', titles: title, format: 'json', origin: '*',
+  });
+  const text = await fetchText(`https://en.wikipedia.org/w/api.php?${params}`);
+  const j = JSON.parse(text);
+  const pages = (j.query && j.query.pages) ? Object.values(j.query.pages) : [];
+  const page = pages.find(p => p.extract);
+  return page ? { title: page.title, extract: page.extract } : null;
 }
 
 async function commonsImage(searchTerm) {
@@ -126,34 +152,65 @@ async function commonsImage(searchTerm) {
 async function researchItem(item) {
   const query = item.researchQuery || item.title || item.name;
   const sources = [];
+  const photos = [];
   let sourceText = '';
+  let resolvedTitle = null;
 
-  const hits = await ddgSearch(`${query} Hawaii history`);
-  for (const h of hits.slice(0, 4)) {
-    sources.push(h.url);
-    try {
-      const body = await jinaRead(h.url);
-      sourceText += `\n\n--- ${h.title} (${h.url}) ---\n${body.slice(0, 3000)}`;
-    } catch {
-      if (h.snippet) sourceText += `\n\n--- ${h.title} ---\n${h.snippet}`;
-    }
-  }
-
+  // 1) Wikipedia is the reliable, keyless backbone: search resolves the loose
+  //    query to a real article, then we pull its intro extract + summary.
   try {
-    const w = await wikiSummary(query);
-    if (w.extract) {
-      sourceText += `\n\n--- Wikipedia: ${w.title} ---\n${w.extract}`;
-      if (w.url) sources.push(w.url);
+    const titles = await wikiSearch(query);
+    for (const title of titles.slice(0, 2)) {
+      const ex = await wikiExtract(title).catch(() => null);
+      if (ex && ex.extract && ex.extract.length > 120) {
+        if (!resolvedTitle) resolvedTitle = ex.title;
+        sourceText += `\n\n--- Wikipedia: ${ex.title} ---\n${ex.extract}`;
+        try {
+          const sum = await wikiSummary(ex.title);
+          if (sum.url) sources.push(sum.url);
+          if (sum.thumbnail) photos.push({
+            url: sum.thumbnail,
+            credit: `Wikipedia — ${ex.title} (CC/PD)`,
+            caption: ex.title,
+          });
+        } catch {
+          sources.push(`https://en.wikipedia.org/wiki/${encodeURIComponent(ex.title.replace(/ /g, '_'))}`);
+        }
+      }
     }
   } catch {}
 
-  const photo = await commonsImage(query).catch(() => null);
+  // 2) DuckDuckGo instant answers as a supplementary source (best-effort; its
+  //    Instant Answer API is sparse, so we never depend on it).
+  try {
+    const hits = await ddgSearch(`${query} Hawaii history`);
+    for (const h of hits.slice(0, 3)) {
+      if (!h.url) continue;
+      sources.push(h.url);
+      try {
+        const body = await jinaRead(h.url);
+        sourceText += `\n\n--- ${h.title} (${h.url}) ---\n${body.slice(0, 2500)}`;
+      } catch {
+        if (h.snippet) sourceText += `\n\n--- ${h.title} ---\n${h.snippet}`;
+      }
+    }
+  } catch {}
+
+  // 3) A license-safe Commons photo, seeded with the resolved article title for
+  //    a better match than the raw query.
+  const photo = await commonsImage(resolvedTitle || query).catch(() => null);
+  if (photo) photos.push(photo);
+
+  // De-dupe photos by url.
+  const seen = new Set();
+  const candidatePhotos = photos.filter(p => p && p.url && !seen.has(p.url) && seen.add(p.url));
 
   return {
     query,
+    resolvedTitle,
     sourceText: sourceText.trim(),
     sources: [...new Set(sources.filter(Boolean))],
-    candidatePhotos: photo ? [photo] : [],
+    candidatePhotos,
   };
 }
 
@@ -162,7 +219,9 @@ module.exports = {
   headUrl,
   ddgSearch,
   jinaRead,
+  wikiSearch,
   wikiSummary,
+  wikiExtract,
   commonsImage,
   researchItem,
 };

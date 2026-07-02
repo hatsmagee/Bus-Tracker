@@ -134,23 +134,40 @@ function loadAgentLogTail() {
   }
   if (agentLog.length > AGENT_LOG_MAX) agentLog.splice(0, agentLog.length - AGENT_LOG_MAX);
 }
+// Resolve a catalog key to on-island [lon,lat] for the roaming robot. Static
+// coords first, then the server's REFERENCE data for hub:/pnr:/airport: keys.
+const itemCoords = require('./scripts/lib/item-coords');
+function agentItemCoord(key) {
+  return itemCoords.coordFor(key, k => {
+    if (!k || k.indexOf(':') < 0) return null;
+    const cat = k.slice(0, k.indexOf(':'));
+    const name = k.slice(k.indexOf(':') + 1);
+    let s = null;
+    if (cat === 'hub') s = (REFERENCE.hubs || []).find(x => x.name === name);
+    else if (cat === 'pnr') s = (REFERENCE.parkAndRide || []).find(x => x.name === name);
+    else if (cat === 'airport') s = (REFERENCE.airports || []).find(x => x.name === name);
+    return s && s.lon != null && s.lat != null ? [s.lon, s.lat] : null;
+  });
+}
+
 // What the agent is doing right now — surfaced so the dashboard robot can hover
-// over the item it's working on and show a live status.
-let agentCurrent = { key: null, activity: 'idle', text: '', ts: null };
+// over the item it's working on and show a live status. `coord` is the on-island
+// point for the current key (null when unknown/off-island → robot hides).
+let agentCurrent = { key: null, activity: 'idle', text: '', coord: null, ts: null };
 function agentParseActivity(text) {
   let m;
   if ((m = text.match(/researching\s+(\S+)\s*\(([^)]*)\)/))) {
-    agentCurrent = { key: m[1], activity: 'researching', text: `Researching ${m[1]} (${m[2]})`, ts: Date.now() };
+    agentCurrent = { key: m[1], activity: 'researching', text: `Researching ${m[1]} (${m[2]})`, coord: agentItemCoord(m[1]), ts: Date.now() };
   } else if ((m = text.match(/skip\s+(\S+):\s*(.*)/))) {
-    agentCurrent = { key: m[1], activity: 'skipped', text: `Skipped ${m[1]}: ${m[2]}`, ts: Date.now() };
+    agentCurrent = { key: m[1], activity: 'skipped', text: `Skipped ${m[1]}: ${m[2]}`, coord: agentItemCoord(m[1]), ts: Date.now() };
   } else if (/\[smoke\]/.test(text)) {
-    agentCurrent = { key: agentCurrent.key, activity: 'testing', text: text.trim(), ts: Date.now() };
+    agentCurrent = { key: agentCurrent.key, activity: 'testing', text: text.trim(), coord: agentCurrent.coord, ts: Date.now() };
   } else if (/merged PR|publish\]/.test(text)) {
-    agentCurrent = { key: null, activity: 'publishing', text: text.trim(), ts: Date.now() };
+    agentCurrent = { key: null, activity: 'publishing', text: text.trim(), coord: null, ts: Date.now() };
   } else if (/run started/.test(text)) {
-    agentCurrent = { key: null, activity: 'starting', text: text.trim(), ts: Date.now() };
+    agentCurrent = { key: null, activity: 'starting', text: text.trim(), coord: null, ts: Date.now() };
   } else if (/run finished/.test(text)) {
-    agentCurrent = { key: null, activity: 'idle', text: text.trim(), ts: Date.now() };
+    agentCurrent = { key: null, activity: 'idle', text: text.trim(), coord: null, ts: Date.now() };
   }
 }
 function agentLogPush(line, level = 'info') {
@@ -2436,6 +2453,86 @@ async function handleApi(url, res, req) {
     } catch {
       return json(res, { items: {} });
     }
+  }
+
+  // Deep health probe — everything you need to see how the agent is doing and
+  // WHY (queue breakdown, recent failures with messages, config, staged work).
+  // Add ?probe=1 to also run live checks: AI Horde heartbeat + a real research
+  // fetch on the first queued item (does the free web actually return sources?).
+  if (p === '/api/agent/diagnostics') {
+    const out = { ts: Date.now(), enabled: AGENT_ENABLED, runInFlight: agentRunInFlight, current: agentCurrent };
+    try {
+      const agentState = require('./scripts/lib/agent-state');
+      const state = agentState.loadState();
+      const queue = agentState.loadQueue();
+      const items = queue.items || [];
+      const byReason = {}, byCategory = {};
+      for (const it of items) {
+        byReason[it.reason || 'unknown'] = (byReason[it.reason || 'unknown'] || 0) + 1;
+        const cat = String(it.key || '').split(':')[0] || 'unknown';
+        byCategory[cat] = (byCategory[cat] || 0) + 1;
+      }
+      out.state = {
+        circuitOpen: state.circuitOpen,
+        circuitOpenedAt: state.circuitOpenedAt,
+        failureCount: (state.failures || []).length,
+        failuresLastHour: (state.failures || []).map(ts => new Date(ts).toISOString()),
+        lastError: state.lastError,
+        lastResearchAt: state.lastResearchAt,
+        lastPublishAt: state.lastPublishAt,
+        lastPrNumber: state.lastPrNumber,
+        lastTopic: state.lastTopic,
+        enrichedToday: state.enrichedToday,
+      };
+      out.queue = {
+        size: items.length,
+        updatedAt: queue.updatedAt,
+        byReason,
+        byCategory,
+        next: items.slice(0, 5).map(i => ({ key: i.key, title: i.title, reason: i.reason, coord: agentItemCoord(i.key) })),
+      };
+    } catch (e) { out.stateError = e.message; }
+    try {
+      const staged = JSON.parse(fs.readFileSync(MAP_ITEMS_STAGED_PATH, 'utf8'));
+      out.staged = { count: Object.keys(staged.items || {}).length, keys: Object.keys(staged.items || {}) };
+    } catch { out.staged = { count: 0, keys: [] }; }
+    out.config = {
+      autoPublish: AGENT_AUTO_PUBLISH,
+      researchIntervalMs: AGENT_RESEARCH_INTERVAL,
+      itemBudget: parseInt(process.env.AGENT_ITEM_BUDGET || '3', 10),
+      staleDays: parseInt(process.env.AGENT_STALE_DAYS || '90', 10),
+      aihordeKey: process.env.AIHORDE_API_KEY ? 'set' : 'anonymous',
+      githubConfigured: !!(process.env.AGENT_GITHUB_TOKEN && process.env.AGENT_GITHUB_REPO),
+      deployHook: process.env.RENDER_DEPLOY_HOOK ? 'set' : 'unset',
+    };
+    if (url.searchParams.get('probe') === '1') {
+      out.probe = {};
+      try {
+        const { heartbeat } = require('./scripts/lib/aihorde');
+        const hb = await heartbeat();
+        out.probe.aihorde = hb.ok ? { ok: true } : { ok: false, error: hb.error };
+      } catch (e) { out.probe.aihorde = { ok: false, error: e.message }; }
+      try {
+        const agentState = require('./scripts/lib/agent-state');
+        const items = (agentState.loadQueue().items) || [];
+        const target = items[0];
+        if (target) {
+          const { researchItem } = require('./scripts/lib/research-sources');
+          const r = await researchItem(target);
+          out.probe.research = {
+            item: target.key,
+            query: r.query,
+            sources: r.sources.length,
+            sourceTextChars: (r.sourceText || '').length,
+            candidatePhotos: r.candidatePhotos.length,
+            sampleSources: r.sources.slice(0, 3),
+          };
+        } else {
+          out.probe.research = { note: 'queue empty' };
+        }
+      } catch (e) { out.probe.research = { ok: false, error: e.message }; }
+    }
+    return json(res, out);
   }
 
   if (p === '/api/agent/run' && req && req.method === 'POST') {
