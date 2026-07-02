@@ -2974,6 +2974,29 @@ async function handleApi(url, res) {
     return json(res, { ts: now, lastRxTs: aprsLastRxTs, lastError: aprsLastError, count: list.length, stations: list });
   }
 
+  // ── VOLCANO (USGS HVO alert levels + live webcams, keyless) ───────────────
+  if (p === '/api/volcano') {
+    return json(res, { ts: Date.now(), lastPollTs: volcanoLastPollTs, lastError: volcanoLastError,
+      alerts: volcanoCache.alerts, webcams: volcanoCache.webcams });
+  }
+
+  // ── AVIATION METARs (airports + Bradshaw AAF military field, keyless) ─────
+  if (p === '/api/metars') {
+    return json(res, { ts: Date.now(), lastPollTs: metarLastPollTs, lastError: metarLastError, metars: metarCache });
+  }
+
+  // ── MESHTASTIC / LoRa mesh nodes (keyless) ────────────────────────────────
+  if (p === '/api/meshtastic') {
+    return json(res, { ts: Date.now(), lastPollTs: meshtasticLastPollTs, lastError: meshtasticLastError,
+      count: meshtasticCache.length, nodes: meshtasticCache });
+  }
+
+  // ── HAM REPEATERS (hearham.com, keyless) ──────────────────────────────────
+  if (p === '/api/repeaters') {
+    return json(res, { ts: Date.now(), lastPollTs: repeaterLastPollTs, lastError: repeaterLastError,
+      count: repeaterCache.length, repeaters: repeaterCache });
+  }
+
   // ── AIR QUALITY / VOG (Open-Meteo, keyless) ───────────────────────────────
   if (p === '/api/air-quality') {
     return json(res, { ts: Date.now(), lastPollTs: airQualityLastPollTs, lastError: airQualityLastError, points: airQualityCache });
@@ -3720,9 +3743,33 @@ async function pollOcean() {
         `/api/prod/datagetter?date=latest&station=${s.id}&product=water_level&datum=MLLW&units=english&time_zone=lst_ldt&format=json`,
         { 'User-Agent': 'heleon-tracker' });
       const d = j.data && j.data[0];
-      if (d) next.push({ kind: 'tide', id: s.id, name: s.name, lat: s.lat, lon: s.lon, readings: { waterLevelFt: parseFloat(d.v), at: d.t } });
+      const readings = { waterLevelFt: parseFloat(d && d.v), at: d && d.t };
+      // Next high/low tide predictions round out the tide card.
+      try {
+        const pj = await fetchJson('api.tidesandcurrents.noaa.gov',
+          `/api/prod/datagetter?date=today&station=${s.id}&product=predictions&datum=MLLW&units=english&time_zone=lst_ldt&interval=hilo&format=json`,
+          { 'User-Agent': 'heleon-tracker' });
+        if (pj.predictions) readings.tides = pj.predictions.map(t => ({ t: t.t, ft: parseFloat(t.v), type: t.type }));
+      } catch { /* predictions are a bonus */ }
+      if (d) next.push({ kind: 'tide', id: s.id, name: s.name, lat: s.lat, lon: s.lon, readings });
     } catch (e) { /* skip */ }
   }));
+  // DART tsunami buoy 51407 — deep-ocean pressure sensor 34 NM west of Kona.
+  // The .dart file's HEIGHT column is water-column height in meters; a sudden
+  // deviation is how the Pacific Tsunami Warning Center sees a tsunami coming.
+  try {
+    const t = await fetchText('www.ndbc.noaa.gov', '/data/realtime2/51407.dart', { 'User-Agent': 'heleon-tracker' });
+    const rows = t.split('\n').filter(l => l && !l.startsWith('#'));
+    if (rows.length) {
+      const c = rows[0].trim().split(/\s+/); // YY MM DD hh mm ss T HEIGHT
+      const heightM = parseFloat(c[7]);
+      if (Number.isFinite(heightM)) {
+        next.push({ kind: 'dart', id: '51407', name: 'DART 51407 tsunami buoy — 34 NM W of Kona',
+          lat: 19.53, lon: -156.601,
+          readings: { waterColumnM: heightM, at: `${c[0]}-${c[1]}-${c[2]} ${c[3]}:${c[4]} UTC` } });
+      }
+    }
+  } catch (e) { /* skip */ }
   if (next.length) { oceanCache = next; oceanLastPollTs = Date.now(); oceanLastError = null; }
   else oceanLastError = 'no ocean stations reporting';
 }
@@ -3838,6 +3885,131 @@ async function pollAirQuality() {
   } catch (e) { airQualityLastError = e.message; }
 }
 
+// ─── VOLCANO (USGS HVO HANS API + live webcams, keyless) ─────────────────────
+// Live alert level/color code for Kīlauea & Mauna Loa from the official USGS
+// Hazard Alert Notification System, plus the HVO webcam network — each cam is
+// a public-domain JPEG that USGS refreshes continuously, so the map can show
+// what the volcano looks like RIGHT NOW. All keyless.
+const HVO_WEBCAMS = [
+  { id: 'KWcam',  name: 'Halemaʻumaʻu crater (west rim)',        lat: 19.4055, lon: -155.2876 },
+  { id: 'V1cam',  name: 'Kīlauea — west Halemaʻumaʻu (PTZ)',      lat: 19.4073, lon: -155.2884 },
+  { id: 'V2cam',  name: 'Kīlauea — east Halemaʻumaʻu (PTZ)',      lat: 19.4090, lon: -155.2815 },
+  { id: 'V3cam',  name: 'Kīlauea — south Halemaʻumaʻu (PTZ)',     lat: 19.4008, lon: -155.2843 },
+  { id: 'KOcam',  name: 'Kīlauea upper East Rift Zone (Maunaulu)', lat: 19.3672, lon: -155.2035 },
+  { id: 'MKcam',  name: 'Mauna Loa summit & NE Rift (from Mauna Kea)', lat: 19.8228, lon: -155.4749 },
+  { id: 'MSPcam', name: 'Mauna Loa SW Rift Zone (from South Point)',   lat: 18.9643, lon: -155.6754 },
+  { id: 'HLcam',  name: 'Mauna Loa NW flank (from Hualālai)',     lat: 19.6890, lon: -155.8645 },
+];
+const hvoWebcamUrl = id => `https://volcanoes.usgs.gov/cams/${id}/images/M.jpg`;
+let volcanoCache = { alerts: [], webcams: HVO_WEBCAMS.map(c => ({ ...c, imageUrl: hvoWebcamUrl(c.id) })) };
+let volcanoLastPollTs = null, volcanoLastError = null;
+async function pollVolcano() {
+  try {
+    const j = await fetchJson('volcanoes.usgs.gov', '/hans-public/api/volcano/getElevatedVolcanoes',
+      { 'User-Agent': 'heleon-tracker' });
+    // Big Island volcano coordinates for placing the alert badge.
+    const VOLC_COORDS = {
+      'Kilauea': { lat: 19.421, lon: -155.287 },
+      'Mauna Loa': { lat: 19.475, lon: -155.608 },
+      'Hualalai': { lat: 19.692, lon: -155.87 },
+      'Mauna Kea': { lat: 19.821, lon: -155.468 },
+    };
+    const alerts = (Array.isArray(j) ? j : [])
+      .filter(v => v.obs_abbr === 'hvo' && VOLC_COORDS[v.volcano_name])
+      .map(v => ({
+        volcano: v.volcano_name,
+        colorCode: v.color_code, alertLevel: v.alert_level,
+        sentUtc: v.sent_utc, noticeUrl: v.notice_url,
+        ...VOLC_COORDS[v.volcano_name],
+      }));
+    volcanoCache.alerts = alerts;
+    volcanoLastPollTs = Date.now(); volcanoLastError = null;
+  } catch (e) { volcanoLastError = e.message; }
+}
+
+// ─── AVIATION METARs (aviationweather.gov, keyless) ───────────────────────────
+// Live observed weather at every Big Island airfield — including Bradshaw Army
+// Airfield (PHSF) inside the Pōhakuloa Training Area, the one public real-time
+// data stream that comes off the military base. Flight category (VFR/IFR),
+// wind, temp, visibility, raw METAR.
+const METAR_FIELDS = [
+  { icao: 'PHTO', name: 'Hilo International', military: false },
+  { icao: 'PHKO', name: 'Kona International (Ellison Onizuka)', military: false },
+  { icao: 'PHSF', name: 'Bradshaw Army Airfield (Pōhakuloa)', military: true },
+  { icao: 'PHUP', name: 'Upolu Airport', military: false },
+];
+let metarCache = [];
+let metarLastPollTs = null, metarLastError = null;
+async function pollMetars() {
+  try {
+    const ids = METAR_FIELDS.map(f => f.icao).join(',');
+    const j = await fetchJson('aviationweather.gov', `/api/data/metar?ids=${ids}&format=json`,
+      { 'User-Agent': 'heleon-tracker' });
+    if (!Array.isArray(j)) { metarLastError = 'unexpected response'; return; }
+    metarCache = j.map(m => {
+      const meta = METAR_FIELDS.find(f => f.icao === m.icaoId) || {};
+      return {
+        icao: m.icaoId, name: meta.name || m.name, military: !!meta.military,
+        lat: m.lat, lon: m.lon,
+        tempC: m.temp, dewpC: m.dewp, windDir: m.wdir, windKt: m.wspd,
+        visib: m.visib, altimHpa: m.altim, fltCat: m.fltCat,
+        raw: m.rawOb, obsTime: m.obsTime ? m.obsTime * 1000 : null,
+      };
+    });
+    metarLastPollTs = Date.now(); metarLastError = null;
+  } catch (e) { metarLastError = e.message; }
+}
+
+// ─── MESHTASTIC / LoRa MESH NODES (liamcottle map API, keyless) ───────────────
+// The community Meshtastic map aggregates nodes heard over MQTT worldwide. We
+// pull the full node list (big — so only every 30 min) and keep just the ones
+// physically on/around the Big Island. These are real LoRa mesh radios people
+// run — solar repeaters on ridgelines, pocket nodes, base stations.
+let meshtasticCache = [];
+let meshtasticLastPollTs = null, meshtasticLastError = null;
+async function pollMeshtastic() {
+  try {
+    const j = await fetchJson('meshtastic.liamcottle.net', '/api/v1/nodes',
+      { 'User-Agent': 'heleon-tracker' });
+    const nodes = (j && j.nodes) || (Array.isArray(j) ? j : []);
+    meshtasticCache = nodes
+      .map(n => ({
+        id: n.node_id, name: n.long_name || n.short_name || String(n.node_id),
+        shortName: n.short_name || '',
+        lat: n.latitude != null ? n.latitude / 1e7 : null,
+        lon: n.longitude != null ? n.longitude / 1e7 : null,
+        hw: n.hardware_model, role: n.role, fw: n.firmware_version,
+        updatedAt: n.position_updated_at || n.updated_at || null,
+      }))
+      .filter(n => n.lat != null && n.lat > 18.5 && n.lat < 20.6 && n.lon > -156.5 && n.lon < -154.4);
+    meshtasticLastPollTs = Date.now(); meshtasticLastError = null;
+  } catch (e) { meshtasticLastError = e.message; }
+}
+
+// ─── HAM RADIO REPEATERS (hearham.com open API, keyless) ──────────────────────
+// Every VHF/UHF amateur repeater on the island — frequency, offset, tone, mode
+// (FM/DMR/D-STAR), IRLP/EchoLink internet nodes. Mostly static infrastructure,
+// refreshed daily.
+let repeaterCache = [];
+let repeaterLastPollTs = null, repeaterLastError = null;
+async function pollRepeaters() {
+  try {
+    const j = await fetchJson('hearham.com', '/api/repeaters/v1', { 'User-Agent': 'heleon-tracker' });
+    if (!Array.isArray(j)) { repeaterLastError = 'unexpected response'; return; }
+    repeaterCache = j
+      .filter(r => r.latitude > 18.5 && r.latitude < 20.6 && r.longitude > -156.5 && r.longitude < -154.4)
+      .map(r => ({
+        callsign: r.callsign, lat: r.latitude, lon: r.longitude,
+        city: r.city, mode: r.mode, group: r.group,
+        freqMhz: r.frequency / 1e6, offsetMhz: r.offset / 1e6,
+        tone: r.decode || r.encode || '', internetNode: r.internet_node || '',
+        description: (r.description || '').slice(0, 120),
+        operational: r.operational !== 0,
+      }));
+    repeaterLastPollTs = Date.now(); repeaterLastError = null;
+  } catch (e) { repeaterLastError = e.message; }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin':'*' }); res.end(); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -3949,6 +4121,11 @@ const server = http.createServer((req, res) => {
   pollSummits();
   pollOcean();
   pollAirQuality();
+  pollVolcano();
+  pollMetars();
+  pollRepeaters();
+  // Meshtastic node list is ~30 MB — delay it past boot and refresh sparingly.
+  setTimeout(pollMeshtastic, 20000);
   connectAprs();
   setInterval(pollEarthquakes, 5 * 60 * 1000);
   setInterval(pollAlerts, 5 * 60 * 1000);
@@ -3958,6 +4135,10 @@ const server = http.createServer((req, res) => {
   setInterval(pollSummits, 5 * 60 * 1000);
   setInterval(pollOcean, 10 * 60 * 1000);
   setInterval(pollAirQuality, 15 * 60 * 1000);
+  setInterval(pollVolcano, 15 * 60 * 1000);
+  setInterval(pollMetars, 10 * 60 * 1000);
+  setInterval(pollMeshtastic, 30 * 60 * 1000);
+  setInterval(pollRepeaters, 24 * 60 * 60 * 1000);
   setInterval(pollHazardZones, 24 * 60 * 60 * 1000);
   setInterval(pollPubSafetyFacilities, 24 * 60 * 60 * 1000);
   setTimeout(pruneDb, 30000);                // full prune+VACUUM shortly after boot

@@ -20,7 +20,7 @@
 const fs = require('fs');
 const path = require('path');
 const { loadRoadGraph, buildEdgeIndex } = require('../road-graph.js');
-const { loadRawGtfsShapesForCli, matchedEdgeSequenceForCli } = require('./snap-routes-to-roads.js');
+const { loadRawGtfsShapesForCli, connectedEdgePathForCli } = require('./snap-routes-to-roads.js');
 
 const ROOT = path.join(__dirname, '..');
 
@@ -64,7 +64,10 @@ async function main() {
     for (const pattern of patterns) {
       let edgeSeq;
       try {
-        edgeSeq = matchedEdgeSequenceForCli(graph, edgeIndex, pattern.coords);
+        // Same connected-path matcher the ribbon builder (build-route-edges.js)
+        // uses — the raw matcher includes stray/unreachable edges the builder
+        // deliberately drops, which reads as false failures here.
+        edgeSeq = connectedEdgePathForCli(graph, edgeIndex, pattern.coords);
       } catch (e) {
         continue; // matching failure is a separate concern (scripts/validate-route-roads.js); skip here
       }

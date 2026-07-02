@@ -30,14 +30,52 @@ entirely on your own machine — no cloud dependency, no API hammering.
 - **Fleet tab** — every vehicle the agency knows (live / idle / dormant) with
   full telemetry and a derived status explaining why each is/isn't on the map
 - **Boats tab** — live vessel positions via [aisstream.io](https://aisstream.io)
-  AIS stream (opt-in via `AISSTREAM_API_KEY`; no fabricated data when off)
-- **Aircraft tab** — live ADS-B positions via [OpenSky Network](https://opensky-network.org)
-  free anonymous tier — no API key needed
+  AIS stream (opt-in via `AISSTREAM_API_KEY`; no fabricated data when off).
+  AIS shore-receiver coverage around the island is genuinely sparse, so a
+  zero-count is honest, not broken.
+- **Aircraft tab** — live ADS-B positions from community aggregators
+  ([adsb.lol](https://adsb.lol) → airplanes.live → adsb.one, all keyless), with
+  aircraft type + tail number; OpenSky anonymous tier as fallback
+- **Every keyless real-time Big Island feed we could find** — see the
+  [data sources](#real-time-data-sources) table below: streamflow water wheels,
+  NWS weather stations, summit observatories, ocean buoys + tides + DART
+  tsunami buoy, air quality / vog, volcano alerts + live webcams, METARs,
+  APRS ham radio, Meshtastic LoRa mesh nodes, ham repeaters
 - **Transformer ETA correction model** (12-token self-attention, per-rank
   output heads) retrained server-side on every recorded stop arrival
 - **Long-term arrival patterns** — 7×24 day-of-week × hour-of-day matrix per
   stop, served from 1 year of stop_arrivals history
 - Desktop + mobile (bottom-sheet) responsive UI; polling pauses when hidden
+
+## Real-time data sources
+
+Everything below is free and needs **no signup and no API key** (except AIS,
+noted). All of it is polled server-side, cached, and served from `/api/*`.
+
+| Layer | Source | Endpoint | Notes |
+|-------|--------|----------|-------|
+| Buses (live GPS) | Syncromatics RTPI + GTFS-RT (`myheleonbus.org`) | `/api/vehicles` | positions snapped to the OSM road graph |
+| Route ribbons | GTFS shapes matched to OSM roads | `/api/route-edges`, `/api/route-roads` | 25 routes, colors the actual road via feature-state |
+| Aircraft | adsb.lol → airplanes.live → adsb.one (community ADS-B) | `/api/aircraft` | keyless; OpenSky fallback |
+| Vessels | aisstream.io AIS websocket | `/api/vessels` | bundled key; sparse mid-ocean coverage is expected |
+| Streamflow | USGS NWIS instantaneous values + daily statistics | `/api/streamflow`, `/api/streamflow-stats`, `/api/gauge-history` | animated water wheels, level meters, historical graphs |
+| Weather stations | NWS `api.weather.gov` observations | `/api/weather-stations` | User-Agent header only |
+| Summit observatories | CFHT weather tower (Maunakea) + NOAA GML CO₂ (Mauna Loa) | `/api/summits` | live summit wind/temp/pressure + the Keeling Curve |
+| Ocean | NDBC buoys (incl. Hilo Waverider), NOAA CO-OPS tides, DART 51407 tsunami buoy | `/api/ocean` | wave height/period, next high/low tides, deep-ocean water column |
+| Air quality / vog | Open-Meteo air-quality API | `/api/air-quality` | US AQI + PM2.5/PM10/SO₂ for 9 towns |
+| Volcano | USGS HVO HANS alerts + live webcams | `/api/volcano` | Kīlauea/Mauna Loa color code + alert level, 8 live cams |
+| METARs | NOAA Aviation Weather Center | `/api/metars` | PHTO Hilo, PHKO Kona, PHSF Bradshaw AAF (military) |
+| APRS ham radio | APRS-IS TCP feed (`rotate.aprs2.net`) | `/api/aprs` | keyless RX-only login; real vehicles/stations/wx beacons |
+| Meshtastic / LoRa | meshtastic.liamcottle.net node map | `/api/meshtastic` | LoRa mesh nodes heard on the island |
+| Ham repeaters | hearham.com open repeater list | `/api/repeaters` | 55 repeaters with frequency/offset/tone |
+| Earthquakes | USGS FDSN GeoJSON | `/api/earthquakes` | Big Island bbox |
+| Wildfire | NASA FIRMS hotspots | `/api/wildfire` | MODIS/VIIRS |
+| NWS alerts + radar | api.weather.gov + Iowa State NEXRAD tiles | `/api/alerts` | |
+| Traffic controls | OSM (Overpass) signals/stop signs | `/api/controls` | locations only — HDOT publishes no live SPaT for the island |
+
+Things we investigated that **don't** exist publicly (so they're not faked):
+live traffic-signal states (no HDOT SPaT feed), observatory/ranger vehicle GPS,
+and Tesla/private fleet tracking (owner-account APIs only).
 
 ## Architecture
 

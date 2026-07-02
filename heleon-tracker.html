@@ -823,6 +823,10 @@ function initMap() {
     try { fetchOcean(); } catch (e) {}
     try { fetchAprs(); } catch (e) {}
     try { fetchAirQuality(); } catch (e) {}
+    try { fetchVolcano(); } catch (e) {}
+    try { fetchMetars(); } catch (e) {}
+    try { fetchMeshtastic(); } catch (e) {}
+    try { fetchRepeaters(); } catch (e) {}
     // Keep an open click-card glued to its map anchor as the map moves.
     map.on('move', positionMapCard);
     // Click on empty map (no interactive feature) closes the card.
@@ -1296,9 +1300,20 @@ function initMapLayers() {
     if (r.airTempC != null) row('Air temp', `${(+r.airTempC).toFixed(1)} °C`);
     if (r.pressureHpa != null) row('Pressure', `${Math.round(r.pressureHpa)} hPa`);
     if (r.waterLevelFt != null) row('Water level', `${(+r.waterLevelFt).toFixed(2)} ft` + (r.at ? ` (${r.at})` : ''));
-    return { title: `${p.kind === 'tide' ? '🌊' : '🛟'} ${p.name}`, body: rows.join('') || 'No current reading.' };
+    // DART tsunami buoy: deep-ocean water-column height — a sudden deviation is
+    // how the Pacific Tsunami Warning Center detects a passing tsunami.
+    if (r.waterColumnM != null) row('Water column', `${(+r.waterColumnM).toFixed(3)} m` + (r.at ? ` (${r.at})` : ''));
+    // Next high/low tide predictions, when the station provides them.
+    if (r.tides) {
+      try {
+        for (const t of JSON.parse(JSON.stringify(typeof r.tides === 'string' ? JSON.parse(r.tides) : r.tides))) {
+          row(t.type === 'H' ? 'High tide' : 'Low tide', `${(+t.ft).toFixed(1)} ft · ${t.t.slice(11)}`);
+        }
+      } catch { /* prediction list optional */ }
+    }
+    return { title: `${p.kind === 'tide' ? '🌊' : p.kind === 'dart' ? '🚨' : '🛟'} ${p.name}`, body: rows.join('') || 'No current reading.' };
   };
-  wireLayerHover('ocean-dot', p => `<div style="font-weight:600;">${p.kind === 'tide' ? '🌊' : '🛟'} ${escapeHtml(p.name)}</div>
+  wireLayerHover('ocean-dot', p => `<div style="font-weight:600;">${p.kind === 'tide' ? '🌊' : p.kind === 'dart' ? '🚨' : '🛟'} ${escapeHtml(p.name)}</div>
     <div style="color:var(--muted);font-size:10px;">click for details</div>`);
   wireLayerCard('ocean-dot', oceanCard);
 
@@ -1348,6 +1363,120 @@ function initMapLayers() {
     if (p.pm10 != null) row('PM10', `${(+p.pm10).toFixed(1)} µg/m³`);
     if (p.so2 != null) row('SO₂ (vog)', `${(+p.so2).toFixed(1)} µg/m³`);
     return { title: `🌫️ ${p.name} — air quality`, body: rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Open-Meteo${p.at ? ' · ' + p.at : ''}</div>` };
+  });
+
+  // Volcano: USGS HVO alert badges at Kīlauea/Mauna Loa summits + live webcam
+  // points. Clicking a webcam opens a card with the live USGS JPEG (refreshed
+  // continuously by HVO — public domain). Keyless.
+  map.addSource('volcano', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'volcano-dot', type: 'symbol', source: 'volcano',
+    layout: {
+      'text-field': ['case', ['==', ['get', 'kind'], 'alert'], ['concat', '🌋 ', ['get', 'badge']], '📷'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, ['case', ['==', ['get', 'kind'], 'alert'], 13, 10], 12, ['case', ['==', ['get', 'kind'], 'alert'], 16, 14]],
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 5,
+    },
+    paint: { 'text-color': ['match', ['get', 'color'], 'RED', '#dc2626', 'ORANGE', '#ea580c', 'YELLOW', '#ca8a04', '#6b7280'],
+      'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+  });
+  wireLayerHover('volcano-dot', p => p.kind === 'alert'
+    ? `<div style="font-weight:600;">🌋 ${escapeHtml(p.name)}</div><div style="color:var(--muted);font-size:11px;">${escapeHtml(p.badge)} · click for details</div>`
+    : `<div style="font-weight:600;">📷 ${escapeHtml(p.name)}</div><div style="color:var(--muted);font-size:10px;">click for live view</div>`);
+  wireLayerCard('volcano-dot', p => {
+    if (p.kind === 'alert') {
+      return { title: `🌋 ${p.name}`, body:
+        `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+          <span style="width:12px;height:12px;border-radius:50%;background:${p.color === 'RED' ? '#dc2626' : p.color === 'ORANGE' ? '#ea580c' : p.color === 'YELLOW' ? '#ca8a04' : '#6b7280'};"></span>
+          <b>${escapeHtml(p.badge)}</b></div>
+        <div style="color:#c9d1d9;">${escapeHtml(p.summary || '')}</div>
+        <div style="color:#8b949e;font-size:10px;margin-top:8px;">USGS Hawaiian Volcano Observatory${p.at ? ' · ' + new Date(+p.at).toLocaleString() : ''}</div>` };
+    }
+    // Webcam: live JPEG, cache-busted so each open shows the current frame.
+    return { title: `📷 ${p.name}`, body:
+      `<img src="${p.imageUrl}?t=${Date.now()}" style="width:100%;border-radius:6px;display:block;" alt="${escapeHtml(p.name)}"/>
+       <div style="color:#8b949e;font-size:10px;margin-top:6px;">USGS HVO webcam — refreshes continuously · public domain</div>` };
+  });
+
+  // Aviation METARs: live observed weather at every Big Island airfield including
+  // Bradshaw Army Airfield inside Pōhakuloa Training Area. Colored by flight
+  // category (VFR green / MVFR blue / IFR red / LIFR magenta). Keyless.
+  map.addSource('metars', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'metars-dot', type: 'symbol', source: 'metars',
+    layout: {
+      'text-field': ['concat', '🛩 ', ['get', 'icao']],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 10, 12, 13],
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 5,
+    },
+    paint: { 'text-color': ['match', ['get', 'fltCat'], 'VFR', '#15803d', 'MVFR', '#1d4ed8', 'IFR', '#dc2626', 'LIFR', '#a21caf', '#6b7280'],
+      'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+  });
+  wireLayerHover('metars-dot', p => `<div style="font-weight:600;">🛩 ${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.fltCat || '')} · ${p.tempC != null ? p.tempC + '°C' : ''} · click for METAR</div>`);
+  wireLayerCard('metars-dot', p => {
+    const rows = [];
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+    if (p.fltCat) row('Flight category', p.fltCat);
+    if (p.tempC != null && p.tempC !== '') row('Temperature', `${p.tempC} °C`);
+    if (p.dewpC != null && p.dewpC !== '') row('Dew point', `${p.dewpC} °C`);
+    if (p.windDir != null && p.windDir !== '') row('Wind', `${p.windDir}° @ ${p.windKt} kt`);
+    if (p.visibSm != null && p.visibSm !== '') row('Visibility', `${p.visibSm} sm`);
+    if (p.altimInHg != null && p.altimInHg !== '') row('Altimeter', `${p.altimInHg}`);
+    const mil = (p.military === true || p.military === 'true') ? `<div style="color:#ca8a04;font-size:10px;margin-top:6px;">⚠ Military airfield — Pōhakuloa Training Area</div>` : '';
+    const raw = p.raw ? `<div style="font-family:monospace;font-size:10px;color:#8b949e;margin-top:8px;word-break:break-all;">${escapeHtml(p.raw)}</div>` : '';
+    return { title: `🛩 ${p.icao} — ${p.name}`, body: rows.join('') + mil + raw };
+  });
+
+  // Meshtastic / LoRa mesh nodes — real community radios (solar repeaters on
+  // ridgelines, pocket nodes) heard over MQTT. Keyless.
+  map.addSource('meshtastic', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'meshtastic-dot', type: 'symbol', source: 'meshtastic',
+    layout: {
+      'text-field': '📶',
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 13, 16],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+    },
+  });
+  wireLayerHover('meshtastic-dot', p => `<div style="font-weight:600;">📶 ${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:10px;">LoRa mesh node · click for details</div>`);
+  wireLayerCard('meshtastic-dot', p => {
+    const rows = [];
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+    if (p.hwName) row('Hardware', p.hwName);
+    if (p.role) row('Role', p.role);
+    if (p.battery != null && p.battery !== '') row('Battery', `${p.battery}%`);
+    if (p.altitude != null && p.altitude !== '') row('Altitude', `${p.altitude} m`);
+    if (p.lastHeard) row('Last heard', new Date(+p.lastHeard).toLocaleString());
+    return { title: `📶 ${p.name}`, body: (rows.join('') || 'Meshtastic node') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Meshtastic mesh via MQTT (meshtastic.liamcottle.net)</div>` };
+  });
+
+  // Ham radio repeaters (hearham.com, keyless): every VHF/UHF machine on the
+  // island with frequency/offset/tone. Static-ish infrastructure, so off by
+  // default behind the APRS/ham toggle... shown always for now, collision-thinned.
+  map.addSource('repeaters', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'repeaters-dot', type: 'symbol', source: 'repeaters',
+    minzoom: 9,   // infrastructure detail — only when zoomed in a bit
+    layout: {
+      'text-field': '📡',
+      'text-size': ['interpolate', ['linear'], ['zoom'], 9, 10, 13, 14],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+    },
+  });
+  wireLayerHover('repeaters-dot', p => `<div style="font-weight:600;font-family:monospace;">📡 ${escapeHtml(p.callsign)}</div>
+    <div style="color:var(--muted);font-size:11px;">${p.freqMhz} MHz · ${escapeHtml(p.mode || 'FM')} · click for details</div>`);
+  wireLayerCard('repeaters-dot', p => {
+    const rows = [];
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+    row('Frequency', `${p.freqMhz} MHz`);
+    if (p.offsetMhz != null && p.offsetMhz !== '' && +p.offsetMhz !== 0) row('Offset', `${+p.offsetMhz > 0 ? '+' : ''}${p.offsetMhz} MHz`);
+    if (p.tone) row('Tone', p.tone);
+    if (p.mode) row('Mode', p.mode);
+    if (p.city) row('Location', p.city);
+    return { title: `📡 ${p.callsign} repeater`, body: rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">hearham.com open repeater directory</div>` };
   });
 
   // Summit observatories (Maunakea CFHT tower, Mauna Loa NOAA) — live conditions
@@ -2258,6 +2387,69 @@ async function fetchAirQuality() {
   } catch (e) { /* keep last */ }
 }
 
+// Volcano alerts + HVO webcams (USGS HANS, keyless). Always on.
+async function fetchVolcano() {
+  try {
+    const res = await fetch('/api/volcano');
+    const data = await res.json();
+    if (!mapReady || !map.getSource('volcano')) return;
+    const feats = [];
+    for (const a of (data.alerts || [])) {
+      feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
+        properties: { kind: 'alert', name: a.volcano, badge: `${a.colorCode}/${a.alertLevel}`,
+          color: a.colorCode, summary: a.summary || '', at: a.sentTs || '' } });
+    }
+    for (const c of (data.webcams || [])) {
+      feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [c.lon, c.lat] },
+        properties: { kind: 'webcam', name: c.name, imageUrl: c.imageUrl, color: 'CAM' } });
+    }
+    map.getSource('volcano').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
+}
+
+// Aviation METARs (airports + Bradshaw AAF, keyless). Always on.
+async function fetchMetars() {
+  try {
+    const res = await fetch('/api/metars');
+    const data = await res.json();
+    if (!mapReady || !map.getSource('metars')) return;
+    const feats = (data.metars || []).map(m => ({
+      type: 'Feature', geometry: { type: 'Point', coordinates: [m.lon, m.lat] },
+      properties: { icao: m.icao, name: m.name, fltCat: m.fltCat || '', tempC: m.tempC, dewpC: m.dewpC,
+        windDir: m.windDir, windKt: m.windKt, visibSm: m.visibSm, altimInHg: m.altimInHg,
+        military: !!m.military, raw: m.raw || '' } }));
+    map.getSource('metars').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
+}
+
+// Meshtastic LoRa nodes (keyless community mesh). Always on.
+async function fetchMeshtastic() {
+  try {
+    const res = await fetch('/api/meshtastic');
+    const data = await res.json();
+    if (!mapReady || !map.getSource('meshtastic')) return;
+    const feats = (data.nodes || []).map(n => ({
+      type: 'Feature', geometry: { type: 'Point', coordinates: [n.lon, n.lat] },
+      properties: { name: n.name || n.id, hwName: n.hwName || '', role: n.role || '',
+        battery: n.battery, altitude: n.altitude, lastHeard: n.lastHeard } }));
+    map.getSource('meshtastic').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
+}
+
+// Ham repeaters (hearham.com, keyless). Mostly static; fetched once per load.
+async function fetchRepeaters() {
+  try {
+    const res = await fetch('/api/repeaters');
+    const data = await res.json();
+    if (!mapReady || !map.getSource('repeaters')) return;
+    const feats = (data.repeaters || []).filter(r => r.lat && r.lon).map(r => ({
+      type: 'Feature', geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
+      properties: { callsign: r.callsign, freqMhz: r.freqMhz, offsetMhz: r.offsetMhz,
+        tone: r.tone || '', mode: r.mode || 'FM', city: r.city || '' } }));
+    map.getSource('repeaters').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
+}
+
 // Ocean stations (NDBC buoys + NOAA tides). Always on.
 async function fetchOcean() {
   try {
@@ -2266,7 +2458,7 @@ async function fetchOcean() {
     if (!mapReady || !map.getSource('ocean')) return;
     const feats = (data.stations || []).map(s => {
       const r = s.readings || {};
-      const icon = s.kind === 'tide' ? '🌊' : '🛟';
+      const icon = s.kind === 'tide' ? '🌊' : s.kind === 'dart' ? '🚨' : '🛟';
       let badge = '';
       if (r.waveHtM != null) badge = `${(+r.waveHtM).toFixed(1)}m`;
       else if (r.waterLevelFt != null) badge = `${(+r.waterLevelFt).toFixed(1)}ft`;
@@ -4338,7 +4530,8 @@ function positionMapCard() {
 }
 
 // Layers whose features open a click-card (and whose empty-space click closes it).
-const CARD_LAYERS = ['ocean-dot', 'aprs-dot', 'summits-dot', 'weather-stations-dot', 'aircraft-triangles', 'airquality-dot'];
+const CARD_LAYERS = ['ocean-dot', 'aprs-dot', 'summits-dot', 'weather-stations-dot', 'aircraft-triangles', 'airquality-dot',
+  'volcano-dot', 'metars-dot', 'meshtastic-dot', 'repeaters-dot'];
 // Wire click-to-open-card on a layer. buildCard(props) -> { title, body }.
 function wireLayerCard(layerId, buildCard) {
   map.on('click', layerId, e => {
@@ -5433,6 +5626,10 @@ Promise.all([
   fetchOcean(),
   fetchAprs(),
   fetchAirQuality(),
+  fetchVolcano(),
+  fetchMetars(),
+  fetchMeshtastic(),
+  fetchRepeaters(),
 ]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
@@ -5455,7 +5652,7 @@ setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
 setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchAirQuality(); }, 15 * 60 * 1000);
+setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); } }, 15 * 60 * 1000);
 // APRS moves faster (vehicles) — refresh more often when it has data.
 setInterval(() => { if (!document.hidden) fetchAprs(); }, 60 * 1000);
 
