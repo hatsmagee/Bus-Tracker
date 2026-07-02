@@ -12,6 +12,12 @@ const {
 const { MAP_ITEMS_PATH, MAP_ITEMS_STAGED_PATH } = require('../lib/paths');
 
 const BUDGET = parseInt(process.env.AGENT_ITEM_BUDGET || '3', 10);
+// How long to wait before retrying an item we couldn't source/synthesize, so the
+// queue advances past un-enrichable items instead of grinding on them forever.
+const SKIP_COOLDOWN_MS = Math.max(
+  60 * 60 * 1000,
+  parseInt(process.env.AGENT_SKIP_COOLDOWN_MS, 10) || 7 * 24 * 60 * 60 * 1000
+);
 
 function agentEnabled() {
   return process.env.AGENT_ENABLED === '1' || process.env.AGENT_ENABLED === 'true';
@@ -155,15 +161,27 @@ async function runResearchCycle({ budget = BUDGET, force = false } = {}) {
   // audit() returns { report, queue } where `queue` is an ARRAY of work items.
   const { queue } = audit();
   const queueItems = Array.isArray(queue) ? queue : (queue.items || []);
-  const work = queueItems.slice(0, budget);
+
+  const staged = readJsonFile(MAP_ITEMS_STAGED_PATH, emptyDoc());
+
+  // Advance through the queue: skip items already staged (awaiting publish) and
+  // ones we recently tried but couldn't source, so each cycle reaches NEW work
+  // instead of re-grinding the same front-of-queue items. Without this, staged
+  // work caps at the per-cycle budget and can never reach the publish batch size.
+  state.skipped = state.skipped || {};
+  const now = Date.now();
+  const recentlySkipped = k => state.skipped[k] && (now - state.skipped[k]) < SKIP_COOLDOWN_MS;
+  const work = queueItems
+    .filter(i => !staged.items[i.key] && !recentlySkipped(i.key))
+    .slice(0, budget);
   if (!work.length) {
     state.lastResearchAt = new Date().toISOString();
     saveState(state);
-    return { ok: true, enriched: 0, message: 'queue empty' };
+    return { ok: true, enriched: 0, message: 'no fresh work (all staged or recently skipped)' };
   }
 
-  const staged = readJsonFile(MAP_ITEMS_STAGED_PATH, emptyDoc());
   const results = [];
+  const markSkip = k => { state.skipped[k] = Date.now(); };
 
   for (const item of work) {
     try {
@@ -171,14 +189,17 @@ async function runResearchCycle({ budget = BUDGET, force = false } = {}) {
       const research = await researchItem(item);
       if (!research.sourceText || research.sources.length < 1) {
         console.log(`[agent] skip ${item.key}: no sources`);
+        markSkip(item.key);
         continue;
       }
       const synth = await synthesizeEntry(item, research);
       if (synth.skip) {
         console.log(`[agent] skip ${item.key}: ${synth.reason}`);
+        markSkip(item.key);
         continue;
       }
       staged.items[item.key] = synth.entry;
+      delete state.skipped[item.key];
       bumpEnriched(state);
       results.push(item.key);
       writeJsonFile(MAP_ITEMS_STAGED_PATH, staged);
@@ -188,12 +209,15 @@ async function runResearchCycle({ budget = BUDGET, force = false } = {}) {
     }
   }
 
-  state = loadState();
+  // Keep mutating (and finally persisting) the same state object we've been
+  // updating in the loop — reloading here would drop in-memory skip bookkeeping
+  // when a cycle produced only skips.
   state.lastResearchAt = new Date().toISOString();
   state.lastTopic = results.length ? results[results.length - 1] : state.lastTopic;
   saveState(state);
 
-  return { ok: true, enriched: results.length, keys: results, queueRemaining: Math.max(0, queueItems.length - work.length) };
+  const remaining = queueItems.filter(i => !staged.items[i.key] && !recentlySkipped(i.key)).length;
+  return { ok: true, enriched: results.length, keys: results, queueRemaining: remaining };
 }
 
 if (require.main === module) {
