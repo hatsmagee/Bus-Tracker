@@ -154,6 +154,22 @@
   @keyframes flowDash { to { stroke-dashoffset: -200; } }
   .bus-ahead-line { animation: flowDash 4s linear infinite; }
 
+  /* ─── WIND TURBINE markers (spinning rotor = a wind farm generating) ────────
+     Like the water wheel: a little DOM marker whose rotor spins. Root is a
+     zero-size point (MapLibre pins it); the turbine is absolutely positioned so
+     the tower base sits on the coordinate. Only the blades spin. */
+  @keyframes windSpin { to { transform: rotate(360deg); } }
+  .wind-turbine { cursor:pointer; position:relative; width:0; height:0; }
+  .wind-turbine .wt-scale { position:absolute; left:0; top:0;
+    transform: translate(-13px, -30px) scale(var(--wtc, 1)); transform-origin: 13px 30px;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
+  .wind-turbine .wt-rotor { transform-origin: 13px 8px; animation: windSpin linear infinite; }
+  .wind-turbine .wt-label { position:absolute; left:26px; top:24px; white-space:nowrap;
+    font-size:10px; font-weight:700; color:#0f5132;
+    background:rgba(255,255,255,.92); border:1px solid #a7f3d0; border-radius:9px;
+    padding:1px 5px; line-height:1.3; }
+  .wind-turbine.compact .wt-label { display:none; }
+
   /* ─── STREAMFLOW markers: water wheel = discharge (ft³/s); staff gauge = stage (ft) ── */
   @keyframes waterWheelSpin { to { transform: rotate(360deg); } }
   @keyframes streamFlow { to { background-position: -48px 0; } }
@@ -1051,7 +1067,7 @@ function initMap() {
   // Keep the DOM water-wheel markers scaled to the current zoom (they shrink
   // when zoomed out so they don't pile up). `zoom` fires continuously so the
   // resize tracks the pinch/scroll smoothly.
-  map.on('zoom', () => { try { updateWheelScale(); } catch (e) {} });
+  map.on('zoom', () => { try { updateWheelScale(); } catch (e) {} try { updateWindScale(); } catch (e) {} });
   map.on('error', (e) => {
     // Suppress known MapLibre v4 bugs about listener arrays
     if (e?.error?.message?.includes('slice is not a function')) return;
@@ -3267,6 +3283,75 @@ function toggleStreamflow() {
   else renderStreamflowWheels(); // clears wheels
 }
 
+// ─── WIND TURBINE markers (spinning rotor at each wind farm) ─────────────────
+// The Big Island's wind farms (Hawi, Pakini Nui) render as little turbines
+// whose rotor spins — a companion animation to the water wheel. Bigger farm =
+// faster spin (capacity as a stand-in for "generating"; no live MW is public).
+const windTurbineMarkers = {}; // plant id -> maplibregl.Marker
+function windTurbineSvg() {
+  // Tower + nacelle at (13,8); three blades 120° apart from the hub.
+  const cx = 13, hubY = 8, bladeLen = 7;
+  let blades = '';
+  for (let i = 0; i < 3; i++) {
+    const a = (i * 120) * Math.PI / 180 - Math.PI / 2;
+    const x2 = cx + bladeLen * Math.cos(a), y2 = hubY + bladeLen * Math.sin(a);
+    blades += `<line x1="${cx}" y1="${hubY}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#e8eef5" stroke-width="2.2" stroke-linecap="round"/>`;
+  }
+  return `<svg class="wt-svg" width="26" height="34" viewBox="0 0 26 34" xmlns="http://www.w3.org/2000/svg">
+    <line x1="${cx}" y1="${hubY}" x2="${cx}" y2="30" stroke="#cbd5e1" stroke-width="2.4" stroke-linecap="round"/>
+    <g class="wt-rotor">${blades}<circle cx="${cx}" cy="${hubY}" r="2" fill="#94a3b8"/></g>
+  </svg>`;
+}
+function windSpinSeconds(mw) {
+  // Bigger nameplate → faster (shorter period). ~4s at tiny, ~1.2s at 25 MW.
+  const m = Math.max(0, +mw || 0);
+  return Math.max(1.2, 4 - m * 0.11).toFixed(2);
+}
+function renderWindTurbines(plants) {
+  if (!mapReady) return;
+  const wind = (plants || []).filter(p => p.fuel === 'wind' && p.lat != null && p.lon != null);
+  const seen = new Set();
+  for (const p of wind) {
+    const id = p.id || `${p.lat},${p.lon}`;
+    seen.add(id);
+    let m = windTurbineMarkers[id];
+    if (!m) {
+      const el = document.createElement('div');
+      el.className = 'wind-turbine';
+      el.innerHTML = `<div class="wt-scale">${windTurbineSvg()}<div class="wt-label"></div></div>`;
+      m = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([p.lon, p.lat]).addTo(map);
+      windTurbineMarkers[id] = m;
+    }
+    const el = m.getElement();
+    const rotor = el.querySelector('.wt-rotor');
+    if (rotor) rotor.style.animationDuration = `${windSpinSeconds(p.capacityMw)}s`;
+    el.querySelector('.wt-label').textContent = `💨 ${p.capacityMw ? p.capacityMw + ' MW' : 'wind'}`;
+    el.title = `${p.name} — ${p.capacityMw ? p.capacityMw + ' MW' : ''} wind farm`;
+    el.onclick = e => { e.stopPropagation(); showMapCard(
+      `<div style="font-size:12px;line-height:1.5;"><div style="font-weight:700;">💨 ${escapeHtml(p.name)}</div>
+       <div style="color:var(--muted);margin-top:4px;">${p.capacityMw ? p.capacityMw + ' MW nameplate' : ''}${p.operator ? ' · ' + escapeHtml(p.operator) : ''}</div>
+       <div style="color:#8b949e;font-size:10px;margin-top:8px;">Wind farm. Live MW output isn't publicly published; rotor speed reflects nameplate capacity.</div></div>`,
+      [p.lon, p.lat], '💨 Wind farm'); };
+    m.setLngLat([p.lon, p.lat]);
+  }
+  for (const id of Object.keys(windTurbineMarkers)) {
+    if (!seen.has(id)) { windTurbineMarkers[id].remove(); delete windTurbineMarkers[id]; }
+  }
+  updateWindScale();
+}
+function updateWindScale() {
+  if (!mapReady) return;
+  const z = map.getZoom();
+  const t = Math.max(0, Math.min(1, (z - 8) / (13 - 8)));
+  const scale = (0.5 + t * 0.5).toFixed(3);
+  const compact = z < 10.5;
+  for (const id of Object.keys(windTurbineMarkers)) {
+    const el = windTurbineMarkers[id].getElement();
+    el.style.setProperty('--wtc', scale);
+    el.classList.toggle('compact', compact);
+  }
+}
+
 // Summit observatories (Maunakea/Mauna Loa live conditions). Shown by default.
 async function fetchSummits() {
   try {
@@ -3790,6 +3875,8 @@ async function fetchInfrastructure() {
     if (map.getSource('infra-rail')) {
       map.getSource('infra-rail').setData(data.railways || { type: 'FeatureCollection', features: [] });
     }
+    // Spinning wind-turbine markers for wind farms (part of the power layer).
+    renderWindTurbines(infraPowerVisible ? (data.powerPlants || []) : []);
     hawaiiList.railways = (data.railways && data.railways.features ? data.railways.features : [])
       .filter(f => f.properties && f.properties.kind === 'station')
       .map((f, i) => ({ id: String(i), name: f.properties.name, lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] }));
@@ -7443,6 +7530,7 @@ document.addEventListener('visibilitychange', () => {
   try { startMarkerAnim(); } catch (e) {}
   try { startAheadAnim(); } catch (e) {}
   try { updateWheelScale(); } catch (e) {}
+  try { updateWindScale(); } catch (e) {}
 });
 function updateCountdownUI() {
   document.getElementById('countdown').textContent = countdownVal;
