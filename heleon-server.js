@@ -5483,30 +5483,98 @@ let repeaterLastPollTs = null, repeaterLastError = null;
 const HAWAII_HAM_BROADCASTIFY_PAGE = 'https://www.broadcastify.com/listen/feed/27598';
 const HAWAII_HAM_STREAM = 'https://broadcastify.cdnstream1.com/27598';
 const KIWISDR_MAP = 'https://rx.kiwisdr.com/';
-// Big Island Puna / Volcano / Kaʻū police & fire dispatch + HVNP federal traffic.
-// Receiver at Kulani Cone site 11 (Volcano); P25 Phase 2 simulcast. Broadcastify
-// feed 40256 — same keyless MP3 pattern as the linked-ham feed above.
-const SCANNER_FEEDS = [{
-  id: 'puna-volcano-kau',
-  feedId: 40256,
-  name: 'Puna · Volcano · Kaʻū Public Safety',
-  shortName: 'D-7 / D-8 / HVNP',
-  streamUrl: 'https://broadcastify.cdnstream1.com/40256',
-  pageUrl: 'https://www.broadcastify.com/listen/feed/40256',
-  lat: 19.399,
-  lon: -155.282,
-  elevM: 1247,
-  site: 'Kulani Cone site 11 (Volcano)',
-  genre: 'Public Safety',
-  system: 'P25 Phase 2',
-  districts: [
-    { id: 'D-7', label: 'Kaʻū District', detail: 'Naʻalehu station · 700-series units' },
-    { id: 'D-8', label: 'Puna District', detail: 'Pāhoa station · 800-series units' },
-    { id: 'HVNP', label: 'Hawaiʻi Volcanoes NP Police', detail: 'Federal · NAC 526 · 169.625 MHz' },
-  ],
-  frequenciesMhz: ['155.2275', '155.3625', '155.625', '156.1125', '169.625'],
-  note: 'Hawaiʻi County Police & Fire dispatch for east/south Big Island plus HVNP park police/traffic. Audio via Broadcastify — may include brief ads on free tier.',
-}];
+// Big Island (Hawaiʻi County) Broadcastify scanner feeds — curated from
+// https://www.broadcastify.com/listen/ctid/542 and search ?q=hawaii.
+// Excludes Oʻahu-only feeds (e.g. 27598 ham repeaters — attached to repeater cards).
+function bcfyFeed(id, extra) {
+  return {
+    feedId: id,
+    streamUrl: `https://broadcastify.cdnstream1.com/${id}`,
+    pageUrl: `https://www.broadcastify.com/listen/feed/${id}`,
+    note: 'Audio via Broadcastify — free tier may play a brief ad at start.',
+    ...extra,
+  };
+}
+const SCANNER_FEEDS = [
+  bcfyFeed(40256, {
+    id: 'puna-volcano-kau',
+    name: 'Big Island Hawaii Puna, Volcano, Kaʻū Public Safety',
+    shortName: 'D-7/D-8',
+    lat: 19.399, lon: -155.282, elevM: 1247,
+    site: 'Kulani Cone site 11 (Volcano)',
+    genre: 'Public Safety',
+    system: 'P25 Phase 2',
+    districts: [
+      { id: 'D-7', label: 'Kaʻū District', detail: 'Naʻalehu station · 700-series units' },
+      { id: 'D-8', label: 'Puna District', detail: 'Pāhoa station · 800-series units' },
+      { id: 'HVNP', label: 'Hawaiʻi Volcanoes NP Police', detail: 'Federal · NAC 526 · 169.625 MHz' },
+    ],
+    frequenciesMhz: ['155.2275', '155.3625', '155.625', '156.1125', '169.625'],
+    note: 'East/south Big Island police & fire dispatch plus HVNP federal traffic from Kulani Cone.',
+  }),
+  bcfyFeed(43585, {
+    id: 'west-hawaii',
+    name: 'Hawaiʻi Island Public Safety — West',
+    shortName: 'West HI',
+    lat: 19.670, lon: -156.029, elevM: 268,
+    site: 'Kealakehe (880 ft)',
+    genre: 'Public Safety',
+    system: 'P25 Phase 2',
+    districts: [
+      { id: 'HPD-II', label: 'Area II Police', detail: 'Kona · Kohala · Kaʻū (400–700 units)' },
+      { id: 'HFD-W', label: 'West Fire / EMS / Ocean Safety', detail: 'Battalion 2 · Kona · Kohala · Kaʻū' },
+    ],
+    note: 'West Hawaiʻi police & fire from Kealakehe. Kaʻū traffic may also appear on the east feed (40256). Tactical channels excluded per Broadcastify TOS.',
+  }),
+  bcfyFeed(40602, {
+    id: 'hamakua-north-hilo',
+    name: 'Hawaiʻi County Public Safety — Hamakua / North Hilo',
+    shortName: 'Hamakua',
+    lat: 20.079, lon: -155.468,
+    site: 'Honokaa',
+    genre: 'Public Safety',
+    system: 'P25 Phase 2',
+    districts: [
+      { id: '6105', label: 'Hamakua & North Hilo Police', detail: 'Police talkgroup' },
+      { id: '6502', label: 'Hamakua & North Hilo Fire/EMS', detail: 'Fire and EMS talkgroups' },
+      { id: '6505', label: 'HFD Dispatch', detail: 'County fire dispatch' },
+      { id: '6503', label: 'Kohala Fire/EMS', detail: 'Occasionally heard on this site' },
+    ],
+    note: 'Hamakua and North Hilo trunk site at Honokaa.',
+  }),
+  bcfyFeed(46769, {
+    id: 'hvnp-hiwin-east',
+    name: 'Hawaiʻi Volcanoes NP & East Hawaiʻi Multi-Agency',
+    shortName: 'HVNP+',
+    lat: 19.420, lon: -155.240,
+    site: 'Volcano / Kulani Cone sector',
+    genre: 'Public Safety',
+    system: 'Mixed P25 / analog',
+    districts: [
+      { id: 'HVNP', label: 'Hawaiʻi Volcanoes NP', detail: '170.3625 MHz · NAC 526' },
+      { id: 'HIWIN', label: 'HIWIN (statewide)', detail: 'DLE · HEMA · Hilo airport security & ARFF' },
+      { id: 'PTA', label: 'Pōhakuloa Training Area', detail: 'Army fire ops talkgroups on county system' },
+      { id: 'Air', label: 'County air ops', detail: 'East & west chopper ops' },
+      { id: 'DPW', label: 'Public Works & HELCO East', detail: 'County maintenance & utility' },
+    ],
+    note: 'Multi-agency feed: federal park police, statewide HIWIN, county fire air/PTA, public works, and east-side utility traffic.',
+  }),
+  bcfyFeed(40043, {
+    id: 'hcf-aviation',
+    name: 'HCF Center ATC — Northeast / Hamakua',
+    shortName: 'ATC',
+    lat: 19.720, lon: -155.048,
+    site: 'Hilo area (rtl-airband)',
+    genre: 'Aviation',
+    system: 'VHF airband',
+    frequenciesMhz: ['127.6', '126.6'],
+    districts: [
+      { id: '127.6', label: 'HCF Center Northeast sector', detail: '127.6 MHz' },
+      { id: '126.6', label: 'Hamakua sector', detail: '126.6 MHz' },
+    ],
+    note: 'Hawaiʻi County Fire / air coordination sectors — Northeast and Hamakua airband (not Honolulu ARTCC).',
+  }),
+];
 function cleanRepeaterDescription(s) {
   if (!s) return '';
   return String(s).replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\r/g, '').trim().slice(0, 900);
