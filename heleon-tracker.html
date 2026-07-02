@@ -2020,7 +2020,8 @@ function initMapLayers() {
     if (p.altimInHg != null && p.altimInHg !== '') row('Altimeter', `${p.altimInHg}`);
     const mil = (p.military === true || p.military === 'true') ? `<div style="color:#ca8a04;font-size:10px;margin-top:6px;">⚠ Military airfield — Pōhakuloa Training Area</div>` : '';
     const raw = p.raw ? `<div style="font-family:monospace;font-size:10px;color:#8b949e;margin-top:8px;word-break:break-all;">${escapeHtml(p.raw)}</div>` : '';
-    return { title: `🛩 ${p.icao} — ${p.name}`, body: rows.join('') + mil + raw };
+    const media = assetMediaHtml(assetMedia(null, p.name, p.icao));
+    return { title: `🛩 ${p.icao} — ${p.name}`, body: media + rows.join('') + mil + raw };
   });
 
   // Satellites — live ISS / Hubble ground position (keyless, wheretheiss.at).
@@ -2347,10 +2348,8 @@ function initMapLayers() {
     if (p.unitCount > 1) row('OSM units', String(p.unitCount));
     if (p.note) row('Notes', escapeHtml(p.note));
     row('Data', 'Static — no live output');
-    const m = assetMedia(p.id, p.name);
-    const img = m && m.photo ? `<img src="${escapeHtml(m.photo)}" style="width:100%;border-radius:6px;display:block;margin-bottom:8px;" loading="lazy" alt="${escapeHtml(p.name)}" onerror="this.style.display='none'"/>` : '';
-    const link = m && m.url ? `<div style="color:#8b949e;font-size:10px;margin-top:8px;"><a href="${escapeHtml(m.url)}" target="_blank" rel="noopener" style="color:#58a6ff;">More on this plant ↗</a></div>` : '';
-    return { title: `${p.icon || fuelEmoji(p.fuel)} ${p.name}`, body: img + rows.join('') + link + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Hawaiian Electric does not publish real-time island grid MW. Annual fuel mix is in the Hawaiʻi browser.</div>` };
+    const media = assetMediaHtml(assetMedia(p.id, p.name));
+    return { title: `${p.icon || fuelEmoji(p.fuel)} ${p.name}`, body: media + rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Hawaiian Electric does not publish real-time island grid MW. Annual fuel mix is in the Hawaiʻi browser.</div>` };
   });
   wireLayerHover('infra-subs-circle', p => `<div style="font-weight:600;">⚡ ${escapeHtml(p.name)}</div>
     <div style="color:var(--muted);font-size:10px;">${p.voltage ? escapeHtml(p.voltage) + ' · ' : ''}substation</div>`);
@@ -2703,19 +2702,37 @@ const HERITAGE_CAT_ICON = {
   petroglyph: '🪨', abandoned: '🏚️', town: '🏘️', natural: '🏞️', park: '🏞️', cave: '🕳️', ranch: '🐄',
   fishpond: '🐟', battle: '⚔️', statue: '🗿', trail: '🥾', museum: '🏛️',
 };
-// Verified real photos + links for a handful of named fixed assets (power
-// plants, notable facilities) that have a genuine public image, keyed by id or
-// a name substring. Keyless Wikimedia URLs. Extend as verified images appear.
-const ASSET_MEDIA = {
-  pgv: { photo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Puna_Geothermal_plant.webp/500px-Puna_Geothermal_plant.webp.png', url: 'https://en.wikipedia.org/wiki/Puna_Geothermal_Venture' },
-};
-const ASSET_MEDIA_NAME = [
-  { re: /puna geothermal/i, photo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Puna_Geothermal_plant.webp/500px-Puna_Geothermal_plant.webp.png', url: 'https://en.wikipedia.org/wiki/Puna_Geothermal_Venture' },
-];
-function assetMedia(id, name) {
-  if (id && ASSET_MEDIA[id]) return ASSET_MEDIA[id];
-  if (name) { for (const m of ASSET_MEDIA_NAME) if (m.re.test(name)) return m; }
+// Real photos + deep background for named fixed assets (power plants, airports,
+// industrial/energy sites), enriched server-side from Wikipedia and served at
+// /api/asset-media. Looked up per card by asset id, ICAO code, or name substring.
+const ASSET_MEDIA_BY_ID = {};
+const ASSET_MEDIA_BY_ICAO = {};
+const ASSET_MEDIA_MATCH = [];
+async function fetchAssetMedia() {
+  try {
+    const data = await (await fetch('/api/asset-media')).json();
+    for (const a of (data.assets || [])) {
+      if (a.id) ASSET_MEDIA_BY_ID[a.id] = a;
+      if (a.icao) ASSET_MEDIA_BY_ICAO[String(a.icao).toUpperCase()] = a;
+      if (a.match) ASSET_MEDIA_MATCH.push({ needle: String(a.match).toLowerCase(), media: a });
+    }
+  } catch (e) { /* keep empty */ }
+}
+function assetMedia(id, name, icao) {
+  if (id && ASSET_MEDIA_BY_ID[id]) return ASSET_MEDIA_BY_ID[id];
+  if (icao && ASSET_MEDIA_BY_ICAO[String(icao).toUpperCase()]) return ASSET_MEDIA_BY_ICAO[String(icao).toUpperCase()];
+  if (name) { const n = String(name).toLowerCase(); for (const m of ASSET_MEDIA_MATCH) if (n.includes(m.needle)) return m.media; }
   return null;
+}
+// Render an asset's media (photo + curated background + Wikipedia write-up +
+// link) as card HTML. Safe to call with null.
+function assetMediaHtml(m) {
+  if (!m) return '';
+  const img = m.photo ? `<img src="${escapeHtml(m.photo)}" style="width:100%;border-radius:6px;display:block;margin-bottom:8px;" loading="lazy" onerror="this.style.display='none'"/>` : '';
+  const note = m.note ? `<div style="font-size:12px;line-height:1.55;color:var(--text);margin-bottom:8px;">${escapeHtml(m.note)}</div>` : '';
+  const extract = m.extract ? `<div style="font-size:11.5px;line-height:1.55;color:#c9d1d9;border-top:1px solid #30363d;padding-top:8px;margin-top:4px;">${escapeHtml(m.extract)}</div>` : '';
+  const link = m.url ? `<div style="margin-top:8px;font-size:10px;"><a href="${escapeHtml(m.url)}" target="_blank" rel="noopener" style="color:#58a6ff;">Read more on Wikipedia ↗</a></div>` : '';
+  return img + note + extract + link;
 }
 function buildHeritageCardBody(p) {
   const img = p.photo ? `<img src="${escapeHtml(p.photo)}" style="width:100%;border-radius:6px;display:block;margin-bottom:8px;" loading="lazy" alt="${escapeHtml(p.name)}" onerror="this.style.display='none'"/>` : '';
@@ -8878,6 +8895,7 @@ Promise.all([
   fetchTsunami(),
   fetchPlaces(),
   fetchHeritage(),
+  fetchAssetMedia(),
   fetchSolar(),
   fetchMeshtastic(),
   fetchRepeaters(),

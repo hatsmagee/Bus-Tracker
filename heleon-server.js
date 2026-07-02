@@ -2330,6 +2330,7 @@ async function handleApi(url, res) {
         airquality: feed(airQualityCache.length, airQualityLastPollTs, airQualityLastError),
         scanner: feed(SCANNER_FEEDS.length, Date.now(), null),
         heritage: feed(heritageCache.length, heritageLastPollTs, heritageLastError),
+        assetMedia: feed(assetMediaCache.length, assetMediaLastPollTs, assetMediaLastError),
         solar: feed(solarCache.length, solarLastPollTs, solarLastError),
         satellites: feed(satelliteCache.length, satelliteLastPollTs, satelliteLastError),
       },
@@ -3099,6 +3100,12 @@ async function handleApi(url, res) {
   if (p === '/api/heritage') {
     return json(res, { ts: Date.now(), lastPollTs: heritageLastPollTs, lastError: heritageLastError,
       sites: heritageCache });
+  }
+
+  // ── ASSET MEDIA — photos + background for named fixed assets (keyless) ─────
+  if (p === '/api/asset-media') {
+    return json(res, { ts: Date.now(), lastPollTs: assetMediaLastPollTs, lastError: assetMediaLastError,
+      assets: assetMediaCache });
   }
 
   // ── TSUNAMI — PTWC bulletin status (keyless) ──────────────────────────────
@@ -5379,6 +5386,57 @@ async function pollHeritage() {
   try { fs.writeFileSync(HERITAGE_CACHE_PATH, JSON.stringify({ lastPollTs: heritageLastPollTs, sites: out })); } catch (e) { /* read-only fs */ }
 }
 
+// ─── ASSET MEDIA (curated + Wikipedia deep enrichment) ───────────────────────
+// Real photos + deep background for named fixed assets already on the map:
+// power plants (incl. hydro/wind/solar), airports, industrial/energy sites.
+// Each curated asset carries an accurate note; where a Wikipedia article exists
+// we add its lead-section write-up, a real photo and a link. Keyed by asset id,
+// ICAO code or a name substring so the client can look media up per card.
+// Keyless, enriched daily, cached to disk.
+const ASSET_MEDIA_PATH = path.join(__dirname, 'data', 'asset-media.json');
+const ASSET_MEDIA_CACHE_PATH = path.join(__dirname, 'data', 'asset-media-cache.json');
+let ASSET_MEDIA_DEFS = [];
+try { ASSET_MEDIA_DEFS = (JSON.parse(fs.readFileSync(ASSET_MEDIA_PATH, 'utf8')).assets) || []; }
+catch (e) { ASSET_MEDIA_DEFS = []; }
+let assetMediaCache = [];
+let assetMediaLastPollTs = null, assetMediaLastError = null;
+function loadAssetMediaCache() {
+  try {
+    const j = JSON.parse(fs.readFileSync(ASSET_MEDIA_CACHE_PATH, 'utf8'));
+    if (Array.isArray(j.assets) && j.assets.length) { assetMediaCache = j.assets; assetMediaLastPollTs = j.lastPollTs || null; }
+  } catch (e) { /* no cache yet */ }
+}
+async function pollAssetMedia() {
+  if (!ASSET_MEDIA_DEFS.length) { assetMediaLastError = 'no curated assets'; return; }
+  const UA = 'heleon-tracker/1.0 (https://github.com/hatsmagee/Bus-Tracker)';
+  const wiki = (q) => fetchJson('en.wikipedia.org', `/w/api.php?${q}`, { 'User-Agent': UA });
+  const out = [];
+  for (const a of ASSET_MEDIA_DEFS) {
+    let photo = null, extract = '', url = null;
+    if (a.wiki) {
+      const enc = encodeURIComponent(a.wiki.replace(/ /g, '_'));
+      for (let attempt = 0; attempt < 3 && !url; attempt++) {
+        try {
+          const j = await wiki(`action=query&format=json&redirects=1&prop=extracts%7Cpageimages%7Cinfo&inprop=url&piprop=thumbnail&pithumbsize=480&exintro=1&explaintext=1&titles=${enc}`);
+          const p = Object.values((j.query && j.query.pages) || {})[0];
+          if (p && p.pageid) {
+            extract = (p.extract || '').trim();
+            photo = (p.thumbnail && p.thumbnail.source) || null;
+            url = p.fullurl || `https://en.wikipedia.org/wiki/${enc}`;
+          } else { url = `https://en.wikipedia.org/wiki/${enc}`; }
+        } catch (e) { await new Promise(r => setTimeout(r, 700 * (attempt + 1))); }
+      }
+      await new Promise(r => setTimeout(r, 250));
+    }
+    out.push({
+      id: a.id || null, icao: a.icao || null, match: a.match || null,
+      note: a.note || '', extract: extract.slice(0, 900), photo, url,
+    });
+  }
+  assetMediaCache = out; assetMediaLastPollTs = Date.now(); assetMediaLastError = null;
+  try { fs.writeFileSync(ASSET_MEDIA_CACHE_PATH, JSON.stringify({ lastPollTs: assetMediaLastPollTs, assets: out })); } catch (e) { /* read-only fs */ }
+}
+
 // ─── TSUNAMI — Pacific Tsunami Warning Center bulletins (keyless Atom) ────────
 // PTWC's Pacific feed (PHEB = Hawaii/Pacific messages). Most of the time it
 // carries only info statements or "no threat"; a real WARNING/WATCH/ADVISORY is
@@ -5929,6 +5987,9 @@ const server = http.createServer((req, res) => {
   loadHeritageCache();                              // serve curated atlas instantly from disk
   pollHeritage();                                   // enrich curated heritage sites from Wikipedia
   setInterval(pollHeritage, 24 * 60 * 60 * 1000);  // heritage is static — refresh once a day
+  loadAssetMediaCache();                            // serve asset photos/background instantly from disk
+  pollAssetMedia();                                 // enrich named assets (power plants, airports…) from Wikipedia
+  setInterval(pollAssetMedia, 24 * 60 * 60 * 1000);
   pollSatellites();
   setInterval(pollSatellites, 20 * 1000); // ISS moves ~7.6 km/s — keep it fresh
   pollRepeaters();
