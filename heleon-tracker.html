@@ -1418,7 +1418,17 @@ function initMapLayers() {
     }
   }, 'stops-circle');
 
-  // ─── VESSEL (boats) layer ──────────────────────────────────────────────────
+  // ─── VESSEL (boats) trail + layer ──────────────────────────────────────────
+  // Boats/planes come from snapshot feeds (no server-side history like buses),
+  // so we accumulate each craft's recent positions client-side and draw a
+  // fading dashed wake beneath the marker — the same idea as the bus trails.
+  // Added before the vessel icon so the wake draws underneath.
+  map.addSource('vessel-trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'vessel-trails-line', type: 'line', source: 'vessel-trails',
+    paint: { 'line-color': '#22d3ee', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.2, 12, 2.4],
+      'line-opacity': 0.6, 'line-dasharray': [1, 1.5] },
+    layout: { 'line-join': 'round', 'line-cap': 'round' } });
+
   // Plain circle layer so a vessel is always locatable at low zoom; the
   // heading chevron is layered on top via a second symbol layer that rotates
   // per-feature. Same pattern as the bus-ahead chevrons.
@@ -1491,7 +1501,16 @@ function initMapLayers() {
     <div style="font-weight:600;">🚲 ${escapeHtml(p.name)}</div>
     <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.systemName || '')} · ${p.bikes} bikes · ${p.docks} open docks</div>`);
 
-  // ─── AIRCRAFT layer ───────────────────────────────────────────────────────
+  // ─── AIRCRAFT trail + layer ───────────────────────────────────────────────
+  // Client-accumulated flight paths (see vessel trails above). Drawn beneath
+  // the aircraft triangles.
+  map.addSource('aircraft-trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({ id: 'aircraft-trails-line', type: 'line', source: 'aircraft-trails',
+    minzoom: 7,
+    paint: { 'line-color': '#ffd33d', 'line-width': ['interpolate', ['linear'], ['zoom'], 7, 1.2, 12, 2.4],
+      'line-opacity': 0.55, 'line-dasharray': [1, 1.5] },
+    layout: { 'line-join': 'round', 'line-cap': 'round' } });
+
   // Triangle symbol rotated per-feature to match the aircraft's true track.
   // Size scales with zoom so they're never lost in the basemap.
   if (!map.hasImage('aircraft-triangle')) {
@@ -2956,6 +2975,58 @@ async function fetchAllStops() {
 let allVessels = [];
 let boatsVisible = true;
 let vesselError = null;
+
+// ─── Client-side movement trails for boats & planes ──────────────────────────
+// Buses get their trail from the server (position DB). Vessels/aircraft are
+// snapshot feeds, so we remember each craft's recent pings here and stitch them
+// into a fading wake. Keyed by mmsi / icao24. Honors the same "Trails" toggle
+// and history-window (trailMinutes) as the bus trails.
+const vesselTrailHist = {};   // mmsi  -> [[lon,lat,t], …]
+const aircraftTrailHist = {}; // icao24 -> [[lon,lat,t], …]
+function trailWindowMs() { return (trailMinutes || 60) * 60 * 1000; }
+// Append a ping to a craft's history if it has meaningfully moved, then prune
+// anything older than the selected window (and cap the array length).
+function pushTrailPoint(hist, id, lon, lat, minStepDeg) {
+  if (id == null || lon == null || lat == null || !isFinite(lon) || !isFinite(lat)) return;
+  const now = Date.now();
+  const arr = hist[id] || (hist[id] = []);
+  const last = arr[arr.length - 1];
+  if (!last || Math.abs(lon - last[0]) > minStepDeg || Math.abs(lat - last[1]) > minStepDeg) {
+    arr.push([lon, lat, now]);
+  }
+  const cutoff = now - trailWindowMs();
+  while (arr.length && arr[0][2] < cutoff) arr.shift();
+  if (arr.length > 600) arr.splice(0, arr.length - 600);
+}
+// Drop craft we haven't heard from in a full window so old wakes don't linger.
+function pruneTrailHist(hist) {
+  const cutoff = Date.now() - trailWindowMs();
+  for (const id in hist) {
+    const arr = hist[id];
+    while (arr.length && arr[0][2] < cutoff) arr.shift();
+    if (!arr.length) delete hist[id];
+  }
+}
+function trailFeatures(hist) {
+  const feats = [];
+  for (const id in hist) {
+    const arr = hist[id];
+    if (arr && arr.length > 1) {
+      feats.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: arr.map(p => [p[0], p[1]]) }, properties: {} });
+    }
+  }
+  return feats;
+}
+function renderVesselTrails() {
+  if (!mapReady || !map.getSource('vessel-trails')) return;
+  const show = showTrails && boatsVisible;
+  map.getSource('vessel-trails').setData({ type: 'FeatureCollection', features: show ? trailFeatures(vesselTrailHist) : [] });
+}
+function renderAircraftTrails() {
+  if (!mapReady || !map.getSource('aircraft-trails')) return;
+  const show = showTrails && aircraftVisible;
+  map.getSource('aircraft-trails').setData({ type: 'FeatureCollection', features: show ? trailFeatures(aircraftTrailHist) : [] });
+}
 async function fetchVessels() {
   try {
     const res = await fetch('/api/vessels');
@@ -3039,6 +3110,11 @@ function renderVesselList() {
 function renderVesselMarkers() {
   if (!mapReady || !map.getSource('vessels')) return;
   const src = map.getSource('vessels');
+  // Record positions into per-vessel history for the wake (even while hidden so
+  // the trail is ready the moment boats are re-shown).
+  for (const v of allVessels) pushTrailPoint(vesselTrailHist, v.mmsi, v.lon, v.lat, 0.00005);
+  pruneTrailHist(vesselTrailHist);
+  renderVesselTrails();
   if (!boatsVisible) { src.setData({ type: 'FeatureCollection', features: [] }); return; }
   src.setData({
     type: 'FeatureCollection',
@@ -3057,6 +3133,7 @@ function renderVesselMarkers() {
 function toggleBoats() {
   boatsVisible = document.getElementById('showBoats').checked;
   renderVesselMarkers();
+  renderVesselTrails();
 }
 
 // ─── Bikeshare / micromobility (GBFS — HIBIKE + Biki, keyless) ─────────────
@@ -3203,6 +3280,9 @@ function renderAircraftList() {
 function renderAircraftMarkers() {
   if (!mapReady || !map.getSource('aircraft')) return;
   const src = map.getSource('aircraft');
+  for (const a of allAircraft) pushTrailPoint(aircraftTrailHist, a.icao24, a.lon, a.lat, 0.0002);
+  pruneTrailHist(aircraftTrailHist);
+  renderAircraftTrails();
   if (!aircraftVisible) { src.setData({ type: 'FeatureCollection', features: [] }); return; }
   src.setData({
     type: 'FeatureCollection',
@@ -3224,6 +3304,7 @@ function renderAircraftMarkers() {
 function toggleAircraft() {
   aircraftVisible = document.getElementById('showAircraft').checked;
   renderAircraftMarkers();
+  renderAircraftTrails();
 }
 function focusAircraft(icao) {
   const a = allAircraft.find(x => x.icao24 === icao);
@@ -7276,14 +7357,20 @@ let showTrails = true;
 function toggleTrails() {
   showTrails = document.getElementById('showTrails').checked;
   if (!mapReady) return;
-  ['trails-line','trail-dots-circle'].forEach(id => {
+  ['trails-line','trail-dots-circle','vessel-trails-line','aircraft-trails-line'].forEach(id => {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', showTrails ? 'visible' : 'none');
   });
+  renderVesselTrails();
+  renderAircraftTrails();
 }
 
 function onTrailMinutesChange() {
   trailMinutes = parseInt(document.getElementById('trailMinutes').value);
   fetchTrails();
+  pruneTrailHist(vesselTrailHist);
+  pruneTrailHist(aircraftTrailHist);
+  renderVesselTrails();
+  renderAircraftTrails();
 }
 
 // ─── STATUS TAB ───────────────────────────────────────────────────────────────
