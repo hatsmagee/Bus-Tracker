@@ -117,7 +117,17 @@
   /* ─── STREAMFLOW markers: water wheel = discharge (ft³/s); staff gauge = stage (ft) ── */
   @keyframes waterWheelSpin { to { transform: rotate(360deg); } }
   @keyframes streamFlow { to { background-position: -48px 0; } }
-  .stream-gauge { display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .stream-gauge { display:flex; align-items:center; gap:5px; cursor:pointer;
+    /* Scale the whole gauge with map zoom so gauges shrink when zoomed out and
+       stop piling on top of each other. Origin at the wheel center (17px in,
+       vertically centered) so scaling keeps the wheel pinned to its coordinate. */
+    transform: scale(var(--wsc, 1)); transform-origin: 17px center;
+    transition: transform .12s ease-out; }
+  /* Zoomed out: collapse to just the wheel — hide the meter + rate label so the
+     map isn't cluttered with wide readout rows crashing into each other. */
+  .stream-gauge.compact .meter-slot,
+  .stream-gauge.compact .rate,
+  .stream-gauge.compact .stream { display:none; }
   .stream-gauge .rig { position:relative; flex-shrink:0; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
   .stream-gauge.kind-flow .rig { width:34px; height:34px; }
   .stream-gauge.kind-stage .rig { width:auto; height:auto; min-width:28px; }
@@ -976,6 +986,10 @@ function initMap() {
   // Re-fan overlapping buses whenever the camera settles (overlap is zoom/pan
   // dependent — buses separate as you zoom in).
   map.on('moveend', () => { try { deOverlapMarkers(); } catch (e) {} });
+  // Keep the DOM water-wheel markers scaled to the current zoom (they shrink
+  // when zoomed out so they don't pile up). `zoom` fires continuously so the
+  // resize tracks the pinch/scroll smoothly.
+  map.on('zoom', () => { try { updateWheelScale(); } catch (e) {} });
   map.on('error', (e) => {
     // Suppress known MapLibre v4 bugs about listener arrays
     if (e?.error?.message?.includes('slice is not a function')) return;
@@ -3015,6 +3029,28 @@ function renderStreamflowWheels() {
   }
   for (const site of Object.keys(streamWheelMarkers)) {
     if (!seen.has(site)) { streamWheelMarkers[site].remove(); delete streamWheelMarkers[site]; }
+  }
+  updateWheelScale();
+}
+
+// Scale the DOM wheel markers with the map zoom so they shrink when zoomed out
+// (and stop piling on top of each other) and grow to full size up close. DOM
+// markers don't auto-scale like MapLibre symbols, so we drive a CSS transform
+// from the current zoom. Below `COMPACT_ZOOM` we also strip the meter+label so
+// only the little wheel shows — keeps the island readable at a glance.
+const WHEEL_MIN_Z = 8, WHEEL_MAX_Z = 13;   // zoom range over which scale ramps
+const WHEEL_MIN_SCALE = 0.45, WHEEL_MAX_SCALE = 1;
+const COMPACT_ZOOM = 11.5;                  // below this, wheel-only
+function updateWheelScale() {
+  if (!mapReady) return;
+  const z = map.getZoom();
+  const t = Math.max(0, Math.min(1, (z - WHEEL_MIN_Z) / (WHEEL_MAX_Z - WHEEL_MIN_Z)));
+  const scale = (WHEEL_MIN_SCALE + t * (WHEEL_MAX_SCALE - WHEEL_MIN_SCALE)).toFixed(3);
+  const compact = z < COMPACT_ZOOM;
+  for (const site of Object.keys(streamWheelMarkers)) {
+    const el = streamWheelMarkers[site].getElement();
+    el.style.setProperty('--wsc', scale);
+    el.classList.toggle('compact', compact);
   }
 }
 
