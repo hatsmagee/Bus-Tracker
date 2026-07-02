@@ -383,6 +383,19 @@
   .pulse-yellow { background:var(--yellow); }
   .pulse-red { background:var(--red); animation:pulse 1.5s ease-in-out infinite; }
   @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+  /* ─── Source-health dots (layer browser) ── live pulses, stale fades ── */
+  .src-health { display:inline-block; width:8px; height:8px; border-radius:50%;
+    margin-right:7px; flex-shrink:0; box-shadow:0 0 0 0 rgba(0,0,0,0); }
+  .src-health.sh-live { background:var(--green);
+    animation: shGlow 1.8s ease-in-out infinite; }
+  .src-health.sh-stale { background:var(--yellow); opacity:.55; transform:scale(.75); }
+  .src-health.sh-empty { background:#6b7280; opacity:.55; transform:scale(.7); }
+  .src-health.sh-error { background:var(--red); animation: pulse 1.1s ease-in-out infinite; }
+  .src-health.sh-warming { background:#58a6ff; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes shGlow {
+    0%,100% { box-shadow:0 0 0 0 rgba(63,185,80,.55); }
+    50%     { box-shadow:0 0 0 4px rgba(63,185,80,0); }
+  }
 
   .main { display:flex; flex:1; overflow:hidden; }
   #map { flex:1; }
@@ -2386,6 +2399,7 @@ async function fetchHibike() {
     const data = await res.json();
     allMobility = data.stations || [];
     hawaiiList.mobility = allMobility.map(st => ({ id: `${st.system}:${st.id}`, ...st }));
+    recordHealth('mobility', data, allMobility.length);
     hawaiiBrowseRefresh();
     renderHibikeMarkers();
     updateHibikeStatus(data);
@@ -2448,6 +2462,7 @@ async function fetchAircraft() {
     const data = await res.json();
     allAircraft = data.aircraft || [];
     aircraftError = data.lastError || null;
+    recordHealth('aircraft', data, allAircraft.length);
     renderAircraftList();
     renderAircraftMarkers();
     updateAircraftStatus(data);
@@ -2675,6 +2690,7 @@ async function fetchStreamflow() {
     const res = await fetch('/api/streamflow');
     const data = await res.json();
     streamflowData = data.geojson || { type: 'FeatureCollection', features: [] };
+    recordHealth('streamflow', data, (streamflowData.features || []).length);
     // Keep the invisible base circle source alive for feature hover/click.
     if (mapReady && map.getSource('streamflow')) {
       map.getSource('streamflow').setData(streamflowVisible ? streamflowData : { type: 'FeatureCollection', features: [] });
@@ -3020,6 +3036,7 @@ async function fetchSummits() {
   try {
     const res = await fetch('/api/summits');
     const data = await res.json();
+    recordHealth('summits', data, (data.summits || []).length);
     if (!mapReady || !map.getSource('summits')) return;
     const feats = (data.summits || []).map(s => {
       const r = s.readings || {};
@@ -3049,6 +3066,7 @@ async function fetchAirQuality() {
   try {
     const res = await fetch('/api/air-quality');
     const data = await res.json();
+    recordHealth('airquality', data, (data.points || []).length);
     if (!mapReady || !map.getSource('airquality')) return;
     const feats = (data.points || []).map(p => ({
       type: 'Feature', geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
@@ -3064,6 +3082,7 @@ async function fetchVolcano() {
   try {
     const res = await fetch('/api/volcano');
     const data = await res.json();
+    recordHealth('volcano', data, (data.alerts || []).length + (data.webcams || []).length);
     if (!mapReady || !map.getSource('volcano')) return;
     const feats = [];
     for (const a of (data.alerts || [])) {
@@ -3087,6 +3106,7 @@ async function fetchMetars() {
   try {
     const res = await fetch('/api/metars');
     const data = await res.json();
+    recordHealth('metars', data, (data.metars || []).length);
     if (!mapReady || !map.getSource('metars')) return;
     const feats = (data.metars || []).map(m => ({
       type: 'Feature', geometry: { type: 'Point', coordinates: [m.lon, m.lat] },
@@ -3178,6 +3198,7 @@ async function fetchMeshtastic(retry = 0) {
     const res = await fetch('/api/meshtastic');
     const data = await res.json();
     const nodes = data.nodes || [];
+    recordHealth('meshtastic', data, nodes.length);
     const warming = nodes.length === 0 && !data.lastPollTs && (data.polling || data.lastError == null);
     if (warming) {
       if (retry < 8 && !meshFetchRetryTimer) {
@@ -3234,6 +3255,7 @@ async function fetchOcean() {
     const res = await fetch('/api/ocean');
     const data = await res.json();
     hawaiiList.ocean = (data.stations || []).map((s, i) => ({ id: String(i), ...s }));
+    recordHealth('ocean', data, (data.stations || []).length);
     hawaiiBrowseRefresh();
     if (!mapReady || !map.getSource('ocean')) return;
     const feats = (data.stations || []).map(s => {
@@ -3304,6 +3326,7 @@ async function fetchMarine() {
     hawaiiList.marineWebcams = data.webcams || [];
     hawaiiList.marineReefSensors = data.reefSensors || [];
     hawaiiList.marineFishing = data.fishing || { top: [] };
+    recordHealth('marine', data, hawaiiList.marineWebcams.length + hawaiiList.marineReefSensors.length);
     hawaiiBrowseRefresh();
     if (!mapReady || !map.getSource('marine')) return;
     const feats = [];
@@ -3507,6 +3530,7 @@ async function fetchAprs() {
     const res = await fetch('/api/aprs');
     const data = await res.json();
     hawaiiList.aprs = (data.stations || []).map((s, i) => ({ id: s.call || String(i), ...s }));
+    recordHealth('aprs', data, hawaiiList.aprs.length);
     hawaiiBrowseRefresh();
     if (!mapReady || !map.getSource('aprs')) return;
     const feats = (data.stations || []).map(s => ({
@@ -3522,6 +3546,7 @@ async function fetchWeatherStations() {
   try {
     const res = await fetch('/api/weather-stations');
     const data = await res.json();
+    recordHealth('weather', data, ((data.geojson && data.geojson.features) || []).length);
     if (mapReady && map.getSource('weather-stations')) {
       map.getSource('weather-stations').setData(weatherStationsVisible ? data.geojson : { type: 'FeatureCollection', features: [] });
     }
@@ -3570,6 +3595,107 @@ const hawaiiList = {
 };
 const hawaiiBrowse = { openCats: new Set(['radio']), openItems: new Set() };
 const hawaiiMeshDetails = {}; // nodeId -> detail payload
+
+// ─── SOURCE HEALTH REGISTRY ─────────────────────────────────────────────────
+// One entry per live data source. Every fetcher calls recordHealth() with the
+// server envelope so we can render a single honest "is this feed alive?" signal
+// everywhere: a pulsing green dot in the layer browser when data is flowing, a
+// faded/smaller state when it's gone quiet, red when the source errored. This
+// is the RTS-style "systems online" readout — and it drives map-layer dimming
+// so a stale layer literally fades on the map instead of lying about being live.
+// staleAfterMs: how long since the LAST SUCCESSFUL poll before we call it stale.
+const SOURCE_HEALTH_CFG = {
+  aircraft:   { staleAfterMs: 90 * 1000,   layers: ['aircraft-triangles'] },
+  vessels:    { staleAfterMs: 15 * 60000,  layers: ['vessels-icon'] },
+  ocean:      { staleAfterMs: 60 * 60000,  layers: ['ocean-dot'] },
+  summits:    { staleAfterMs: 30 * 60000,  layers: ['summits-dot'] },
+  airquality: { staleAfterMs: 60 * 60000,  layers: ['airquality-icon'] },
+  aprs:       { staleAfterMs: 30 * 60000,  layers: ['aprs-icon'] },
+  meshtastic: { staleAfterMs: 60 * 60000,  layers: ['meshtastic-icon'] },
+  metars:     { staleAfterMs: 90 * 60000,  layers: ['metars-dot'] },
+  volcano:    { staleAfterMs: 60 * 60000,  layers: ['volcano-dot'] },
+  streamflow: { staleAfterMs: 3 * 3600000, layers: [] },
+  weather:    { staleAfterMs: 2 * 3600000, layers: ['weather-stations-icon'] },
+  marine:     { staleAfterMs: 6 * 3600000, layers: ['marine-dot'] },
+  mobility:   { staleAfterMs: 30 * 60000,  layers: ['hibike-icon'] },
+};
+const sourceHealth = {}; // id -> { state, lastPollTs, lastError, count, at }
+
+// Layer-browser category id -> source-health registry id (only live feeds).
+const CAT_HEALTH_ID = {
+  aprs: 'aprs', meshtastic: 'meshtastic', mobility: 'mobility', weather: 'weather',
+  streamflow: 'streamflow', summits: 'summits', ocean: 'ocean',
+  marineWebcams: 'marine', marineReefSensors: 'marine',
+  airquality: 'airquality', volcano: 'volcano', metars: 'metars',
+};
+
+// state: 'live' (fresh data), 'stale' (data but poll went quiet), 'empty'
+// (source up, nothing to show), 'error' (source failed), 'warming' (first load).
+function healthState(id, data, count) {
+  const cfg = SOURCE_HEALTH_CFG[id] || { staleAfterMs: 30 * 60000 };
+  const now = Date.now();
+  const pollTs = data && (data.lastPollTs || data.lastRxTs || data.ts) || 0;
+  const err = data && data.lastError;
+  if (err && !count) return 'error';
+  if (!pollTs && !count) return 'warming';
+  if (pollTs && (now - pollTs) > cfg.staleAfterMs) return 'stale';
+  if (!count) return 'empty';
+  return 'live';
+}
+
+function recordHealth(id, data, count) {
+  const state = healthState(id, data, count);
+  sourceHealth[id] = {
+    state, count: count || 0, at: Date.now(),
+    lastPollTs: (data && (data.lastPollTs || data.lastRxTs || data.ts)) || null,
+    lastError: (data && data.lastError) || null,
+  };
+  applyLayerHealthDim(id, state);
+}
+
+// Fade a source's map layers when its feed goes stale/quiet, so the map itself
+// reflects freshness — bright when live, dimmed when the data stopped updating.
+function applyLayerHealthDim(id, state) {
+  if (!mapReady) return;
+  const cfg = SOURCE_HEALTH_CFG[id];
+  if (!cfg || !cfg.layers) return;
+  const dim = (state === 'stale' || state === 'error');
+  for (const lyr of cfg.layers) {
+    if (!map.getLayer(lyr)) continue;
+    const isSymbol = (map.getLayer(lyr).type === 'symbol');
+    try {
+      const props = isSymbol
+        ? [['text-opacity', dim ? 0.4 : 1], ['icon-opacity', dim ? 0.45 : 1]]
+        : [['circle-opacity', dim ? 0.35 : 0.9]];
+      for (const [k, v] of props) {
+        // Only set properties the layer actually has, to avoid console spam.
+        try { map.setPaintProperty(lyr, k, v); } catch { /* prop N/A for this layer */ }
+      }
+    } catch { /* layer not paintable yet */ }
+  }
+}
+
+function healthDotHtml(id) {
+  const h = sourceHealth[id];
+  if (!h) return '';
+  const map = {
+    live:    { cls: 'sh-live',    t: 'Live — data flowing' },
+    stale:   { cls: 'sh-stale',   t: 'Stale — feed went quiet' },
+    empty:   { cls: 'sh-empty',   t: 'Online — nothing to show right now' },
+    error:   { cls: 'sh-error',   t: 'Source error' },
+    warming: { cls: 'sh-warming', t: 'Connecting…' },
+  }[h.state] || { cls: 'sh-empty', t: '' };
+  const age = h.lastPollTs ? ` (${timeAgoShort(h.lastPollTs)})` : '';
+  return `<span class="src-health ${map.cls}" title="${map.t}${age}"></span>`;
+}
+
+function timeAgoShort(ts) {
+  const s = Math.max(0, (Date.now() - ts) / 1000);
+  if (s < 60) return Math.round(s) + 's ago';
+  if (s < 3600) return Math.round(s / 60) + 'm ago';
+  if (s < 86400) return Math.round(s / 3600) + 'h ago';
+  return Math.round(s / 86400) + 'd ago';
+}
 
 function hawaiiDetailRow(e, k, v) {
   if (v == null || v === '') return '';
@@ -4007,9 +4133,12 @@ function renderHawaiiBrowser() {
         <div class="hawaii-item-body">${openItem ? hawaiiItemBody(cat.id, item) : ''}</div>
       </div>`;
     }).join('') : `<div style="padding:10px 22px;font-size:11px;color:var(--muted);">No items in this layer right now.</div>`;
+    // Map the browser category to its live-data source health, when it has one.
+    const healthId = CAT_HEALTH_ID[cat.id];
+    const dot = healthId ? healthDotHtml(healthId) : '';
     return `<div class="hawaii-cat${open ? ' open' : ''}">
       <div class="hawaii-cat-h" onclick="toggleHawaiiCat('${cat.id}')">
-        <span>${cat.icon}</span><span>${escapeHtml(cat.label)}</span>
+        ${dot}<span>${cat.icon}</span><span>${escapeHtml(cat.label)}</span>
         <span class="cnt">(${items.length})</span><span class="chev">▶</span>
       </div>
       <div class="hawaii-cat-items">${itemHtml}</div>
@@ -7284,6 +7413,22 @@ const _earlyTimer = setInterval(() => {
   fetchAircraft(); fetchVessels();
   if (++_earlyPolls >= 6) clearInterval(_earlyTimer); // ~6×5s = first 30s
 }, 5000);
+
+// Health tick: re-evaluate each source's freshness on a slow cadence so a feed
+// that goes quiet visibly decays (green → yellow) and its map layer fades, even
+// if no new fetch has landed. Re-render the browser only when it's the open tab.
+setInterval(() => {
+  let changed = false;
+  for (const id of Object.keys(sourceHealth)) {
+    const h = sourceHealth[id];
+    const cfg = SOURCE_HEALTH_CFG[id];
+    if (!h || !cfg || !h.lastPollTs) continue;
+    const stale = (Date.now() - h.lastPollTs) > cfg.staleAfterMs;
+    const want = stale ? 'stale' : (h.count ? 'live' : 'empty');
+    if (want !== h.state) { h.state = want; applyLayerHealthDim(id, want); changed = true; }
+  }
+  if (changed && activeTab === 'hawaii' && !document.hidden) renderHawaiiBrowser();
+}, 20000);
 
 // Tick live clocks in all open stop lists every second
 setInterval(() => {
