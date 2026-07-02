@@ -55,6 +55,7 @@ noted). All of it is polled server-side, cached, and served from `/api/*`.
 | Layer | Source | Endpoint | Notes |
 |-------|--------|----------|-------|
 | Buses (live GPS) | Syncromatics RTPI + GTFS-RT (`myheleonbus.org`) | `/api/vehicles` | positions snapped to the OSM road graph |
+| HIBIKE bikeshare | PBSC GBFS v3 (`kona.publicbikesystem.net`) | `/api/hibike` | keyless; dock bike/dock counts in Hilo + Kona (not per-bike GPS) |
 | Route ribbons | GTFS shapes matched to OSM roads | `/api/route-edges`, `/api/route-roads` | 25 routes, colors the actual road via feature-state |
 | Aircraft | adsb.lol → airplanes.live → adsb.one (community ADS-B) | `/api/aircraft` | keyless; OpenSky fallback |
 | Vessels | aisstream.io AIS websocket | `/api/vessels` | bundled key; sparse mid-ocean coverage is expected |
@@ -75,7 +76,7 @@ noted). All of it is polled server-side, cached, and served from `/api/*`.
 
 Things we investigated that **don't** exist publicly (so they're not faked):
 live traffic-signal states (no HDOT SPaT feed), observatory/ranger vehicle GPS,
-and Tesla/private fleet tracking (owner-account APIs only).
+county taxis / paratransit / Uber-Lyft GPS feeds, and Tesla/private fleet tracking.
 
 ## Architecture
 

@@ -2835,8 +2835,21 @@ async function handleApi(url, res) {
       keyConfigured: !!AISSTREAM_API_KEY,
       lastConnectTs: vesselLastConnectTs,
       lastError: vesselLastError,
+      msgCount: vesselMsgCount,
       count: list.length,
       vessels: list,
+    });
+  }
+
+  // ── HIBIKE bikeshare (GBFS v3, keyless — Hilo + Kona stations) ───────────
+  if (p === '/api/hibike') {
+    return json(res, {
+      ts: Date.now(),
+      lastPollTs: hibikeLastPollTs,
+      lastError: hibikeLastError,
+      count: hibikeCache.length,
+      bikesAvailable: hibikeCache.reduce((s, st) => s + (st.bikes || 0), 0),
+      stations: hibikeCache,
     });
   }
 
@@ -3075,39 +3088,87 @@ const AISSTREAM_URL = 'wss://stream.aisstream.io/v0/stream';
 // Wider than the island itself so we catch cargo/cruise/fishing traffic in the
 // approaches and inter-island lanes (AIS shore-receiver coverage out here is
 // sparse, so a tight box often shows nothing even when ships are near).
-const HAWAII_BBOX = [[[18.3, -157.2], [21.0, -154.2]]];
+// Three boxes: Big Island + approaches, Maui channel, and Oʻahu where most
+// shore AIS receivers actually hear traffic (Honolulu harbor, USCG, inter-island).
+const HAWAII_BBOX = [
+  [[18.0, -157.5], [21.0, -154.0]],
+  [[20.5, -158.5], [22.5, -155.0]],
+  [[21.0, -158.5], [22.2, -157.5]],
+];
+const VESSEL_LAT_MIN = 18.0;
+const VESSEL_LAT_MAX = 22.5;
+const VESSEL_LON_MIN = -160.5;
+const VESSEL_LON_MAX = -154.0;
 const VESSEL_STALE_MS = 10 * 60 * 1000; // drop unseen vessels after 10 min
 const vesselCache = new Map(); // mmsi -> { mmsi, name, lat, lon, speedKts, headingDeg, lastTs, shipType }
 let vesselLastConnectTs = null;
 let vesselLastError = null;
+let vesselMsgCount = 0;
 let aisSocket = null;
 let aisReconnectTimer = null;
 
+function aisMmsiFromMsg(msg) {
+  if (!msg) return null;
+  const md = msg.MetaData;
+  if (md && md.MMSI != null) return String(md.MMSI);
+  const inner = msg.Message || {};
+  for (const key of ['PositionReport', 'ShipStaticData', 'StandardClassBPositionReport', 'ExtendedClassBPositionReport', 'PositionReportForLongRange']) {
+    const block = inner[key];
+    if (!block) continue;
+    if (block.UserID != null) return String(block.UserID);
+    if (block.MMSI != null) return String(block.MMSI);
+  }
+  return null;
+}
+
+function aisPositionBlock(msg) {
+  if (!msg || !msg.Message) return null;
+  const inner = msg.Message;
+  const blocks = [
+    inner.PositionReport,
+    inner.StandardClassBPositionReport,
+    inner.ExtendedClassBPositionReport,
+    inner.PositionReportForLongRange,
+  ].filter(Boolean);
+  for (const p of blocks) {
+    if (p.Latitude != null && p.Longitude != null) return p;
+  }
+  const md = msg.MetaData;
+  if (md && md.latitude != null && md.longitude != null) {
+    return { Latitude: md.latitude, Longitude: md.longitude, Sog: null, TrueHeading: null, Cog: null };
+  }
+  return null;
+}
+
+function vesselInHawaii(lat, lon) {
+  return lat >= VESSEL_LAT_MIN && lat <= VESSEL_LAT_MAX && lon >= VESSEL_LON_MIN && lon <= VESSEL_LON_MAX;
+}
+
 function setVesselFromMsg(msg) {
-  if (!msg || !msg.Message) return;
-  // aisstream.io wraps each PositionReport / ShipStaticData. Combine them
-  // (StaticData updates ShipName + ShipType; PositionReport updates lat/lon).
-  const { Message } = msg;
-  const mmsi = Message.MMSI != null ? String(Message.MMSI) : null;
+  if (!msg) return;
+  vesselMsgCount++;
+  const mmsi = aisMmsiFromMsg(msg);
   if (!mmsi) return;
   let v = vesselCache.get(mmsi) || { mmsi, name: '', lat: null, lon: null, speedKts: 0, headingDeg: 0, lastTs: 0, shipType: null };
-  if (Message.PositionReport) {
-    const p = Message.PositionReport;
-    // Coarse bbox filter (server also subscribes with bbox — defence in depth)
-    if (p.Latitude < 18.5 || p.Latitude > 20.7 || p.Longitude < -156.5 || p.Longitude > -154.5) return;
+  const md = msg.MetaData || {};
+  if (md.ShipName && String(md.ShipName).trim()) v.name = String(md.ShipName).trim();
+  const p = aisPositionBlock(msg);
+  if (p) {
+    if (!vesselInHawaii(p.Latitude, p.Longitude)) return;
     v.lat = p.Latitude;
     v.lon = p.Longitude;
     v.speedKts = p.Sog != null ? p.Sog : v.speedKts;
-    v.headingDeg = p.TrueHeading != null && p.TrueHeading <= 359 ? p.TrueHeading : (p.Cog != null ? p.Cog : v.headingDeg);
+    v.headingDeg = p.TrueHeading != null && p.TrueHeading <= 359 ? p.TrueHeading
+      : (p.Cog != null ? p.Cog : v.headingDeg);
     v.lastTs = Date.now();
   }
-  if (Message.ShipStaticData) {
-    const s = Message.ShipStaticData;
-    if (s.Name && s.Name.trim()) v.name = s.Name.trim();
+  const inner = msg.Message || {};
+  if (inner.ShipStaticData) {
+    const s = inner.ShipStaticData;
+    if (s.Name && String(s.Name).trim()) v.name = String(s.Name).trim();
     if (s.Type != null) v.shipType = s.Type;
     v.lastTs = Date.now();
   }
-  // Drop low-quality positions outside the bbox or with no position yet
   if (v.lat == null || v.lon == null) return;
   vesselCache.set(mmsi, v);
 }
@@ -3153,6 +3214,61 @@ function scheduleAisReconnect() {
   // Backoff capped at 60s
   const delay = Math.min(60000, 5000 * Math.pow(1.5, (vesselCache.size === 0 ? 1 : 0)));
   aisReconnectTimer = setTimeout(() => { aisReconnectTimer = null; connectAisStream(); }, delay);
+}
+
+// ─── HIBIKE BIKESHARE (GBFS, keyless) ─────────────────────────────────────
+// County-funded dock bikeshare in Hilo + Kailua-Kona. PBSC publishes a standard
+// GBFS v3 feed — no API key. Individual bikes aren't GPS-tracked; we show dock
+// stations with live bike/dock availability counts.
+const HIBIKE_GBFS_HOST = 'kona.publicbikesystem.net';
+const HIBIKE_GBFS_PATH = '/customer/gbfs/v3.0/gbfs.json';
+let hibikeCache = [];
+let hibikeLastPollTs = null;
+let hibikeLastError = null;
+
+function gbfsText(field) {
+  if (!field) return '';
+  if (typeof field === 'string') return field;
+  if (Array.isArray(field)) {
+    const en = field.find(x => x.language === 'en');
+    return (en && en.text) || (field[0] && field[0].text) || '';
+  }
+  return '';
+}
+
+async function pollHibike() {
+  try {
+    const root = await fetchJson(HIBIKE_GBFS_HOST, HIBIKE_GBFS_PATH);
+    const feeds = (root.data && root.data.feeds) || [];
+    const infoFeed = feeds.find(f => f.name === 'station_information');
+    const statusFeed = feeds.find(f => f.name === 'station_status');
+    if (!infoFeed || !statusFeed) throw new Error('GBFS station feeds missing');
+    const infoUrl = new URL(infoFeed.url);
+    const statusUrl = new URL(statusFeed.url);
+    const [info, status] = await Promise.all([
+      fetchJson(infoUrl.hostname, infoUrl.pathname + infoUrl.search),
+      fetchJson(statusUrl.hostname, statusUrl.pathname + statusUrl.search),
+    ]);
+    const statusById = new Map((status.data.stations || []).map(s => [s.station_id, s]));
+    hibikeCache = (info.data.stations || []).map(st => {
+      const stStat = statusById.get(st.station_id) || {};
+      return {
+        id: st.station_id,
+        name: gbfsText(st.name) || gbfsText(st.short_name) || `Station ${st.station_id}`,
+        lat: st.lat,
+        lon: st.lon,
+        address: st.address || '',
+        capacity: st.capacity,
+        bikes: stStat.num_bikes_available ?? 0,
+        docks: stStat.num_docks_available ?? 0,
+        isRenting: stStat.is_renting !== false,
+      };
+    });
+    hibikeLastPollTs = Date.now();
+    hibikeLastError = null;
+  } catch (e) {
+    hibikeLastError = e.message;
+  }
 }
 
 // ─── AIRCRAFT (OpenSky Network) ────────────────────────────────────────────
@@ -4229,6 +4345,8 @@ const server = http.createServer((req, res) => {
   pollVolcano();
   pollMetars();
   pollRepeaters();
+  pollHibike();
+  setInterval(pollHibike, 60 * 1000);
   // Meshtastic node list is ~30 MB — delay it past boot and refresh sparingly.
   setTimeout(pollMeshtastic, 20000);
   connectAprs();

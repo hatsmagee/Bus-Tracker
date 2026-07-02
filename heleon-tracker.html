@@ -526,6 +526,15 @@
     </div>
 
     <div class="tab-content active" id="tab-vehicles">
+      <div class="trail-controls" style="flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--border);">
+        <label><input type="checkbox" id="showHibike" onchange="toggleHibike()" checked> HIBIKE bikeshare docks</label>
+        <span class="vessel-status" id="hibikeStatus"></span>
+      </div>
+      <div style="padding:6px 12px;color:var(--muted);font-size:10px;border-bottom:1px solid var(--border);">
+        Hele-On buses are the only live GPS vehicle fleet on Hawaiʻi Island.
+        <a href="https://www.hawaiiislandbike.com/" target="_blank" style="color:#58a6ff">HIBIKE</a> dock availability is keyless (GBFS).
+        County taxis, Uber/Lyft, and paratransit have no public tracking API.
+      </div>
       <div id="vehicleList"><div class="empty"><div class="empty-icon">🚌</div>Loading…</div></div>
       <div id="etaSection" style="border-top:2px solid var(--border);flex-shrink:0;display:none;">
         <div class="section-header" style="display:flex;align-items:center;justify-content:space-between;">
@@ -1039,6 +1048,37 @@ function initMapLayers() {
   wireLayerHover('vessels-icon', p => `
     <div style="font-weight:600;">⛵ ${escapeHtml(p.name) || 'Unknown vessel'}</div>
     <div style="color:var(--muted);font-size:11px;">${p.speedKts} kts · heading ${Math.round(p.heading)}°</div>`);
+
+  // ─── HIBIKE bikeshare docks (GBFS, keyless) ───────────────────────────────
+  map.addSource('hibike', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'hibike-icon', type: 'symbol', source: 'hibike',
+    layout: {
+      'text-field': ['concat', '🚲 ', ['get', 'bikes']],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 10, 11, 14, 14],
+      'text-font': EMOJI_FONT,
+      'text-allow-overlap': true,
+      'text-ignore-placement': true,
+    },
+    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+  });
+  map.on('click', 'hibike-icon', e => {
+    const p = e.features[0].properties;
+    const html = `<div style="font-family:system-ui;font-size:12px;color:#e6edf3;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">🚲 ${escapeHtml(p.name)}</div>
+      <div style="color:var(--muted);font-size:10px;margin-bottom:6px;">HIBIKE · ${escapeHtml(p.address || '')}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;">
+        <div><span style="color:var(--muted);">Bikes:</span> ${p.bikes}</div>
+        <div><span style="color:var(--muted);">Open docks:</span> ${p.docks}</div>
+      </div>
+    </div>`;
+    if (vesselPopup) vesselPopup.remove();
+    vesselPopup = new maplibregl.Popup({ offset: 12, maxWidth: '260px' })
+      .setLngLat(e.lngLat).setHTML(html).addTo(map);
+  });
+  wireLayerHover('hibike-icon', p => `
+    <div style="font-weight:600;">🚲 ${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:11px;">${p.bikes} bikes · ${p.docks} open docks</div>`);
 
   // ─── AIRCRAFT layer ───────────────────────────────────────────────────────
   // Triangle symbol rotated per-feature to match the aircraft's true track.
@@ -1939,7 +1979,11 @@ function renderVesselList() {
     return;
   }
   if (!allVessels.length) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">⛵</div>No vessels broadcasting near Hawaiʻi right now.<div style="color:var(--muted);font-size:10px;margin-top:6px;">${vesselError ? escapeHtml(vesselError) : ''}</div></div>`;
+    el.innerHTML = `<div class="empty"><div class="empty-icon">⛵</div>No vessels broadcasting in Hawaiian waters right now.
+      <div style="color:var(--muted);font-size:10px;margin-top:6px;max-width:280px;margin-left:auto;margin-right:auto;">
+        AIS shore coverage around the island is sparse — cargo and fishing boats may appear in bursts.
+        ${vesselError ? escapeHtml(vesselError) : ''}
+      </div></div>`;
     return;
   }
   // Sort by speed desc so the active vessels are at the top
@@ -1983,6 +2027,50 @@ function renderVesselMarkers() {
 function toggleBoats() {
   boatsVisible = document.getElementById('showBoats').checked;
   renderVesselMarkers();
+}
+
+// ─── HIBIKE (community bikeshare, GBFS) ───────────────────────────────────
+let allHibike = [];
+let hibikeVisible = true;
+async function fetchHibike() {
+  try {
+    const res = await fetch('/api/hibike');
+    const data = await res.json();
+    allHibike = data.stations || [];
+    renderHibikeMarkers();
+    updateHibikeStatus(data);
+  } catch (e) {
+    updateHibikeStatus(null);
+  }
+}
+function updateHibikeStatus(data) {
+  const el = document.getElementById('hibikeStatus');
+  if (!el) return;
+  if (!data) { el.className = 'vessel-status err'; el.innerHTML = '<span class="vessel-dot"></span><span>Offline</span>'; return; }
+  if (data.lastError) {
+    el.className = 'vessel-status err';
+    el.innerHTML = `<span class="vessel-dot"></span><span title="${escapeHtml(data.lastError)}">Feed error</span>`;
+    return;
+  }
+  el.className = 'vessel-status live';
+  el.innerHTML = `<span class="vessel-dot"></span><span>${data.bikesAvailable || 0} bikes at ${data.count || 0} docks</span>`;
+}
+function renderHibikeMarkers() {
+  if (!mapReady || !map.getSource('hibike')) return;
+  const src = map.getSource('hibike');
+  if (!hibikeVisible) { src.setData({ type: 'FeatureCollection', features: [] }); return; }
+  src.setData({
+    type: 'FeatureCollection',
+    features: allHibike.map(st => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [st.lon, st.lat] },
+      properties: { id: st.id, name: st.name, address: st.address || '', bikes: st.bikes, docks: st.docks },
+    })),
+  });
+}
+function toggleHibike() {
+  hibikeVisible = document.getElementById('showHibike').checked;
+  renderHibikeMarkers();
 }
 function focusVessel(mmsi) {
   const v = allVessels.find(x => String(x.mmsi) === String(mmsi));
@@ -5875,6 +5963,7 @@ Promise.all([
   fetchGtfsStops(),
   fetchTrails(),
   fetchVessels(),
+  fetchHibike(),
   fetchAircraft(),
   fetchQuakes(),
   fetchAlerts(),
@@ -5904,6 +5993,7 @@ setInterval(() => { if (!document.hidden) fetchStoplines(); }, 30000); // refres
 // Vessel refresh — 30 s is plenty; the AIS stream on the server updates in
 // near real time. Skip while tab is hidden to save mobile data.
 setInterval(() => { if (!document.hidden) fetchVessels(); }, 30000);
+setInterval(() => { if (!document.hidden) fetchHibike(); }, 60000);
 // Aircraft refresh — server polls OpenSky every 12 s; UI refreshes at 30 s.
 // Slower than the server poll is fine — the visible difference between
 // snapshots a few seconds apart is negligible.
