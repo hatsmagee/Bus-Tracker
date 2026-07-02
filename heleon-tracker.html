@@ -186,6 +186,30 @@
     background:rgba(255,255,255,.9); border:1px solid #fde68a; border-radius:9px; padding:1px 5px; }
   .solar-sun.compact .ss-label { display:none; }
 
+  /* ─── RADIO-TOWER markers (ham repeater / cell tower with pulsing rings) ────
+     A tower + 1 or 2 pulse rings expanding outward. Pulsing lets you see
+     'something is broadcasting/repeating here' at a glance. Same zero-size
+     root trick so each marker stays welded to its coordinate. */
+  @keyframes ringPulse {
+    0%   { transform: scale(0.4); opacity: 0.9; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+  @keyframes ringPulse2 { 0% { transform:scale(0.4); opacity:0.9; } 100% { transform:scale(2.0); opacity:0; } }
+  .radio-tower { cursor:pointer; position:relative; width:0; height:0; }
+  .radio-tower .rt-scale { position:absolute; left:0; top:0;
+    transform: translate(-13px, -22px) scale(var(--rtc, 1)); transform-origin: 13px 22px;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
+  .radio-tower .rt-ring { position:absolute; left:13px; top:14px; width:6px; height:6px;
+    border-radius:50%; border:1.5px solid; transform-origin:center; animation: ringPulse 2.4s ease-out infinite; }
+  .radio-tower .rt-ring.r2 { animation: ringPulse2 2.4s ease-out infinite; animation-delay: 1.2s; }
+  .radio-tower .rt-tower { position:absolute; left:11px; top:0;
+    width:4px; height:20px; background:linear-gradient(180deg,#cbd5e1,#475569); border-radius:1px; }
+  .radio-tower .rt-top { position:absolute; left:12px; top:-2px; font-size:13px; }
+  .radio-tower .rt-label { position:absolute; left:24px; top:6px; white-space:nowrap;
+    font-size:10px; font-weight:700; color:#1e3a8a;
+    background:rgba(255,255,255,.92); border:1px solid #bfdbfe; border-radius:9px; padding:1px 5px; }
+  .radio-tower.compact .rt-label, .radio-tower.compact .rt-ring { display:none; }
+
   /* ─── STREAMFLOW markers: water wheel = discharge (ft³/s); staff gauge = stage (ft) ── */
   @keyframes waterWheelSpin { to { transform: rotate(360deg); } }
   @keyframes streamFlow { to { background-position: -48px 0; } }
@@ -203,12 +227,16 @@
   .stream-gauge .gauge-scale { position:absolute; left:0; top:0;
     display:flex; align-items:center; gap:5px;
     transform: translate(-17px, -15px) scale(var(--wsc, 1));
-    transform-origin: 17px 15px; }
+    transform-origin: 17px 15px; min-width:34px; min-height:34px; }
   /* Zoomed way out: collapse to just the wheel — hide the meter + rate label so
      the map isn't cluttered with wide readout rows. The flowing-water strip
-     under the wheel STAYS (it's part of the wheel, not clutter). */
-  .stream-gauge.compact .meter-slot,
-  .stream-gauge.compact .rate { display:none; }
+     inside the wheel STAYS (it's part of the wheel, not clutter). */
+  .stream-gauge.compact .meter-slot { display:none; }
+  /* In compact mode, the rate pill moves BELOW the wheel (not to the right)
+     so it never collides with the spinning water strip; the rest of the
+     row is hidden so this is the only readout. */
+  .stream-gauge.compact .rate { position:absolute; left:50%; top:35px;
+    transform: translateX(-50%); font-size:9px; padding:1px 4px; white-space:nowrap; }
   .stream-gauge .rig { position:relative; flex-shrink:0; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
   .stream-gauge.kind-flow .rig { width:34px; height:34px; }
   .stream-gauge.kind-stage .rig { width:auto; height:auto; min-width:28px; }
@@ -216,15 +244,21 @@
   .stream-gauge.kind-flow svg.wheel-svg,
   .stream-gauge.kind-both svg.wheel-svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
   .stream-gauge .wheel-spin { transform-origin:17px 15px; animation: waterWheelSpin linear infinite; }
-  .stream-gauge .stream { position:absolute; left:-6px; right:-6px; bottom:1px; height:8px;
-    border-radius:3px; overflow:hidden;
+  /* Flowing water inside the wheel disc (not extending past it) so it can't
+     collide with the rate readout label. Compact, with a subtle inward fade
+     so the rim of the wheel stays visible around the water. */
+  .stream-gauge .stream { position:absolute; left:4px; right:4px; bottom:4px; height:6px;
+    border-radius:2px; overflow:hidden;
     background:
       repeating-linear-gradient(90deg,
-        rgba(255,255,255,.55) 0 3px, rgba(255,255,255,0) 3px 10px),
-      linear-gradient(180deg,#7ec7f0,#2e83c9);
+        rgba(255,255,255,.65) 0 3px, rgba(255,255,255,0) 3px 10px),
+      linear-gradient(180deg,#9ed5f3,#3a8ed0);
     background-size:24px 100%, 100% 100%;
     animation: streamFlow linear infinite;
-    box-shadow: inset 0 1px 1px rgba(255,255,255,.4); }
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.5); }
+  /* Tucked-in top border so it doesn't bleed past the rim. */
+  .stream-gauge .stream::after { content:''; position:absolute; inset:0;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35); pointer-events:none; }
   .stream-gauge .rate { font-size:10px; font-weight:700; color:#0b3a5b;
     background:rgba(255,255,255,.92); border:1px solid #bae6fd; border-radius:9px;
     padding:1px 5px; white-space:nowrap; line-height:1.4; }
@@ -5850,18 +5884,38 @@ function renderRoutePills(wayColors) {
   if (!idx) return;
   const z = mapReady ? map.getZoom() : 14;
   const offsetM = z < 13 ? 11 : z < 15 ? 15 : 20;
+  // Per-corridor pill spacing: pill only on roads at least this long, AND
+  // suppress consecutive ways within ~150 m of an already-labeled way of the
+  // SAME route combo so the labels read as a corridor, not a ticker-tape.
+  // (Without this, OSM's high-precision road segments produced ~1 pill / 300ft
+  //  in downtown corridors.)
+  const MIN_LEN_M = 600, NEAR_DUP_M = 150;
+  const recent = []; // {pt, m, key} for last-pill deduplication along map
   const feats = [];
   for (const [wid, cols] of wayColors) {
     const g = idx.get(wid) || idx.get(Number(wid));
-    if (!g || g.lengthM < 180) continue;      // skip stubs — subtle, not everywhere
+    if (!g || g.lengthM < MIN_LEN_M) continue;
     const pt = pillPointBesideWay(g.coords, wid, offsetM);
+    const shorts = cols.map(c => c.short);
+    const key = shorts.slice().sort().join('|');
+    // Near-duplicate suppression: skip if the last pill with the same route
+    // combo is within NEAR_DUP_M (and on roughly the same road).
+    let tooClose = false;
+    for (const r of recent) {
+      if (r.key !== key) continue;
+      const dx = (pt[0] - r.pt[0]) * 111320 * Math.cos(pt[1] * Math.PI / 180);
+      const dy = (pt[1] - r.pt[1]) * 110540;
+      if (Math.hypot(dx, dy) < NEAR_DUP_M) { tooClose = true; break; }
+    }
+    if (tooClose) continue;
     // Keep pills short: at most 3 shorts, then "+N" — a busy corridor shows
     // "10 · 1 · 2 +5", not an unreadable 11-route string.
-    const shorts = cols.map(c => c.short);
     const label = shorts.length <= 3 ? shorts.join(' · ')
       : shorts.slice(0, 3).join(' · ') + ' +' + (shorts.length - 3);
     feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: pt },
       properties: { label, color: cols.length === 1 ? cols[0].color : '#37415a' } });
+    recent.push({ pt, key });
+    if (recent.length > 40) recent.shift();
   }
   const data = { type: 'FeatureCollection', features: feats };
   const src = map.getSource(PILLS_SRC);
@@ -5869,14 +5923,14 @@ function renderRoutePills(wayColors) {
   map.addSource(PILLS_SRC, { type: 'geojson', data });
   map.addLayer({
     id: PILLS_LAYER, type: 'symbol', source: PILLS_SRC,
-    minzoom: 12.5,   // only when zoomed enough to matter
+    minzoom: 13,   // only when zoomed in enough that the label is readable
     layout: {
       'text-field': ['get', 'label'],
-      'text-size': ['interpolate', ['linear'], ['zoom'], 12.5, 9, 16, 11],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 13, 10, 16, 11],
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
       'symbol-placement': 'point',
       'text-anchor': 'center',
-      'text-padding': 18,
+      'text-padding': 22,
       'text-allow-overlap': false,
       'text-optional': true,
     },
@@ -7038,7 +7092,11 @@ function renderMarkers() {
 
     function wire(el, vdata) {
       const inner = el.querySelector('.bus-rot') || el.firstChild; // the rotating div
-      inner.onclick = () => selectVehicle(vdata.id);
+      // Click is bound to the WHOLE marker root (not just .bus-rot) so clicks
+      // on any part of the bus icon (the bubble, the arrow, transparent edges)
+      // hit the bus instead of passing through to an underlying map symbol
+      // layer. The bus is always on top, regardless of where you click it.
+      el.onclick = (e) => { e.stopPropagation(); e.preventDefault(); selectVehicle(vdata.id); };
       inner.onmouseenter = e => {
         showBusTooltip(vdata, e.clientX, e.clientY);
         const h = (markers[vdata.id] && markers[vdata.id].heading) ?? vdata.headingDegrees ?? 0;
