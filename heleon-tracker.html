@@ -117,17 +117,19 @@
   /* ─── STREAMFLOW markers: water wheel = discharge (ft³/s); staff gauge = stage (ft) ── */
   @keyframes waterWheelSpin { to { transform: rotate(360deg); } }
   @keyframes streamFlow { to { background-position: -48px 0; } }
-  .stream-gauge { display:flex; align-items:center; gap:5px; cursor:pointer;
-    /* Scale the whole gauge with map zoom so gauges shrink when zoomed out and
-       stop piling on top of each other. Origin at the wheel center (17px in,
-       vertically centered) so scaling keeps the wheel pinned to its coordinate. */
+  /* IMPORTANT: .stream-gauge is the MapLibre marker root — MapLibre writes an
+     inline `transform: translate(...)` on it every frame to pin it to its
+     coordinate. We must NOT put our own `transform` here or it fights MapLibre
+     and the marker drifts loose. The zoom SCALE goes on the inner wrapper. */
+  .stream-gauge { cursor:pointer; }
+  .stream-gauge .gauge-scale { display:flex; align-items:center; gap:5px;
     transform: scale(var(--wsc, 1)); transform-origin: 17px center;
     transition: transform .12s ease-out; }
-  /* Zoomed out: collapse to just the wheel — hide the meter + rate label so the
-     map isn't cluttered with wide readout rows crashing into each other. */
+  /* Zoomed way out: collapse to just the wheel — hide the meter + rate label so
+     the map isn't cluttered with wide readout rows. The flowing-water strip
+     under the wheel STAYS (it's part of the wheel, not clutter). */
   .stream-gauge.compact .meter-slot,
-  .stream-gauge.compact .rate,
-  .stream-gauge.compact .stream { display:none; }
+  .stream-gauge.compact .rate { display:none; }
   .stream-gauge .rig { position:relative; flex-shrink:0; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
   .stream-gauge.kind-flow .rig { width:34px; height:34px; }
   .stream-gauge.kind-stage .rig { width:auto; height:auto; min-width:28px; }
@@ -3007,7 +3009,9 @@ function renderStreamflowWheels() {
     if (!m) {
       const el = document.createElement('div');
       el.className = 'stream-gauge';
-      el.innerHTML = `<div class="rig"></div><div class="meter-slot"></div><span class="rate"></span>`;
+      // Content lives inside .gauge-scale so we can zoom-scale it WITHOUT
+      // touching the root element's transform (MapLibre owns that for pinning).
+      el.innerHTML = `<div class="gauge-scale"><div class="rig"></div><div class="meter-slot"></div><span class="rate"></span></div>`;
       // Anchor at the element's LEFT edge, not its center: the row is
       // [wheel][meter][rate] laid out horizontally, so centering the whole
       // row would push the wheel (the thing that marks the gauge's spot) far
