@@ -3051,6 +3051,12 @@ async function handleApi(url, res) {
       ...(spaceWxCache || {}) });
   }
 
+  // ── SKY CLOCK — sun & moon for the Big Island (keyless) ───────────────────
+  if (p === '/api/skyclock') {
+    return json(res, { ts: Date.now(), lastPollTs: skyClockLastPollTs, lastError: skyClockLastError,
+      ...(skyClockCache || {}) });
+  }
+
   // ── SATELLITES — live ISS/Hubble position (keyless) ───────────────────────
   if (p === '/api/satellites') {
     return json(res, { ts: Date.now(), lastPollTs: satelliteLastPollTs, lastError: satelliteLastError,
@@ -4960,6 +4966,35 @@ async function pollMetars() {
   } catch (e) { metarLastError = e.message; }
 }
 
+// ─── SKY CLOCK — sun & moon for the Big Island (USNO, keyless) ────────────────
+// Sunrise/sunset + moon phase & illumination for Hilo, refreshed daily. Drives
+// a day/night + moon-phase status badge — the "what time is it on the island"
+// readout for the RTS status board. Keyless USNO astronomical API.
+let skyClockCache = null;
+let skyClockLastPollTs = null, skyClockLastError = null;
+async function pollSkyClock() {
+  try {
+    const d = new Date();
+    // Hawaii is UTC-10, no DST. Use the Hawaii-local date.
+    const hi = new Date(d.getTime() - 10 * 3600000);
+    const date = `${hi.getUTCFullYear()}-${String(hi.getUTCMonth()+1).padStart(2,'0')}-${String(hi.getUTCDate()).padStart(2,'0')}`;
+    const j = await fetchJson('aa.usno.navy.mil',
+      `/api/rstt/oneday?date=${date}&coords=19.7,-155.1&tz=-10`, { 'User-Agent': 'heleon-tracker' });
+    const p = j && j.properties && j.properties.data;
+    if (!p) { skyClockLastError = 'unexpected response'; return; }
+    const pick = (arr, phen) => { const e = (arr || []).find(x => x.phen === phen); return e ? e.time : null; };
+    skyClockCache = {
+      date,
+      sunrise: pick(p.sundata, 'Rise'), sunset: pick(p.sundata, 'Set'),
+      solarNoon: pick(p.sundata, 'Upper Transit'),
+      moonrise: pick(p.moondata, 'Rise'), moonset: pick(p.moondata, 'Set'),
+      moonPhase: p.curphase || (p.closestphase && p.closestphase.phase) || null,
+      moonIllum: p.fracillum || null,
+    };
+    skyClockLastPollTs = Date.now(); skyClockLastError = null;
+  } catch (e) { skyClockLastError = (e && e.message) || 'unknown error'; }
+}
+
 // ─── SATELLITES — live ISS position (wheretheiss.at, keyless) ─────────────────
 // Real-time ground-track position of the International Space Station (and any
 // other NORAD ids we add). Keyless, single tiny JSON per object. Rendered as a
@@ -5349,6 +5384,8 @@ const server = http.createServer((req, res) => {
   setInterval(pollRainfall, 10 * 60 * 1000);      // rain gauges report ~15 min
   pollSpaceWeather();
   setInterval(pollSpaceWeather, 15 * 60 * 1000);  // Kp updates every 3h; poll loosely
+  pollSkyClock();
+  setInterval(pollSkyClock, 6 * 60 * 60 * 1000);  // sun/moon change slowly; refresh 4×/day
   pollSatellites();
   setInterval(pollSatellites, 20 * 1000); // ISS moves ~7.6 km/s — keep it fresh
   pollRepeaters();

@@ -13,6 +13,41 @@
     --bg: #0d1117; --panel: #161b22; --panel2: #1c2128; --border: #30363d;
     --accent: #1f6feb; --green: #3fb950; --yellow: #d29922; --red: #f85149;
     --text: #e6edf3; --muted: #8b949e; --header-h: 52px;
+    /* Ambient sky gradient behind the header — shifts with time of day. */
+    --sky: linear-gradient(180deg,#0b1020,#161b22);
+    --sky-glow: transparent;
+  }
+  /* ─── TIME-OF-DAY THEMES (auto, tracks Hawaiʻi sun) ────────────────────────
+     Applied via <html data-daylight="night|dawn|day|dusk">. The chrome is
+     re-tinted and the header gets an ambient sky wash so the whole board reads
+     as "the island right now." Transitions are smooth so dawn→day feels alive. */
+  html[data-daylight] body, html[data-daylight] header,
+  html[data-daylight] .sidebar, html[data-daylight] .badge {
+    transition: background-color .8s ease, background .8s ease, color .8s ease, border-color .8s ease;
+  }
+  html[data-daylight="night"] {
+    --bg:#0a0e1a; --panel:#111725; --panel2:#161d2e; --border:#26304a;
+    --text:#dce4f5; --muted:#7c8aa8;
+    --sky: linear-gradient(180deg,#070b16 0%,#0e1524 100%);
+    --sky-glow: radial-gradient(120% 140% at 80% -20%, rgba(90,110,190,.18), transparent 60%);
+  }
+  html[data-daylight="dawn"] {
+    --bg:#1a1526; --panel:#231b30; --panel2:#2b2138; --border:#4a3a52;
+    --text:#f3e9ef; --muted:#b89aa8; --accent:#c2681f;
+    --sky: linear-gradient(180deg,#2a1e3a 0%,#7a3b52 55%,#e0855a 100%);
+    --sky-glow: radial-gradient(120% 160% at 85% 40%, rgba(255,170,90,.30), transparent 55%);
+  }
+  html[data-daylight="day"] {
+    --bg:#0f1826; --panel:#16233a; --panel2:#1c2c48; --border:#2f4568;
+    --text:#eef4ff; --muted:#93a6c4; --accent:#2b8fff;
+    --sky: linear-gradient(180deg,#1a4a86 0%,#2f7ac2 55%,#6fb8e8 100%);
+    --sky-glow: radial-gradient(120% 160% at 80% -10%, rgba(120,200,255,.28), transparent 55%);
+  }
+  html[data-daylight="dusk"] {
+    --bg:#1c1420; --panel:#261a2a; --panel2:#2f2135; --border:#4d3a4e;
+    --text:#f5eaf0; --muted:#b79aac; --accent:#d1602f;
+    --sky: linear-gradient(180deg,#241a3a 0%,#6b3a5e 50%,#d16a3e 100%);
+    --sky-glow: radial-gradient(120% 160% at 80% 30%, rgba(255,140,80,.30), transparent 55%);
   }
   body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; font-size:13px; overflow:hidden; height:100vh; display:flex; flex-direction:column; }
 
@@ -388,7 +423,9 @@
   /* Aircraft marker — small triangle pointing along the heading */
   .aircraft-marker { cursor: pointer; }
 
-  header { height:var(--header-h); background:var(--panel); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; padding:0 16px; flex-shrink:0; z-index:10; }
+  header { height:var(--header-h); background:var(--sky); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; padding:0 16px; flex-shrink:0; z-index:10; position:relative; }
+  header::after { content:''; position:absolute; inset:0; background:var(--sky-glow); pointer-events:none; }
+  header > * { position:relative; z-index:1; }
   header img { height:32px; }
   header h1 { font-size:15px; font-weight:600; }
   .header-badges { display:flex; gap:8px; margin-left:auto; align-items:center; flex-wrap:wrap; }
@@ -585,6 +622,9 @@
       <span id="locateIcon">📍</span><span id="locateText">Locate me</span>
     </div>
     <span class="locate-status" id="locateStatus"></span>
+    <div class="badge" id="skyClockBadge" style="display:none;user-select:none;">
+      <span id="skyClockText">—</span>
+    </div>
     <div class="badge" id="spaceWxBadge" style="display:none;user-select:none;">
       <div class="pulse" id="spaceWxDot" style="background:#3fb950;"></div><span id="spaceWxText">Kp —</span>
     </div>
@@ -3286,6 +3326,74 @@ async function fetchSpaceWeather() {
   } catch (e) { /* keep last */ }
 }
 
+// Sky clock — sun/moon status for the Big Island (keyless, USNO). Header badge.
+function moonEmoji(phase) {
+  const p = (phase || '').toLowerCase();
+  if (p.includes('new')) return '🌑';
+  if (p.includes('waxing cres')) return '🌒';
+  if (p.includes('first')) return '🌓';
+  if (p.includes('waxing gib')) return '🌔';
+  if (p.includes('full')) return '🌕';
+  if (p.includes('waning gib')) return '🌖';
+  if (p.includes('last') || p.includes('third')) return '🌗';
+  if (p.includes('waning cres')) return '🌘';
+  return '🌙';
+}
+async function fetchSkyClock() {
+  try {
+    const res = await fetch('/api/skyclock');
+    const data = await res.json();
+    recordHealth('skyclock', data, data.sunrise ? 1 : 0);
+    const badge = document.getElementById('skyClockBadge');
+    if (!badge) return;
+    if (!data.sunrise && !data.sunset) { badge.style.display = 'none'; return; }
+    badge.style.display = '';
+    // Is it day right now in Hawaii? Compare current HI time to sunrise/sunset.
+    const now = new Date();
+    const hiMins = ((now.getUTCHours() - 10 + 24) % 24) * 60 + now.getUTCMinutes();
+    const toMin = t => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+    const sr = toMin(data.sunrise), ss = toMin(data.sunset);
+    const isDay = sr != null && ss != null ? (hiMins >= sr && hiMins < ss) : true;
+    const moon = moonEmoji(data.moonPhase);
+    document.getElementById('skyClockText').textContent =
+      isDay ? `☀️ ${data.sunset ? '↓' + data.sunset : ''}` : `${moon} ${data.sunrise ? '↑' + data.sunrise : ''}`;
+    badge.title = `Hawaiʻi: sunrise ${data.sunrise || '—'} · sunset ${data.sunset || '—'} · ${data.moonPhase || 'moon'} ${data.moonIllum ? '(' + data.moonIllum + ' lit)' : ''} · moonrise ${data.moonrise || '—'} (USNO)`;
+    skyClockData = data;
+    applyDaylightTheme();
+  } catch (e) { /* keep last */ }
+}
+
+// Auto day/night/dawn/dusk theme, tracking Hawaiʻi time vs today's sun times.
+// dawn = the ~45 min before sunrise; day = sunrise→sunset; dusk = the ~45 min
+// after sunset; night = the rest. Re-runs on a timer so it flips on its own.
+let skyClockData = null;
+const TWILIGHT_MIN = 45;
+function currentDaylightPhase() {
+  if (!skyClockData || !skyClockData.sunrise || !skyClockData.sunset) return null;
+  const now = new Date();
+  const hiMins = ((now.getUTCHours() - 10 + 24) % 24) * 60 + now.getUTCMinutes();
+  const toMin = t => { if (!t) return null; const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+  const sr = toMin(skyClockData.sunrise), ss = toMin(skyClockData.sunset);
+  if (sr == null || ss == null) return null;
+  if (hiMins >= sr - TWILIGHT_MIN && hiMins < sr) return 'dawn';
+  if (hiMins >= sr && hiMins < ss) return 'day';
+  if (hiMins >= ss && hiMins < ss + TWILIGHT_MIN) return 'dusk';
+  return 'night';
+}
+function applyDaylightTheme() {
+  const phase = currentDaylightPhase();
+  if (!phase) return;
+  const root = document.documentElement;
+  if (root.getAttribute('data-daylight') !== phase) {
+    root.setAttribute('data-daylight', phase);
+    // Nudge MapLibre so any theme-dependent chrome (attribution etc.) repaints.
+    try { if (mapReady) map.triggerRepaint(); } catch (e) {}
+  }
+}
+// Flip the theme on its own every 2 min (cheap, no network) so dawn/dusk arrive
+// without waiting for the next data refresh.
+setInterval(() => { if (!document.hidden) applyDaylightTheme(); }, 2 * 60 * 1000);
+
 // Volcano alerts + HVO webcams (USGS HANS, keyless). Always on.
 async function fetchVolcano() {
   try {
@@ -3825,6 +3933,7 @@ const SOURCE_HEALTH_CFG = {
   satellites: { staleAfterMs: 5 * 60000,   layers: ['satellites-icon'] },
   rainfall:   { staleAfterMs: 45 * 60000,  layers: ['rainfall-icon'] },
   spaceweather: { staleAfterMs: 60 * 60000, layers: [] },
+  skyclock:   { staleAfterMs: 26 * 3600000, layers: [] },
   volcano:    { staleAfterMs: 60 * 60000,  layers: ['volcano-dot'] },
   streamflow: { staleAfterMs: 3 * 3600000, layers: [] },
   weather:    { staleAfterMs: 2 * 3600000, layers: ['weather-stations-icon'] },
@@ -7600,6 +7709,7 @@ Promise.all([
   fetchSatellites(),
   fetchRainfall(),
   fetchSpaceWeather(),
+  fetchSkyClock(),
   fetchMeshtastic(),
   fetchRepeaters(),
   fetchInfrastructure(),
@@ -7627,7 +7737,7 @@ setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
 setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchMarine(); if (!document.hidden) fetchInfrastructure(); if (!document.hidden) fetchLocal(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); fetchRainfall(); fetchSpaceWeather(); } }, 15 * 60 * 1000);
+setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchMarine(); if (!document.hidden) fetchInfrastructure(); if (!document.hidden) fetchLocal(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); fetchRainfall(); fetchSpaceWeather(); fetchSkyClock(); } }, 15 * 60 * 1000);
 setInterval(() => { if (!document.hidden && (!hawaiiList.meshtastic || !hawaiiList.meshtastic.length)) fetchMeshtastic(); }, 2 * 60 * 1000);
 // APRS moves faster (vehicles) — refresh more often when it has data.
 setInterval(() => { if (!document.hidden) fetchAprs(); }, 60 * 1000);
