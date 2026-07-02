@@ -170,6 +170,22 @@
     padding:1px 5px; line-height:1.3; }
   .wind-turbine.compact .wt-label { display:none; }
 
+  /* ─── SOLAR markers (a little sun whose rays pulse with irradiance) ─────────
+     Brightness + ray spin speed scale with live W/m². At night (0 W/m²) it goes
+     dim/grey. A real-time proxy for solar-power generation across the island. */
+  @keyframes sunRays { to { transform: rotate(360deg); } }
+  @keyframes sunGlow { 0%,100% { opacity:.55; } 50% { opacity:1; } }
+  .solar-sun { cursor:pointer; position:relative; width:0; height:0; }
+  .solar-sun .ss-scale { position:absolute; left:0; top:0;
+    transform: translate(-14px, -14px) scale(var(--ssc, 1)); transform-origin:14px 14px;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); }
+  .solar-sun .ss-rays { transform-origin:14px 14px; animation: sunRays linear infinite; }
+  .solar-sun .ss-core { transform-origin:14px 14px; animation: sunGlow ease-in-out infinite; }
+  .solar-sun .ss-label { position:absolute; left:28px; top:6px; white-space:nowrap;
+    font-size:10px; font-weight:700; color:#92400e;
+    background:rgba(255,255,255,.9); border:1px solid #fde68a; border-radius:9px; padding:1px 5px; }
+  .solar-sun.compact .ss-label { display:none; }
+
   /* ─── STREAMFLOW markers: water wheel = discharge (ft³/s); staff gauge = stage (ft) ── */
   @keyframes waterWheelSpin { to { transform: rotate(360deg); } }
   @keyframes streamFlow { to { background-position: -48px 0; } }
@@ -779,6 +795,7 @@
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showStreamflow" onchange="toggleStreamflow()" checked> USGS streamflow gauges</label>
         <label><input type="checkbox" id="showWeatherStations" onchange="toggleWeatherStations()" checked> NWS weather stations</label>
+        <label><input type="checkbox" id="showSolar" onchange="toggleSolar()"> ☀️ Solar irradiance</label>
         <span class="vessel-status" id="streamflowStatus"></span>
       </div>
       <div class="section-header">⚡ Grid & Telecom Infrastructure</div>
@@ -1068,7 +1085,7 @@ function initMap() {
   // Keep the DOM water-wheel markers scaled to the current zoom (they shrink
   // when zoomed out so they don't pile up). `zoom` fires continuously so the
   // resize tracks the pinch/scroll smoothly.
-  map.on('zoom', () => { try { updateWheelScale(); } catch (e) {} try { updateWindScale(); } catch (e) {} });
+  map.on('zoom', () => { try { updateWheelScale(); } catch (e) {} try { updateWindScale(); } catch (e) {} try { updateSolarScale(); } catch (e) {} });
   map.on('error', (e) => {
     // Suppress known MapLibre v4 bugs about listener arrays
     if (e?.error?.message?.includes('slice is not a function')) return;
@@ -3381,6 +3398,94 @@ function updateWindScale() {
   }
 }
 
+// ─── SOLAR sun markers (rays pulse with live irradiance) ─────────────────────
+const solarMarkers = {}; // name -> maplibregl.Marker
+let solarVisible = false;
+function sunSvg() {
+  const cx = 14, cy = 14, coreR = 5;
+  let rays = '';
+  for (let i = 0; i < 8; i++) {
+    const a = (i * 45) * Math.PI / 180;
+    const x1 = cx + 7 * Math.cos(a), y1 = cy + 7 * Math.sin(a);
+    const x2 = cx + 11 * Math.cos(a), y2 = cy + 11 * Math.sin(a);
+    rays += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>`;
+  }
+  return `<svg class="ss-svg" width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">
+    <g class="ss-rays">${rays}</g>
+    <circle class="ss-core" cx="${cx}" cy="${cy}" r="${coreR}" fill="#fbbf24" stroke="#f59e0b" stroke-width="1.5"/>
+  </svg>`;
+}
+function renderSolar(points) {
+  if (!mapReady) return;
+  const pts = solarVisible ? (points || []) : [];
+  const seen = new Set();
+  for (const p of pts) {
+    if (p.lat == null || p.lon == null) continue;
+    seen.add(p.name);
+    let m = solarMarkers[p.name];
+    if (!m) {
+      const el = document.createElement('div');
+      el.className = 'solar-sun';
+      el.innerHTML = `<div class="ss-scale">${sunSvg()}<div class="ss-label"></div></div>`;
+      m = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([p.lon, p.lat]).addTo(map);
+      solarMarkers[p.name] = m;
+    }
+    const el = m.getElement();
+    const ghi = +p.ghi || 0;
+    // Ray spin: fast in strong sun (~3s), still at night. Core glow pulse likewise.
+    const rays = el.querySelector('.ss-rays'), core = el.querySelector('.ss-core');
+    const raySec = ghi > 5 ? Math.max(3, 14 - ghi / 90).toFixed(1) : 0;
+    if (rays) { rays.style.animationDuration = raySec ? `${raySec}s` : '0s'; rays.style.animationPlayState = raySec ? 'running' : 'paused'; }
+    if (core) { core.style.animationDuration = raySec ? `${(raySec * 0.6)}s` : '0s'; core.style.animationPlayState = raySec ? 'running' : 'paused'; }
+    // Dim at night; full brightness in strong sun.
+    const scale = el.querySelector('.ss-scale');
+    if (scale) scale.style.opacity = ghi > 5 ? (0.5 + Math.min(0.5, ghi / 1000)).toFixed(2) : 0.35;
+    el.querySelector('.ss-label').textContent = `☀️ ${Math.round(ghi)} W/m²`;
+    el.title = `${p.name}: ${Math.round(ghi)} W/m² sunlight · UV ${p.uv != null ? (+p.uv).toFixed(1) : '—'} · ${p.cloud != null ? p.cloud + '% cloud' : ''}`;
+    el.onclick = e => { e.stopPropagation(); showMapCard(
+      `<div style="font-size:12px;line-height:1.6;">
+        <div style="display:flex;justify-content:space-between;"><span style="color:#8b949e;">Sunlight (GHI)</span><b>${Math.round(ghi)} W/m²</b></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:#8b949e;">Direct beam</span><b>${p.dni != null ? Math.round(p.dni) + ' W/m²' : '—'}</b></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:#8b949e;">UV index</span><b>${p.uv != null ? (+p.uv).toFixed(1) : '—'}</b></div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:#8b949e;">Cloud cover</span><b>${p.cloud != null ? p.cloud + '%' : '—'}</b></div>
+        <div style="color:#8b949e;font-size:10px;margin-top:8px;">Live global horizontal irradiance — a proxy for solar-power potential (no utility publishes live PV MW). Open-Meteo${p.at ? ' · ' + p.at.replace('T',' ') : ''}</div>
+      </div>`, [p.lon, p.lat], `☀️ Solar — ${p.name}`); };
+    m.setLngLat([p.lon, p.lat]);
+  }
+  for (const name of Object.keys(solarMarkers)) {
+    if (!seen.has(name)) { solarMarkers[name].remove(); delete solarMarkers[name]; }
+  }
+  updateSolarScale();
+}
+function updateSolarScale() {
+  if (!mapReady) return;
+  const z = map.getZoom();
+  const t = Math.max(0, Math.min(1, (z - 7) / (12 - 7)));
+  const scale = (0.55 + t * 0.45).toFixed(3);
+  const compact = z < 9.5;
+  for (const name of Object.keys(solarMarkers)) {
+    const el = solarMarkers[name].getElement();
+    el.style.setProperty('--ssc', scale);
+    el.classList.toggle('compact', compact);
+  }
+}
+let solarData = null;
+async function fetchSolar() {
+  try {
+    const res = await fetch('/api/solar');
+    const data = await res.json();
+    recordHealth('solar', data, (data.points || []).length);
+    solarData = data.points || [];
+    hawaiiList.solar = solarData.map((p, i) => ({ id: String(i), ...p }));
+    hawaiiBrowseRefresh();
+    renderSolar(solarData);
+  } catch (e) { /* keep last */ }
+}
+function toggleSolar() {
+  solarVisible = document.getElementById('showSolar').checked;
+  renderSolar(solarData || []);
+}
+
 // Summit observatories (Maunakea/Mauna Loa live conditions). Shown by default.
 async function fetchSummits() {
   try {
@@ -4134,7 +4239,7 @@ const hawaiiList = {
   localFuelPrices: {}, localFuelStations: [], localTrafficSensors: [], localLco: [], localInat: [],
   localNotes: {},
   summits: [], ocean: [], airquality: [], volcanoAlerts: [], volcanoCams: [], satellites: [], rainfall: [],
-  metars: [], alerts: [], wildfire: [], places: [],
+  metars: [], alerts: [], wildfire: [], places: [], solar: [],
   facilities: { police: [], fire: [], ems: [], trauma: [] },
 };
 const hawaiiBrowse = { openCats: new Set(['radio']), openItems: new Set() };
@@ -4163,6 +4268,7 @@ const SOURCE_HEALTH_CFG = {
   skyclock:   { staleAfterMs: 26 * 3600000, layers: [] },
   tsunami:    { staleAfterMs: 30 * 60000,  layers: [] },
   places:     { staleAfterMs: 48 * 3600000, layers: ['places-icon'] },
+  solar:      { staleAfterMs: 45 * 60000,  layers: [] },
   volcano:    { staleAfterMs: 60 * 60000,  layers: ['volcano-dot'] },
   streamflow: { staleAfterMs: 3 * 3600000, layers: [] },
   weather:    { staleAfterMs: 2 * 3600000, layers: ['weather-stations-icon'] },
@@ -4177,7 +4283,7 @@ const CAT_HEALTH_ID = {
   streamflow: 'streamflow', summits: 'summits', ocean: 'ocean',
   marineWebcams: 'marine', marineReefSensors: 'marine',
   airquality: 'airquality', volcano: 'volcano', metars: 'metars', satellites: 'satellites',
-  rainfall: 'rainfall', places: 'places',
+  rainfall: 'rainfall', places: 'places', solar: 'solar',
 };
 
 // state: 'live' (fresh data), 'stale' (data but poll went quiet), 'empty'
@@ -4606,6 +4712,7 @@ function hawaiiCategories() {
     { id: 'localInat', icon: '🦋', label: 'Nature Sightings (iNaturalist)',
       items: [...hawaiiList.localInat].sort((a, b) => String(b.observedAt).localeCompare(String(a.observedAt))) },
     { id: 'airquality', icon: '🌫️', label: 'Air Quality / Vog', items: hawaiiList.airquality },
+    { id: 'solar', icon: '☀️', label: 'Solar Irradiance', items: hawaiiList.solar },
     { id: 'volcano', icon: '🌋', label: 'Volcano Alerts & Webcams', items: volcanoItems },
     { id: 'metars', icon: '✈️', label: 'Aviation METARs', items: hawaiiList.metars },
     { id: 'satellites', icon: '🛰️', label: 'Satellites Overhead', items: hawaiiList.satellites },
@@ -4655,6 +4762,7 @@ function hawaiiItemSummary(catId, item) {
     case 'localLco': return { icon: '🔭', title: item.siteName || item.site, meta: [item.name, item.start ? String(item.start).slice(0, 10) : ''].filter(Boolean).join(' · ') };
     case 'localInat': return { icon: '🦋', title: item.name, meta: item.observedAt ? String(item.observedAt).slice(0, 10) : '' };
     case 'airquality': return { icon: '🌫️', title: item.name, meta: item.usAqi != null ? `AQI ${item.usAqi}` : '' };
+    case 'solar': return { icon: '☀️', title: item.name, meta: `${Math.round(item.ghi || 0)} W/m²${item.uv != null ? ' · UV ' + (+item.uv).toFixed(1) : ''}` };
     case 'volcano': return { icon: item.kind === 'webcam' ? '📷' : '🌋', title: item.name, meta: item.kind === 'webcam' ? 'Live webcam' : `${item.colorCode}/${item.alertLevel}` };
     case 'metars': return { icon: '✈️', title: `${item.icao} — ${item.name}`, meta: item.fltCat || '' };
     case 'satellites': return { icon: item.emoji || '🛰️', title: item.name, meta: item.overhead ? '🌺 over Hawaiʻi now' : `${Math.round(item.altKm)} km up · ${Math.round(item.distKm)} km away` };
@@ -7588,6 +7696,7 @@ document.addEventListener('visibilitychange', () => {
   try { startAheadAnim(); } catch (e) {}
   try { updateWheelScale(); } catch (e) {}
   try { updateWindScale(); } catch (e) {}
+  try { updateSolarScale(); } catch (e) {}
 });
 function updateCountdownUI() {
   document.getElementById('countdown').textContent = countdownVal;
@@ -7948,6 +8057,7 @@ Promise.all([
   fetchSkyClock(),
   fetchTsunami(),
   fetchPlaces(),
+  fetchSolar(),
   fetchMeshtastic(),
   fetchRepeaters(),
   fetchInfrastructure(),
@@ -7975,7 +8085,7 @@ setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
 setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); fetchTsunami(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchMarine(); if (!document.hidden) fetchInfrastructure(); if (!document.hidden) fetchLocal(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); fetchRainfall(); fetchSpaceWeather(); fetchSkyClock(); } }, 15 * 60 * 1000);
+setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchMarine(); if (!document.hidden) fetchInfrastructure(); if (!document.hidden) fetchLocal(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); fetchRainfall(); fetchSpaceWeather(); fetchSkyClock(); fetchSolar(); } }, 15 * 60 * 1000);
 setInterval(() => { if (!document.hidden && (!hawaiiList.meshtastic || !hawaiiList.meshtastic.length)) fetchMeshtastic(); }, 2 * 60 * 1000);
 // APRS moves faster (vehicles) — refresh more often when it has data.
 setInterval(() => { if (!document.hidden) fetchAprs(); }, 60 * 1000);

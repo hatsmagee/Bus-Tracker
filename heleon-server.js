@@ -3051,6 +3051,12 @@ async function handleApi(url, res) {
       ...(spaceWxCache || {}) });
   }
 
+  // ── SOLAR — live irradiance / UV across the island (keyless) ──────────────
+  if (p === '/api/solar') {
+    return json(res, { ts: Date.now(), lastPollTs: solarLastPollTs, lastError: solarLastError,
+      points: solarCache });
+  }
+
   // ── PLACES OF INTEREST — Wikipedia (keyless, photos + notes) ──────────────
   if (p === '/api/places') {
     return json(res, { ts: Date.now(), lastPollTs: placesLastPollTs, lastError: placesLastError,
@@ -4960,6 +4966,35 @@ async function pollAirQuality() {
   } catch (e) { airQualityLastError = e.message; }
 }
 
+// ─── SOLAR — live sunshine intensity across the island (Open-Meteo, keyless) ─
+// Shortwave (global horizontal) irradiance in W/m² + UV index at each town — a
+// real-time proxy for solar-power generation potential ("how hard is the sun
+// hitting the island right now"). No utility publishes live PV MW, so this is
+// the closest honest live signal. Same batched Open-Meteo call as air quality.
+let solarCache = [];
+let solarLastPollTs = null, solarLastError = null;
+async function pollSolar() {
+  const lats = AQ_POINTS.map(p => p.lat).join(',');
+  const lons = AQ_POINTS.map(p => p.lon).join(',');
+  try {
+    const j = await fetchJson('api.open-meteo.com',
+      `/v1/forecast?latitude=${lats}&longitude=${lons}&current=shortwave_radiation,direct_radiation,uv_index,cloud_cover&timezone=Pacific%2FHonolulu`,
+      { 'User-Agent': 'heleon-tracker' });
+    const arr = Array.isArray(j) ? j : [j];
+    const next = arr.map((r, i) => ({
+      name: AQ_POINTS[i] ? AQ_POINTS[i].name : `pt${i}`,
+      lat: r.latitude, lon: r.longitude,
+      ghi: r.current && r.current.shortwave_radiation,   // W/m² global horizontal
+      dni: r.current && r.current.direct_radiation,
+      uv: r.current && r.current.uv_index,
+      cloud: r.current && r.current.cloud_cover,
+      at: r.current && r.current.time,
+    })).filter(x => x.ghi != null);
+    if (next.length) { solarCache = next; solarLastPollTs = Date.now(); solarLastError = null; }
+    else solarLastError = 'no solar data';
+  } catch (e) { solarLastError = e.message; }
+}
+
 // ─── VOLCANO (USGS HVO HANS API + live webcams, keyless) ─────────────────────
 // Live alert level/color code for Kīlauea & Mauna Loa from the official USGS
 // Hazard Alert Notification System, plus the HVO webcam network — each cam is
@@ -5598,6 +5633,8 @@ const server = http.createServer((req, res) => {
   setInterval(pollInfrastructure, 24 * 60 * 60 * 1000);
   setInterval(pollLocal, 6 * 60 * 60 * 1000);
   setInterval(pollAirQuality, 15 * 60 * 1000);
+  pollSolar();
+  setInterval(pollSolar, 15 * 60 * 1000);
   setInterval(pollVolcano, 15 * 60 * 1000);
   setInterval(pollMetars, 10 * 60 * 1000);
   setInterval(pollMeshtastic, 30 * 60 * 1000);
