@@ -1258,7 +1258,7 @@ function buildSummitCard(p) {
   if (p.pageUrl) links.push(`<a href="${escapeHtml(p.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">Observatory page ↗</a>`);
   if (p.source) links.push(`<span style="color:#8b949e;">${escapeHtml(p.source)}</span>`);
   const foot = `<div style="color:#8b949e;font-size:10px;margin-top:8px;">${p.elevM ? Math.round(p.elevM) + ' m elev' : ''}${r.readingTs ? ' · ' + r.readingTs : ''}${r.co2Year ? ' · CO₂ ' + r.co2Year : ''}${links.length ? '<br>' + links.join(' · ') : ''}</div>`;
-  return { title: `🔭 ${p.name}`, body: (rows.join('') || 'No current reading.') + extra + foot };
+  return { title: `🔭 ${p.name}`, body: (rows.join('') || 'No current reading.') + extra + foot + timelineHtml(p.id, p.name) };
 }
 
 function buildScannerCard(f) {
@@ -1985,7 +1985,8 @@ function initMapLayers() {
           <span style="width:12px;height:12px;border-radius:50%;background:${dot};"></span>
           <b>${escapeHtml(p.badge)}</b></div>
         ${head}${summary}${link}
-        <div style="color:#8b949e;font-size:10px;margin-top:8px;">USGS Hawaiian Volcano Observatory${when ? ' · ' + when : ''}</div>` };
+        <div style="color:#8b949e;font-size:10px;margin-top:8px;">USGS Hawaiian Volcano Observatory${when ? ' · ' + when : ''}</div>
+        ${timelineHtml(p.name, p.name)}` };
     }
     // Webcam: live view in card (image refreshes, or YouTube/Luma embed).
     return { title: `📷 ${p.name}`, body: buildWebcamCardBody(p) };
@@ -2351,7 +2352,7 @@ function initMapLayers() {
     if (p.note) row('Notes', escapeHtml(p.note));
     row('Data', 'Static — no live output');
     const media = assetMediaHtml(assetMedia(p.id, p.name));
-    return { title: `${p.icon || fuelEmoji(p.fuel)} ${p.name}`, body: media + rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Hawaiian Electric does not publish real-time island grid MW. Annual fuel mix is in the Hawaiʻi browser.</div>` };
+    return { title: `${p.icon || fuelEmoji(p.fuel)} ${p.name}`, body: media + rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Hawaiian Electric does not publish real-time island grid MW. Annual fuel mix is in the Hawaiʻi browser.</div>` + timelineHtml(p.id, p.name) };
   });
   wireLayerHover('infra-subs-circle', p => `<div style="font-weight:600;">⚡ ${escapeHtml(p.name)}</div>
     <div style="color:var(--muted);font-size:10px;">${p.voltage ? escapeHtml(p.voltage) + ' · ' : ''}substation</div>`);
@@ -2726,6 +2727,56 @@ function assetMedia(id, name, icao) {
   if (name) { const n = String(name).toLowerCase(); for (const m of ASSET_MEDIA_MATCH) if (n.includes(m.needle)) return m.media; }
   return null;
 }
+// ─── Deep-history timelines ──────────────────────────────────────────────────
+// Curated, sourced, dated histories (with images) resolved server-side and
+// served at /api/timelines. Matched to a card by id or name substring and
+// rendered as a vertical timeline you scroll through inside the card.
+let TIMELINES = [];
+async function fetchTimelines() {
+  try {
+    const data = await (await fetch('/api/timelines')).json();
+    TIMELINES = data.timelines || [];
+  } catch (e) { TIMELINES = []; }
+}
+function timelineFor(id, name) {
+  const nid = id != null ? String(id).toLowerCase() : '';
+  const nname = name != null ? String(name).toLowerCase() : '';
+  for (const tl of TIMELINES) {
+    if (tl.ids && tl.ids.some(x => String(x).toLowerCase() === nid)) return tl;
+    if (tl.match && tl.match.some(m => (nname && nname.includes(m)) || (nid && nid.includes(m)))) return tl;
+  }
+  return null;
+}
+// Vertical scrolling timeline: year rail on the left, event cards on the right,
+// each with an optional image and a source link. Collapsed behind a toggle so
+// the card stays compact until the reader wants the deep dive.
+let _tlSeq = 0;
+function timelineHtml(id, name) {
+  const tl = timelineFor(id, name);
+  if (!tl || !tl.events || !tl.events.length) return '';
+  const uid = 'tl' + (++_tlSeq);
+  const intro = tl.intro ? `<div style="font-size:11px;color:#8b949e;line-height:1.5;margin:2px 0 8px;">${escapeHtml(tl.intro)}</div>` : '';
+  const rows = tl.events.map(ev => {
+    const img = ev.image ? `<img src="${escapeHtml(ev.image)}" loading="lazy" style="width:100%;border-radius:5px;display:block;margin:6px 0;" onerror="this.style.display='none'"/>` : '';
+    const src = ev.source ? `<div style="margin-top:4px;font-size:9.5px;color:#8b949e;">${ev.sourceUrl ? `<a href="${escapeHtml(ev.sourceUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">${escapeHtml(ev.source)} ↗</a>` : escapeHtml(ev.source)}</div>` : '';
+    return `<div style="position:relative;padding:0 0 14px 16px;border-left:2px solid #30363d;">
+      <div style="position:absolute;left:-5px;top:2px;width:8px;height:8px;border-radius:50%;background:#f0883e;border:2px solid #161b22;"></div>
+      <div style="font-weight:700;font-size:11px;color:#f0883e;">${escapeHtml(ev.year)}</div>
+      <div style="font-weight:600;font-size:12px;margin-top:1px;">${escapeHtml(ev.title)}</div>
+      ${img}
+      <div style="font-size:11px;line-height:1.5;color:#c9d1d9;margin-top:3px;">${escapeHtml(ev.text)}</div>
+      ${src}
+    </div>`;
+  }).join('');
+  return `<div style="margin-top:10px;border-top:1px solid #30363d;padding-top:8px;">
+    <div onclick="(function(el){var b=document.getElementById('${uid}');var open=b.style.display!=='none';b.style.display=open?'none':'block';el.querySelector('.tl-caret').textContent=open?'▸':'▾';})(this)" style="cursor:pointer;display:flex;align-items:center;gap:6px;font-weight:700;font-size:12px;color:#e6edf3;user-select:none;">
+      <span class="tl-caret">▾</span><span>🕰️ History — ${escapeHtml(tl.title)}</span>
+      <span style="margin-left:auto;font-size:9.5px;color:#8b949e;">${tl.events.length} events · scroll</span>
+    </div>
+    <div id="${uid}" style="display:block;margin-top:8px;">${intro}${rows}</div>
+  </div>`;
+}
+
 // Render an asset's media (photo + curated background + Wikipedia write-up +
 // link) as card HTML. Safe to call with null.
 function assetMediaHtml(m) {
@@ -2743,7 +2794,7 @@ function buildHeritageCardBody(p) {
   const extract = p.extract ? `<div style="font-size:11.5px;line-height:1.55;color:#c9d1d9;border-top:1px solid #30363d;padding-top:8px;">${escapeHtml(p.extract)}</div>` : '';
   const link = p.url ? `<div style="margin-top:8px;font-size:10px;"><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener" style="color:#58a6ff;">Read more on Wikipedia ↗</a></div>` : '';
   const dir = (p.lat != null && p.lon != null) ? `<div style="margin-top:4px;font-size:10px;"><a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}" target="_blank" rel="noopener" style="color:#58a6ff;">Directions / satellite ↗</a></div>` : '';
-  return cat + img + note + extract + link + dir;
+  return cat + img + note + extract + link + dir + timelineHtml(p.id, p.name);
 }
 const ICON_PX = 40;
 const ICON_Z = (z0, s0, z1, s1, z2, s2) => ['interpolate', ['linear'], ['zoom'], z0, s0, z1, s1, z2, s2];
@@ -8898,6 +8949,7 @@ Promise.all([
   fetchPlaces(),
   fetchHeritage(),
   fetchAssetMedia(),
+  fetchTimelines(),
   fetchSolar(),
   fetchMeshtastic(),
   fetchRepeaters(),

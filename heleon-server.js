@@ -2331,6 +2331,7 @@ async function handleApi(url, res) {
         scanner: feed(SCANNER_FEEDS.length, Date.now(), null),
         heritage: feed(heritageCache.length, heritageLastPollTs, heritageLastError),
         assetMedia: feed(assetMediaCache.length, assetMediaLastPollTs, assetMediaLastError),
+        timelines: feed(timelinesCache.length, timelinesLastPollTs, timelinesLastError),
         solar: feed(solarCache.length, solarLastPollTs, solarLastError),
         satellites: feed(satelliteCache.length, satelliteLastPollTs, satelliteLastError),
       },
@@ -3106,6 +3107,12 @@ async function handleApi(url, res) {
   if (p === '/api/asset-media') {
     return json(res, { ts: Date.now(), lastPollTs: assetMediaLastPollTs, lastError: assetMediaLastError,
       assets: assetMediaCache });
+  }
+
+  // ── TIMELINES — curated deep histories with images + sources (keyless) ─────
+  if (p === '/api/timelines') {
+    return json(res, { ts: Date.now(), lastPollTs: timelinesLastPollTs, lastError: timelinesLastError,
+      timelines: timelinesCache });
   }
 
   // ── TSUNAMI — PTWC bulletin status (keyless) ──────────────────────────────
@@ -5437,6 +5444,68 @@ async function pollAssetMedia() {
   try { fs.writeFileSync(ASSET_MEDIA_CACHE_PATH, JSON.stringify({ lastPollTs: assetMediaLastPollTs, assets: out })); } catch (e) { /* read-only fs */ }
 }
 
+// ─── TIMELINES (curated deep histories + Wikipedia image resolution) ─────────
+// Dated, sourced historical timelines attached to cards. Each event may name a
+// Wikipedia article (wikiImage) which we resolve to a real thumbnail at poll
+// time so images never rot. Curated text/sources are authored in
+// data/timelines.json. Keyless, refreshed daily, cached to disk.
+const TIMELINES_PATH = path.join(__dirname, 'data', 'timelines.json');
+const TIMELINES_CACHE_PATH = path.join(__dirname, 'data', 'timelines-cache.json');
+let TIMELINE_DEFS = [];
+try { TIMELINE_DEFS = (JSON.parse(fs.readFileSync(TIMELINES_PATH, 'utf8')).timelines) || []; }
+catch (e) { TIMELINE_DEFS = []; }
+let timelinesCache = [];
+let timelinesLastPollTs = null, timelinesLastError = null;
+function loadTimelinesCache() {
+  try {
+    const j = JSON.parse(fs.readFileSync(TIMELINES_CACHE_PATH, 'utf8'));
+    if (Array.isArray(j.timelines) && j.timelines.length) { timelinesCache = j.timelines; timelinesLastPollTs = j.lastPollTs || null; }
+  } catch (e) { /* no cache yet */ }
+}
+async function pollTimelines() {
+  if (!TIMELINE_DEFS.length) { timelinesLastError = 'no curated timelines'; return; }
+  const UA = 'heleon-tracker/1.0 (https://github.com/hatsmagee/Bus-Tracker)';
+  const wiki = (q) => fetchJson('en.wikipedia.org', `/w/api.php?${q}`, { 'User-Agent': UA });
+  // De-dupe wikiImage titles across all events so each is resolved once.
+  const imageCache = new Map();
+  async function resolveImage(title) {
+    if (!title) return null;
+    if (imageCache.has(title)) return imageCache.get(title);
+    const enc = encodeURIComponent(title.replace(/ /g, '_'));
+    let thumb = null, url = null;
+    for (let attempt = 0; attempt < 3 && thumb === null && url === null; attempt++) {
+      try {
+        const j = await wiki(`action=query&format=json&redirects=1&prop=pageimages%7Cinfo&inprop=url&piprop=thumbnail&pithumbsize=480&titles=${enc}`);
+        const p = Object.values((j.query && j.query.pages) || {})[0];
+        if (p) { thumb = (p.thumbnail && p.thumbnail.source) || null; url = p.fullurl || null; break; }
+      } catch (e) { await new Promise(r => setTimeout(r, 700 * (attempt + 1))); }
+    }
+    const media = { image: thumb, wikiUrl: url };
+    imageCache.set(title, media);
+    await new Promise(r => setTimeout(r, 220));
+    return media;
+  }
+  const out = [];
+  for (const tl of TIMELINE_DEFS) {
+    const events = [];
+    for (const ev of (tl.events || [])) {
+      const media = ev.wikiImage ? await resolveImage(ev.wikiImage) : null;
+      events.push({
+        year: ev.year || '', title: ev.title || '', text: ev.text || '',
+        image: (media && media.image) || null,
+        source: ev.source || '', sourceUrl: ev.sourceUrl || (media && media.wikiUrl) || null,
+      });
+    }
+    out.push({
+      match: (tl.match || []).map(s => String(s).toLowerCase()),
+      ids: tl.ids || [],
+      title: tl.title || 'History', intro: tl.intro || '', events,
+    });
+  }
+  timelinesCache = out; timelinesLastPollTs = Date.now(); timelinesLastError = null;
+  try { fs.writeFileSync(TIMELINES_CACHE_PATH, JSON.stringify({ lastPollTs: timelinesLastPollTs, timelines: out })); } catch (e) { /* read-only fs */ }
+}
+
 // ─── TSUNAMI — Pacific Tsunami Warning Center bulletins (keyless Atom) ────────
 // PTWC's Pacific feed (PHEB = Hawaii/Pacific messages). Most of the time it
 // carries only info statements or "no threat"; a real WARNING/WATCH/ADVISORY is
@@ -5990,6 +6059,9 @@ const server = http.createServer((req, res) => {
   loadAssetMediaCache();                            // serve asset photos/background instantly from disk
   pollAssetMedia();                                 // enrich named assets (power plants, airports…) from Wikipedia
   setInterval(pollAssetMedia, 24 * 60 * 60 * 1000);
+  loadTimelinesCache();                             // serve deep-history timelines instantly from disk
+  pollTimelines();                                  // resolve timeline event images from Wikipedia
+  setInterval(pollTimelines, 24 * 60 * 60 * 1000);
   pollSatellites();
   setInterval(pollSatellites, 20 * 1000); // ISS moves ~7.6 km/s — keep it fresh
   pollRepeaters();

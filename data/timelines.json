@@ -1,0 +1,141 @@
+{
+  "_comment": "Deeply-researched historical timelines attached to map cards. Each timeline matches a card by lowercased name/id substring (match[]) and/or explicit ids[]. Events are dated, sourced, and may name a Wikipedia article (wikiImage) that pollTimelines() resolves to a real thumbnail at poll time (so image URLs never rot). Sources beyond Wikipedia are welcome via sourceUrl. Rendered as a vertical scrolling timeline in the card body. Cached to data/timelines-cache.json.",
+  "timelines": [
+    {
+      "match": ["kilauea", "kīlauea", "halemaumau", "halemaʻumaʻu"],
+      "ids": ["Kilauea"],
+      "title": "Kīlauea — a history of fire",
+      "intro": "One of the most active volcanoes on Earth and, in Hawaiian tradition, the home of the goddess Pele. Continuously monitored since 1912.",
+      "events": [
+        { "year": "1790", "title": "Deadly explosive eruption", "text": "A violent steam-driven explosion killed part of the army of chief Keōua crossing the Kaʻū Desert. Their footprints, pressed into wet ash, are still preserved — the deadliest known volcanic eruption in what is now the United States.", "wikiImage": "Footprints (Hawaii Volcanoes National Park)", "source": "USGS HVO", "sourceUrl": "https://www.usgs.gov/volcanoes/kilauea" },
+        { "year": "1823", "title": "First written eyewitness account", "text": "Missionary William Ellis and a party became the first non-Hawaiians to describe the roiling lava lake of Halemaʻumaʻu, launching two centuries of scientific fascination.", "wikiImage": "William Ellis (missionary)", "source": "Wikipedia" },
+        { "year": "1912", "title": "Hawaiian Volcano Observatory founded", "text": "Geologist Thomas Jaggar established HVO on the caldera rim, pioneering continuous volcano monitoring. It is the oldest of the USGS volcano observatories.", "wikiImage": "Thomas Jaggar", "source": "USGS HVO", "sourceUrl": "https://www.usgs.gov/observatories/hvo" },
+        { "year": "1924", "title": "Halemaʻumaʻu explosions", "text": "As the lava lake drained, groundwater flashed to steam and blasted multi-ton blocks around the crater over two weeks, killing one photographer and doubling the crater's width.", "wikiImage": "Halemaʻumaʻu", "source": "USGS HVO" },
+        { "year": "1959", "title": "Kīlauea Iki lava fountains", "text": "Fountains from Kīlauea Iki reached a record 1,900 ft (580 m), building the Puʻu Puaʻi cinder cone and a lava lake whose crust hikers still cross today.", "wikiImage": "Kīlauea Iki", "source": "USGS HVO" },
+        { "year": "1983–2018", "title": "The Puʻu ʻŌʻō eruption", "text": "A 35-year East Rift Zone eruption — one of the longest in recorded history. Its lava buried the town of Kalapana in 1990 and repeatedly reshaped the coastline before the vent collapsed in 2018.", "wikiImage": "Puʻu ʻŌʻō", "source": "USGS HVO" },
+        { "year": "2018", "title": "Lower Puna eruption & summit collapse", "text": "Fissure 8 in Leilani Estates fed a river of lava that destroyed ~700 homes and filled Kapoho Bay, while the summit lava lake drained and Halemaʻumaʻu collapsed dramatically over three months.", "wikiImage": "2018 lower Puna eruption", "source": "USGS HVO", "sourceUrl": "https://www.usgs.gov/volcanoes/kilauea/2018-eruption-kilauea-volcano" },
+        { "year": "2020–2021", "title": "Lava returns to the summit", "text": "A new eruption refilled Halemaʻumaʻu with a lava lake, drawing crowds to the overlooks in Hawaiʻi Volcanoes National Park.", "wikiImage": "Halemaʻumaʻu", "source": "USGS HVO" },
+        { "year": "2023–2025", "title": "Episodic summit fountaining", "text": "Repeated short summit eruptions and lava-fountaining episodes continued, tracked live by HVO — see the current alert level and webcams on this map.", "source": "USGS HVO", "sourceUrl": "https://www.usgs.gov/volcanoes/kilauea/volcano-updates" }
+      ]
+    },
+    {
+      "match": ["mauna loa"],
+      "ids": ["Mauna Loa"],
+      "title": "Mauna Loa — the largest active volcano on Earth",
+      "intro": "By volume the biggest volcano on the planet, covering half of Hawaiʻi Island. It has erupted 33 times since 1843.",
+      "events": [
+        { "year": "1843", "title": "First documented eruption", "text": "The first well-recorded historical eruption of Mauna Loa opened the modern observational record of the mountain.", "wikiImage": "Mauna Loa", "source": "USGS HVO" },
+        { "year": "1935", "title": "Bombing the lava flow", "text": "As lava threatened Hilo's water supply, Thomas Jaggar asked the Army Air Corps to bomb the flow's channels to divert it — an audacious, much-debated experiment led by then-Lt. Col. George S. Patton's era airmen.", "wikiImage": "Mauna Loa", "source": "USGS HVO", "sourceUrl": "https://www.usgs.gov/observatories/hvo" },
+        { "year": "1942", "title": "The secret wartime eruption", "text": "An eruption during WWII was hushed under blackout rules so its glow couldn't guide enemy ships toward the islands.", "source": "USGS HVO" },
+        { "year": "1950", "title": "Southwest Rift Zone races to the sea", "text": "One of the most voluminous flank eruptions on record reached the ocean in about three hours, cutting the belt highway and destroying the Kona village of Hoʻokena-mauka.", "source": "USGS HVO" },
+        { "year": "1984", "title": "Lava toward Hilo", "text": "A Northeast Rift Zone eruption sent flows to within about 4 miles of Hilo before stopping — the last eruption for 38 years.", "wikiImage": "Mauna Loa", "source": "USGS HVO" },
+        { "year": "2022", "title": "Reawakening", "text": "After 38 quiet years Mauna Loa erupted again from its Northeast Rift Zone, sending lava across the flank toward (but not over) Saddle Road, watched worldwide.", "wikiImage": "Mauna Loa", "source": "USGS HVO", "sourceUrl": "https://www.usgs.gov/volcanoes/mauna-loa" }
+      ]
+    },
+    {
+      "match": ["tsunami museum", "laupahoehoe", "laupāhoehoe", "coconut island", "hilo bay"],
+      "title": "Hilo & the great tsunamis",
+      "intro": "Hilo's crescent bay funnels and amplifies waves, making it the most tsunami-struck city in the United States. Two disasters reshaped it forever.",
+      "events": [
+        { "year": "1946", "title": "April Fools' Day tsunami", "text": "A magnitude-8.6 Aleutian earthquake sent waves that killed 159 people in Hawaiʻi — 96 in Hilo alone — with no warning. At Laupāhoehoe, 24 students and teachers at a seaside school were swept away.", "wikiImage": "1946 Aleutian Islands earthquake", "source": "Pacific Tsunami Museum", "sourceUrl": "https://tsunami.org/" },
+        { "year": "1949", "title": "A warning system is born", "text": "The disaster led directly to the creation of what became the Pacific Tsunami Warning Center, headquartered in Hawaiʻi.", "wikiImage": "Pacific Tsunami Warning Center", "source": "NOAA", "sourceUrl": "https://www.tsunami.gov/" },
+        { "year": "1960", "title": "The Chile tsunami", "text": "The largest earthquake ever recorded (M9.5, Chile) sent a tsunami across the Pacific that killed 61 people in Hilo and flattened the Waiākea district — despite warnings many did not heed.", "wikiImage": "1960 Valdivia earthquake", "source": "Pacific Tsunami Museum" },
+        { "year": "1960s", "title": "Rebuilding as buffer parks", "text": "Rather than rebuild the lethal low-lying bayfront, planners converted Waiākea into green space — today's Liliʻuokalani Gardens and bayfront parks are that tsunami buffer.", "wikiImage": "Liliʻuokalani Park and Gardens", "source": "County of Hawaiʻi" }
+      ]
+    },
+    {
+      "match": ["puukohola", "puʻukoholā", "kamehameha", "kawaihae"],
+      "title": "Kamehameha the Great & Puʻukoholā",
+      "intro": "The war temple above Kawaihae is bound to the rise of the chief who first united the Hawaiian Islands.",
+      "events": [
+        { "year": "c.1758", "title": "Birth in Kohala", "text": "Kamehameha was born in North Kohala, tradition tying his birth to the appearance of a bright comet (likely Halley's) that a prophecy said heralded a slayer of chiefs.", "wikiImage": "Kamehameha I", "source": "Wikipedia" },
+        { "year": "1790–91", "title": "Building the war temple", "text": "Told by a prophet he would conquer all the islands if he built a great heiau to his war god at Puʻukoholā, Kamehameha's people moved stones hand-to-hand from miles away.", "wikiImage": "Puʻukoholā Heiau National Historic Site", "source": "NPS", "sourceUrl": "https://www.nps.gov/puhe/" },
+        { "year": "1791", "title": "The dedication", "text": "His chief rival Keōua came to the dedication and was killed and offered on the altar — removing the last challenge to Kamehameha's control of Hawaiʻi Island.", "source": "NPS" },
+        { "year": "1795", "title": "Conquest of the islands", "text": "With guns, ships and Western advisers, Kamehameha invaded Maui, Molokaʻi and Oʻahu, winning the decisive Battle of Nuʻuanu where warriors were driven over the Pali cliffs.", "wikiImage": "Battle of Nuʻuanu", "source": "Wikipedia" },
+        { "year": "1810", "title": "One kingdom", "text": "Kauaʻi's chief submitted by negotiation, completing the unification of all the Hawaiian Islands under a single ruler for the first time.", "source": "Wikipedia" },
+        { "year": "1819", "title": "Death at Kamakahonu", "text": "Kamehameha died at his Kailua-Kona compound; within months the kapu system he upheld was overthrown, on the eve of the missionaries' arrival.", "wikiImage": "Ahuena Heiau", "source": "Wikipedia" }
+      ]
+    },
+    {
+      "match": ["kohala ditch"],
+      "title": "The Kohala Ditch",
+      "intro": "A 1900s feat of hand engineering that made sugar possible in dry Kohala — and nearly killed the men who built it.",
+      "events": [
+        { "year": "1904", "title": "An impossible contract", "text": "Sugar baron John Hind hired engineer Michael O'Shaughnessy (later of San Francisco's Hetch Hetchy) to carry water from the wet Kohala mountains to the arid cane fields.", "source": "HistoricHawaii", "sourceUrl": "https://historichawaii.org/" },
+        { "year": "1905–06", "title": "Built by hand in 18 months", "text": "Around 600 laborers — mostly Japanese immigrants — dug 22.5 miles of tunnels and wooden flumes through sheer gulches. Roughly 17 workers died in the dangerous work.", "wikiImage": "Kohala, Hawaii", "source": "HistoricHawaii" },
+        { "year": "1906", "title": "Water arrives", "text": "The completed ditch delivered tens of millions of gallons a day, and Kohala's plantations boomed for the next seven decades.", "source": "HistoricHawaii" },
+        { "year": "1975", "title": "The sugar era ends", "text": "Kohala Sugar Company closed, and the ditch's purpose faded — though it kept watering ranches and small farms.", "source": "Wikipedia" },
+        { "year": "2006", "title": "Earthquake damage", "text": "The M6.7 Kīholo Bay earthquake collapsed tunnels and ended the popular 'Flumin' da Ditch' kayak tours for years; partial restoration followed.", "wikiImage": "2006 Hawaii earthquake", "source": "USGS" }
+      ]
+    },
+    {
+      "match": ["kalapana", "kaimū", "kaimu"],
+      "title": "Kalapana — a town beneath the lava",
+      "intro": "A beloved Puna village and its famous black-sand beach, lost to Kīlauea in a single dramatic year.",
+      "events": [
+        { "year": "pre-1990", "title": "Kaimū black-sand beach", "text": "Kalapana's Kaimū Beach, fringed with coconut palms, was among the most photographed places in Hawaiʻi and a cultural heart of Puna.", "source": "Wikipedia" },
+        { "year": "1990", "title": "The flows arrive", "text": "Lava from the Puʻu ʻŌʻō eruption advanced through Kalapana over months, burning more than 100 homes, the store, and burying Kaimū Beach under dozens of feet of rock.", "wikiImage": "Kalapana, Hawaii", "source": "USGS HVO" },
+        { "year": "1990", "title": "Saving the Painted Church", "text": "The historic 1928 Star of the Sea 'Painted Church' was lifted onto a truck and moved out of the lava's path; it survives today as a roadside landmark.", "source": "Wikipedia" },
+        { "year": "Now", "title": "A new beach is born", "text": "A fresh black-sand beach and a young planted coconut grove have formed on top of the 1990 flow — the island rebuilding itself.", "source": "NPS" }
+      ]
+    },
+    {
+      "match": ["kapoho", "kumukahi"],
+      "title": "Kapoho — twice taken by Kīlauea",
+      "intro": "A lush lower-Puna community famous for its tide pools, destroyed by eruptions 58 years apart.",
+      "events": [
+        { "year": "1960", "title": "The village is buried", "text": "A lower East Rift Zone eruption destroyed Kapoho village and its farms; the lava stopped just short of the Cape Kumukahi lighthouse, sparing the tower.", "wikiImage": "Cape Kumukahi Light", "source": "USGS HVO" },
+        { "year": "1960s–2018", "title": "Tide pools & Vacationland", "text": "Over decades the Kapoho tide pools and the Vacationland/Kapoho Beach Lots became a snorkeling paradise built around warm, spring-fed pools.", "source": "Wikipedia" },
+        { "year": "2018", "title": "Fissure 8 fills the bay", "text": "The 2018 eruption's massive channelized flow buried Vacationland, Kapoho Beach Lots and the entire Kapoho Bay and tide-pool system, adding new land to the coastline.", "wikiImage": "2018 lower Puna eruption", "source": "USGS HVO", "sourceUrl": "https://www.usgs.gov/volcanoes/kilauea/2018-eruption-kilauea-volcano" }
+      ]
+    },
+    {
+      "match": ["kealakekua", "captain cook", "hikiau"],
+      "title": "Kealakekua Bay & Captain Cook",
+      "intro": "A sacred bay that became the site of one of the most famous encounters — and deaths — in Pacific history.",
+      "events": [
+        { "year": "1779", "title": "Arrival during Makahiki", "text": "Captain James Cook sailed into Kealakekua Bay during the Makahiki festival honoring Lono; he was received with extraordinary ceremony at Hikiau Heiau, possibly as an embodiment of the god.", "wikiImage": "Kealakekua Bay", "source": "Wikipedia" },
+        { "year": "1779", "title": "The death of Cook", "text": "After leaving and returning to repair a mast, a dispute over a stolen boat escalated; Cook was killed in the shallows at Kaʻawaloa on 14 February 1779.", "wikiImage": "Death of James Cook", "source": "Wikipedia" },
+        { "year": "1874", "title": "The monument", "text": "A white obelisk was erected at Kaʻawaloa to mark the spot; the small parcel of land is deeded to the United Kingdom.", "source": "Wikipedia" },
+        { "year": "Now", "title": "Marine reserve", "text": "The bay is a protected Marine Life Conservation District — some of the island's best-preserved coral reef and a resident pod of spinner dolphins.", "source": "Hawaiʻi DLNR", "sourceUrl": "https://dlnr.hawaii.gov/dar/" }
+      ]
+    },
+    {
+      "match": ["parker ranch", "waimea"],
+      "title": "Parker Ranch & the paniolo",
+      "intro": "From wild cattle to one of America's largest ranches — the cradle of Hawaiian cowboy culture in Waimea.",
+      "events": [
+        { "year": "1793", "title": "Cattle arrive", "text": "Captain George Vancouver gave longhorn cattle to Kamehameha, who placed a kapu protecting them; within decades wild herds overran the uplands.", "source": "Wikipedia" },
+        { "year": "1809", "title": "John Palmer Parker", "text": "A young New England sailor jumped ship, befriended Kamehameha, and was later given permission to hunt and manage the wild cattle — the ranch's beginning.", "wikiImage": "Parker Ranch", "source": "Wikipedia" },
+        { "year": "1830s", "title": "The paniolo", "text": "Mexican vaqueros were brought in to teach cattle handling; Hawaiians adapted their skills, dress and music into the distinct paniolo (cowboy) culture — decades before the American Wild West.", "wikiImage": "Paniolo", "source": "Wikipedia" },
+        { "year": "1847", "title": "The ranch is founded", "text": "Parker formally established the ranch that would grow to cover much of North Hawaiʻi's grasslands.", "source": "Wikipedia" },
+        { "year": "1992", "title": "Left to the community", "text": "Last Parker heir Richard Smart died and willed the ranch to a charitable trust that still funds Waimea's schools, hospital and community.", "source": "Parker Ranch", "sourceUrl": "https://parkerranch.com/" }
+      ]
+    },
+    {
+      "match": ["mauna kea", "keck", "subaru", "gemini", "maxwell", "ukirt", "infrared telescope"],
+      "title": "Mauna Kea — sacred summit, window to the universe",
+      "intro": "The highest point in the Pacific: a wahi pana (storied place) at the piko of the island, and home to the world's premier astronomy.",
+      "events": [
+        { "year": "ancient", "title": "Sacred realm", "text": "In Hawaiian tradition the summit region is the meeting place of Earth Mother and Sky Father and home to deities; Lake Waiau near the top is a sacred site, and the mountain holds the largest adze quarry in the Pacific.", "wikiImage": "Mauna Kea", "source": "Wikipedia" },
+        { "year": "1964", "title": "First summit road", "text": "A road to the summit opened the peak to research, prized for its dry, dark, stable air above 40% of the atmosphere.", "source": "UH IfA", "sourceUrl": "https://www.ifa.hawaii.edu/mko/" },
+        { "year": "1970", "title": "UH 2.2-metre telescope", "text": "The University of Hawaiʻi's telescope proved the site's world-class quality and launched Mauna Kea's astronomy era.", "source": "UH IfA" },
+        { "year": "1979", "title": "CFHT, UKIRT & IRTF", "text": "A wave of international telescopes — Canada-France-Hawaii, the UK Infrared Telescope, and NASA's IRTF (built for planetary missions) — arrived within a year.", "wikiImage": "Canada–France–Hawaii Telescope", "source": "UH IfA" },
+        { "year": "1992–96", "title": "The Keck telescopes", "text": "The twin 10-metre Kecks, using revolutionary segmented mirrors, became the largest optical/infrared telescopes on Earth.", "wikiImage": "W. M. Keck Observatory", "source": "Keck Observatory", "sourceUrl": "https://www.keckobservatory.org/" },
+        { "year": "1999", "title": "Subaru & Gemini North", "text": "Japan's 8.2-metre Subaru and the 8.1-metre Gemini North added giant single-mirror telescopes to the summit.", "wikiImage": "Subaru Telescope", "source": "UH IfA" },
+        { "year": "2015–", "title": "The TMT conflict", "text": "Plans for the Thirty Meter Telescope sparked sustained protests defending the mountain as sacred land, forcing a broad reckoning over stewardship of the summit.", "wikiImage": "Thirty Meter Telescope", "source": "Wikipedia" }
+      ]
+    },
+    {
+      "match": ["waipio", "waipiʻo"],
+      "title": "Waipiʻo — the Valley of the Kings",
+      "intro": "A deep, taro-rich valley that was the political and spiritual heart of ancient Hawaiʻi Island.",
+      "events": [
+        { "year": "ancient", "title": "Seat of the chiefs", "text": "Waipiʻo was a royal residence and religious center said to have held thousands of people farming vast terraced loʻi (taro pondfields). Great chiefs Līloa and ʻUmi ruled from here.", "wikiImage": "Waipiʻo Valley", "source": "Wikipedia" },
+        { "year": "1780s", "title": "Young Kamehameha", "text": "Tradition places pivotal moments of Kamehameha's early life in Waipiʻo, including receiving the war god Kūkāʻilimoku.", "source": "Wikipedia" },
+        { "year": "1946", "title": "Tsunami devastation", "text": "The April 1946 tsunami surged far up the valley, destroying homes and farms and prompting most residents to leave the valley floor for good.", "wikiImage": "1946 Aleutian Islands earthquake", "source": "Pacific Tsunami Museum" },
+        { "year": "Now", "title": "Living taro & fragile access", "text": "A small community still farms taro in the valley; the punishingly steep access road is periodically closed for safety, keeping Waipiʻo remote.", "source": "County of Hawaiʻi" }
+      ]
+    }
+  ]
+}
