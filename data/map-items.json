@@ -909,6 +909,232 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "ocean:1617760": {
+      "title": "Hilo Bay tide station",
+      "summary": "A seiche ( SAYSH) is a standing wave in an enclosed or partially enclosed body of water.",
+      "history": [
+        {
+          "year": 1890,
+          "text": "The term was promoted in 1890 by the Swiss hydrologist François-Alphonse Forel, who was the first to make scientific observations of the effect in Lake Geneva.",
+          "source": "https://en.wikipedia.org/wiki/Seiche"
+        },
+        {
+          "year": 1954,
+          "text": "In 1954, the remnants of Hurricane Hazel piled up water along the northwestern Lake Ontario shoreline near Toronto, causing extensive flooding, and established a seiche that subsequently caused flooding along the south shore.",
+          "source": "https://en.wikipedia.org/wiki/Seiche"
+        },
+        {
+          "year": 1964,
+          "text": "The massive Good Friday earthquake that hit Alaska in 1964 caused seiches in swimming pools as far away as Puerto Rico.",
+          "source": "https://en.wikipedia.org/wiki/Seiche"
+        },
+        {
+          "year": 1972,
+          "text": "According to Wilson (1972), this Swiss French dialect word comes from the Latin word siccus meaning \"dry\", i.e., as the water recedes, the beach dries.",
+          "source": "https://en.wikipedia.org/wiki/Seiche"
+        },
+        {
+          "year": 1994,
+          "text": "The 1994 Northridge earthquake in California caused swimming pools to overflow across southern California.",
+          "source": "https://en.wikipedia.org/wiki/Seiche"
+        },
+        {
+          "year": 1995,
+          "text": "Lake seiches can occur very quickly: on July 13, 1995, a large seiche on Lake Superior caused the water level to fall and then rise again by one metre (three feet) within fifteen minutes, leaving some boats hanging from the docks on their…",
+          "source": "https://en.wikipedia.org/wiki/Seiche"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/Standing_wave_2.gif/330px-Standing_wave_2.gif",
+          "credit": "Wikipedia — Seiche (CC/PD)",
+          "caption": "Seiche"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Seiche"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Seiche"
+        ],
+        "resolvedTitle": "Seiche",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T23:18:58.253Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "ocean:1612480": {
+      "title": "Kailua-Kona tide station",
+      "summary": "Hualālai (pronounced [huwəˈlaːlɐi] in Hawaiian) is an active shield volcano on the island of Hawaiʻi in the Hawaiian Islands.",
+      "history": [
+        {
+          "year": 1700,
+          "text": "Between 1700 and 2016, eruptions originated from six vents; four of these lava flows poured into the sea to the west coast. .",
+          "source": "https://en.wikipedia.org/wiki/Hual%C4%81lai"
+        },
+        {
+          "year": 1800,
+          "text": "Hualālai last erupted in 1800–1801.",
+          "source": "https://en.wikipedia.org/wiki/Hual%C4%81lai"
+        },
+        {
+          "year": 1801,
+          "text": "Despite maintaining a very low level of activity since its last eruption in 1801, and being unusually inactive for the last 2,000 years, Hualālai is still considered active, and is expected to erupt again sometime in the next 100 years.",
+          "source": "https://en.wikipedia.org/wiki/Hual%C4%81lai"
+        },
+        {
+          "year": 1929,
+          "text": "The most recent major activity at the volcano was in 1929, when an intense earthquake swarm rocked it, most likely caused by magmatic action near its peak.",
+          "source": "https://en.wikipedia.org/wiki/Hual%C4%81lai"
+        },
+        {
+          "year": 2001,
+          "text": "This area was explored more closely in a 2001 joint Japan-United States project to explore the volcano's flanks, utilizing the remotely operated vehicle (ROV) Kaikō.",
+          "source": "https://en.wikipedia.org/wiki/Hual%C4%81lai"
+        },
+        {
+          "year": 2010,
+          "text": "This caused $100,000 worth of damage to the Kona district ($1.2 million as of 2010), and two earthquakes with magnitudes of 5.5 and 6.5 were felt as far away as Honolulu.",
+          "source": "https://en.wikipedia.org/wiki/Hual%C4%81lai"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/Hual%C4%81lai_1996.jpg/330px-Hual%C4%81lai_1996.jpg",
+          "credit": "Wikipedia — Hualālai (CC/PD)",
+          "caption": "Hualālai"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Hual%C4%81lai"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Hual%C4%81lai"
+        ],
+        "resolvedTitle": "Hualālai",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T23:28:57.556Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "power:pakinigui": {
+      "title": "Pakini Nui Wind Farm",
+      "summary": "Wind power in Hawaii is produced by the state's 132 commercial wind turbines, totaling 236 MW in capacity.",
+      "history": [
+        {
+          "year": 1987,
+          "text": "The MOD-5B, a 3.2MW wind turbine on Oahu, was the largest in the world in 1987.",
+          "source": "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        },
+        {
+          "year": 2010,
+          "text": "These early examples were all out of service by 2010. . . .",
+          "source": "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        },
+        {
+          "year": 2012,
+          "text": "In 2012, Hawaii generated 367 million kWh from wind power.",
+          "source": "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        },
+        {
+          "year": 2015,
+          "text": "In 2015, wind turbines produced 6.4% of Hawaii's electricity.",
+          "source": "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        },
+        {
+          "year": 2017,
+          "text": "Repowered by a new farm at the site in 2017. .",
+          "source": "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        },
+        {
+          "year": 2019,
+          "text": "In 2019, Kahuku residents protested the placement of wind towers, leading to hundreds of arrests for obstructing entry of equipment to the turbine sites.",
+          "source": "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Kaheawa_Wind_Farm.jpg/330px-Kaheawa_Wind_Farm.jpg",
+          "credit": "Wikipedia — Wind power in Hawaii (CC/PD)",
+          "caption": "Wind power in Hawaii"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        ],
+        "resolvedTitle": "Wind power in Hawaii",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T23:28:58.937Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "power:hawiwind": {
+      "title": "Hawi Wind Farm",
+      "summary": "Hawi Wind Farm is a wind farm on Upolu Point, the northern tip of Hawaii's largest island, Hawaiʻi.",
+      "history": [
+        {
+          "year": 2004,
+          "text": "On 14 May 2004, Hawaii Electric Light Company (HELCO) bought the project from enXco or EDF Renewable Energy.",
+          "source": "https://en.wikipedia.org/wiki/Hawi_Wind_Farm"
+        },
+        {
+          "year": 2006,
+          "text": "Commissioned in 2006, it comprises sixteen 660 kW wind turbines manufactured by Vestas, specifically the Vestas V47 turbine.",
+          "source": "https://en.wikipedia.org/wiki/Hawi_Wind_Farm"
+        },
+        {
+          "year": 2011,
+          "text": "In 2011, the Hawi Wind Farm added a 1 megawatt back-up battery system to their wind farm.",
+          "source": "https://en.wikipedia.org/wiki/Hawi_Wind_Farm"
+        },
+        {
+          "year": 2013,
+          "text": "However, as recently as 2013 the farm has also had its setbacks.",
+          "source": "https://en.wikipedia.org/wiki/Hawi_Wind_Farm"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/Hawi_Renewable_Development.jpg/330px-Hawi_Renewable_Development.jpg",
+          "credit": "Wikipedia — Hawi Wind Farm (CC/PD)",
+          "caption": "Hawi Wind Farm"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Hawi_Wind_Farm"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Hawi_Wind_Farm"
+        ],
+        "resolvedTitle": "Hawi Wind Farm",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T23:29:00.289Z",
+        "reviewed": false
+      },
+      "status": "ok"
     }
   }
 }
