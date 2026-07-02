@@ -5049,52 +5049,75 @@ let placesCache = [];
 let placesLastPollTs = null, placesLastError = null;
 async function pollPlaces() {
   try {
+    const UA = 'heleon-tracker/1.0 (https://bus-tracker-a36o.onrender.com; bus map)';
+    const wiki = (q) => fetchJson('en.wikipedia.org', `/w/api.php?${q}`, { 'User-Agent': UA });
     const found = new Map(); // pageid -> {title, lat, lon}
     for (const [lat, lon] of WIKI_GRID) {
-      try {
-        const j = await fetchJson('en.wikipedia.org',
-          `/w/api.php?action=query&format=json&list=geosearch&gscoord=${lat}%7C${lon}&gsradius=10000&gslimit=20`,
-          { 'User-Agent': 'heleon-tracker/1.0 (bus map)' });
-        for (const g of ((j.query && j.query.geosearch) || [])) {
-          if (!found.has(g.pageid)) found.set(g.pageid, { title: g.title, lat: g.lat, lon: g.lon });
-        }
-      } catch (e) { /* skip this grid cell */ }
-      await new Promise(r => setTimeout(r, 120)); // be gentle to Wikipedia
+      // Retry a couple of times with backoff — Wikipedia rate-limits rapid
+      // sequential requests from shared cloud IPs (Render), so a naive tight
+      // loop gets throttled and returns almost nothing.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const j = await wiki(`action=query&format=json&list=geosearch&gscoord=${lat}%7C${lon}&gsradius=10000&gslimit=20`);
+          for (const g of ((j.query && j.query.geosearch) || [])) {
+            if (!found.has(g.pageid)) found.set(g.pageid, { title: g.title, lat: g.lat, lon: g.lon });
+          }
+          break;
+        } catch (e) { await new Promise(r => setTimeout(r, 800 * (attempt + 1))); }
+      }
+      await new Promise(r => setTimeout(r, 350)); // gentler spacing
     }
-    // Enrich in batches of 20 pageids with thumbnail + intro extract.
+    // Enrich in batches of 20 pageids with thumbnail + intro extract. If a batch
+    // fails, fall back to emitting those places WITHOUT a photo (title/coords/
+    // kind from geosearch) so the layer is never empty just because enrichment
+    // got throttled.
     const ids = [...found.keys()];
     const out = [];
+    const classify = (title, extract) => {
+      const hay = `${title} ${extract}`.toLowerCase();
+      if (/shipwreck|wreck|sunk|sank/.test(hay)) return 'wreck';
+      if (/battle|war|fort|cannon|skirmish/.test(hay)) return 'battle';
+      if (/heiau|puʻuhonua|puuhonua|sacred/.test(hay)) return 'heiau';
+      if (/dock|wharf|pier|harbor|harbour|landing/.test(hay)) return 'dock';
+      if (/waterfall|falls|spring|pond|lake|\bbay\b|beach/.test(hay)) return 'water';
+      if (/heritage|historic|national register|monument|memorial/.test(hay)) return 'historic';
+      if (/church|mission|shrine/.test(hay)) return 'church';
+      if (/observatory|telescope/.test(hay)) return 'observatory';
+      if (/park|refuge|forest|reserve/.test(hay)) return 'park';
+      return 'landmark';
+    };
     for (let i = 0; i < ids.length; i += 20) {
       const batch = ids.slice(i, i + 20);
-      try {
-        const j = await fetchJson('en.wikipedia.org',
-          `/w/api.php?action=query&format=json&prop=pageimages%7Cextracts&piprop=thumbnail&pithumbsize=360&exintro=1&explaintext=1&exsentences=2&pilimit=20&pageids=${batch.join('%7C')}`,
-          { 'User-Agent': 'heleon-tracker/1.0 (bus map)' });
-        for (const p of Object.values((j.query && j.query.pages) || {})) {
-          const base = found.get(p.pageid);
-          if (!base) continue;
-          const extract = (p.extract || '').trim();
-          // Classify for icon: shipwreck / battle / heiau / dock / landmark…
-          const hay = `${p.title} ${extract}`.toLowerCase();
-          let kind = 'landmark';
-          if (/shipwreck|wreck|sunk|sank/.test(hay)) kind = 'wreck';
-          else if (/battle|war|fort|cannon|skirmish/.test(hay)) kind = 'battle';
-          else if (/heiau|temple|sacred|puʻuhonua|puuhonua/.test(hay)) kind = 'heiau';
-          else if (/dock|wharf|pier|harbor|harbour|landing/.test(hay)) kind = 'dock';
-          else if (/waterfall|falls|spring|pond|lake|bay|beach/.test(hay)) kind = 'water';
-          else if (/heritage|historic|national register|monument|memorial/.test(hay)) kind = 'historic';
-          else if (/church|mission|temple|shrine/.test(hay)) kind = 'church';
-          else if (/observatory|telescope/.test(hay)) kind = 'observatory';
-          else if (/park|refuge|forest|reserve/.test(hay)) kind = 'park';
-          out.push({
-            id: p.pageid, title: base.title, lat: base.lat, lon: base.lon, kind,
-            extract: extract.slice(0, 320),
-            thumb: (p.thumbnail && p.thumbnail.source) || null,
-            url: `https://en.wikipedia.org/?curid=${p.pageid}`,
-          });
+      let enriched = false;
+      for (let attempt = 0; attempt < 3 && !enriched; attempt++) {
+        try {
+          const j = await wiki(`action=query&format=json&prop=pageimages%7Cextracts&piprop=thumbnail&pithumbsize=360&exintro=1&explaintext=1&exsentences=2&pilimit=20&pageids=${batch.join('%7C')}`);
+          for (const p of Object.values((j.query && j.query.pages) || {})) {
+            const base = found.get(p.pageid);
+            if (!base) continue;
+            const extract = (p.extract || '').trim();
+            enriched = true;
+            out.push({
+              id: p.pageid, title: base.title, lat: base.lat, lon: base.lon,
+              kind: classify(base.title, extract),
+              extract: extract.slice(0, 320),
+              thumb: (p.thumbnail && p.thumbnail.source) || null,
+              url: `https://en.wikipedia.org/?curid=${p.pageid}`,
+            });
+          }
+        } catch (e) { await new Promise(r => setTimeout(r, 800 * (attempt + 1))); }
+      }
+      // Enrichment throttled for this batch — still emit the places (no photo)
+      // so the layer isn't empty; the title-based classifier still gives an icon.
+      if (!enriched) {
+        for (const pid of batch) {
+          const base = found.get(pid);
+          if (base) out.push({ id: pid, title: base.title, lat: base.lat, lon: base.lon,
+            kind: classify(base.title, ''), extract: '', thumb: null,
+            url: `https://en.wikipedia.org/?curid=${pid}` });
         }
-      } catch (e) { /* skip this enrichment batch */ }
-      await new Promise(r => setTimeout(r, 120));
+      }
+      await new Promise(r => setTimeout(r, 350));
     }
     placesLastPollTs = Date.now();
     if (out.length) { placesCache = out; placesLastError = null; }
