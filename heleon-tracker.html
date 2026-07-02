@@ -1401,22 +1401,11 @@ function initMapLayers() {
       'text-halo-width': 1.5,
     },
   });
-  // Simple JS animation: every 1.5s, scale the pulse layer's outer radius
-  // expression outward and back via a state-driven property. Looks like a
-  // "spinning water wheel" — the bigger the discharge, the more visible.
-  let _streamflowPulsePhase = 0;
-  setInterval(() => {
-    if (!mapReady) return;
-    const phase = (_streamflowPulsePhase = (_streamflowPulsePhase + 1) % 4);
-    // Slightly modulate circle-opacity over time to give a "splash" effect.
-    if (!map.getLayer('streamflow-pulse')) return;
-    map.setPaintProperty('streamflow-pulse', 'circle-opacity', [
-      'interpolate', ['linear'], ['get', 'value'],
-      0, 0.05 + (phase % 2) * 0.02,
-      100, 0.20 + (phase % 2) * 0.05,
-      500, 0.45 + (phase % 2) * 0.10,
-    ]);
-  }, 1500);
+  // NOTE: the streamflow-circle/-pulse/-label layers are retired (kept only so
+  // the invisible circle can answer hover/click feature queries) — the visible
+  // gauges are the animated DOM water wheels. The old 1.5s pulse-repaint timer
+  // was removed: it fired forever (even backgrounded) repainting a layer that's
+  // always visibility:none — pure idle waste with no visual effect.
   wireLayerHover('streamflow-circle', p => `
     <div style="font-weight:600;">💧 ${escapeHtml(p.name)}</div>
     <div style="color:var(--muted);font-size:11px;">${p.value != null ? (+p.value).toFixed(1) + ' ft³/s' : 'no recent reading'}</div>
@@ -7122,7 +7111,15 @@ function resetCountdown() {
 }
 // Refresh immediately when the tab becomes visible again (so it's current).
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && countdownVal <= 0) fetchAll();
+  if (document.hidden) return;
+  if (countdownVal <= 0) fetchAll();
+  // The RAF animation loops bail out while the tab is hidden (to save CPU) and
+  // set their handles to null; re-kick them on return so buses + the flowing
+  // route chevrons resume moving immediately instead of staying frozen until
+  // the next data refresh happens to restart them.
+  try { startMarkerAnim(); } catch (e) {}
+  try { startAheadAnim(); } catch (e) {}
+  try { updateWheelScale(); } catch (e) {}
 });
 function updateCountdownUI() {
   document.getElementById('countdown').textContent = countdownVal;
