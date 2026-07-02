@@ -4193,21 +4193,26 @@ async function fetchMeshtasticNodeDetail(nodeId) {
 // refreshed daily.
 let repeaterCache = [];
 let repeaterLastPollTs = null, repeaterLastError = null;
-// Curated listen links — most VHF/UHF repeaters have no public HTTP audio; these
-// are the best keyless options we can offer when someone clicks a tower.
-const HAWAII_HAM_BROADCASTIFY = 'https://www.broadcastify.com/listen/feed/27598';
+// Curated listen links — per-tower VHF streams are rare; the Hawaii linked-ham
+// Broadcastify feed (27598) is the best keyless in-browser MP3 we can attach to
+// every tower so the click-card Play button actually does something.
+const HAWAII_HAM_BROADCASTIFY_PAGE = 'https://www.broadcastify.com/listen/feed/27598';
+const HAWAII_HAM_STREAM = 'https://broadcastify.cdnstream1.com/27598';
 const KIWISDR_MAP = 'https://rx.kiwisdr.com/';
 function repeaterListenMeta(r) {
   const g = String(r.group || '').toUpperCase();
   const node = r.internet_node || '';
-  const meta = {
+  let listenLabel = 'Hawaiʻi linked ham nets';
+  if (g.includes('DMR') || g.includes('MMDVM')) listenLabel = 'Hawaiʻi ham nets (DMR — see Hoseline for talkgroups)';
+  else if (g === 'IRLP' && node) listenLabel = `Linked ham nets (IRLP node ${node} nearby)`;
+  return {
     irlpStatus: (g === 'IRLP' && node) ? `https://status.irlp.net/?node=${node}` : '',
-    listenStream: '',
+    listenStream: HAWAII_HAM_STREAM,
+    listenLabel,
     hoselineUrl: (g.includes('DMR') || g.includes('MMDVM')) ? 'https://hose.brandmeister.network/' : '',
-    broadcastifyUrl: HAWAII_HAM_BROADCASTIFY,
+    broadcastifyUrl: HAWAII_HAM_BROADCASTIFY_PAGE,
     kiwisdrUrl: KIWISDR_MAP,
   };
-  return meta;
 }
 async function pollRepeaters() {
   try {

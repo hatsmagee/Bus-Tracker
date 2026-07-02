@@ -173,6 +173,15 @@
   .gauge-range-btns button { font-size:10px; padding:3px 8px; border-radius:6px;
     border:1px solid #30363d; background:#21262d; color:#8b949e; cursor:pointer; }
   .gauge-range-btns button.active { background:#1f6feb; border-color:#388bfd; color:#fff; }
+  .stream-ctrl { display:flex; align-items:center; gap:8px; margin-top:8px; }
+  .stream-ctrl button { font-size:11px; font-weight:700; padding:6px 12px; border-radius:8px;
+    border:1px solid #30363d; background:#21262d; color:#e6edf3; cursor:pointer; }
+  .stream-ctrl button:hover:not(:disabled) { background:#30363d; border-color:#484f58; }
+  .stream-ctrl button:disabled { opacity:.45; cursor:default; }
+  .stream-ctrl .stream-play-btn { background:#238636; border-color:#2ea043; color:#fff; }
+  .stream-ctrl .stream-play-btn:hover:not(:disabled) { background:#2ea043; }
+  .stream-ctrl .stream-stop-btn { background:#da3633; border-color:#f85149; color:#fff; }
+  .stream-ctrl .stream-status { font-size:10px; color:#8b949e; flex:1; min-width:0; }
   .mesh-feed { max-height:200px; overflow-y:auto; font-family:ui-monospace,monospace; font-size:10px;
     background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:6px 8px; margin-top:8px; }
   .mesh-feed .msg { padding:5px 0; border-bottom:1px solid #21262d; line-height:1.35; }
@@ -1539,21 +1548,26 @@ function initMapLayers() {
     if (p.city) row('Location', p.city);
     let listen = '';
     if (p.listenStream) {
-      listen = `<div style="margin-top:10px;"><div style="font-size:10px;color:#8b949e;margin-bottom:4px;">🔊 Live stream</div>
-        <audio controls preload="none" style="width:100%;height:32px;" src="${escapeHtml(p.listenStream)}"></audio></div>`;
+      listen = `<div class="repeater-stream" style="margin-top:10px;padding:10px;background:#0d1117;border:1px solid #30363d;border-radius:8px;">
+        <div style="font-size:10px;color:#8b949e;margin-bottom:6px;">🔊 ${escapeHtml(p.listenLabel || 'Live stream')}</div>
+        <div class="stream-ctrl">
+          <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(p.listenStream)}">▶ Play</button>
+          <button type="button" class="stream-stop-btn" disabled>■ Stop</button>
+          <span class="stream-status">Ready — tap Play</span>
+        </div></div>`;
     }
     const links = [];
     if (p.irlpStatus) links.push(`<a href="${escapeHtml(p.irlpStatus)}" target="_blank" rel="noopener" style="color:#58a6ff;">IRLP node status</a>`);
-    if (p.hoselineUrl) links.push(`<a href="${escapeHtml(p.hoselineUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">DMR Hoseline</a>`);
-    if (p.broadcastifyUrl) links.push(`<a href="${escapeHtml(p.broadcastifyUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">Hawaii linked nets (Broadcastify)</a>`);
+    if (p.hoselineUrl) links.push(`<a href="${escapeHtml(p.hoselineUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">DMR Hoseline (talkgroups)</a>`);
+    if (p.broadcastifyUrl) links.push(`<a href="${escapeHtml(p.broadcastifyUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">Broadcastify page</a>`);
     if (p.kiwisdrUrl) links.push(`<a href="${escapeHtml(p.kiwisdrUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">HF KiwiSDR map (not VHF)</a>`);
     if (links.length) {
       listen += `<div style="margin-top:8px;font-size:11px;display:flex;flex-direction:column;gap:4px;">${links.join('')}</div>`;
     }
     if (!listen) {
-      listen = `<div style="margin-top:8px;font-size:10px;color:#8b949e;line-height:1.45;">No public VHF audio stream for this tower. Program your radio with the settings above, or use a linked internet node (IRLP/DMR/AllStar) if available.</div>`;
+      listen = `<div style="margin-top:8px;font-size:10px;color:#8b949e;line-height:1.45;">No public audio stream for this tower. Program your radio with the settings above.</div>`;
     }
-    return { title: `📡 ${p.callsign} repeater`, body: rows.join('') + listen + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">hearham.com · most repeaters need a radio — streams are rare</div>` };
+    return { title: `📡 ${p.callsign} repeater`, body: rows.join('') + listen + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">hearham.com · stream is Hawaiʻi linked nets, not this tower alone</div>` };
   });
 
   // Summit observatories (Maunakea CFHT tower, Mauna Loa NOAA) — live conditions
@@ -2787,8 +2801,8 @@ async function fetchRepeaters() {
         tone: r.tone || '', mode: r.mode || 'FM', city: r.city || '',
         group: r.group || '', internetNode: r.internetNode || '',
         irlpStatus: r.irlpStatus || '', listenStream: r.listenStream || '',
-        hoselineUrl: r.hoselineUrl || '', broadcastifyUrl: r.broadcastifyUrl || '',
-        kiwisdrUrl: r.kiwisdrUrl || '',
+        listenLabel: r.listenLabel || '', hoselineUrl: r.hoselineUrl || '',
+        broadcastifyUrl: r.broadcastifyUrl || '', kiwisdrUrl: r.kiwisdrUrl || '',
       } }));
     map.getSource('repeaters').setData({ type: 'FeatureCollection', features: feats });
   } catch (e) { /* keep last */ }
@@ -2872,9 +2886,71 @@ const RADIO_STATIONS = [
   { name: 'KKOA', kind: 'Kona (1220 AM)', url: 'https://radio.securenetsystems.net/v5/KKOA' },
 ];
 let audioEl = null;
+let mapStreamAudio = null;
+
+function stopMapStream() {
+  if (mapStreamAudio) {
+    mapStreamAudio.pause();
+    mapStreamAudio.src = '';
+    mapStreamAudio = null;
+  }
+  document.querySelectorAll('.repeater-stream').forEach(wrap => {
+    const play = wrap.querySelector('.stream-play-btn');
+    const stop = wrap.querySelector('.stream-stop-btn');
+    const status = wrap.querySelector('.stream-status');
+    if (play) play.disabled = false;
+    if (stop) stop.disabled = true;
+    if (status && status.textContent !== 'Ready — tap Play') status.textContent = 'Stopped';
+  });
+}
+
+function wireRepeaterStreamControls(root) {
+  if (!root) return;
+  root.querySelectorAll('.repeater-stream').forEach(wrap => {
+    const playBtn = wrap.querySelector('.stream-play-btn');
+    const stopBtn = wrap.querySelector('.stream-stop-btn');
+    const status = wrap.querySelector('.stream-status');
+    if (!playBtn || !stopBtn || playBtn._wired) return;
+    playBtn._wired = true;
+    playBtn.onclick = () => {
+      const url = playBtn.dataset.streamUrl;
+      if (!url) return;
+      stopMapStream();
+      if (audioEl) { audioEl.pause(); audioEl = null; }
+      mapStreamAudio = new Audio(url);
+      mapStreamAudio.crossOrigin = 'anonymous';
+      status.textContent = 'Connecting…';
+      playBtn.disabled = true;
+      stopBtn.disabled = false;
+      mapStreamAudio.onplaying = () => { status.textContent = 'Playing live'; };
+      mapStreamAudio.onwaiting = () => { status.textContent = 'Buffering…'; };
+      mapStreamAudio.onerror = () => {
+        status.textContent = 'Stream unavailable';
+        playBtn.disabled = false;
+        stopBtn.disabled = true;
+        mapStreamAudio = null;
+      };
+      mapStreamAudio.onended = () => {
+        status.textContent = 'Ended';
+        playBtn.disabled = false;
+        stopBtn.disabled = true;
+        mapStreamAudio = null;
+      };
+      mapStreamAudio.play().catch(() => {
+        status.textContent = 'Tap Play again if blocked';
+        playBtn.disabled = false;
+        stopBtn.disabled = true;
+      });
+    };
+    stopBtn.onclick = () => {
+      stopMapStream();
+      if (status) status.textContent = 'Stopped';
+    };
+  });
+}
+
 function pickStream(url) {
-  // Stop any previous stream before starting a new one, so only one station
-  // plays at a time and we don't leak audio element across selections.
+  stopMapStream();
   if (audioEl) { audioEl.pause(); audioEl = null; }
   audioEl = new Audio(url);
   audioEl.crossOrigin = 'anonymous';
@@ -4854,11 +4930,13 @@ function showMapCard(bodyHtml, lngLat, title) {
     </div>
     <div style="padding:12px;max-height:60vh;overflow-y:auto;">${bodyHtml}</div>`;
   mapCard.querySelector('.map-card-x').onclick = hideMapCard;
+  wireRepeaterStreamControls(mapCard);
   mapCard.style.display = 'block';
   positionMapCard();
 }
 function hideMapCard() {
   if (meshCardRefreshTimer) { clearInterval(meshCardRefreshTimer); meshCardRefreshTimer = null; }
+  stopMapStream();
   if (mapCard) { mapCard.style.display = 'none'; mapCardAnchor = null; }
 }
 function positionMapCard() {
