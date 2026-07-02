@@ -749,6 +749,7 @@
       <div class="tab" data-tab="aircraft" id="aircraftTab">✈️ Aircraft</div>
       <div class="tab" data-tab="hawaii" id="hawaiiTab">🌋 Hawaiʻi</div>
       <div class="tab" data-tab="system">📊 System</div>
+      <div class="tab" data-tab="agent">🤖 Agent</div>
       <div class="tab" data-tab="docs">📚 Docs</div>
     </div>
 
@@ -822,14 +823,29 @@
       <div class="api-section" id="apiLog"></div>
 
       <div class="section-header" style="margin-top:4px;">🤖 Self-Development Agent</div>
-      <div id="agentPanel" style="padding:8px 12px;font-size:11px;line-height:1.5;color:var(--muted);">
+      <div style="padding:8px 12px;font-size:11px;color:var(--muted);">The research robot lives in the <strong>🤖 Agent</strong> tab — watch it roam the map and log its work there.</div>
+    </div>
+
+    <div class="tab-content" id="tab-agent">
+      <div style="padding:8px 12px;font-size:11px;color:var(--muted);line-height:1.5;">
+        A keyless research agent enriches map landmarks with history &amp; photos, smoke-tests its work, and ships it via GitHub. Watch the 🤖 robot on the map — hover it for what it's doing right now.
+      </div>
+      <div id="agentPanel" style="padding:0 12px 8px;font-size:11px;line-height:1.5;color:var(--muted);">
         Loading agent status…
       </div>
-      <div style="padding:0 12px 12px;display:flex;gap:8px;flex-wrap:wrap;">
+      <div style="padding:0 12px 8px;display:flex;gap:8px;flex-wrap:wrap;">
         <button type="button" id="agentRunResearch" style="font-size:11px;padding:4px 10px;cursor:pointer;">Run research</button>
         <button type="button" id="agentRunPublish" style="font-size:11px;padding:4px 10px;cursor:pointer;">Publish staged</button>
         <button type="button" id="agentResetBreaker" style="font-size:11px;padding:4px 10px;cursor:pointer;">Reset breaker</button>
+        <button type="button" id="agentFindRobot" style="font-size:11px;padding:4px 10px;cursor:pointer;">📍 Find robot</button>
       </div>
+      <div class="section-header">📦 Captured Work</div>
+      <div id="agentWork" style="padding:8px 12px;font-size:11px;color:var(--muted);">No work captured yet.</div>
+      <div style="padding:8px 12px 4px;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:10px;color:var(--muted);font-weight:600;">ACTIVITY LOG</span>
+        <label style="font-size:10px;color:var(--muted);"><input type="checkbox" id="agentLogFollow" checked> auto-scroll</label>
+      </div>
+      <pre id="agentLog" style="margin:0 12px 12px;padding:8px;background:#0d1117;border:1px solid #30363d;border-radius:6px;font-size:10px;line-height:1.4;color:#c9d1d9;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;">Waiting for agent activity…</pre>
     </div>
 
     <div class="tab-content" id="tab-boats">
@@ -862,7 +878,7 @@
         <label><input type="checkbox" id="showTsunami" onchange="toggleTsunami()"> Tsunami evacuation zone</label>
       </div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
-        <label><input type="checkbox" id="showQuakes" onchange="toggleQuakes()" checked> Recent earthquakes (30d)</label>
+        <label><input type="checkbox" id="showQuakes" onchange="toggleQuakes()"> Recent earthquakes (30d)</label>
       </div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showWildfire" onchange="toggleWildfire()" checked> Thermal hotspots (satellite)</label>
@@ -3442,13 +3458,108 @@ async function refreshAgentPanel() {
 }
 
 function wireAgentButtons() {
-  const post = mode => fetch(`/api/agent/run?mode=${mode}`, { method: 'POST' }).then(() => refreshAgentPanel());
+  const post = mode => fetch(`/api/agent/run?mode=${mode}`, { method: 'POST' }).then(() => { refreshAgentPanel(); refreshAgentLog(); });
   const runR = document.getElementById('agentRunResearch');
   const runP = document.getElementById('agentRunPublish');
   const reset = document.getElementById('agentResetBreaker');
   if (runR) runR.onclick = () => post('research');
   if (runP) runP.onclick = () => post('publish');
   if (reset) reset.onclick = () => fetch('/api/agent/reset-breaker', { method: 'POST' }).then(() => refreshAgentPanel());
+  const find = document.getElementById('agentFindRobot');
+  if (find) find.onclick = () => { ensureAgentRobot(); if (agentRobotMarker) map.flyTo({ center: agentRobotMarker.getLngLat(), zoom: 10 }); };
+}
+
+const AGENT_LOG_COLORS = { error: '#f85149', start: '#58a6ff', info: '#8b949e' };
+let agentLogLastTs = 0;
+let agentLogLines = [];
+async function refreshAgentLog() {
+  const el = document.getElementById('agentLog');
+  if (!el) return;
+  try {
+    const r = await (await fetch(`/api/agent/log?since=${agentLogLastTs}`)).json();
+    if (r.lines && r.lines.length) {
+      for (const l of r.lines) {
+        agentLogLines.push(l);
+        agentLogLastTs = Math.max(agentLogLastTs, l.ts);
+      }
+      if (agentLogLines.length > 500) agentLogLines = agentLogLines.slice(-500);
+      el.innerHTML = agentLogLines.map(l => {
+        const t = new Date(l.ts).toLocaleTimeString();
+        const c = AGENT_LOG_COLORS[l.level] || '#c9d1d9';
+        return `<span style="color:#6e7681;">${t}</span> <span style="color:${c};">${escapeHtml(l.text)}</span>`;
+      }).join('\n');
+      const follow = document.getElementById('agentLogFollow');
+      if (!follow || follow.checked) el.scrollTop = el.scrollHeight;
+    } else if (!agentLogLines.length) {
+      el.textContent = 'Waiting for agent activity…';
+    }
+  } catch (e) { /* keep last */ }
+}
+
+// ─── AGENT ROBOT ────────────────────────────────────────────────────────────
+// A little robot that roams the map to whatever landmark the research agent is
+// currently working on. Hover it for a live status; click to open the Agent tab.
+let agentRobotMarker = null;
+const agentRobotState = { lon: -155.5, lat: 19.6 };
+function resolveLoreKeyCoord(key) {
+  if (!key || key.indexOf(':') < 0) return null;
+  const cat = key.slice(0, key.indexOf(':'));
+  const rest = key.slice(key.indexOf(':') + 1);
+  const find = (arr, pred) => (arr || []).find(pred);
+  let s = null;
+  if (cat === 'summit') s = find(hawaiiList.summits, x => x.id === rest);
+  else if (cat === 'ocean') s = find(hawaiiList.ocean, x => String(x.id) === rest);
+  else if (cat === 'airquality') s = find(hawaiiList.airquality, x => x.name === rest);
+  else if (cat === 'hub') s = find(REFERENCE.hubs, x => x.name === rest);
+  else if (cat === 'pnr') s = find(REFERENCE.parkAndRide, x => x.name === rest);
+  else if (cat === 'airport') s = find(REFERENCE.airports, x => x.name === rest);
+  return s && s.lon != null ? [s.lon, s.lat] : null;
+}
+function ensureAgentRobot() {
+  if (agentRobotMarker || !mapReady || typeof maplibregl === 'undefined') return;
+  const el = document.createElement('div');
+  el.textContent = '🤖';
+  el.style.cssText = 'font-size:26px;cursor:pointer;line-height:1;filter:drop-shadow(0 0 5px rgba(88,166,255,.9));transition:transform .5s ease,opacity .5s;';
+  el.title = '🤖 Research robot';
+  el.onclick = () => { switchTab('agent'); if (agentRobotMarker) map.flyTo({ center: agentRobotMarker.getLngLat(), zoom: Math.max(map.getZoom(), 9) }); };
+  agentRobotMarker = new maplibregl.Marker({ element: el, anchor: 'center' })
+    .setLngLat([agentRobotState.lon, agentRobotState.lat]).addTo(map);
+}
+async function refreshAgentRobot() {
+  if (!mapReady) return;
+  let s;
+  try { s = await (await fetch('/api/agent/status')).json(); } catch { return; }
+  ensureAgentRobot();
+  if (!agentRobotMarker) return;
+  const cur = s.current || { activity: 'idle', text: '' };
+  const coord = resolveLoreKeyCoord(cur.key);
+  if (coord) { agentRobotState.lon = coord[0]; agentRobotState.lat = coord[1]; agentRobotMarker.setLngLat(coord); }
+  const el = agentRobotMarker.getElement();
+  const working = s.runInFlight || (cur.activity && cur.activity !== 'idle');
+  el.style.opacity = working ? '1' : '0.4';
+  el.style.transform = working ? 'scale(1.2)' : 'scale(0.85)';
+  el.title = '🤖 ' + (cur.text || (s.enabled ? 'Idle — waiting for work' : 'Agent disabled'));
+}
+
+async function refreshAgentWork() {
+  const el = document.getElementById('agentWork');
+  if (!el) return;
+  try {
+    const staged = await (await fetch('/api/agent/staged')).json();
+    const stagedItems = staged.items || {};
+    const liveItems = (MAP_LORE && MAP_LORE.items) || {};
+    const row = (key, entry, badge, color) => {
+      const coord = resolveLoreKeyCoord(key);
+      const attrs = coord
+        ? ` style="cursor:pointer;padding:4px 0;border-bottom:1px solid #21262d;" onclick="map.flyTo({center:[${coord[0]},${coord[1]}],zoom:10})"`
+        : ' style="padding:4px 0;border-bottom:1px solid #21262d;"';
+      return `<div${attrs}><span style="color:${color};font-weight:700;font-size:9px;text-transform:uppercase;margin-right:6px;">${badge}</span>${escapeHtml(entry.title || key)} <span style="color:#6e7681;font-size:9px;">${escapeHtml(key)}</span></div>`;
+    };
+    const rows = [];
+    for (const [k, e] of Object.entries(stagedItems)) rows.push(row(k, e, 'staged', '#d29922'));
+    for (const [k, e] of Object.entries(liveItems)) if (!stagedItems[k]) rows.push(row(k, e, 'live', '#3fb950'));
+    el.innerHTML = rows.length ? rows.join('') : 'No work captured yet.';
+  } catch { el.textContent = 'Work unavailable.'; }
 }
 // Route classification badge ({label,color}) for a route short name, or null.
 function routeClass(short) {
@@ -3968,7 +4079,7 @@ function focusAircraft(icao) {
 // All free/keyless federal/state sources. Hazard-zone polygons are fetched
 // once (static reference geometry); earthquakes/alerts refresh periodically.
 let allQuakes = [];
-let quakesVisible = true, lavaVisible = false, tsunamiVisible = false;
+let quakesVisible = false, lavaVisible = false, tsunamiVisible = false;
 let hazardZonesLoaded = false;
 
 async function fetchHazardZonesOnce() {
@@ -9313,6 +9424,7 @@ function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.id === `tab-${name}`));
   if (name === 'system') { fetchApiStats(); pollLearn(); }
+  if (name === 'agent') { refreshAgentPanel(); refreshAgentLog(); refreshAgentWork(); refreshAgentRobot(); }
   if (name === 'fleet') fetchFleet();
   if (name === 'boats') fetchVessels();
   if (name === 'aircraft') fetchAircraft();
@@ -9829,10 +9941,15 @@ Promise.all([
   fetchLocal(),
   fetchEv(),
   fetchSurf(),
-]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); ensureHawaiiFacilitiesBrowse().then(() => renderHawaiiBrowser()); renderHawaiiBrowser(); wireAgentButtons(); refreshAgentPanel(); });
+]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); ensureHawaiiFacilitiesBrowse().then(() => renderHawaiiBrowser()); renderHawaiiBrowser(); wireAgentButtons(); refreshAgentPanel(); refreshAgentLog(); ensureAgentRobot(); refreshAgentRobot(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
-setInterval(() => { if (activeTab === 'system' && !document.hidden) { pollLearn(); fetchApiStats(); refreshAgentPanel(); } }, 5000);
+setInterval(() => { if (activeTab === 'system' && !document.hidden) { pollLearn(); fetchApiStats(); } }, 5000);
+// Agent tab: refresh panel/log/work while open.
+setInterval(() => { if (activeTab === 'agent' && !document.hidden) { refreshAgentPanel(); refreshAgentLog(); refreshAgentWork(); } }, 5000);
+// The robot roams regardless of active tab (so you can watch it on the map),
+// but only while the page is visible.
+setInterval(() => { if (!document.hidden) refreshAgentRobot(); }, 6000);
 // Refresh the Fleet table while it's open (it's a heavier multi-request scrape,
 // so only when actually visible).
 setInterval(() => { if (activeTab === 'fleet' && !document.hidden) fetchFleet(); }, 15000);

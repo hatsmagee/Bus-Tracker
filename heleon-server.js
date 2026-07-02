@@ -86,6 +86,36 @@ loadMapItems();
 
 const AGENT_ENABLED = process.env.AGENT_ENABLED === '1' || process.env.AGENT_ENABLED === 'true';
 let agentRunInFlight = false;
+// Rolling in-memory log of agent activity so the dashboard can watch what it's
+// doing. Capped so a long-lived process doesn't grow unbounded.
+const AGENT_LOG_MAX = 500;
+const agentLog = [];
+// What the agent is doing right now — surfaced so the dashboard robot can hover
+// over the item it's working on and show a live status.
+let agentCurrent = { key: null, activity: 'idle', text: '', ts: null };
+function agentParseActivity(text) {
+  let m;
+  if ((m = text.match(/researching\s+(\S+)\s*\(([^)]*)\)/))) {
+    agentCurrent = { key: m[1], activity: 'researching', text: `Researching ${m[1]} (${m[2]})`, ts: Date.now() };
+  } else if ((m = text.match(/skip\s+(\S+):\s*(.*)/))) {
+    agentCurrent = { key: m[1], activity: 'skipped', text: `Skipped ${m[1]}: ${m[2]}`, ts: Date.now() };
+  } else if (/\[smoke\]/.test(text)) {
+    agentCurrent = { key: agentCurrent.key, activity: 'testing', text: text.trim(), ts: Date.now() };
+  } else if (/merged PR|publish\]/.test(text)) {
+    agentCurrent = { key: null, activity: 'publishing', text: text.trim(), ts: Date.now() };
+  } else if (/run started/.test(text)) {
+    agentCurrent = { key: null, activity: 'starting', text: text.trim(), ts: Date.now() };
+  } else if (/run finished/.test(text)) {
+    agentCurrent = { key: null, activity: 'idle', text: text.trim(), ts: Date.now() };
+  }
+}
+function agentLogPush(line, level = 'info') {
+  const text = String(line).replace(/\s+$/, '');
+  if (!text) return;
+  agentLog.push({ ts: Date.now(), level, text });
+  if (agentLog.length > AGENT_LOG_MAX) agentLog.splice(0, agentLog.length - AGENT_LOG_MAX);
+  agentParseActivity(text);
+}
 
 // Server-side road-snapping (Valhalla map-matching, cached + auto-refreshing).
 const { matchShape, isLocal: VALHALLA_LOCAL } = require('./map-match');
@@ -2289,6 +2319,7 @@ async function handleApi(url, res, req) {
     return json(res, {
       enabled: AGENT_ENABLED,
       runInFlight: agentRunInFlight,
+      current: agentCurrent,
       ...state,
     });
   }
@@ -2310,19 +2341,35 @@ async function handleApi(url, res, req) {
     const script = mode === 'publish'
       ? path.join(__dirname, 'scripts', 'agent', 'run-publish.js')
       : path.join(__dirname, 'scripts', 'agent', 'run-research.js');
+    agentLogPush(`── ${mode} run started ──`, 'start');
     const child = require('child_process').spawn('node', [script], {
       cwd: __dirname,
       env: process.env,
       detached: false,
     });
-    let out = '';
-    child.stdout.on('data', d => { out += d; });
-    child.stderr.on('data', d => { out += d; });
+    let carry = { out: '', err: '' };
+    const pump = (chunk, key, level) => {
+      carry[key] += chunk;
+      const lines = carry[key].split('\n');
+      carry[key] = lines.pop();
+      for (const l of lines) agentLogPush(l, level);
+    };
+    child.stdout.on('data', d => pump(d.toString(), 'out', 'info'));
+    child.stderr.on('data', d => pump(d.toString(), 'err', 'error'));
     child.on('close', code => {
+      if (carry.out) agentLogPush(carry.out, 'info');
+      if (carry.err) agentLogPush(carry.err, 'error');
+      agentLogPush(`── ${mode} run finished (exit ${code}) ──`, 'start');
       agentRunInFlight = false;
       if (mode === 'publish') loadMapItems();
     });
     return json(res, { ok: true, started: true, mode, pid: child.pid });
+  }
+
+  if (p === '/api/agent/log') {
+    const since = parseInt(url.searchParams.get('since') || '0', 10);
+    const lines = since ? agentLog.filter(l => l.ts > since) : agentLog;
+    return json(res, { lines, now: Date.now(), runInFlight: agentRunInFlight });
   }
 
   if (p === '/api/agent/reset-breaker' && req && req.method === 'POST') {
