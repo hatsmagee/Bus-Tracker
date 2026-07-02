@@ -55,14 +55,18 @@ noted). All of it is polled server-side, cached, and served from `/api/*`.
 | Layer | Source | Endpoint | Notes |
 |-------|--------|----------|-------|
 | Buses (live GPS) | Syncromatics RTPI + GTFS-RT (`myheleonbus.org`) | `/api/vehicles` | positions snapped to the OSM road graph |
-| HIBIKE bikeshare | PBSC GBFS v3 (`kona.publicbikesystem.net`) | `/api/hibike` | keyless; dock bike/dock counts in Hilo + Kona (not per-bike GPS) |
+| Bikeshare (HIBIKE + Biki) | PBSC GBFS v3 — Big Island + Honolulu | `/api/mobility`, `/api/hibike` | keyless; dock bike/dock counts (not per-bike GPS) |
+| APRS trackers | aprs2.net (ham radio positions) | `/api/aprs` | keyless RX; vehicles/boats/weather beacons statewide |
 | Route ribbons | GTFS shapes matched to OSM roads | `/api/route-edges`, `/api/route-roads` | 25 routes, colors the actual road via feature-state |
 | Aircraft | adsb.lol → airplanes.live → adsb.one (community ADS-B) | `/api/aircraft` | keyless; OpenSky fallback |
 | Vessels | aisstream.io AIS websocket | `/api/vessels` | bundled key; sparse mid-ocean coverage is expected |
 | Streamflow | USGS NWIS instantaneous values + daily statistics | `/api/streamflow`, `/api/streamflow-stats`, `/api/gauge-history` | animated water wheels, level meters, historical graphs |
 | Weather stations | NWS `api.weather.gov` observations | `/api/weather-stations` | User-Agent header only |
-| Summit observatories | CFHT weather tower (Maunakea) + NOAA GML CO₂ (Mauna Loa) | `/api/summits` | live summit wind/temp/pressure + the Keeling Curve |
+| Summit observatories | MKWC (Maunakea telescopes) + NOAA GML MLO met & daily CO₂ | `/api/summits` | CFHT, Keck, Subaru, IRTF, JCMT, VLBA, Hale Pōhaku + Mauna Loa Keeling Curve |
 | Ocean | NDBC buoys (incl. Hilo Waverider), NOAA CO-OPS tides, DART 51407 tsunami buoy | `/api/ocean` | wave height/period, next high/low tides, deep-ocean water column |
+| Marine | Aqualink reef cams + Sofar spotters, NOAA FOSS landings | `/api/marine` | 🐠 reef livestreams (MEGA Lab), 🌡️ sensors, 🎣 commercial catch summaries |
+| Grid & telecom | HECO plant list + OSM power lines, PeeringDB colo/IX, OSM cell towers | `/api/infrastructure` | static reference — no live Hawaiʻi Island MW or cell-load API |
+| Local & community | AAA fuel averages, OSM gas stations, HDOT AADT, Blyncsy sensors, LCO telescopes, iNaturalist | `/api/local` | monthly gas (not live pumps); AADT static; Blyncsy = dashboard link only |
 | Air quality / vog | Open-Meteo air-quality API | `/api/air-quality` | US AQI + PM2.5/PM10/SO₂ for 9 towns |
 | Volcano | USGS HVO HANS alerts + live webcams | `/api/volcano` | Kīlauea/Mauna Loa color code + alert level, 8 live cams |
 | METARs | NOAA Aviation Weather Center | `/api/metars` | PHTO Hilo, PHKO Kona, PHSF Bradshaw AAF (military) |
@@ -76,7 +80,10 @@ noted). All of it is polled server-side, cached, and served from `/api/*`.
 
 Things we investigated that **don't** exist publicly (so they're not faked):
 live traffic-signal states (no HDOT SPaT feed), observatory/ranger vehicle GPS,
-county taxis / paratransit / Uber-Lyft GPS feeds, and Tesla/private fleet tracking.
+county taxis / paratransit / Uber-Lyft GPS feeds, Tesla/private fleet tracking,
+real-time Hawaiʻi Island grid MW / fuel mix (HECO has no keyless feed; islandpulse.org is dead),
+live cell-tower load or per-carrier coverage API (FCC maps are propagation models only),
+per-pump live gas prices (GasBuddy GraphQL is not a public keyless API; we use AAA monthly regional averages).
 
 ## Architecture
 

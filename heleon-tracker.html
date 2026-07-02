@@ -114,22 +114,18 @@
   @keyframes flowDash { to { stroke-dashoffset: -200; } }
   .bus-ahead-line { animation: flowDash 4s linear infinite; }
 
-  /* ─── STREAMFLOW: wooden undershot water wheel over a flowing stream ──
-     An undershot mill wheel (water strikes the lower paddles): oak rim + arms +
-     paddles rendered in wood tones. Only the .wheel-spin group rotates; the
-     stream band flows past underneath independently, so it reads as a wheel
-     being turned BY a stream, not a spinning icon. Both speeds scale with the
-     gauge's discharge (set inline per-marker). */
+  /* ─── STREAMFLOW markers: water wheel = discharge (ft³/s); staff gauge = stage (ft) ── */
   @keyframes waterWheelSpin { to { transform: rotate(360deg); } }
   @keyframes streamFlow { to { background-position: -48px 0; } }
-  .stream-wheel { display:flex; align-items:center; gap:5px; cursor:pointer; }
-  .stream-wheel .rig { position:relative; width:34px; height:34px; flex-shrink:0;
-    filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
-  .stream-wheel svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
-  .stream-wheel .wheel-spin { transform-origin:17px 15px;
-    animation: waterWheelSpin linear infinite; }
-  /* The stream: a repeating ripple gradient sliding left→right under the wheel. */
-  .stream-wheel .stream { position:absolute; left:-6px; right:-6px; bottom:1px; height:8px;
+  .stream-gauge { display:flex; align-items:center; gap:5px; cursor:pointer; }
+  .stream-gauge .rig { position:relative; flex-shrink:0; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+  .stream-gauge.kind-flow .rig { width:34px; height:34px; }
+  .stream-gauge.kind-stage .rig { width:auto; height:auto; min-width:28px; }
+  .stream-gauge.kind-both .rig { width:34px; height:34px; }
+  .stream-gauge.kind-flow svg.wheel-svg,
+  .stream-gauge.kind-both svg.wheel-svg { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+  .stream-gauge .wheel-spin { transform-origin:17px 15px; animation: waterWheelSpin linear infinite; }
+  .stream-gauge .stream { position:absolute; left:-6px; right:-6px; bottom:1px; height:8px;
     border-radius:3px; overflow:hidden;
     background:
       repeating-linear-gradient(90deg,
@@ -138,34 +134,36 @@
     background-size:24px 100%, 100% 100%;
     animation: streamFlow linear infinite;
     box-shadow: inset 0 1px 1px rgba(255,255,255,.4); }
-  .stream-wheel .rate { font-size:10px; font-weight:700; color:#0b3a5b;
+  .stream-gauge .rate { font-size:10px; font-weight:700; color:#0b3a5b;
     background:rgba(255,255,255,.92); border:1px solid #bae6fd; border-radius:9px;
     padding:1px 5px; white-space:nowrap; line-height:1.4; }
-  /* Gauges with no discharge reading: half-size, faded, no stream band, so the
-     live-flow wheels stand out and the stage-only ones stay out of the way. */
-  .stream-wheel.no-flow { opacity:.7; }
-  .stream-wheel.no-flow .rig { width:18px; height:18px; }
-  .stream-wheel.no-flow .stream { display:none; }
-  .stream-wheel.no-flow .rate { font-size:8px; padding:0 3px; opacity:.85; }
-  /* Vertical discharge meter: all-time min (bottom) → max (top); yellow tick =
-     today's median; cyan fill = current value. Shown beside the water wheel. */
+  .stream-gauge.kind-stage .rate { border-color:#cbd5e1; color:#334155; }
+  .stream-gauge.kind-other .rig { width:26px; height:26px; display:flex; align-items:center; justify-content:center; font-size:18px; }
+  /* Vertical stage/flow meter: record low (bottom) → high (top). Beside wheel for flow; primary icon for stage. */
   .stream-level-meter { width:11px; height:38px; flex-shrink:0; position:relative;
     border-radius:4px; overflow:hidden; border:1px solid #0c4a6e;
     background:linear-gradient(180deg,#164e63 0%,#0c4a6e 100%);
     box-shadow:inset 0 1px 2px rgba(0,0,0,.35); }
-  .stream-level-meter .fill { position:absolute; left:0; right:0; bottom:0;
-    background:linear-gradient(180deg,#67e8f9,#0891b2); opacity:.92; }
+  .stream-level-meter.primary { width:16px; height:44px; border-color:#475569;
+    background:linear-gradient(180deg,#f8fafc 0%,#e2e8f0 100%); }
+  .stream-level-meter.primary .fill { background:linear-gradient(180deg,#38bdf8,#0284c7); }
+  .stream-level-meter.stage .fill { background:linear-gradient(180deg,#7dd3fc,#0369a1); }
+  .stream-level-meter.flow .fill { background:linear-gradient(180deg,#67e8f9,#0891b2); }
+  .stream-level-meter .fill { position:absolute; left:0; right:0; bottom:0; opacity:.92; }
   .stream-level-meter .median { position:absolute; left:-1px; right:-1px; height:2px;
     background:#fde047; opacity:.85; pointer-events:none; }
   .stream-level-meter .needle { position:absolute; left:-2px; right:-2px; height:3px;
     background:#fef9c3; box-shadow:0 0 3px rgba(0,0,0,.55); pointer-events:none; }
   .stream-level-meter .cap, .stream-level-meter .floor { position:absolute; left:-14px; right:-14px;
     font-size:7px; font-weight:700; color:#e0f2fe; text-align:center; line-height:1; pointer-events:none; }
+  .stream-level-meter.primary .cap, .stream-level-meter.primary .floor { color:#334155; }
   .stream-level-meter .cap { top:1px; }
   .stream-level-meter .floor { bottom:0; }
   .stream-level-meter .now-tag { position:absolute; right:-20px; font-size:7px; font-weight:800;
     color:#fef08a; transform:translateY(50%); white-space:nowrap; pointer-events:none; }
-  .stream-wheel .rate .tag-now { color:#0369a1; font-weight:800; margin-right:2px; }
+  .stream-level-meter.primary .now-tag { color:#b45309; }
+  .stream-gauge .rate .tag-now { color:#0369a1; font-weight:800; margin-right:2px; }
+  .staff-gauge-svg { width:22px; height:40px; display:block; }
   .gauge-chart-wrap { margin-top:10px; }
   .gauge-chart { width:100%; height:120px; display:block; background:#0d1117;
     border-radius:8px; border:1px solid #30363d; }
@@ -576,12 +574,14 @@
 
     <div class="tab-content active" id="tab-vehicles">
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--border);">
-        <label><input type="checkbox" id="showHibike" onchange="toggleHibike()" checked> HIBIKE bikeshare docks</label>
+        <label><input type="checkbox" id="showHibike" onchange="toggleHibike()" checked> Bikeshare docks (HIBIKE + Biki)</label>
         <span class="vessel-status" id="hibikeStatus"></span>
       </div>
       <div style="padding:6px 12px;color:var(--muted);font-size:10px;border-bottom:1px solid var(--border);">
-        Hele-On buses are the only live GPS vehicle fleet on Hawaiʻi Island.
-        <a href="https://www.hawaiiislandbike.com/" target="_blank" style="color:#58a6ff">HIBIKE</a> dock availability is keyless (GBFS).
+        Hele-On buses are the only live GPS transit fleet on Hawaiʻi Island.
+        <a href="https://www.hawaiiislandbike.com/" target="_blank" style="color:#58a6ff">HIBIKE</a> (Big Island) and
+        <a href="https://gobiki.org/" target="_blank" style="color:#58a6ff">Biki</a> (Honolulu) dock counts are keyless GBFS.
+        APRS shows ham-radio trackers statewide. TheBus/Uber/Lyft need API keys.
         County taxis, Uber/Lyft, and paratransit have no public tracking API.
       </div>
       <div id="vehicleList"><div class="empty"><div class="empty-icon">🚌</div>Loading…</div></div>
@@ -679,6 +679,31 @@
         <label><input type="checkbox" id="showStreamflow" onchange="toggleStreamflow()" checked> USGS streamflow gauges</label>
         <label><input type="checkbox" id="showWeatherStations" onchange="toggleWeatherStations()" checked> NWS weather stations</label>
         <span class="vessel-status" id="streamflowStatus"></span>
+      </div>
+      <div class="section-header">⚡ Grid & Telecom Infrastructure</div>
+      <div class="trail-controls" style="flex-wrap:wrap;gap:10px;">
+        <label><input type="checkbox" id="showInfraPower" onchange="toggleInfraPower()" checked> Power plants & lines</label>
+        <label><input type="checkbox" id="showInfraCell" onchange="toggleInfraCell()"> Cell / comm towers</label>
+        <label><input type="checkbox" id="showInfraNet" onchange="toggleInfraNet()"> Internet facilities (statewide)</label>
+      </div>
+      <div style="padding:4px 12px;color:var(--muted);font-size:10px;">
+        Static reference data — Hawaiian Electric has no public real-time Big Island
+        grid MW API. Cell coverage is modeled on
+        <a href="https://www.fcc.gov/BroadbandData/MobileMaps" target="_blank" style="color:#58a6ff;">FCC maps</a>,
+        not live tower load.
+      </div>
+      <div class="section-header">🏪 Local & Community</div>
+      <div class="trail-controls" style="flex-wrap:wrap;gap:10px;">
+        <label><input type="checkbox" id="showLocalFuel" onchange="toggleLocalFuel()" checked> Gas stations & regional prices</label>
+        <label><input type="checkbox" id="showLocalTraffic" onchange="toggleLocalTraffic()"> Highway traffic counts (AADT)</label>
+        <label><input type="checkbox" id="showLocalSensors" onchange="toggleLocalSensors()"> HDOT traffic sensors (East HI)</label>
+        <label><input type="checkbox" id="showLocalLco" onchange="toggleLocalLco()"> Remote telescopes (LCO schedule)</label>
+        <label><input type="checkbox" id="showLocalInat" onchange="toggleLocalInat()"> Nature sightings (iNaturalist)</label>
+      </div>
+      <div style="padding:4px 12px;color:var(--muted);font-size:10px;">
+        AAA fuel = monthly regional averages (not live pumps). AADT = annual traffic
+        counts. Blyncsy live delays:
+        <a href="https://pulse.blyncsy.com/commuter_dashboard/hidot" target="_blank" style="color:#58a6ff;">Pulse dashboard</a>.
       </div>
       <div class="section-header">🚓 Public Safety Facilities</div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:10px;">
@@ -905,6 +930,7 @@ function initMap() {
   window.map = map; // expose for debugging / console tooling
   map.on('load', () => {
     mapReady = true;
+    try { initTerrainRelief(); } catch (e) { console.error('[map] terrain:', e); }
     try { initMapLayers(); } catch (e) { console.error('[map] layers:', e); }
     try { renderMarkers(); } catch (e) { console.error('[map] markers:', e); }
     // Stops/shapes may have been fetched before the style finished loading;
@@ -917,12 +943,15 @@ function initMap() {
     try { fetchSummits(); } catch (e) {}
     try { fetchStreamflow(); } catch (e) {}
     try { fetchOcean(); } catch (e) {}
+    try { fetchMarine(); } catch (e) {}
     try { fetchAprs(); } catch (e) {}
     try { fetchAirQuality(); } catch (e) {}
     try { fetchVolcano(); } catch (e) {}
     try { fetchMetars(); } catch (e) {}
     try { fetchMeshtastic(); } catch (e) {}
     try { fetchRepeaters(); } catch (e) {}
+    try { fetchInfrastructure(); } catch (e) {}
+    try { fetchLocal(); } catch (e) {}
     // Keep an open click-card glued to its map anchor as the map moves.
     map.on('move', positionMapCard);
     // Click on empty map (no interactive feature) closes the card.
@@ -939,6 +968,32 @@ function initMap() {
     if (e?.error?.message?.includes('slice is not a function')) return;
     console.warn('[map]', e?.error?.message || e);
   });
+}
+
+// Subtle hillshade from free Terrarium DEM tiles (AWS Open Data, no key).
+function initTerrainRelief() {
+  if (!map || map.getSource('relief-dem')) return;
+  map.addSource('relief-dem', {
+    type: 'raster-dem',
+    tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+    tileSize: 256,
+    encoding: 'terrarium',
+    maxzoom: 13,
+  });
+  const styleLayers = map.getStyle().layers || [];
+  const beforeId = styleLayers.find(l => l.type === 'symbol' && l.layout && l.layout['text-field'])?.id;
+  map.addLayer({
+    id: 'relief-hillshade',
+    type: 'hillshade',
+    source: 'relief-dem',
+    paint: {
+      'hillshade-exaggeration': 0.22,
+      'hillshade-shadow-color': '#1e293b',
+      'hillshade-highlight-color': '#f1f5f9',
+      'hillshade-accent-color': '#94a3b8',
+      'hillshade-illumination-direction': 315,
+    },
+  }, beforeId);
 }
 
 function initMapLayers() {
@@ -1094,7 +1149,7 @@ function initMapLayers() {
     <div style="font-weight:600;">⛵ ${escapeHtml(p.name) || 'Unknown vessel'}</div>
     <div style="color:var(--muted);font-size:11px;">${p.speedKts} kts · heading ${Math.round(p.heading)}°</div>`);
 
-  // ─── HIBIKE bikeshare docks (GBFS, keyless) ───────────────────────────────
+  // ─── Bikeshare docks (GBFS — HIBIKE + Biki, keyless) ─────────────────────
   map.addSource('hibike', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addLayer({
     id: 'hibike-icon', type: 'symbol', source: 'hibike',
@@ -1111,7 +1166,7 @@ function initMapLayers() {
     const p = e.features[0].properties;
     const html = `<div style="font-family:system-ui;font-size:12px;color:#e6edf3;">
       <div style="font-weight:700;font-size:14px;margin-bottom:4px;">🚲 ${escapeHtml(p.name)}</div>
-      <div style="color:var(--muted);font-size:10px;margin-bottom:6px;">HIBIKE · ${escapeHtml(p.address || '')}</div>
+      <div style="color:var(--muted);font-size:10px;margin-bottom:6px;">${escapeHtml(p.systemName || 'Bikeshare')} · ${escapeHtml(p.address || '')}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;">
         <div><span style="color:var(--muted);">Bikes:</span> ${p.bikes}</div>
         <div><span style="color:var(--muted);">Open docks:</span> ${p.docks}</div>
@@ -1123,7 +1178,7 @@ function initMapLayers() {
   });
   wireLayerHover('hibike-icon', p => `
     <div style="font-weight:600;">🚲 ${escapeHtml(p.name)}</div>
-    <div style="color:var(--muted);font-size:11px;">${p.bikes} bikes · ${p.docks} open docks</div>`);
+    <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.systemName || '')} · ${p.bikes} bikes · ${p.docks} open docks</div>`);
 
   // ─── AIRCRAFT layer ───────────────────────────────────────────────────────
   // Triangle symbol rotated per-feature to match the aircraft's true track.
@@ -1417,6 +1472,29 @@ function initMapLayers() {
     <div style="color:var(--muted);font-size:10px;">click for details</div>`);
   wireLayerCard('ocean-dot', oceanCard);
 
+  // Marine reef webcams (MEGA Lab / Aqualink) + Sofar spotter sensor sites.
+  map.addSource('marine', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'marine-dot', type: 'symbol', source: 'marine',
+    layout: {
+      'text-field': ['match', ['get', 'mkind'], 'reef-cam', '🐠', 'reef-sensor', '🌡️', '🌊'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 12, 12, 15],
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+    },
+    paint: { 'text-color': '#0e7490', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+  });
+  wireLayerHover('marine-dot', p => {
+    const icon = p.mkind === 'reef-cam' ? '🐠' : '🌡️';
+    const sub = p.mkind === 'reef-cam' ? 'tap to watch live' : (p.sensorId ? `sensor ${p.sensorId}` : 'reef sensor');
+    return `<div style="font-weight:600;">${icon} ${escapeHtml(p.name)}</div><div style="color:var(--muted);font-size:10px;">${escapeHtml(sub)}</div>`;
+  });
+  map.on('click', 'marine-dot', e => {
+    if (!e.features || !e.features.length) return;
+    const f = e.features[0];
+    openMarineCard(f.properties, f.geometry.coordinates);
+  });
+
   // APRS ham-radio positions (vehicles/stations/weather beacons, keyless). Emoji
   // by kind (🚗 vehicle / 🌤 wx / ⛵ boat / 📻 station); collision-hidden so a
   // busy area doesn't turn to mush. Populates in production.
@@ -1493,10 +1571,8 @@ function initMapLayers() {
         <div style="color:#c9d1d9;">${escapeHtml(p.summary || '')}</div>
         <div style="color:#8b949e;font-size:10px;margin-top:8px;">USGS Hawaiian Volcano Observatory${p.at ? ' · ' + new Date(+p.at).toLocaleString() : ''}</div>` };
     }
-    // Webcam: live JPEG, cache-busted so each open shows the current frame.
-    return { title: `📷 ${p.name}`, body:
-      `<img src="${p.imageUrl}?t=${Date.now()}" style="width:100%;border-radius:6px;display:block;" alt="${escapeHtml(p.name)}"/>
-       <div style="color:#8b949e;font-size:10px;margin-top:6px;">USGS HVO webcam — refreshes continuously · public domain</div>` };
+    // Webcam: live view in card (image refreshes, or YouTube/Luma embed).
+    return { title: `📷 ${p.name}`, body: buildWebcamCardBody(p) };
   });
 
   // Aviation METARs: live observed weather at every Big Island airfield including
@@ -1630,6 +1706,195 @@ function initMapLayers() {
     return { title: `${icon} ${p.callsign} repeater`, body: rows.join('') + about + listen + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">ℹ️ hearham.com · stream is Hawaiʻi linked nets, not this tower alone</div>` };
   });
 
+  // Power grid — plants, substations, transmission lines (OSM + curated HECO plants).
+  // No live MW feed exists; cards show fuel type and annual mix reference.
+  map.addSource('infra-power', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('infra-subs', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('infra-lines', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'infra-lines-line', type: 'line', source: 'infra-lines',
+    minzoom: 9,
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: {
+      'line-color': '#ea580c',
+      'line-width': ['interpolate', ['linear'], ['zoom'], 9, 1.2, 13, 2.5],
+      'line-opacity': 0.65,
+    },
+  });
+  map.addLayer({
+    id: 'infra-subs-circle', type: 'circle', source: 'infra-subs',
+    minzoom: 10,
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 3, 14, 6],
+      'circle-color': '#fbbf24', 'circle-stroke-color': '#78350f', 'circle-stroke-width': 1,
+      'circle-opacity': 0.85,
+    },
+  });
+  map.addLayer({
+    id: 'infra-power-icon', type: 'symbol', source: 'infra-power',
+    layout: {
+      'text-field': ['concat', ['get', 'icon'], ' ', ['coalesce', ['get', 'badge'], '']],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 12, 14],
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+    },
+    paint: { 'text-color': '#7c2d12', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+  });
+  const fuelEmoji = f => ({ geothermal: '♨️', oil: '🛢️', gas: '🔥', wind: '💨', solar: '☀️', hydro: '💧' }[f] || '⚡');
+  wireLayerHover('infra-power-icon', p => `<div style="font-weight:600;">${p.icon || '⚡'} ${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:10px;">${escapeHtml(p.fuel || 'power')} · tap for details</div>`);
+  wireLayerCard('infra-power-icon', p => {
+    const rows = [];
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;text-align:right;">${v}</span></div>`);
+    if (p.fuel) row('Fuel', escapeHtml(p.fuel));
+    if (p.capacityMw) row('Nameplate', `${p.capacityMw} MW`);
+    if (p.operator) row('Operator', escapeHtml(p.operator));
+    if (p.unitCount > 1) row('OSM units', String(p.unitCount));
+    if (p.note) row('Notes', escapeHtml(p.note));
+    row('Data', 'Static — no live output');
+    return { title: `${p.icon || fuelEmoji(p.fuel)} ${p.name}`, body: rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Hawaiian Electric does not publish real-time island grid MW. Annual fuel mix is in the Hawaiʻi browser.</div>` };
+  });
+  wireLayerHover('infra-subs-circle', p => `<div style="font-weight:600;">⚡ ${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:10px;">${p.voltage ? escapeHtml(p.voltage) + ' · ' : ''}substation</div>`);
+
+  // Cell / radio towers mapped in OpenStreetMap (subset of full FCC ASR database).
+  map.addSource('infra-cell', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'infra-cell-icon', type: 'symbol', source: 'infra-cell',
+    minzoom: 10,
+    layout: {
+      'text-field': '📶',
+      'text-size': ['interpolate', ['linear'], ['zoom'], 10, 10, 14, 14],
+      'text-font': EMOJI_FONT,
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 2,
+    },
+    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
+  });
+  wireLayerHover('infra-cell-icon', p => `<div style="font-weight:600;">📶 Cell / comm tower</div>
+    <div style="color:var(--muted);font-size:10px;">${p.operator ? escapeHtml(p.operator) + ' · ' : ''}OSM-mapped · not live coverage</div>`);
+  wireLayerCard('infra-cell-icon', p => {
+    const rows = [];
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+    if (p.name) row('Name', escapeHtml(p.name));
+    if (p.operator) row('Operator', escapeHtml(p.operator));
+    if (p.heightM) row('Height', escapeHtml(String(p.heightM)));
+    return { title: '📶 Communication tower', body: rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Incomplete vs FCC ASR (~130k US structures). <a href="https://www.fcc.gov/BroadbandData/MobileMaps" target="_blank" rel="noopener" style="color:#58a6ff;">FCC mobile coverage maps</a> show modeled LTE/5G, not live load.</div>` };
+  });
+
+  // Internet colocation + exchange points (PeeringDB — statewide, mostly Oʻahu).
+  map.addSource('infra-net', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'infra-net-icon', type: 'symbol', source: 'infra-net',
+    layout: {
+      'text-field': ['match', ['get', 'nkind'], 'ix', '🔀', '🌐'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 6, 12, 11, 15],
+      'text-font': EMOJI_FONT,
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+    },
+    paint: { 'text-color': '#1d4ed8', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+  });
+  wireLayerHover('infra-net-icon', p => `<div style="font-weight:600;">${p.nkind === 'ix' ? '🔀' : '🌐'} ${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:10px;">${escapeHtml(p.city || 'Hawaiʻi')} · PeeringDB metadata</div>`);
+  wireLayerCard('infra-net-icon', p => {
+    const rows = [];
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;text-align:right;">${v}</span></div>`);
+    if (p.org) row('Operator', escapeHtml(p.org));
+    if (p.city) row('City', escapeHtml(p.city));
+    if (p.netCount != null) row('Networks', String(p.netCount));
+    if (p.ixCount != null) row('IXPs', String(p.ixCount));
+    if (p.media) row('Media', escapeHtml(p.media));
+    let links = '';
+    if (p.website) links = `<div style="margin-top:8px;"><a href="${escapeHtml(p.website)}" target="_blank" rel="noopener" style="color:#58a6ff;">Website</a></div>`;
+    return { title: `${p.nkind === 'ix' ? '🔀' : '🌐'} ${p.name}`, body: rows.join('') + links + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Facility registry only — no live backbone traffic API.</div>` };
+  });
+  map.setLayoutProperty('infra-cell-icon', 'visibility', 'none');
+  map.setLayoutProperty('infra-net-icon', 'visibility', 'none');
+
+  // Local: gas stations, AADT roads, Blyncsy sensors, LCO telescopes, iNaturalist.
+  map.addSource('local-fuel', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('local-traffic', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('local-sensors', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('local-lco', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('local-inat', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'local-traffic-line', type: 'line', source: 'local-traffic', minzoom: 10,
+    layout: { 'line-join': 'round', 'line-cap': 'round' },
+    paint: {
+      'line-color': ['interpolate', ['linear'], ['get', 'aadt'], 1000, '#bfdbfe', 5000, '#60a5fa', 15000, '#1d4ed8', 30000, '#7e22ce'],
+      'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2, 14, 5],
+      'line-opacity': 0.75,
+    },
+  });
+  map.addLayer({
+    id: 'local-fuel-icon', type: 'symbol', source: 'local-fuel',
+    layout: {
+      'text-field': '⛽', 'text-size': ['interpolate', ['linear'], ['zoom'], 9, 11, 13, 14],
+      'text-font': EMOJI_FONT, 'text-allow-overlap': false, 'text-optional': true, 'text-padding': 3,
+    },
+    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+  });
+  map.addLayer({
+    id: 'local-sensors-icon', type: 'symbol', source: 'local-sensors',
+    layout: {
+      'text-field': '🚦', 'text-size': 12, 'text-font': EMOJI_FONT,
+      'text-allow-overlap': false, 'text-optional': true,
+    },
+    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
+  });
+  map.addLayer({
+    id: 'local-lco-icon', type: 'symbol', source: 'local-lco',
+    layout: {
+      'text-field': '🔭', 'text-size': 13, 'text-font': EMOJI_FONT,
+      'text-allow-overlap': false, 'text-optional': true,
+    },
+    paint: { 'text-color': '#4c1d95', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+  });
+  map.addLayer({
+    id: 'local-inat-icon', type: 'symbol', source: 'local-inat',
+    minzoom: 9,
+    layout: {
+      'text-field': '🦋', 'text-size': 11, 'text-font': EMOJI_FONT,
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 2,
+    },
+    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
+  });
+  wireLayerHover('local-fuel-icon', p => `<div style="font-weight:600;">⛽ ${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:10px;">${p.brand ? escapeHtml(p.brand) + ' · ' : ''}OSM location — see regional AAA prices in browser</div>`);
+  wireLayerCard('local-fuel-icon', p => ({
+    title: `⛽ ${p.name}`,
+    body: `<div>${p.brand ? `<div style="padding:3px 0;"><span style="color:#8b949e;">Brand</span> · <b>${escapeHtml(p.brand)}</b></div>` : ''}</div>
+      <div style="color:#8b949e;font-size:10px;margin-top:8px;">OpenStreetMap pin — no live pump price. Hawaiʻi browser lists AAA monthly Hilo averages.</div>`,
+  }));
+  wireLayerHover('local-sensors-icon', p => `<div style="font-weight:600;">🚦 ${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:10px;">HDOT / Blyncsy corridor sensor</div>`);
+  wireLayerCard('local-sensors-icon', p => ({
+    title: `🚦 ${p.name}`,
+    body: `<div style="font-size:11px;line-height:1.5;">${escapeHtml(p.note || '')}</div>
+      <div style="margin-top:8px;"><a href="${escapeHtml(p.dashboardUrl || 'https://pulse.blyncsy.com/commuter_dashboard/hidot')}" target="_blank" rel="noopener" style="color:#58a6ff;">Open Blyncsy Pulse dashboard ↗</a></div>`,
+  }));
+  wireLayerHover('local-lco-icon', p => `<div style="font-weight:600;">🔭 ${escapeHtml(p.siteName || p.name)}</div>
+    <div style="color:var(--muted);font-size:10px;">${escapeHtml(p.name || 'scheduled observation')}</div>`);
+  wireLayerCard('local-lco-icon', p => {
+    const rows = [];
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;text-align:right;">${v}</span></div>`);
+    if (p.telescope) row('Telescope', escapeHtml(p.telescope));
+    if (p.start) row('Start (UTC)', escapeHtml(String(p.start).slice(0, 16).replace('T', ' ')));
+    if (p.state) row('State', escapeHtml(p.state));
+    return { title: `🔭 ${p.siteName || 'LCO'}`, body: rows.join('') + `<div style="margin-top:8px;font-size:10px;"><a href="https://schedule.lco.global/" target="_blank" rel="noopener" style="color:#58a6ff;">LCO schedule ↗</a> · global network (Maui site is nearest)</div>` };
+  });
+  wireLayerHover('local-inat-icon', p => `<div style="font-weight:600;">🦋 ${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:10px;">iNaturalist · ${p.observedAt ? escapeHtml(String(p.observedAt).slice(0, 10)) : ''}</div>`);
+  wireLayerCard('local-inat-icon', p => {
+    let body = `<div style="font-style:italic;color:#8b949e;margin-bottom:6px;">${escapeHtml(p.species || '')}</div>`;
+    if (p.photoUrl) body += `<img src="${escapeHtml(p.photoUrl)}" alt="" style="width:100%;border-radius:8px;margin-bottom:6px;">`;
+    body += `<div style="font-size:10px;"><a href="${escapeHtml(p.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">View on iNaturalist ↗</a></div>`;
+    return { title: `🦋 ${p.name}`, body };
+  });
+  map.setLayoutProperty('local-traffic-line', 'visibility', 'none');
+  map.setLayoutProperty('local-sensors-icon', 'visibility', 'none');
+  map.setLayoutProperty('local-lco-icon', 'visibility', 'none');
+  map.setLayoutProperty('local-inat-icon', 'visibility', 'none');
+
   // Summit observatories (Maunakea CFHT tower, Mauna Loa NOAA) — live conditions
   // straight from the observatories, no key. A telescope glyph with a small
   // readout; hover for full readings.
@@ -1651,16 +1916,25 @@ function initMapLayers() {
     const rows = [];
     const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
     if (r.tempC != null) row('Temperature', `${(+r.tempC).toFixed(1)} °C`);
-    if (r.windKt != null) row('Wind', `${(+r.windKt).toFixed(0)} kt` + (r.windDir != null ? ` @ ${Math.round(r.windDir)}°` : ''));
+    if (r.dewpointC != null) row('Dew point', `${(+r.dewpointC).toFixed(1)} °C`);
     if (r.humidity != null) row('Humidity', `${Math.round(r.humidity)} %`);
+    if (r.windMph != null) row('Wind', `${(+r.windMph).toFixed(0)} mph` + (r.windDir ? ` ${r.windDir}` : '') + (r.windGustMph ? ` (gust ${Math.round(r.windGustMph)})` : ''));
+    else if (r.windMs != null) row('Wind', `${(+r.windMs).toFixed(1)} m/s` + (r.windDir != null ? ` @ ${Math.round(r.windDir)}°` : ''));
+    else if (r.windKt != null) row('Wind', `${(+r.windKt).toFixed(0)} kt` + (r.windDir != null ? ` @ ${Math.round(r.windDir)}°` : ''));
     if (r.pressureMb != null) row('Pressure', `${Math.round(r.pressureMb)} mb`);
     if (r.co2ppm != null) {
-      row('CO₂', `${(+r.co2ppm).toFixed(2)} ppm`);
+      row('CO₂', `${(+r.co2ppm).toFixed(2)} ppm` + (r.co2Cadence ? ` (${r.co2Cadence})` : ''));
       if (r.co2OneYearAgo != null) row('vs 1 year ago', `${(+r.co2ppm - +r.co2OneYearAgo >= 0 ? '+' : '')}${(+r.co2ppm - +r.co2OneYearAgo).toFixed(2)} ppm`);
       if (r.co2TenYearsAgo != null) row('vs 10 years ago', `+${(+r.co2ppm - +r.co2TenYearsAgo).toFixed(1)} ppm`);
     }
-    const foot = `<div style="color:#8b949e;font-size:10px;margin-top:8px;">${p.elevM ? Math.round(p.elevM) + ' m elev' : ''}${r.readingTs ? ' · ' + r.readingTs : ''}${r.co2Year ? ' · week of ' + r.co2Year : ''}</div>`;
-    return { title: `🔭 ${p.name}`, body: (rows.join('') || 'No current reading.') + foot };
+    let extra = '';
+    if (p.note) extra += `<div style="margin-top:8px;font-size:10px;color:#d29922;line-height:1.45;">${escapeHtml(p.note)}</div>`;
+    if (p.webcamUrl) extra += `<div style="margin-top:8px;"><img src="${escapeHtml(p.webcamUrl)}" alt="Observatory webcam" style="width:100%;border-radius:8px;border:1px solid #30363d;"></div>`;
+    const links = [];
+    if (p.pageUrl) links.push(`<a href="${escapeHtml(p.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">Observatory page ↗</a>`);
+    if (p.source) links.push(`<span style="color:#8b949e;">${escapeHtml(p.source)}</span>`);
+    const foot = `<div style="color:#8b949e;font-size:10px;margin-top:8px;">${p.elevM ? Math.round(p.elevM) + ' m elev' : ''}${r.readingTs ? ' · ' + r.readingTs : ''}${r.co2Year ? ' · CO₂ ' + r.co2Year : ''}${links.length ? '<br>' + links.join(' · ') : ''}</div>`;
+    return { title: `🔭 ${p.name}`, body: (rows.join('') || 'No current reading.') + extra + foot };
   });
 
   // Public-safety facility markers — static reference locations, off by
@@ -2103,14 +2377,16 @@ function toggleBoats() {
   renderVesselMarkers();
 }
 
-// ─── HIBIKE (community bikeshare, GBFS) ───────────────────────────────────
-let allHibike = [];
+// ─── Bikeshare / micromobility (GBFS — HIBIKE + Biki, keyless) ─────────────
+let allMobility = [];
 let hibikeVisible = true;
 async function fetchHibike() {
   try {
-    const res = await fetch('/api/hibike');
+    const res = await fetch('/api/mobility');
     const data = await res.json();
-    allHibike = data.stations || [];
+    allMobility = data.stations || [];
+    hawaiiList.mobility = allMobility.map(st => ({ id: `${st.system}:${st.id}`, ...st }));
+    hawaiiBrowseRefresh();
     renderHibikeMarkers();
     updateHibikeStatus(data);
   } catch (e) {
@@ -2121,13 +2397,15 @@ function updateHibikeStatus(data) {
   const el = document.getElementById('hibikeStatus');
   if (!el) return;
   if (!data) { el.className = 'vessel-status err'; el.innerHTML = '<span class="vessel-dot"></span><span>Offline</span>'; return; }
-  if (data.lastError) {
+  const errs = Object.values(data.errors || {}).filter(Boolean);
+  if (errs.length && !data.count) {
     el.className = 'vessel-status err';
-    el.innerHTML = `<span class="vessel-dot"></span><span title="${escapeHtml(data.lastError)}">Feed error</span>`;
+    el.innerHTML = `<span class="vessel-dot"></span><span title="${escapeHtml(errs[0])}">Feed error</span>`;
     return;
   }
+  const sys = (data.systems || []).map(s => `${s.name} ${s.count}`).join(' · ');
   el.className = 'vessel-status live';
-  el.innerHTML = `<span class="vessel-dot"></span><span>${data.bikesAvailable || 0} bikes at ${data.count || 0} docks</span>`;
+  el.innerHTML = `<span class="vessel-dot"></span><span>${data.bikesAvailable || 0} bikes · ${data.count || 0} docks (${sys || 'GBFS'})</span>`;
 }
 function renderHibikeMarkers() {
   if (!mapReady || !map.getSource('hibike')) return;
@@ -2135,10 +2413,14 @@ function renderHibikeMarkers() {
   if (!hibikeVisible) { src.setData({ type: 'FeatureCollection', features: [] }); return; }
   src.setData({
     type: 'FeatureCollection',
-    features: allHibike.map(st => ({
+    features: allMobility.map(st => ({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [st.lon, st.lat] },
-      properties: { id: st.id, name: st.name, address: st.address || '', bikes: st.bikes, docks: st.docks },
+      properties: {
+        id: st.id, name: st.name, address: st.address || '', bikes: st.bikes, docks: st.docks,
+        system: st.system || '', systemName: st.systemName || '',
+        badge: `${st.bikes}`,
+      },
     })),
   });
 }
@@ -2423,15 +2705,18 @@ function levelPct(val, min, max) {
   if (!(span > 0) || val == null) return null;
   return Math.max(0, Math.min(1, (val - min) / span));
 }
-function streamLevelMeterHtml(cur, stats) {
+function streamLevelMeterHtml(cur, stats, opts) {
+  const primary = opts && opts.primary;
+  const kind = (opts && opts.kind) || (stats && stats.param === '00065' ? 'stage' : 'flow');
   if (!stats || stats.allMin == null || stats.allMax == null || cur == null) return '';
   const pct = levelPct(cur, stats.allMin, stats.allMax);
   if (pct == null) return '';
   const unit = stats.unit || 'ft³/s';
   const medPct = stats.todayMedian != null ? levelPct(stats.todayMedian, stats.allMin, stats.allMax) : null;
   const fmt = v => (+v).toFixed(Math.abs(v) < 10 ? 1 : 0);
-  const tip = `Record low ${fmt(stats.allMin)} · NOW ${fmt(cur)} · record high ${fmt(stats.allMax)} ${unit}`;
-  return `<div class="stream-level-meter" title="${escapeHtml(tip)}">
+  const tip = `${stats.label || 'Reading'} — record low ${fmt(stats.allMin)} · NOW ${fmt(cur)} · record high ${fmt(stats.allMax)} ${unit}`;
+  const cls = ['stream-level-meter', kind, primary ? 'primary' : ''].filter(Boolean).join(' ');
+  return `<div class="${cls}" title="${escapeHtml(tip)}">
     <div class="cap">REC ${fmt(stats.allMax)}</div>
     <div class="fill" style="height:${(pct * 100).toFixed(1)}%"></div>
     ${medPct != null ? `<div class="median" style="bottom:${(medPct * 100).toFixed(1)}%" title="Today median ${fmt(stats.todayMedian)}"></div>` : ''}
@@ -2439,6 +2724,32 @@ function streamLevelMeterHtml(cur, stats) {
     <div class="now-tag" style="bottom:${(pct * 100).toFixed(1)}%">NOW</div>
     <div class="floor">REC ${fmt(stats.allMin)}</div>
   </div>`;
+}
+function staffGaugeFallback(cur, unit) {
+  const pct = cur != null ? Math.min(92, Math.max(8, (cur % 10) * 8 + 12)) : 30;
+  const fmt = cur != null ? (+cur).toFixed(Math.abs(cur) < 10 ? 1 : 0) : '—';
+  return `<svg class="staff-gauge-svg" viewBox="0 0 24 40" xmlns="http://www.w3.org/2000/svg" title="Gage height ${fmt} ${unit || 'ft'}">
+    <rect x="7" y="2" width="10" height="36" rx="2" fill="#f1f5f9" stroke="#64748b" stroke-width="1.2"/>
+    <line x1="4" y1="8" x2="7" y2="8" stroke="#94a3b8" stroke-width="1"/>
+    <line x1="4" y1="16" x2="7" y2="16" stroke="#94a3b8" stroke-width="1"/>
+    <line x1="4" y1="24" x2="7" y2="24" stroke="#94a3b8" stroke-width="1"/>
+    <line x1="4" y1="32" x2="7" y2="32" stroke="#94a3b8" stroke-width="1"/>
+    <rect x="8.5" y="${(38 - pct * 0.34).toFixed(1)}" width="7" height="${(pct * 0.34).toFixed(1)}" fill="#0ea5e9" opacity=".9" rx="1"/>
+  </svg>`;
+}
+function gaugeKindFor(readings, hasFlow) {
+  const hasStage = readings.gageHeight != null;
+  if (hasFlow && hasStage) return 'both';
+  if (hasFlow) return 'flow';
+  if (hasStage) return 'stage';
+  return 'other';
+}
+function statsBlock(siteStats, which) {
+  if (!siteStats) return null;
+  if (which === 'stage' && siteStats.stage) return siteStats.stage;
+  if (which === 'flow' && siteStats.param === '00060') return siteStats;
+  if (which === 'stage' && siteStats.param === '00065') return siteStats;
+  return null;
 }
 function weatherThermometerHtml(tempC) {
   const lo = 5, hi = 35;
@@ -2515,8 +2826,17 @@ async function openStreamGaugeCard(site, props, coords) {
       row('Today normal range', `${stats.todayP10.toFixed(0)}–${stats.todayP90.toFixed(0)} ${unit}`);
     }
   }
-  const meter = cur != null && stats.allMin != null ? streamLevelMeterHtml(cur, stats) : '';
-  const body = (meter ? `<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">${meter}<div style="flex:1;font-size:10px;color:#8b949e;line-height:1.45;"><b style="color:#e6edf3;">NOW</b> = yellow marker · top/bottom = <b style="color:#e6edf3;">record high/low</b> · gold line = today's median for this calendar day.</div></div>` : '') +
+  const meterKind = stats.param === '00065' ? 'stage' : 'flow';
+  const hasFlow = props.value != null;
+  let meter = '';
+  if (cur != null && stats.allMin != null) {
+    meter += streamLevelMeterHtml(cur, stats, { primary: true, kind: meterKind });
+  }
+  if (stats.stage && readings.gageHeight) {
+    meter += streamLevelMeterHtml(readings.gageHeight.value, stats.stage, { kind: 'stage' });
+  }
+  const cardIcon = meterKind === 'stage' && !hasFlow ? '📏' : (hasFlow ? '⚙️' : '💧');
+  const body = (meter ? `<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">${meter}<div style="flex:1;font-size:10px;color:#8b949e;line-height:1.45;"><b style="color:#e6edf3;">NOW</b> = yellow marker · top/bottom = <b style="color:#e6edf3;">record high/low</b> · gold line = today's median. ⚙️ wheel = discharge · 📏 staff = water height.</div></div>` : '') +
     (rows.join('') || '<div style="color:#8b949e;">No current reading.</div>') +
     `<div class="gauge-chart-wrap"><canvas class="gauge-chart"></canvas><div class="gauge-range-btns">
       <button type="button" data-range="week">Week</button>
@@ -2525,7 +2845,7 @@ async function openStreamGaugeCard(site, props, coords) {
       <button type="button" data-range="5yr">5 years</button>
     </div></div>` +
     `<div style="color:#8b949e;font-size:10px;margin-top:8px;">USGS ${escapeHtml(site)}${props.ts ? ' · ' + new Date(props.ts).toLocaleString() : ''}</div>`;
-  showMapCard(body, coords, `💧 ${props.name || 'Stream gauge'}`);
+  showMapCard(body, coords, `${cardIcon} ${props.name || 'Stream gauge'}`);
   const canvas = mapCard.querySelector('.gauge-chart');
   const loadRange = async range => {
     mapCard.querySelectorAll('.gauge-range-btns button').forEach(b => b.classList.toggle('active', b.dataset.range === range));
@@ -2579,7 +2899,7 @@ function woodenWheelSvg(uid) {
     const w = 2.6; // half-length of paddle
     paddles += `<line x1="${(px - tx*w).toFixed(1)}" y1="${(py - ty*w).toFixed(1)}" x2="${(px + tx*w).toFixed(1)}" y2="${(py + ty*w).toFixed(1)}" stroke="#7a4a1e" stroke-width="2.4" stroke-linecap="butt"/>`;
   }
-  return `<svg viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg">
+  return `<svg class="wheel-svg" viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="${uid}g" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" stop-color="#b07a3e"/><stop offset=".5" stop-color="#8a5a24"/>
@@ -2604,14 +2924,12 @@ function renderStreamflowWheels() {
   for (const f of feats) {
     const p = f.properties, site = p.site_no;
     seen.add(site);
-    const cfs = p.value != null ? +p.value : 0;
+    const readings = propReadings(p);
     const hasFlow = p.value != null;
+    const cfs = hasFlow ? +p.value : 0;
+    const kind = gaugeKindFor(readings, hasFlow);
     const spin = wheelSpinSeconds(cfs);
     const streamSec = streamFlowSeconds(cfs);
-    // Pick the headline reading: discharge if present, else the first other
-    // reading the gauge does report (gage height, water temp, …) — never "—"
-    // if ANY data exists.
-    const readings = propReadings(p);
     const stats = streamflowStats[site];
     const fmt = r => `${(+r.value).toFixed(Math.abs(r.value) < 10 ? 1 : 0)} ${r.unit}`;
     let rateTxt;
@@ -2624,34 +2942,56 @@ function renderStreamflowWheels() {
     const allTxt = Object.values(readings).map(r => `${r.label}: ${fmt(r)}`).join(' · ') || 'no current reading';
     let m = streamWheelMarkers[site];
     if (!m) {
-      const uid = 'ww' + String(site).replace(/[^a-z0-9]/gi, '');
       const el = document.createElement('div');
-      el.className = 'stream-wheel';
-      el.innerHTML = `<div class="rig">${woodenWheelSvg(uid)}<div class="stream"></div></div><div class="meter-slot"></div><span class="rate"></span>`;
+      el.className = 'stream-gauge';
+      el.innerHTML = `<div class="rig"></div><div class="meter-slot"></div><span class="rate"></span>`;
       m = new maplibregl.Marker({ element: el, anchor: 'center' })
         .setLngLat(f.geometry.coordinates).addTo(map);
       streamWheelMarkers[site] = m;
     }
     const el = m.getElement();
+    el.className = `stream-gauge kind-${kind}`;
+    const rig = el.querySelector('.rig');
     const meterSlot = el.querySelector('.meter-slot');
-    const meterCur = hasFlow ? cfs : (stats && stats.current != null ? stats.current : (readings.gageHeight ? readings.gageHeight.value : null));
-    if (meterSlot) meterSlot.innerHTML = meterCur != null && stats ? streamLevelMeterHtml(+meterCur, stats) : '';
-    // Gauges with no discharge read as SECONDARY: shrink them so they don't
-    // crowd the flowing wheels, and don't animate a stream that isn't measured.
-    el.classList.toggle('no-flow', !hasFlow);
+    const uid = 'ww' + String(site).replace(/[^a-z0-9]/gi, '');
+
+    if (kind === 'flow' || kind === 'both') {
+      rig.innerHTML = `${woodenWheelSvg(uid)}<div class="stream"></div>`;
+      const wheel = rig.querySelector('.wheel-spin');
+      const stream = rig.querySelector('.stream');
+      wheel.style.animationDuration = spin ? `${spin.toFixed(2)}s` : '0s';
+      wheel.style.animationPlayState = spin ? 'running' : 'paused';
+      stream.style.animationDuration = streamSec ? `${streamSec.toFixed(2)}s` : '0s';
+      stream.style.animationPlayState = streamSec ? 'running' : 'paused';
+    } else if (kind === 'stage') {
+      const stageCur = readings.gageHeight.value;
+      const stageStats = statsBlock(stats, 'stage');
+      rig.innerHTML = stageStats
+        ? streamLevelMeterHtml(stageCur, stageStats, { primary: true, kind: 'stage' })
+        : staffGaugeFallback(stageCur, readings.gageHeight.unit);
+    } else {
+      rig.textContent = readings.waterTempC ? '🌡️' : readings.precip ? '🌧️' : '💧';
+    }
+
+    if (kind === 'both' && readings.gageHeight) {
+      const st = statsBlock(stats, 'stage');
+      meterSlot.innerHTML = st
+        ? streamLevelMeterHtml(readings.gageHeight.value, st, { kind: 'stage' })
+        : staffGaugeFallback(readings.gageHeight.value, readings.gageHeight.unit);
+    } else if (kind === 'flow') {
+      const flowStats = statsBlock(stats, 'flow');
+      meterSlot.innerHTML = flowStats
+        ? streamLevelMeterHtml(cfs, flowStats, { kind: 'flow' })
+        : '';
+    } else {
+      meterSlot.innerHTML = '';
+    }
+
     el.onclick = e => { e.stopPropagation(); openStreamGaugeCard(site, p, f.geometry.coordinates); };
     el.title = `${p.name || 'USGS gauge'} — ${allTxt}`;
-    const wheel = el.querySelector('.wheel-spin');
-    const stream = el.querySelector('.stream');
-    // Both the wheel spin and the stream flow scale with discharge; 0 flow → still.
-    wheel.style.animationDuration = spin ? `${spin.toFixed(2)}s` : '0s';
-    wheel.style.animationPlayState = spin ? 'running' : 'paused';
-    stream.style.animationDuration = streamSec ? `${streamSec.toFixed(2)}s` : '0s';
-    stream.style.animationPlayState = streamSec ? 'running' : 'paused';
     el.querySelector('.rate').innerHTML = rateTxt;
     m.setLngLat(f.geometry.coordinates);
   }
-  // Remove markers for gauges no longer present/visible.
   for (const site of Object.keys(streamWheelMarkers)) {
     if (!seen.has(site)) { streamWheelMarkers[site].remove(); delete streamWheelMarkers[site]; }
   }
@@ -2678,16 +3018,22 @@ async function fetchSummits() {
     if (!mapReady || !map.getSource('summits')) return;
     const feats = (data.summits || []).map(s => {
       const r = s.readings || {};
-      // Compact on-map badge: temp for the weather tower, CO₂ for Mauna Loa.
       let badge = '';
       if (r.tempC != null) badge = `${(+r.tempC).toFixed(0)}°C`;
       else if (r.co2ppm != null) badge = `${(+r.co2ppm).toFixed(0)}ppm`;
+      else if (r.windMph != null) badge = `${Math.round(r.windMph)}mph`;
       return { type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
-        properties: { name: s.name, elevM: s.elevM, badge, readings: JSON.stringify(r) } };
+        properties: {
+          name: s.name, elevM: s.elevM, badge, source: s.source || '',
+          pageUrl: s.pageUrl || '', webcamUrl: s.webcamUrl || '', note: s.note || '',
+          readings: JSON.stringify(r),
+        } };
     });
     map.getSource('summits').setData({ type: 'FeatureCollection', features: feats });
     hawaiiList.summits = (data.summits || []).map((s, i) => ({
-      id: String(i), name: s.name, lon: s.lon, lat: s.lat, elevM: s.elevM, readings: s.readings || {},
+      id: s.id || String(i), name: s.name, lon: s.lon, lat: s.lat, elevM: s.elevM,
+      readings: s.readings || {}, source: s.source || '', pageUrl: s.pageUrl || '',
+      webcamUrl: s.webcamUrl || '', note: s.note || '',
     }));
     hawaiiBrowseRefresh();
   } catch (e) { /* keep last */ }
@@ -2750,6 +3096,7 @@ async function fetchMetars() {
 
 // Meshtastic LoRa nodes (keyless community mesh). Always on.
 let meshCardRefreshTimer = null;
+let meshFetchRetryTimer = null;
 function meshMsgHtml(messages, nodeId) {
   if (!messages || !messages.length) return '<div class="empty">No text messages captured for this node on the public MQTT feed yet.</div>';
   return messages.map(m => {
@@ -2821,14 +3168,23 @@ async function openMeshtasticCard(nodeId, props, coords) {
   if (meshCardRefreshTimer) clearInterval(meshCardRefreshTimer);
   meshCardRefreshTimer = setInterval(refresh, 15000);
 }
-async function fetchMeshtastic() {
+async function fetchMeshtastic(retry = 0) {
   try {
     const res = await fetch('/api/meshtastic');
     const data = await res.json();
-    hawaiiList.meshtastic = (data.nodes || []).map(n => ({ id: n.id, nodeId: n.id, ...n }));
+    const nodes = data.nodes || [];
+    const warming = nodes.length === 0 && !data.lastPollTs && (data.polling || data.lastError == null);
+    if (warming) {
+      if (retry < 8 && !meshFetchRetryTimer) {
+        meshFetchRetryTimer = setTimeout(() => { meshFetchRetryTimer = null; fetchMeshtastic(retry + 1); }, 10000);
+      }
+      return;
+    }
+    if (meshFetchRetryTimer) { clearTimeout(meshFetchRetryTimer); meshFetchRetryTimer = null; }
+    hawaiiList.meshtastic = nodes.map(n => ({ id: n.id, nodeId: n.id, ...n }));
     hawaiiBrowseRefresh();
     if (!mapReady || !map.getSource('meshtastic')) return;
-    const feats = (data.nodes || []).map(n => ({
+    const feats = nodes.map(n => ({
       type: 'Feature', geometry: { type: 'Point', coordinates: [n.lon, n.lat] },
       properties: {
         nodeId: n.id, name: n.name || String(n.id), shortName: n.shortName || '', badge: n.shortName || n.name || String(n.id),
@@ -2889,6 +3245,257 @@ async function fetchOcean() {
   } catch (e) { /* keep last */ }
 }
 
+let webcamCardTimer = null;
+function stopWebcamCardRefresh() {
+  if (webcamCardTimer) { clearInterval(webcamCardTimer); webcamCardTimer = null; }
+}
+function buildWebcamCardBody(p) {
+  const page = p.pageUrl ? `<div style="margin-top:8px;font-size:10px;"><a href="${escapeHtml(p.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">Open source page ↗</a>${p.source ? ` · ${escapeHtml(p.source)}` : ''}</div>` : '';
+  if (p.embedType === 'youtube' && p.embedUrl) {
+    const src = escapeHtml(p.embedUrl);
+    return `<div class="webcam-embed-wrap"><iframe src="${src}" style="width:100%;aspect-ratio:16/9;border:0;border-radius:6px;background:#000;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>${page}`;
+  }
+  if (p.embedType === 'iframe' && p.embedUrl) {
+    return `<div class="webcam-embed-wrap"><iframe src="${escapeHtml(p.embedUrl)}" style="width:100%;aspect-ratio:16/9;border:0;border-radius:6px;background:#000;" allowfullscreen loading="lazy"></iframe></div>${page}`;
+  }
+  const imgUrl = p.imageUrl || '';
+  if (!imgUrl) return `<div style="color:#8b949e;">No live feed URL.</div>${page}`;
+  const bust = Date.now();
+  return `<img class="webcam-live-img" src="${escapeHtml(imgUrl)}?t=${bust}" style="width:100%;border-radius:6px;display:block;" alt="${escapeHtml(p.name || 'webcam')}"/>
+    <div style="color:#8b949e;font-size:10px;margin-top:6px;">Live image — auto-refreshes every 30s · public domain</div>${page}`;
+}
+function wireWebcamCardRefresh() {
+  stopWebcamCardRefresh();
+  const img = mapCard && mapCard.querySelector('.webcam-live-img');
+  if (!img) return;
+  const base = (img.getAttribute('src') || '').split('?')[0];
+  webcamCardTimer = setInterval(() => { img.src = `${base}?t=${Date.now()}`; }, 30000);
+}
+function openMarineCard(props, coords) {
+  const p = { ...props };
+  if (p.mkind === 'reef-sensor') {
+    const rows = [
+      hawaiiDetailRow('🌡️', 'Sensor', escapeHtml(p.sensorId || '—')),
+      p.depth != null ? hawaiiDetailRow('📏', 'Depth', `${p.depth} m`) : '',
+      hawaiiDetailRow('🔗', 'Dashboard', p.pageUrl ? `<a href="${escapeHtml(p.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff">Aqualink site ↗</a>` : '—'),
+    ].join('');
+    showMapCard(rows + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Open-ocean temperature spotter — live readings on Aqualink (no public GPS for fishing boats).</div>`,
+      coords, `🌡️ ${p.name}`);
+    return;
+  }
+  const media = {
+    embedType: p.embedType, embedUrl: p.embedUrl, imageUrl: p.imageUrl,
+    pageUrl: p.pageUrl, source: p.source, name: p.name,
+  };
+  showMapCard(buildWebcamCardBody(media), coords, `🐠 ${p.name}`);
+  wireWebcamCardRefresh();
+}
+
+// Marine reef cams, sensors, fishing summaries (keyless).
+async function fetchMarine() {
+  try {
+    const res = await fetch('/api/marine');
+    const data = await res.json();
+    hawaiiList.marineWebcams = data.webcams || [];
+    hawaiiList.marineReefSensors = data.reefSensors || [];
+    hawaiiList.marineFishing = data.fishing || { top: [] };
+    hawaiiBrowseRefresh();
+    if (!mapReady || !map.getSource('marine')) return;
+    const feats = [];
+    for (const w of (data.webcams || [])) {
+      feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [w.lon, w.lat] },
+        properties: { mkind: 'reef-cam', id: w.id, name: w.name, embedType: w.embedType, embedUrl: w.embedUrl || '',
+          imageUrl: w.imageUrl || '', pageUrl: w.pageUrl || '', source: w.source || '' } });
+    }
+    for (const s of (data.reefSensors || [])) {
+      feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+        properties: { mkind: 'reef-sensor', id: s.id, name: s.name, sensorId: s.sensorId || '',
+          depth: s.depth, pageUrl: s.pageUrl || '', source: s.source || '' } });
+    }
+    map.getSource('marine').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
+}
+
+const INFRA_FUEL_ICON = { geothermal: '♨️', oil: '🛢️', gas: '🔥', wind: '💨', solar: '☀️', hydro: '💧' };
+let infraPowerVisible = true;
+let infraCellVisible = false;
+let infraNetVisible = false;
+let infraGridMix = null;
+
+function infraPlantProps(p) {
+  const icon = INFRA_FUEL_ICON[p.fuel] || '⚡';
+  const badge = p.capacityMw ? `${p.capacityMw}MW` : (p.fuel || '').slice(0, 4);
+  return { id: p.id, name: p.name, fuel: p.fuel || '', capacityMw: p.capacityMw || '',
+    operator: p.operator || '', note: p.note || '', unitCount: p.unitCount || 0, icon, badge };
+}
+
+async function fetchInfrastructure() {
+  try {
+    const res = await fetch('/api/infrastructure');
+    const data = await res.json();
+    infraGridMix = data.gridMix || null;
+    hawaiiList.infraPower = data.powerPlants || [];
+    hawaiiList.infraSubs = data.substations || [];
+    hawaiiList.infraCell = data.cellTowers || [];
+    hawaiiList.infraNet = [
+      ...(data.netFacilities || []).map(f => ({ id: f.id, nkind: 'dc', ...f })),
+      ...(data.internetExchanges || []).map(ix => ({ id: ix.id, nkind: 'ix', name: ix.name, city: ix.city, netCount: ix.netCount, website: ix.website, note: ix.note })),
+    ];
+    hawaiiList.infraGridMix = data.gridMix || null;
+    hawaiiBrowseRefresh();
+    if (!mapReady) return;
+    if (map.getSource('infra-power')) {
+      const plantFeats = infraPowerVisible ? (data.powerPlants || []).map(p => ({
+        type: 'Feature', geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
+        properties: infraPlantProps(p),
+      })) : [];
+      map.getSource('infra-power').setData({ type: 'FeatureCollection', features: plantFeats });
+    }
+    if (map.getSource('infra-subs')) {
+      const subFeats = infraPowerVisible ? (data.substations || []).map(s => ({
+        type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+        properties: { id: s.id, name: s.name, voltage: s.voltage || '', operator: s.operator || '' },
+      })) : [];
+      map.getSource('infra-subs').setData({ type: 'FeatureCollection', features: subFeats });
+    }
+    if (map.getSource('infra-lines')) {
+      map.getSource('infra-lines').setData(infraPowerVisible && data.powerLines ? data.powerLines : { type: 'FeatureCollection', features: [] });
+    }
+    if (map.getSource('infra-cell')) {
+      const cellFeats = infraCellVisible ? (data.cellTowers || []).map(t => ({
+        type: 'Feature', geometry: { type: 'Point', coordinates: [t.lon, t.lat] },
+        properties: { id: t.id, name: t.name || '', operator: t.operator || '', heightM: t.heightM || '' },
+      })) : [];
+      map.getSource('infra-cell').setData({ type: 'FeatureCollection', features: cellFeats });
+    }
+    if (map.getSource('infra-net')) {
+      const netFeats = infraNetVisible ? [
+        ...(data.netFacilities || []).map(f => ({
+          type: 'Feature', geometry: { type: 'Point', coordinates: [f.lon, f.lat] },
+          properties: { id: f.id, nkind: 'dc', name: f.name, org: f.org || '', city: f.city || '', netCount: f.netCount, ixCount: f.ixCount, website: f.website || '' },
+        })),
+      ] : [];
+      map.getSource('infra-net').setData({ type: 'FeatureCollection', features: netFeats });
+    }
+  } catch (e) { /* keep last */ }
+}
+
+function toggleInfraPower() {
+  infraPowerVisible = document.getElementById('showInfraPower').checked;
+  if (mapReady) {
+    const v = infraPowerVisible ? 'visible' : 'none';
+    for (const id of ['infra-power-icon', 'infra-subs-circle', 'infra-lines-line']) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
+    }
+  }
+  fetchInfrastructure();
+}
+function toggleInfraCell() {
+  infraCellVisible = document.getElementById('showInfraCell').checked;
+  if (mapReady && map.getLayer('infra-cell-icon')) {
+    map.setLayoutProperty('infra-cell-icon', 'visibility', infraCellVisible ? 'visible' : 'none');
+  }
+  fetchInfrastructure();
+}
+function toggleInfraNet() {
+  infraNetVisible = document.getElementById('showInfraNet').checked;
+  if (mapReady && map.getLayer('infra-net-icon')) {
+    map.setLayoutProperty('infra-net-icon', 'visibility', infraNetVisible ? 'visible' : 'none');
+  }
+  fetchInfrastructure();
+}
+
+let localFuelVisible = true;
+let localTrafficVisible = false;
+let localSensorsVisible = false;
+let localLcoVisible = false;
+let localInatVisible = false;
+
+async function fetchLocal() {
+  try {
+    const res = await fetch('/api/local');
+    const data = await res.json();
+    hawaiiList.localFuelPrices = data.fuelPrices || {};
+    hawaiiList.localFuelStations = data.fuelStations || [];
+    hawaiiList.localTrafficSensors = data.trafficSensors || [];
+    hawaiiList.localLco = data.lcoSchedule || [];
+    hawaiiList.localInat = data.iNaturalist || [];
+    hawaiiList.localNotes = data.notes || {};
+    hawaiiBrowseRefresh();
+    if (!mapReady) return;
+    if (map.getSource('local-fuel')) {
+      const feats = localFuelVisible ? (data.fuelStations || []).map(s => ({
+        type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+        properties: { id: s.id, name: s.name, brand: s.brand || '', operator: s.operator || '' },
+      })) : [];
+      map.getSource('local-fuel').setData({ type: 'FeatureCollection', features: feats });
+    }
+    if (map.getSource('local-traffic') && data.trafficRoads) {
+      const enriched = {
+        ...data.trafficRoads,
+        features: localTrafficVisible ? (data.trafficRoads.features || []).map(f => ({
+          ...f,
+          properties: { ...f.properties, aadt: f.properties.aadt || 0 },
+        })) : [],
+      };
+      map.getSource('local-traffic').setData(enriched);
+    }
+    if (map.getSource('local-sensors')) {
+      const feats = localSensorsVisible ? (data.trafficSensors || []).map(s => ({
+        type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+        properties: { id: s.id, name: s.name, note: s.note || '', dashboardUrl: s.dashboardUrl || '' },
+      })) : [];
+      map.getSource('local-sensors').setData({ type: 'FeatureCollection', features: feats });
+    }
+    if (map.getSource('local-lco')) {
+      const feats = localLcoVisible ? (data.lcoSchedule || []).filter(s => s.lat != null).map(s => ({
+        type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+        properties: { id: s.id, name: s.name, siteName: s.siteName, telescope: s.telescope || '', start: s.start || '', state: s.state || '' },
+      })) : [];
+      map.getSource('local-lco').setData({ type: 'FeatureCollection', features: feats });
+    }
+    if (map.getSource('local-inat')) {
+      const feats = localInatVisible ? (data.iNaturalist || []).map(s => ({
+        type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+        properties: { id: s.id, name: s.name, species: s.species || '', observedAt: s.observedAt || '', photoUrl: s.photoUrl || '', pageUrl: s.pageUrl || '' },
+      })) : [];
+      map.getSource('local-inat').setData({ type: 'FeatureCollection', features: feats });
+    }
+  } catch (e) { /* keep last */ }
+}
+function toggleLocalFuel() {
+  localFuelVisible = document.getElementById('showLocalFuel').checked;
+  fetchLocal();
+}
+function toggleLocalTraffic() {
+  localTrafficVisible = document.getElementById('showLocalTraffic').checked;
+  if (mapReady && map.getLayer('local-traffic-line')) {
+    map.setLayoutProperty('local-traffic-line', 'visibility', localTrafficVisible ? 'visible' : 'none');
+  }
+  fetchLocal();
+}
+function toggleLocalSensors() {
+  localSensorsVisible = document.getElementById('showLocalSensors').checked;
+  if (mapReady && map.getLayer('local-sensors-icon')) {
+    map.setLayoutProperty('local-sensors-icon', 'visibility', localSensorsVisible ? 'visible' : 'none');
+  }
+  fetchLocal();
+}
+function toggleLocalLco() {
+  localLcoVisible = document.getElementById('showLocalLco').checked;
+  if (mapReady && map.getLayer('local-lco-icon')) {
+    map.setLayoutProperty('local-lco-icon', 'visibility', localLcoVisible ? 'visible' : 'none');
+  }
+  fetchLocal();
+}
+function toggleLocalInat() {
+  localInatVisible = document.getElementById('showLocalInat').checked;
+  if (mapReady && map.getLayer('local-inat-icon')) {
+    map.setLayoutProperty('local-inat-icon', 'visibility', localInatVisible ? 'visible' : 'none');
+  }
+  fetchLocal();
+}
+
 // APRS ham positions (populates in production; sandbox blocks the TCP port).
 async function fetchAprs() {
   try {
@@ -2945,11 +3552,13 @@ async function toggleFacility(kind) {
   }
 }
 
-}
-
 // ─── HAWAIʻI TAB BROWSER (collapsible category + item lists) ─────────────────
 const hawaiiList = {
-  repeaters: [], meshtastic: [], aprs: [], weather: [], streamflow: [],
+  repeaters: [], meshtastic: [], aprs: [], mobility: [], weather: [], streamflow: [],
+  marineWebcams: [], marineReefSensors: [], marineFishing: { top: [] },
+  infraPower: [], infraSubs: [], infraCell: [], infraNet: [], infraGridMix: null,
+  localFuelPrices: {}, localFuelStations: [], localTrafficSensors: [], localLco: [], localInat: [],
+  localNotes: {},
   summits: [], ocean: [], airquality: [], volcanoAlerts: [], volcanoCams: [],
   metars: [], alerts: [], wildfire: [],
   facilities: { police: [], fire: [], ems: [], trauma: [] },
@@ -3078,6 +3687,13 @@ function hawaiiItemBody(catId, item) {
     case 'radio': return hawaiiRadioDetail(item);
     case 'repeaters': return hawaiiRepeaterDetail(item);
     case 'meshtastic': return hawaiiMeshDetail(item);
+    case 'mobility':
+      return hawaiiDetailRow('🚲', 'System', escapeHtml(item.systemName || item.system || '')) +
+        hawaiiDetailRow('📍', 'Station', escapeHtml(item.name || '')) +
+        (item.address ? hawaiiDetailRow('🏠', 'Address', escapeHtml(item.address)) : '') +
+        hawaiiDetailRow('🚲', 'Bikes available', String(item.bikes ?? '—')) +
+        hawaiiDetailRow('🅿️', 'Open docks', String(item.docks ?? '—')) +
+        hawaiiMapBtn(item.lon, item.lat, 14);
     case 'aprs':
       return hawaiiDetailRow('📻', 'Callsign', escapeHtml(item.call)) +
         hawaiiDetailRow('🏷️', 'Kind', escapeHtml(item.kind || 'station')) +
@@ -3095,10 +3711,11 @@ function hawaiiItemBody(catId, item) {
     }
     case 'streamflow': {
       const p = item, rd = p.readings || {};
+      const rdIcon = label => label === 'Flow' ? '⚙️' : label === 'Gage height' ? '📏' : '💧';
       let h = hawaiiDetailRow('🆔', 'Site', escapeHtml(p.site_no || ''));
       h += hawaiiDetailRow('📍', 'River', escapeHtml(p.name || ''));
       for (const k of Object.values(rd)) {
-        if (k && k.value != null) h += hawaiiDetailRow('💧', k.label || 'Reading', `${(+k.value).toFixed(2)} ${k.unit || ''}`);
+        if (k && k.value != null) h += hawaiiDetailRow(rdIcon(k.label), k.label || 'Reading', `${(+k.value).toFixed(2)} ${k.unit || ''}`);
       }
       if (p.ts) h += hawaiiDetailRow('🕐', 'Updated', new Date(p.ts).toLocaleString());
       return h + hawaiiMapBtn(item.lon, item.lat, 12);
@@ -3107,8 +3724,15 @@ function hawaiiItemBody(catId, item) {
       const r = item.readings || {};
       let h = hawaiiDetailRow('⛰️', 'Elevation', item.elevM ? `${Math.round(item.elevM)} m` : '—');
       if (r.tempC != null) h += hawaiiDetailRow('🌡️', 'Temperature', `${(+r.tempC).toFixed(1)}°C`);
-      if (r.windKt != null) h += hawaiiDetailRow('💨', 'Wind', `${(+r.windKt).toFixed(0)} kt`);
+      if (r.dewpointC != null) h += hawaiiDetailRow('💧', 'Dew point', `${(+r.dewpointC).toFixed(1)}°C`);
+      if (r.humidity != null) h += hawaiiDetailRow('💨', 'Humidity', `${Math.round(r.humidity)}%`);
+      if (r.windMph != null) h += hawaiiDetailRow('🌬️', 'Wind', `${Math.round(r.windMph)} mph ${r.windDir || ''}`);
+      if (r.pressureMb != null) h += hawaiiDetailRow('📊', 'Pressure', `${Math.round(r.pressureMb)} mb`);
       if (r.co2ppm != null) h += hawaiiDetailRow('🫧', 'CO₂', `${(+r.co2ppm).toFixed(2)} ppm`);
+      if (r.readingTs) h += hawaiiDetailRow('🕐', 'Reading', escapeHtml(r.readingTs));
+      if (item.note) h += `<div style="margin-top:6px;font-size:10px;color:#d29922;">${escapeHtml(item.note)}</div>`;
+      if (item.webcamUrl) h += `<div style="margin-top:8px;"><img src="${escapeHtml(item.webcamUrl)}" alt="webcam" style="width:100%;border-radius:6px;"></div>`;
+      if (item.pageUrl) h += `<div style="margin-top:6px;"><a href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">${escapeHtml(item.source || 'Observatory')} ↗</a></div>`;
       return h + hawaiiMapBtn(item.lon, item.lat, 10);
     }
     case 'ocean': {
@@ -3119,6 +3743,81 @@ function hawaiiItemBody(catId, item) {
       if (r.waterTempC != null) h += hawaiiDetailRow('🌡️', 'Water temp', `${(+r.waterTempC).toFixed(1)}°C`);
       return h + hawaiiMapBtn(item.lon, item.lat, 10);
     }
+    case 'marineWebcams':
+      return buildWebcamCardBody(item) + hawaiiMapBtn(item.lon, item.lat, 13);
+    case 'marineReefSensors': {
+      let h = hawaiiDetailRow('🌡️', 'Sensor', escapeHtml(item.sensorId || '—'));
+      if (item.depth != null) h += hawaiiDetailRow('📏', 'Depth', `${item.depth} m`);
+      if (item.pageUrl) h += hawaiiDetailRow('🔗', 'Aqualink', `<a href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff">Open dashboard ↗</a>`);
+      return h + hawaiiMapBtn(item.lon, item.lat, 13);
+    }
+    case 'marineFishing': {
+      const f = hawaiiList.marineFishing || {};
+      let h = `<div style="font-size:10px;color:#8b949e;margin-bottom:6px;">${escapeHtml(f.note || '')}</div>`;
+      h += `<div style="font-weight:600;margin-bottom:4px;">${escapeHtml(item.species)} <span style="color:#8b949e;font-weight:400;">(${item.year})</span></div>`;
+      h += hawaiiDetailRow('⚖️', 'Landings', `${Number(item.pounds).toLocaleString()} lb`);
+      if ((f.links || []).length) {
+        h += `<div style="margin-top:8px;font-size:10px;">${f.links.map(l => `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener" style="color:#58a6ff;margin-right:8px;">${escapeHtml(l.label)} ↗</a>`).join('')}</div>`;
+      }
+      return h;
+    }
+    case 'infraPower':
+      return hawaiiDetailRow(INFRA_FUEL_ICON[item.fuel] || '⚡', 'Fuel', escapeHtml(item.fuel || '')) +
+        (item.capacityMw ? hawaiiDetailRow('⚡', 'Nameplate', `${item.capacityMw} MW`) : '') +
+        (item.operator ? hawaiiDetailRow('🏢', 'Operator', escapeHtml(item.operator)) : '') +
+        (item.note ? hawaiiDetailRow('📝', 'Notes', escapeHtml(item.note)) : '') +
+        `<div style="margin-top:6px;font-size:10px;color:#8b949e;">Static location — no live MW output published.</div>` +
+        hawaiiMapBtn(item.lon, item.lat, 11);
+    case 'infraCell':
+      return (item.operator ? hawaiiDetailRow('📡', 'Operator', escapeHtml(item.operator)) : '') +
+        (item.heightM ? hawaiiDetailRow('📏', 'Height', escapeHtml(String(item.heightM))) : '') +
+        `<div style="margin-top:6px;font-size:10px;color:#8b949e;">OSM-mapped tower — incomplete vs full FCC database.</div>` +
+        hawaiiMapBtn(item.lon, item.lat, 14);
+    case 'infraNet':
+      return hawaiiDetailRow('🏙️', 'City', escapeHtml(item.city || '')) +
+        (item.org ? hawaiiDetailRow('🏢', 'Org', escapeHtml(item.org)) : '') +
+        (item.netCount != null ? hawaiiDetailRow('🌐', 'Networks', String(item.netCount)) : '') +
+        (item.website ? `<div style="margin-top:6px;"><a href="${escapeHtml(item.website)}" target="_blank" rel="noopener" style="color:#58a6ff;">Website ↗</a></div>` : '') +
+        (item.lon != null ? hawaiiMapBtn(item.lon, item.lat, item.nkind === 'ix' ? 8 : 11) : '');
+    case 'infraGridMix': {
+      const g = item;
+      let h = `<div style="font-size:10px;color:#8b949e;margin-bottom:8px;">${escapeHtml(g.note || '')}</div>`;
+      h += hawaiiDetailRow('♻️', 'Renewable', g.renewablePct != null ? `${g.renewablePct}%` : '—');
+      for (const s of (g.sources || [])) {
+        const icon = INFRA_FUEL_ICON[s.fuel] || '⚡';
+        h += hawaiiDetailRow(icon, s.fuel, `${s.pct}%`);
+      }
+      if ((g.links || []).length) {
+        h += `<div style="margin-top:8px;font-size:10px;">${g.links.map(l => `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener" style="color:#58a6ff;margin-right:8px;">${escapeHtml(l.label)} ↗</a>`).join('')}</div>`;
+      }
+      return h;
+    }
+    case 'localFuelPrices': {
+      const fp = hawaiiList.localFuelPrices || {};
+      let h = `<div style="font-size:10px;color:#8b949e;margin-bottom:6px;">${escapeHtml(fp.note || '')}</div>`;
+      h += hawaiiDetailRow('💵', item.fuel, `$${(+item.price).toFixed(3)}/gal`);
+      h += hawaiiDetailRow('📅', 'As of', escapeHtml(item.asOf || fp.asOf || ''));
+      if ((fp.links || []).length) h += `<div style="margin-top:8px;font-size:10px;">${fp.links.map(l => `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener" style="color:#58a6ff;margin-right:8px;">${escapeHtml(l.label)} ↗</a>`).join('')}</div>`;
+      return h;
+    }
+    case 'localFuelStations':
+      return (item.brand ? hawaiiDetailRow('🏷️', 'Brand', escapeHtml(item.brand)) : '') +
+        hawaiiMapBtn(item.lon, item.lat, 14);
+    case 'localTrafficSensors':
+      return `<div style="font-size:10px;color:#8b949e;margin-bottom:6px;">${escapeHtml(item.note || '')}</div>` +
+        `<a href="${escapeHtml(item.dashboardUrl || 'https://pulse.blyncsy.com/commuter_dashboard/hidot')}" target="_blank" rel="noopener" style="color:#58a6ff;font-size:11px;">Blyncsy Pulse live delays ↗</a>` +
+        hawaiiMapBtn(item.lon, item.lat, 13);
+    case 'localLco':
+      return hawaiiDetailRow('🔭', 'Observation', escapeHtml(item.name || '')) +
+        (item.telescope ? hawaiiDetailRow('📡', 'Telescope', escapeHtml(item.telescope)) : '') +
+        (item.start ? hawaiiDetailRow('🕐', 'Start UTC', escapeHtml(String(item.start).slice(0, 16).replace('T', ' '))) : '') +
+        `<div style="margin-top:6px;"><a href="https://schedule.lco.global/" target="_blank" rel="noopener" style="color:#58a6ff;font-size:11px;">LCO schedule ↗</a></div>` +
+        (item.lat != null ? hawaiiMapBtn(item.lon, item.lat, 4) : '');
+    case 'localInat':
+      return (item.species ? hawaiiDetailRow('🔬', 'Species', escapeHtml(item.species)) : '') +
+        (item.photoUrl ? `<img src="${escapeHtml(item.photoUrl)}" alt="" style="width:100%;border-radius:6px;margin:6px 0;">` : '') +
+        `<a href="${escapeHtml(item.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;font-size:11px;">iNaturalist ↗</a>` +
+        hawaiiMapBtn(item.lon, item.lat, 12);
     case 'airquality':
       return hawaiiDetailRow('🌫️', 'US AQI', item.usAqi != null ? String(item.usAqi) : '—') +
         hawaiiDetailRow('🫧', 'PM2.5', item.pm25 != null ? `${item.pm25} µg/m³` : '—') +
@@ -3127,8 +3826,7 @@ function hawaiiItemBody(catId, item) {
         hawaiiMapBtn(item.lon, item.lat, 10);
     case 'volcano':
       if (item.kind === 'webcam') {
-        return hawaiiDetailRow('📷', 'Live cam', escapeHtml(item.name)) +
-          (item.imageUrl ? `<div style="margin-top:6px;"><img src="${escapeHtml(item.imageUrl)}" alt="" style="max-width:100%;border-radius:6px;border:1px solid #30363d;"></div>` : '') +
+        return buildWebcamCardBody({ embedType: 'image', imageUrl: item.imageUrl, name: item.name, source: 'USGS HVO', pageUrl: 'https://www.usgs.gov/observatories/hvo/multimedia/webcams' }) +
           hawaiiMapBtn(item.lon, item.lat, 10);
       }
       return hawaiiDetailRow('🌋', 'Volcano', escapeHtml(item.name)) +
@@ -3189,14 +3887,40 @@ function hawaiiCategories() {
       items: [...hawaiiList.repeaters].sort((a, b) => String(a.callsign).localeCompare(b.callsign)) },
     { id: 'meshtastic', icon: '📶', label: 'Meshtastic / LoRa',
       items: [...hawaiiList.meshtastic].sort((a, b) => String(a.name).localeCompare(b.name)) },
-    { id: 'aprs', icon: '📻', label: 'APRS Stations',
+    { id: 'mobility', icon: '🚲', label: 'Bikeshare Docks',
+      items: [...hawaiiList.mobility].sort((a, b) => String(a.systemName).localeCompare(b.systemName) || String(a.name).localeCompare(b.name)) },
+    { id: 'aprs', icon: '📻', label: 'APRS Trackers',
       items: [...hawaiiList.aprs].sort((a, b) => String(a.call).localeCompare(b.call)) },
     { id: 'weather', icon: '🌡️', label: 'NWS Weather Stations',
       items: [...hawaiiList.weather].sort((a, b) => String(a.name).localeCompare(b.name)) },
-    { id: 'streamflow', icon: '💧', label: 'USGS Streamflow Gauges',
+    { id: 'streamflow', icon: '💧', label: 'USGS River Gauges',
       items: [...hawaiiList.streamflow].sort((a, b) => String(a.name).localeCompare(b.name)) },
     { id: 'summits', icon: '🔭', label: 'Summit Observatories', items: hawaiiList.summits },
     { id: 'ocean', icon: '🌊', label: 'Ocean Buoys & Tides', items: hawaiiList.ocean },
+    { id: 'marineWebcams', icon: '🐠', label: 'Reef & Ocean Webcams',
+      items: [...hawaiiList.marineWebcams].sort((a, b) => String(a.name).localeCompare(b.name)) },
+    { id: 'marineReefSensors', icon: '🌡️', label: 'Reef Temperature Sensors',
+      items: [...hawaiiList.marineReefSensors].sort((a, b) => String(a.name).localeCompare(b.name)) },
+    { id: 'marineFishing', icon: '🎣', label: 'Commercial Fishing Landings',
+      items: [...(hawaiiList.marineFishing.top || [])].map((r, i) => ({ id: String(i), ...r })) },
+    { id: 'infraGridMix', icon: '⚡', label: 'Island Grid Fuel Mix (annual)',
+      items: hawaiiList.infraGridMix ? [{ id: 'mix', ...hawaiiList.infraGridMix }] : [] },
+    { id: 'infraPower', icon: '🛢️', label: 'Power Plants & Generators',
+      items: [...hawaiiList.infraPower].sort((a, b) => String(a.name).localeCompare(b.name)) },
+    { id: 'infraCell', icon: '📶', label: 'Cell / Comm Towers (OSM)',
+      items: [...hawaiiList.infraCell].sort((a, b) => (a.operator || '').localeCompare(b.operator || '')) },
+    { id: 'infraNet', icon: '🌐', label: 'Internet Facilities (PeeringDB)',
+      items: [...hawaiiList.infraNet].sort((a, b) => String(a.name).localeCompare(b.name)) },
+    { id: 'localFuelPrices', icon: '⛽', label: 'Regional Gas Prices (AAA monthly)',
+      items: (hawaiiList.localFuelPrices.hilo || []).map((f, i) => ({ id: String(i), ...f, asOf: hawaiiList.localFuelPrices.asOf })) },
+    { id: 'localFuelStations', icon: '⛽', label: 'Gas Stations (map)',
+      items: [...hawaiiList.localFuelStations].sort((a, b) => String(a.name).localeCompare(b.name)) },
+    { id: 'localTrafficSensors', icon: '🚦', label: 'Traffic Sensors (East HI)',
+      items: [...hawaiiList.localTrafficSensors] },
+    { id: 'localLco', icon: '🔭', label: 'Remote Telescope Schedule (LCO)',
+      items: [...hawaiiList.localLco].sort((a, b) => String(a.start).localeCompare(b.start)) },
+    { id: 'localInat', icon: '🦋', label: 'Nature Sightings (iNaturalist)',
+      items: [...hawaiiList.localInat].sort((a, b) => String(b.observedAt).localeCompare(String(a.observedAt))) },
     { id: 'airquality', icon: '🌫️', label: 'Air Quality / Vog', items: hawaiiList.airquality },
     { id: 'volcano', icon: '🌋', label: 'Volcano Alerts & Webcams', items: volcanoItems },
     { id: 'metars', icon: '✈️', label: 'Aviation METARs', items: hawaiiList.metars },
@@ -3215,11 +3939,34 @@ function hawaiiItemSummary(catId, item) {
     case 'radio': return { icon: item.icon || '📻', title: item.name, meta: item.kind };
     case 'repeaters': return { icon: item.icon || '📡', title: item.callsign, meta: `${item.freqMhz} MHz · ${item.typeLabel || item.group || 'FM'}` };
     case 'meshtastic': return { icon: '📶', title: item.name || item.idHex, meta: [item.hwName, item.battery != null ? `🔋${item.battery}%` : ''].filter(Boolean).join(' · ') };
-    case 'aprs': return { icon: '📻', title: item.call, meta: item.kind || 'APRS' };
+    case 'mobility': return { icon: '🚲', title: item.name, meta: `${item.systemName || ''} · ${item.bikes ?? 0} bikes` };
+    case 'aprs': return { icon: item.kind === 'vehicle' ? '🚗' : item.kind === 'boat' ? '⛵' : '📻', title: item.call, meta: item.kind || 'APRS' };
     case 'weather': return { icon: '🌡️', title: item.name, meta: item.temperatureC != null ? `${(+item.temperatureC).toFixed(0)}°C · ${item.textDescription || ''}` : item.stationId };
-    case 'streamflow': return { icon: '💧', title: item.name, meta: item.value != null ? `${(+item.value).toFixed(0)} ft³/s` : 'gauge reporting' };
-    case 'summits': return { icon: '🔭', title: item.name, meta: item.elevM ? `${Math.round(item.elevM)} m` : '' };
+    case 'streamflow': {
+      const rd = item.readings || {};
+      if (item.value != null) return { icon: '⚙️', title: item.name, meta: `${(+item.value).toFixed(0)} ft³/s flow` };
+      if (rd.gageHeight) return { icon: '📏', title: item.name, meta: `${(+rd.gageHeight.value).toFixed(1)} ft stage` };
+      const other = Object.values(rd)[0];
+      return { icon: '💧', title: item.name, meta: other ? `${other.label}: ${(+other.value).toFixed(1)} ${other.unit}` : 'gauge reporting' };
+    }
+    case 'summits': {
+      const r = item.readings || {};
+      const meta = r.tempC != null ? `${(+r.tempC).toFixed(0)}°C` : r.co2ppm != null ? `${(+r.co2ppm).toFixed(0)} ppm CO₂` : item.source || '';
+      return { icon: '🔭', title: item.name, meta };
+    }
     case 'ocean': return { icon: item.kind === 'tide' ? '🌊' : item.kind === 'dart' ? '🚨' : '🛟', title: item.name, meta: item.kind };
+    case 'marineWebcams': return { icon: '🐠', title: item.name, meta: item.source || 'Live reef cam' };
+    case 'marineReefSensors': return { icon: '🌡️', title: item.name, meta: item.sensorId || 'Aqualink sensor' };
+    case 'marineFishing': return { icon: '🎣', title: item.species, meta: `${item.year} · ${Number(item.pounds).toLocaleString()} lb` };
+    case 'infraGridMix': return { icon: '⚡', title: `Hawaiʻi Island ${item.year || ''} mix`.trim(), meta: item.renewablePct != null ? `${item.renewablePct}% renewable` : 'annual averages' };
+    case 'infraPower': return { icon: INFRA_FUEL_ICON[item.fuel] || '⚡', title: item.name, meta: [item.capacityMw ? `${item.capacityMw} MW` : '', item.fuel].filter(Boolean).join(' · ') };
+    case 'infraCell': return { icon: '📶', title: item.name || 'Comm tower', meta: item.operator || 'OSM' };
+    case 'infraNet': return { icon: item.nkind === 'ix' ? '🔀' : '🌐', title: item.name, meta: item.city || item.org || 'PeeringDB' };
+    case 'localFuelPrices': return { icon: '⛽', title: item.fuel, meta: `$${(+item.price).toFixed(3)}/gal · Hilo ${item.asOf || ''}` };
+    case 'localFuelStations': return { icon: '⛽', title: item.name, meta: item.brand || 'OpenStreetMap' };
+    case 'localTrafficSensors': return { icon: '🚦', title: item.name, meta: 'Blyncsy / HDOT' };
+    case 'localLco': return { icon: '🔭', title: item.siteName || item.site, meta: [item.name, item.start ? String(item.start).slice(0, 10) : ''].filter(Boolean).join(' · ') };
+    case 'localInat': return { icon: '🦋', title: item.name, meta: item.observedAt ? String(item.observedAt).slice(0, 10) : '' };
     case 'airquality': return { icon: '🌫️', title: item.name, meta: item.usAqi != null ? `AQI ${item.usAqi}` : '' };
     case 'volcano': return { icon: item.kind === 'webcam' ? '📷' : '🌋', title: item.name, meta: item.kind === 'webcam' ? 'Live webcam' : `${item.colorCode}/${item.alertLevel}` };
     case 'metars': return { icon: '✈️', title: `${item.icao} — ${item.name}`, meta: item.fltCat || '' };
@@ -5358,11 +6105,13 @@ function showMapCard(bodyHtml, lngLat, title) {
     <div style="padding:12px;max-height:60vh;overflow-y:auto;">${bodyHtml}</div>`;
   mapCard.querySelector('.map-card-x').onclick = hideMapCard;
   wireRepeaterStreamControls(mapCard);
+  wireWebcamCardRefresh();
   mapCard.style.display = 'block';
   positionMapCard();
 }
 function hideMapCard() {
   if (meshCardRefreshTimer) { clearInterval(meshCardRefreshTimer); meshCardRefreshTimer = null; }
+  stopWebcamCardRefresh();
   stopMapStream();
   if (mapCard) { mapCard.style.display = 'none'; mapCardAnchor = null; }
 }
@@ -5382,8 +6131,9 @@ function positionMapCard() {
 }
 
 // Layers whose features open a click-card (and whose empty-space click closes it).
-const CARD_LAYERS = ['ocean-dot', 'aprs-icon', 'summits-dot', 'weather-stations-icon', 'aircraft-triangles', 'airquality-icon',
-  'volcano-dot', 'metars-dot', 'repeaters-icon'];
+const CARD_LAYERS = ['ocean-dot', 'marine-dot', 'aprs-icon', 'summits-dot', 'weather-stations-icon', 'aircraft-triangles', 'airquality-icon',
+  'volcano-dot', 'metars-dot', 'repeaters-icon', 'infra-power-icon', 'infra-cell-icon', 'infra-net-icon',
+  'local-fuel-icon', 'local-sensors-icon', 'local-lco-icon', 'local-inat-icon'];
 // Wire click-to-open-card on a layer. buildCard(props) -> { title, body }.
 function wireLayerCard(layerId, buildCard) {
   map.on('click', layerId, e => {
@@ -6482,12 +7232,15 @@ Promise.all([
   fetchWeatherStations(),
   fetchSummits(),
   fetchOcean(),
+  fetchMarine(),
   fetchAprs(),
   fetchAirQuality(),
   fetchVolcano(),
   fetchMetars(),
   fetchMeshtastic(),
   fetchRepeaters(),
+  fetchInfrastructure(),
+  fetchLocal(),
 ]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); ensureHawaiiFacilitiesBrowse().then(() => renderHawaiiBrowser()); renderHawaiiBrowser(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
@@ -6511,7 +7264,8 @@ setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
 setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); } }, 15 * 60 * 1000);
+setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchMarine(); if (!document.hidden) fetchInfrastructure(); if (!document.hidden) fetchLocal(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); } }, 15 * 60 * 1000);
+setInterval(() => { if (!document.hidden && (!hawaiiList.meshtastic || !hawaiiList.meshtastic.length)) fetchMeshtastic(); }, 2 * 60 * 1000);
 // APRS moves faster (vehicles) — refresh more often when it has data.
 setInterval(() => { if (!document.hidden) fetchAprs(); }, 60 * 1000);
 

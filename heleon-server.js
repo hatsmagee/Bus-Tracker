@@ -2843,13 +2843,32 @@ async function handleApi(url, res) {
 
   // ── HIBIKE bikeshare (GBFS v3, keyless — Hilo + Kona stations) ───────────
   if (p === '/api/hibike') {
+    const stations = mobilityCache.filter(s => s.system === 'hibike');
     return json(res, {
       ts: Date.now(),
-      lastPollTs: hibikeLastPollTs,
-      lastError: hibikeLastError,
-      count: hibikeCache.length,
-      bikesAvailable: hibikeCache.reduce((s, st) => s + (st.bikes || 0), 0),
-      stations: hibikeCache,
+      lastPollTs: mobilityLastPollTs,
+      lastError: mobilityErrors.hibike || null,
+      count: stations.length,
+      bikesAvailable: stations.reduce((s, st) => s + (st.bikes || 0), 0),
+      stations,
+    });
+  }
+
+  // ── Bikeshare / micromobility (GBFS v3, keyless — HIBIKE + Biki) ─────────
+  if (p === '/api/mobility') {
+    return json(res, {
+      ts: Date.now(),
+      lastPollTs: mobilityLastPollTs,
+      errors: mobilityErrors,
+      count: mobilityCache.length,
+      bikesAvailable: mobilityCache.reduce((s, st) => s + (st.bikes || 0), 0),
+      systems: MOBILITY_GBFS_FEEDS.map(f => ({
+        id: f.id, name: f.name,
+        count: mobilityCache.filter(s => s.system === f.id).length,
+        bikes: mobilityCache.filter(s => s.system === f.id).reduce((n, st) => n + (st.bikes || 0), 0),
+        error: mobilityErrors[f.id] || null,
+      })),
+      stations: mobilityCache,
     });
   }
 
@@ -2948,20 +2967,35 @@ async function handleApi(url, res) {
     await Promise.all(feats.map(async f => {
       const site = f.properties.site_no;
       const readings = f.properties.readings || {};
-      let param = '00060', cur = f.properties.value, label = 'Flow', unit = 'ft³/s';
-      if (cur == null && readings.gageHeight) {
-        param = '00065'; cur = readings.gageHeight.value; label = 'Gage height'; unit = 'ft';
+      const blocks = [];
+      if (f.properties.value != null) {
+        blocks.push({ param: '00060', cur: f.properties.value, label: 'Flow', unit: 'ft³/s' });
       }
-      if (cur == null) return;
+      if (readings.gageHeight) {
+        blocks.push({ param: '00065', cur: readings.gageHeight.value, label: 'Gage height', unit: 'ft' });
+      }
+      if (!blocks.length) return;
       try {
-        const s = await usgsDailyStats(site, param);
+        const primary = blocks[0];
+        const s = await usgsDailyStats(site, primary.param);
         const d = s.byDoy[doy] || null;
         out[site] = {
-          param, label, unit, current: cur,
+          param: primary.param, label: primary.label, unit: primary.unit, current: primary.cur,
           allMin: s.allMin, allMax: s.allMax, allMinYr: s.allMinYr, allMaxYr: s.allMaxYr,
           beginYr: s.beginYr, endYr: s.endYr,
           todayMin: d && d.min, todayMax: d && d.max, todayMedian: d && d.p50, todayP10: d && d.p10, todayP90: d && d.p90,
         };
+        if (blocks.length > 1) {
+          const st = blocks[1];
+          const ss = await usgsDailyStats(site, st.param);
+          const sd = ss.byDoy[doy] || null;
+          out[site].stage = {
+            param: st.param, label: st.label, unit: st.unit, current: st.cur,
+            allMin: ss.allMin, allMax: ss.allMax, allMinYr: ss.allMinYr, allMaxYr: ss.allMaxYr,
+            beginYr: ss.beginYr, endYr: ss.endYr,
+            todayMin: sd && sd.min, todayMax: sd && sd.max, todayMedian: sd && sd.p50, todayP10: sd && sd.p10, todayP90: sd && sd.p90,
+          };
+        }
       } catch (e) { /* site may have no stats; skip */ }
     }));
     return json(res, { stats: out });
@@ -3007,8 +3041,9 @@ async function handleApi(url, res) {
 
   // ── MESHTASTIC / LoRa mesh nodes (keyless) ────────────────────────────────
   if (p === '/api/meshtastic') {
+    ensureMeshtasticPoll();
     return json(res, { ts: Date.now(), lastPollTs: meshtasticLastPollTs, lastError: meshtasticLastError,
-      count: meshtasticCache.length, nodes: meshtasticCache });
+      polling: meshtasticPollInFlight, count: meshtasticCache.length, nodes: meshtasticCache });
   }
   if (p === '/api/meshtastic-feed') {
     return json(res, { ts: Date.now(), lastPollTs: meshtasticFeedLastPoll, messages: meshtasticFeedCache });
@@ -3038,9 +3073,38 @@ async function handleApi(url, res) {
     return json(res, { ts: Date.now(), lastPollTs: oceanLastPollTs, lastError: oceanLastError, stations: oceanCache });
   }
 
+  // ── MARINE (reef webcams, Aqualink sensors, fishing landings summary) ───────
+  if (p === '/api/marine') {
+    return json(res, {
+      ts: Date.now(),
+      lastPollTs: marineLastPollTs,
+      lastError: marineLastError,
+      webcams: marineCache.webcams,
+      reefSensors: marineCache.reefSensors,
+      fishing: marineFishingCache,
+    });
+  }
+
+  // ── INFRASTRUCTURE (power grid, cell towers, internet facilities) ─────────
+  if (p === '/api/infrastructure') {
+    if (!infraLastPollTs && !infraPollInFlight) pollInfrastructure();
+    return json(res, {
+      ts: Date.now(),
+      lastPollTs: infraLastPollTs,
+      lastError: infraLastError,
+      ...infraCache,
+    });
+  }
+
   // ── SUMMIT OBSERVATORIES (Mauna Kea towers, live conditions, no key) ──────
   if (p === '/api/summits') {
     return json(res, { ts: Date.now(), lastPollTs: summitLastPollTs, lastError: summitLastError, summits: summitCache });
+  }
+
+  // ── LOCAL: fuel, traffic, telescopes, community sightings ───────────────────
+  if (p === '/api/local') {
+    if (!localLastPollTs && !localPollInFlight) pollLocal();
+    return json(res, { ts: Date.now(), lastPollTs: localLastPollTs, lastError: localLastError, ...localCache });
   }
 
   // ── WEATHER STATIONS (NWS, Big Island, no key) ──────────────────────────
@@ -3216,15 +3280,16 @@ function scheduleAisReconnect() {
   aisReconnectTimer = setTimeout(() => { aisReconnectTimer = null; connectAisStream(); }, delay);
 }
 
-// ─── HIBIKE BIKESHARE (GBFS, keyless) ─────────────────────────────────────
-// County-funded dock bikeshare in Hilo + Kailua-Kona. PBSC publishes a standard
-// GBFS v3 feed — no API key. Individual bikes aren't GPS-tracked; we show dock
-// stations with live bike/dock availability counts.
-const HIBIKE_GBFS_HOST = 'kona.publicbikesystem.net';
-const HIBIKE_GBFS_PATH = '/customer/gbfs/v3.0/gbfs.json';
-let hibikeCache = [];
-let hibikeLastPollTs = null;
-let hibikeLastError = null;
+// ─── BIKESHARE / MICROMOBILITY (GBFS v3, keyless) ───────────────────────────
+// Dock-based bikeshare — stations with live bike/dock counts (not per-bike GPS).
+// HIBIKE: Big Island (Hilo + Kona). Biki: Oʻahu (Honolulu). No API keys.
+const MOBILITY_GBFS_FEEDS = [
+  { id: 'hibike', name: 'HIBIKE', host: 'kona.publicbikesystem.net', path: '/customer/gbfs/v3.0/gbfs.json' },
+  { id: 'biki', name: 'Biki', host: 'honolulu.publicbikesystem.net', path: '/customer/gbfs/v3.0/gbfs.json' },
+];
+let mobilityCache = [];
+let mobilityLastPollTs = null;
+let mobilityErrors = {};
 
 function gbfsText(field) {
   if (!field) return '';
@@ -3236,39 +3301,52 @@ function gbfsText(field) {
   return '';
 }
 
-async function pollHibike() {
-  try {
-    const root = await fetchJson(HIBIKE_GBFS_HOST, HIBIKE_GBFS_PATH);
-    const feeds = (root.data && root.data.feeds) || [];
-    const infoFeed = feeds.find(f => f.name === 'station_information');
-    const statusFeed = feeds.find(f => f.name === 'station_status');
-    if (!infoFeed || !statusFeed) throw new Error('GBFS station feeds missing');
-    const infoUrl = new URL(infoFeed.url);
-    const statusUrl = new URL(statusFeed.url);
-    const [info, status] = await Promise.all([
-      fetchJson(infoUrl.hostname, infoUrl.pathname + infoUrl.search),
-      fetchJson(statusUrl.hostname, statusUrl.pathname + statusUrl.search),
-    ]);
-    const statusById = new Map((status.data.stations || []).map(s => [s.station_id, s]));
-    hibikeCache = (info.data.stations || []).map(st => {
-      const stStat = statusById.get(st.station_id) || {};
-      return {
-        id: st.station_id,
-        name: gbfsText(st.name) || gbfsText(st.short_name) || `Station ${st.station_id}`,
-        lat: st.lat,
-        lon: st.lon,
-        address: st.address || '',
-        capacity: st.capacity,
-        bikes: stStat.num_bikes_available ?? 0,
-        docks: stStat.num_docks_available ?? 0,
-        isRenting: stStat.is_renting !== false,
-      };
-    });
-    hibikeLastPollTs = Date.now();
-    hibikeLastError = null;
-  } catch (e) {
-    hibikeLastError = e.message;
-  }
+async function fetchGbfsStations(host, path) {
+  const root = await fetchJson(host, path);
+  const feeds = (root.data && root.data.feeds) || [];
+  const infoFeed = feeds.find(f => f.name === 'station_information');
+  const statusFeed = feeds.find(f => f.name === 'station_status');
+  if (!infoFeed || !statusFeed) throw new Error('GBFS station feeds missing');
+  const infoUrl = new URL(infoFeed.url);
+  const statusUrl = new URL(statusFeed.url);
+  const [info, status] = await Promise.all([
+    fetchJson(infoUrl.hostname, infoUrl.pathname + infoUrl.search),
+    fetchJson(statusUrl.hostname, statusUrl.pathname + statusUrl.search),
+  ]);
+  const statusById = new Map((status.data.stations || []).map(s => [s.station_id, s]));
+  return (info.data.stations || []).map(st => {
+    const stStat = statusById.get(st.station_id) || {};
+    return {
+      id: st.station_id,
+      name: gbfsText(st.name) || gbfsText(st.short_name) || `Station ${st.station_id}`,
+      lat: st.lat,
+      lon: st.lon,
+      address: st.address || '',
+      capacity: st.capacity,
+      bikes: stStat.num_bikes_available ?? 0,
+      docks: stStat.num_docks_available ?? 0,
+      isRenting: stStat.is_renting !== false,
+    };
+  });
+}
+
+async function pollMobility() {
+  const settled = await Promise.allSettled(
+    MOBILITY_GBFS_FEEDS.map(f => fetchGbfsStations(f.host, f.path)),
+  );
+  const next = [];
+  const errs = {};
+  settled.forEach((r, i) => {
+    const feed = MOBILITY_GBFS_FEEDS[i];
+    if (r.status === 'fulfilled') {
+      for (const st of r.value) next.push({ ...st, system: feed.id, systemName: feed.name });
+    } else {
+      errs[feed.id] = r.reason?.message || String(r.reason);
+    }
+  });
+  if (next.length) mobilityCache = next;
+  mobilityErrors = errs;
+  mobilityLastPollTs = Date.now();
 }
 
 // ─── AIRCRAFT (OpenSky Network) ────────────────────────────────────────────
@@ -3455,9 +3533,10 @@ function fetchJson(hostname, reqPath, headers) {
   });
 }
 
-function fetchText(hostname, reqPath, headers) {
+function fetchText(hostname, reqPath, headers, proto) {
+  const mod = proto === 'http' ? http : https;
   return new Promise((resolve, reject) => {
-    const req = https.request({ hostname, path: reqPath, method: 'GET', headers, timeout: 25000 }, res => {
+    const req = mod.request({ hostname, path: reqPath, method: 'GET', headers, timeout: 25000 }, res => {
       let b = ''; res.on('data', d => b += d);
       res.on('end', () => res.statusCode === 200 ? resolve(b) : reject(new Error(`HTTP ${res.statusCode}`)));
     });
@@ -3778,22 +3857,101 @@ async function fetchWeatherStationsState() {
 }
 const fetchWeatherStations = fetchWeatherStationsState;
 
-// ─── SUMMIT OBSERVATORIES (Mauna Kea + Mauna Loa) ─────────────────────────────
-// Real-time conditions the observatories publish publicly, no key. The Mauna Kea
-// telescopes sit on the summit at ~4200 m; CFHT's weather-tower datalogger emits
-// a clean key=value block (wind, temp, humidity, pressure), timestamped. We map
-// each observatory to its summit location so it shows as a point on the map with
-// live weather — the closest thing to "what's happening on the summit right now"
-// that's openly streamed. Extend SUMMIT_SITES to add more towers as they expose
-// machine-readable feeds.
-const SUMMIT_SITES = [
-  { id: 'cfht', name: 'CFHT Weather Tower (Maunakea summit)', lat: 19.8253, lon: -155.4689, elevM: 4204,
-    host: 'www.cfht.hawaii.edu', path: '/cgi-bin/dl_gemini.csh', kind: 'cfht' },
-  { id: 'mlo', name: 'Mauna Loa Observatory (NOAA — atmospheric CO₂)', lat: 19.5362, lon: -155.5763, elevM: 3397,
-    host: 'gml.noaa.gov', path: '/webdata/ccgg/trends/co2/co2_weekly_mlo.txt', kind: 'noaa_co2' },
-];
-function parseNoaaCo2(text) {
-  // Columns: year month day decimal ppm num_days 1_yr_ago 10_yr_ago since_1800
+// ─── SUMMIT OBSERVATORIES (Maunakea + Mauna Loa) ─────────────────────────────
+// Maunakea: MKWC publishes a single HTML table of per-telescope weather (CFHT,
+// Keck, Subaru, IRTF, JCMT, UKIRT, SMA, VLBA, Hale Pōhaku) — keyless HTTP.
+// Mauna Loa: NOAA GML hourly met + daily CO₂ from public FTP-style URLs on
+// gml.noaa.gov (Keeling Curve site). MLO road access is still restricted after
+// the 2022 eruption but met/CO₂ files continue updating — see obop/mlo status.
+const MKWC_OBS = {
+  'CFHT/GEM': { id: 'cfht', name: 'CFHT / Gemini North', lat: 19.8252, lon: -155.4692, elevM: 4204 },
+  'UKIRT': { id: 'ukirt', name: 'UKIRT Infrared Telescope', lat: 19.8237, lon: -155.4693, elevM: 4194 },
+  'IRTF': { id: 'irtf', name: 'NASA Infrared Telescope Facility (IRTF)', lat: 19.8267, lon: -155.4784, elevM: 4168 },
+  'SUBARU': { id: 'subaru', name: 'Subaru Telescope', lat: 19.8235, lon: -155.4765, elevM: 4139 },
+  'KECK': { id: 'keck', name: 'W. M. Keck Observatory', lat: 19.8263, lon: -155.4749, elevM: 4160 },
+  'JCMT': { id: 'jcmt', name: 'James Clerk Maxwell Telescope', lat: 19.8229, lon: -155.4783, elevM: 4082 },
+  'SMA': { id: 'sma', name: 'Submillimeter Array', lat: 19.8242, lon: -155.4792, elevM: 4080 },
+  'VLBA': { id: 'vlba', name: 'VLBA Station (Maunakea)', lat: 19.8013, lon: -155.4564, elevM: 3720 },
+  'HP': { id: 'hpohaku', name: 'Hale Pōhaku (mid-level facility)', lat: 19.7583, lon: -155.4556, elevM: 2800 },
+};
+const MLO_SITE = {
+  id: 'mlo', name: 'Mauna Loa Observatory (NOAA GML)', lat: 19.5362, lon: -155.5763, elevM: 3397,
+  pageUrl: 'https://gml.noaa.gov/obop/mlo/',
+  webcamUrl: 'https://gml.noaa.gov/webdata/mlo/webcam/northcam.jpg',
+  note: 'Road/public access limited since 2022 eruption; GML is restoring instruments. Met + CO₂ data from GML FTP.',
+};
+
+function mkwcStationKey(label) {
+  const s = String(label || '').trim();
+  if (!s || s === '--') return null;
+  if (MKWC_OBS[s]) return s;
+  for (const k of Object.keys(MKWC_OBS)) {
+    if (s.startsWith(k.split('/')[0])) return k;
+  }
+  return null;
+}
+function parseMkwcTable(html) {
+  const out = [];
+  const seen = new Set();
+  for (const row of (html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [])) {
+    const cells = [...row.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)]
+      .map(m => m[1].replace(/<[^>]+>/g, '').trim());
+    if (cells.length < 8) continue;
+    const key = mkwcStationKey(cells[0]);
+    if (!key || seen.has(key)) continue;
+    if (cells[1] === '--' || cells[3] === '--') continue;
+    seen.add(key);
+    const meta = MKWC_OBS[key];
+    const tempC = parseFloat(cells[3]);
+    const windMph = parseFloat(cells[6]);
+    out.push({
+      id: meta.id, name: meta.name, lat: meta.lat, lon: meta.lon, elevM: meta.elevM,
+      source: 'Maunakea Weather Center',
+      pageUrl: 'http://mkwc.ifa.hawaii.edu/current/',
+      readings: {
+        tempC: Number.isFinite(tempC) ? tempC : null,
+        dewpointC: Number.isFinite(parseFloat(cells[4])) ? parseFloat(cells[4]) : null,
+        humidity: Number.isFinite(parseFloat(cells[5])) ? parseFloat(cells[5]) : null,
+        windMph: Number.isFinite(windMph) ? windMph : null,
+        windGustMph: Number.isFinite(parseFloat(cells[7])) ? parseFloat(cells[7]) : null,
+        windDir: cells[8] && cells[8] !== '--' ? cells[8] : null,
+        pressureMb: Number.isFinite(parseFloat(cells[9])) ? parseFloat(cells[9]) : null,
+        rainMm: Number.isFinite(parseFloat(cells[10])) ? parseFloat(cells[10]) : null,
+        readingTs: `${cells[1]} ${cells[2]} HST`,
+      },
+    });
+  }
+  return out;
+}
+function parseMloMetHourly(text) {
+  const lines = text.split('\n').filter(l => l.startsWith('MLO'));
+  if (!lines.length) return {};
+  const p = lines[lines.length - 1].trim().split(/\s+/);
+  if (p.length < 12) return {};
+  const tempC = parseFloat(p[9]);
+  const dew = parseFloat(p[10]);
+  const pres = parseFloat(p[8]);
+  return {
+    tempC: Number.isFinite(tempC) ? tempC : null,
+    dewpointC: Number.isFinite(dew) && dew > -900 ? dew : null,
+    pressureMb: Number.isFinite(pres) && pres > 100 ? pres : null,
+    windDir: parseInt(p[5], 10),
+    windMs: Number.isFinite(parseFloat(p[6])) ? parseFloat(p[6]) : null,
+    rainMm: Number.isFinite(parseFloat(p[11])) && parseFloat(p[11]) >= 0 ? parseFloat(p[11]) : null,
+    readingTs: `${p[1]}-${p[2].padStart(2, '0')}-${p[3].padStart(2, '0')} ${p[4]}:00 UTC`,
+  };
+}
+function parseNoaaDailyCo2(text) {
+  const rows = text.split('\n').filter(l => l && !l.startsWith('#'));
+  const last = rows[rows.length - 1].trim().split(/\s+/);
+  if (last.length < 5) return {};
+  return {
+    co2ppm: parseFloat(last[4]),
+    co2Year: `${last[0]}-${last[1].padStart(2, '0')}-${last[2].padStart(2, '0')}`,
+    co2Cadence: 'daily',
+  };
+}
+function parseNoaaWeeklyCo2(text) {
   const rows = text.split('\n').filter(l => l && !l.startsWith('#'));
   const last = rows[rows.length - 1].trim().split(/\s+/);
   if (last.length < 8) return {};
@@ -3802,35 +3960,45 @@ function parseNoaaCo2(text) {
     co2Year: `${last[0]}-${last[1].padStart(2, '0')}-${last[2].padStart(2, '0')}`,
     co2OneYearAgo: parseFloat(last[6]),
     co2TenYearsAgo: parseFloat(last[7]),
+    co2Cadence: 'weekly',
   };
 }
 let summitCache = [];
 let summitLastPollTs = null, summitLastError = null;
-function parseCfhtTower(text) {
-  // Lines like "WS=    5.21   #Wind speed (knots)"
-  const out = {};
-  const grab = (re) => { const m = text.match(re); return m ? parseFloat(m[1]) : null; };
-  out.windKt = grab(/WS=\s*([-\d.]+)/);
-  out.windDir = grab(/WD=\s*([-\d.]+)/);
-  out.tempC = grab(/T\s*=\s*([-\d.]+)/);
-  out.humidity = grab(/RH=\s*([-\d.]+)/);
-  out.pressureMb = grab(/BP=\s*([-\d.]+)/);
-  const tm = text.match(/(\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2})/);
-  out.readingTs = tm ? tm[1] : null;
-  return out;
-}
+
 async function pollSummits() {
   const next = [];
-  for (const s of SUMMIT_SITES) {
+  const hdrs = { 'User-Agent': 'Mozilla/5.0 (heleon-tracker)' };
+  try {
+    const mkwcHtml = await fetchText('mkwc.ifa.hawaii.edu', '/current/index.cgi', hdrs, 'http');
+    next.push(...parseMkwcTable(mkwcHtml));
+  } catch (e) { summitLastError = `mkwc: ${e.message}`; }
+
+  try {
+    const yr = new Date().getUTCFullYear();
+    const metText = await fetchText('gml.noaa.gov',
+      `/aftp/data/meteorology/in-situ/mlo/met_mlo_insitu_1_obop_hour_${yr}.txt`, hdrs);
+    let co2 = {};
     try {
-      const text = await fetchText(s.host, s.path, { 'User-Agent': 'Mozilla/5.0 (heleon-tracker)' });
-      let readings = {};
-      if (s.kind === 'cfht') readings = parseCfhtTower(text);
-      else if (s.kind === 'noaa_co2') readings = parseNoaaCo2(text);
-      next.push({ id: s.id, name: s.name, lat: s.lat, lon: s.lon, elevM: s.elevM, readings });
-    } catch (e) { summitLastError = `${s.id}: ${e.message}`; }
+      const co2Text = await fetchText('gml.noaa.gov', '/webdata/ccgg/trends/co2/co2_daily_mlo.txt', hdrs);
+      co2 = parseNoaaDailyCo2(co2Text);
+    } catch {
+      const wk = await fetchText('gml.noaa.gov', '/webdata/ccgg/trends/co2/co2_weekly_mlo.txt', hdrs);
+      co2 = parseNoaaWeeklyCo2(wk);
+    }
+    next.push({
+      ...MLO_SITE,
+      source: 'NOAA Global Monitoring Laboratory',
+      readings: { ...parseMloMetHourly(metText), ...co2 },
+    });
+  } catch (e) {
+    summitLastError = (summitLastError ? summitLastError + '; ' : '') + `mlo: ${e.message}`;
+    if (!next.some(s => s.id === 'mlo')) {
+      next.push({ ...MLO_SITE, source: 'NOAA GML', readings: {}, offline: true });
+    }
   }
-  if (next.length) { summitCache = next; summitLastPollTs = Date.now(); summitLastError = null; }
+
+  if (next.length) { summitCache = next; summitLastPollTs = Date.now(); if (next.some(s => (s.readings && Object.keys(s.readings).length) || !s.offline)) summitLastError = null; }
 }
 
 // ─── OCEAN: NDBC wave/weather buoys + NOAA tide stations (keyless) ────────────
@@ -3847,6 +4015,7 @@ const NDBC_BUOYS = [
 const TIDE_STATIONS = [
   { id: '1617760', name: 'Hilo Bay tide', lat: 19.7303, lon: -155.0556 },
   { id: '1617433', name: 'Kawaihae tide', lat: 20.0366, lon: -155.8294 },
+  { id: '1612480', name: 'Kailua-Kona tide', lat: 19.6392, lon: -155.9969 },
 ];
 let oceanCache = [];
 let oceanLastPollTs = null, oceanLastError = null;
@@ -3908,6 +4077,608 @@ async function pollOcean() {
   else oceanLastError = 'no ocean stations reporting';
 }
 
+// ─── MARINE: reef webcams, Aqualink sensors, NOAA fishing landings ───────────
+// Aqualink publishes all site metadata (incl. YouTube/Luma reef cams) at
+// /api/sites — no key. FOSS landings API is keyless but needs paging to filter
+// Hawaiʻi rows; many species are "WITHHELD" at fine granularity.
+const MARINE_BI = { minLat: 18.5, maxLat: 20.6, minLon: -156.5, maxLon: -154.4 };
+let marineCache = { webcams: [], reefSensors: [] };
+let marineFishingCache = { top: [], source: '', links: [], note: '' };
+let marineLastPollTs = null, marineLastError = null;
+
+function cleanYoutubeEmbed(url) {
+  if (!url) return null;
+  const m = String(url).match(/embed\/([^?&]+)/);
+  return m ? `https://www.youtube.com/embed/${m[1]}` : url.split('?')[0];
+}
+
+async function pollMarine() {
+  const webcams = [];
+  const reefSensors = [];
+  try {
+    const sites = await fetchJson('ocean-systems.uc.r.appspot.com', '/api/sites', { 'User-Agent': 'heleon-tracker' });
+    for (const s of (Array.isArray(sites) ? sites : [])) {
+      const coords = s.polygon && s.polygon.coordinates;
+      if (!coords) continue;
+      const lon = coords[0], lat = coords[1];
+      const b = MARINE_BI;
+      if (lat < b.minLat || lat > b.maxLat || lon < b.minLon || lon > b.maxLon) continue;
+      const pageUrl = `https://aqualink.org/sites/${s.id}`;
+      if (s.videoStream) {
+        const embedUrl = cleanYoutubeEmbed(s.videoStream);
+        webcams.push({
+          id: `aq-v-${s.id}`, name: s.name, lat, lon,
+          kind: 'reef-cam', embedType: 'youtube', embedUrl,
+          source: 'MEGA Lab / Aqualink', pageUrl,
+        });
+      }
+      if (s.iframe) {
+        webcams.push({
+          id: `aq-i-${s.id}`, name: s.name, lat, lon,
+          kind: 'reef-cam', embedType: 'iframe', embedUrl: s.iframe,
+          source: 'Aqualink', pageUrl,
+        });
+      }
+      if (s.sensorId) {
+        reefSensors.push({
+          id: `aq-s-${s.id}`, name: s.name, lat, lon,
+          sensorId: s.sensorId, depth: s.depth,
+          source: 'Aqualink / Sofar Spotter', pageUrl,
+        });
+      }
+    }
+    marineCache = { webcams, reefSensors };
+    marineLastPollTs = Date.now();
+    marineLastError = null;
+  } catch (e) { marineLastError = e.message; }
+}
+
+async function pollFishingSummary() {
+  try {
+    const agg = new Map();
+    let offset = 0;
+    for (let page = 0; page < 40; page++) {
+      const j = await fetchJson('apps-st.fisheries.noaa.gov',
+        `/ods/foss/landings/?offset=${offset}&limit=1000`,
+        { 'User-Agent': 'heleon-tracker' });
+      const items = j.items || [];
+      if (!items.length) break;
+      for (const row of items) {
+        if (row.state_name !== 'HAWAII' || row.year < 2018) continue;
+        if (!row.ts_afs_name || /WITHHELD/i.test(row.ts_afs_name)) continue;
+        const key = `${row.year}|${row.ts_afs_name}`;
+        agg.set(key, (agg.get(key) || 0) + (row.pounds || 0));
+      }
+      offset += items.length;
+      if (items.length < 1000) break;
+    }
+    const top = [...agg.entries()]
+      .map(([k, pounds]) => {
+        const [year, species] = k.split('|');
+        return { year: +year, species, pounds: Math.round(pounds) };
+      })
+      .sort((a, b) => b.pounds - a.pounds)
+      .filter(r => r.pounds > 0)
+      .slice(0, 30);
+    marineFishingCache = {
+      top,
+      source: 'NOAA FOSS commercial landings (statewide summaries)',
+      links: [
+        { label: 'WPacFIN Hawaiʻi queries', url: 'https://apps-pifsc.fisheries.noaa.gov/wpacfin/' },
+        { label: 'FOSS landings API', url: 'https://apps-st.fisheries.noaa.gov/ods/foss/landings/' },
+        { label: 'DLNR fishing rules', url: 'https://dlnr.hawaii.gov/dar/fishing/' },
+      ],
+      note: 'Commercial catch totals by species/year — not live boat positions. Fine-grained catch is often withheld as confidential.',
+    };
+  } catch (e) {
+    marineFishingCache = { top: [], error: e.message, source: 'NOAA FOSS', links: [], note: '' };
+  }
+}
+
+// ─── INFRASTRUCTURE: power grid, cell towers, internet facilities ───────────
+// Hawaiian Electric does not publish a keyless real-time Hawaiʻi Island MW /
+// fuel-mix API (islandpulse.org is defunct). We surface curated plant locations,
+// OpenStreetMap transmission assets, PeeringDB colo/IX metadata, and OSM-mapped
+// cell towers — all static/reference, refreshed daily from public sources.
+const INFRA_BI = { minLat: 18.5, maxLat: 20.6, minLon: -156.5, maxLon: -154.4 };
+const INFRA_CACHE_PATH = path.join(__dirname, 'data', 'infrastructure-cache.json');
+const CURATED_POWER_PLANTS = [
+  { id: 'pgv', name: 'Puna Geothermal Venture', fuel: 'geothermal', capacityMw: 38, lat: 19.470, lon: -155.117, operator: 'PGV / HECO', island: 'Hawaiʻi', note: 'Largest geothermal plant in the state' },
+  { id: 'hamakua', name: 'Hamakua Energy', fuel: 'oil', capacityMw: 60, lat: 20.054, lon: -155.552, operator: 'Hamakua Energy Partners', island: 'Hawaiʻi', note: 'Oil-fired peaker near Honokaʻa' },
+  { id: 'keahole', name: 'Keahole Power Plant', fuel: 'oil', capacityMw: 77, lat: 19.728, lon: -156.058, operator: 'HECO', island: 'Hawaiʻi', note: 'North Kona combustion turbines' },
+  { id: 'hill6', name: 'Hill 6 Generating Station', fuel: 'oil', capacityMw: 63, lat: 19.718, lon: -155.089, operator: 'HECO', island: 'Hawaiʻi', note: 'Hilo-area baseload / peaker' },
+  { id: 'waimea', name: 'Waimea Generating Station', fuel: 'oil', capacityMw: 6, lat: 20.023, lon: -155.669, operator: 'HECO', island: 'Hawaiʻi', note: 'North Hawaiʻi diesel' },
+  { id: 'pakinigui', name: 'Pakini Nui Wind Farm', fuel: 'wind', capacityMw: 21, lat: 18.941, lon: -155.682, operator: 'Tawhiri Power', island: 'Hawaiʻi', note: 'South Point area' },
+  { id: 'hawiwind', name: 'Hawi Wind Farm', fuel: 'wind', capacityMw: 10.6, lat: 20.228, lon: -155.832, operator: 'Tawhiri Power', island: 'Hawaiʻi', note: 'North Kohala' },
+  { id: 'aes-waikoloa', name: 'AES Waikoloa Solar', fuel: 'solar', capacityMw: 30, lat: 19.945, lon: -155.865, operator: 'AES', island: 'Hawaiʻi', note: 'Utility-scale solar + storage' },
+  { id: 'hakalau-hydro', name: 'Hakalau Hydro', fuel: 'hydro', capacityMw: 2.4, lat: 19.865, lon: -155.125, operator: 'HECO', island: 'Hawaiʻi', note: 'Run-of-river hydro' },
+];
+const HAWAII_ISLAND_GRID_MIX = {
+  year: 2024,
+  island: 'Hawaiʻi Island',
+  renewablePct: 57.3,
+  sources: [
+    { fuel: 'geothermal', pct: 14.8 },
+    { fuel: 'oil', pct: 42.7 },
+    { fuel: 'wind', pct: 14.2 },
+    { fuel: 'solar', pct: 15.8 },
+    { fuel: 'hydro', pct: 12.5 },
+  ],
+  note: 'Annual average shares from HECO RPS reporting — not live grid load. No public real-time Hawaiʻi Island MW-by-fuel feed exists.',
+  links: [
+    { label: 'HECO clean energy portfolio', url: 'https://www.hawaiianelectric.com/clean-energy-portfolio' },
+    { label: 'Hawaii Powered (grid plan)', url: 'https://www.hawaiipowered.com/' },
+    { label: 'FCC mobile coverage maps', url: 'https://www.fcc.gov/BroadbandData/MobileMaps' },
+  ],
+};
+let infraCache = {
+  powerPlants: [...CURATED_POWER_PLANTS],
+  substations: [],
+  powerLines: { type: 'FeatureCollection', features: [] },
+  cellTowers: [],
+  netFacilities: [],
+  internetExchanges: [],
+  gridMix: HAWAII_ISLAND_GRID_MIX,
+  notes: {
+    power: 'Plant locations and transmission lines from HECO public reports + OpenStreetMap. Live MW output is not published.',
+    cell: 'OpenStreetMap communication towers — incomplete vs the full FCC ASR database (~130k US structures). No live coverage/load API.',
+    net: 'PeeringDB colocation + internet exchange metadata — facility locations, not live backbone traffic.',
+  },
+};
+let infraLastPollTs = null, infraLastError = null, infraPollInFlight = false;
+
+function fetchOverpass(query, attempt = 1) {
+  return new Promise((resolve, reject) => {
+    const body = `data=${encodeURIComponent(query)}`;
+    const req = https.request({
+      hostname: 'overpass-api.de', path: '/api/interpreter', method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(body),
+        'User-Agent': 'heleon-tracker',
+      },
+      timeout: 50000,
+    }, res => {
+      let b = '';
+      res.on('data', d => { b += d; });
+      res.on('end', () => {
+        if (res.statusCode !== 200) {
+          const err = new Error(`Overpass HTTP ${res.statusCode}`);
+          if (attempt < 2 && (res.statusCode === 429 || res.statusCode === 504)) {
+            setTimeout(() => fetchOverpass(query, attempt + 1).then(resolve).catch(reject), 3000);
+            return;
+          }
+          return reject(err);
+        }
+        try { resolve(JSON.parse(b)); } catch { reject(new Error('Overpass bad JSON')); }
+      });
+    });
+    req.on('error', e => reject(new Error(e.code || e.message)));
+    req.on('timeout', () => { req.destroy(); reject(new Error('Overpass timeout')); });
+    req.write(body);
+    req.end();
+  });
+}
+
+const overpassPause = () => new Promise(r => setTimeout(r, 2500));
+
+function osmCenter(el) {
+  if (el.lat != null && el.lon != null) return { lat: el.lat, lon: el.lon };
+  if (el.center) return { lat: el.center.lat, lon: el.center.lon };
+  return null;
+}
+
+function inInfraBi(lat, lon) {
+  const b = INFRA_BI;
+  return lat >= b.minLat && lat <= b.maxLat && lon >= b.minLon && lon <= b.maxLon;
+}
+
+function normalizeFuel(tags) {
+  const raw = tags['generator:source'] || tags['plant:source'] || tags['plant:method'] || '';
+  const s = String(raw).toLowerCase();
+  if (s.includes('geotherm')) return 'geothermal';
+  if (s.includes('wind')) return 'wind';
+  if (s.includes('solar') || s.includes('photovoltaic')) return 'solar';
+  if (s.includes('hydro') || s.includes('water')) return 'hydro';
+  if (s.includes('oil') || s.includes('diesel')) return 'oil';
+  if (s.includes('gas')) return 'gas';
+  return s || 'unknown';
+}
+
+function clusterOsmGenerators(elements) {
+  const buckets = new Map();
+  for (const el of elements) {
+    const tags = el.tags || {};
+    if (tags.power !== 'generator' && tags.power !== 'plant') continue;
+    const c = osmCenter(el);
+    if (!c || !inInfraBi(c.lat, c.lon)) continue;
+    const fuel = normalizeFuel(tags);
+    const name = tags.name || '';
+    const cell = (fuel === 'wind' && !name)
+      ? `${Math.round(c.lat * 40) / 40}|${Math.round(c.lon * 40) / 40}|${fuel}`
+      : `id|${el.type}|${el.id}`;
+    const prev = buckets.get(cell);
+    if (prev) { prev.count++; if (name && !prev.name) prev.name = name; }
+    else buckets.set(cell, {
+      id: `osm-${el.type}-${el.id}`, name: name || null, fuel, lat: c.lat, lon: c.lon,
+      count: 1, source: 'OpenStreetMap', operator: tags.operator || '', voltage: tags.voltage || '',
+    });
+  }
+  return [...buckets.values()].map(b => ({
+    id: b.id,
+    name: b.name || (b.count > 3 ? `${b.fuel} cluster (${b.count} units)` : `${b.fuel} generator`),
+    fuel: b.fuel, capacityMw: null, lat: b.lat, lon: b.lon,
+    operator: b.operator, island: 'Hawaiʻi', source: b.source, unitCount: b.count, note: b.voltage ? `${b.voltage} V` : '',
+  }));
+}
+
+function osmPowerLinesGeojson(elements) {
+  const features = [];
+  for (const el of elements) {
+    if (el.type !== 'way' || !el.geometry) continue;
+    const tags = el.tags || {};
+    const coords = el.geometry.map(p => [p.lon, p.lat]);
+    if (coords.length < 2) continue;
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: coords },
+      properties: {
+        voltage: tags.voltage || '',
+        cables: tags.cables || '',
+        operator: tags.operator || '',
+      },
+    });
+  }
+  return { type: 'FeatureCollection', features };
+}
+
+function loadInfraCacheFromDisk() {
+  try {
+    const j = JSON.parse(fs.readFileSync(INFRA_CACHE_PATH, 'utf8'));
+    if (j.powerPlants) infraCache = { ...infraCache, ...j };
+    infraLastPollTs = j.lastPollTs || infraLastPollTs;
+  } catch { /* no cache yet */ }
+}
+function saveInfraCacheToDisk() {
+  try {
+    fs.writeFileSync(INFRA_CACHE_PATH, JSON.stringify({ lastPollTs: infraLastPollTs, ...infraCache }));
+  } catch { /* non-fatal */ }
+}
+loadInfraCacheFromDisk();
+
+async function pollPeeringDbInfra() {
+  const netFacilities = [];
+  const internetExchanges = [];
+  try {
+    const facJ = await fetchJson('www.peeringdb.com', '/api/fac?state=HI&limit=50', { 'User-Agent': 'heleon-tracker' });
+    for (const f of (facJ.data || [])) {
+      if (f.latitude == null || f.longitude == null) continue;
+      netFacilities.push({
+        id: `pdb-fac-${f.id}`, name: f.name, org: f.org_name || '', city: f.city || '',
+        state: f.state || 'HI', lat: f.latitude, lon: f.longitude,
+        netCount: f.net_count, ixCount: f.ix_count, website: f.website || '',
+        address: [f.address1, f.city, f.state, f.zipcode].filter(Boolean).join(', '),
+        source: 'PeeringDB', kind: 'datacenter',
+      });
+    }
+    const ixJ = await fetchJson('www.peeringdb.com', '/api/ix?country=US&limit=200', { 'User-Agent': 'heleon-tracker' });
+    for (const ix of (ixJ.data || [])) {
+      const city = (ix.city || '').toLowerCase();
+      if (!city.includes('honolulu') && !city.includes('hilo') && !city.includes('kapolei')) continue;
+      internetExchanges.push({
+        id: `pdb-ix-${ix.id}`, name: ix.name, city: ix.city, website: ix.website || '',
+        netCount: ix.net_count, facCount: ix.fac_count, media: ix.media || '',
+        protoIpv6: ix.proto_ipv6, source: 'PeeringDB', kind: 'ix',
+        note: 'Internet exchange — peering point for networks, not live traffic stats',
+      });
+    }
+  } catch (e) { throw new Error(`PeeringDB: ${e.message}`); }
+  return { netFacilities, internetExchanges };
+}
+
+async function pollInfrastructure() {
+  if (infraPollInFlight) return;
+  infraPollInFlight = true;
+  try {
+    const bbox = `${INFRA_BI.minLat},${INFRA_BI.minLon},${INFRA_BI.maxLat},${INFRA_BI.maxLon}`;
+    let powerJ = { elements: [] }, towerJ = { elements: [] }, lineJ = { elements: [] };
+    try {
+      powerJ = await fetchOverpass(`[out:json][timeout:40];
+(
+  node["power"~"^(plant|generator|substation)$"](${bbox});
+  way["power"~"^(plant|generator|substation)$"](${bbox});
+);
+out center tags 120;`);
+    } catch (e) { console.warn('[infra] power OSM:', e.message); }
+    await overpassPause();
+    try {
+      towerJ = await fetchOverpass(`[out:json][timeout:40];
+(
+  node["man_made"="tower"]["tower:type"="communication"](${bbox});
+  node["man_made"="mast"](${bbox});
+  node["man_made"="communications_tower"](${bbox});
+);
+out body 200;`);
+    } catch (e) { console.warn('[infra] tower OSM:', e.message); }
+    await overpassPause();
+    try {
+      lineJ = await fetchOverpass(`[out:json][timeout:40];
+way["power"="line"]["voltage"](${bbox});
+out geom 80;`);
+    } catch (e) { console.warn('[infra] lines OSM:', e.message); }
+    let peering = { netFacilities: [], internetExchanges: [] };
+    try { peering = await pollPeeringDbInfra(); } catch (e) { console.warn('[infra] PeeringDB:', e.message); }
+
+    const osmPlants = clusterOsmGenerators(powerJ.elements || []);
+    const extraPlants = osmPlants.filter(p => {
+      return !CURATED_POWER_PLANTS.some(c => Math.hypot(c.lat - p.lat, c.lon - p.lon) < 0.015);
+    });
+
+    const substations = [];
+    for (const el of (powerJ.elements || [])) {
+      const tags = el.tags || {};
+      if (tags.power !== 'substation') continue;
+      const c = osmCenter(el);
+      if (!c || !inInfraBi(c.lat, c.lon)) continue;
+      substations.push({
+        id: `osm-sub-${el.type}-${el.id}`, name: tags.name || 'Substation',
+        lat: c.lat, lon: c.lon, voltage: tags.voltage || '', operator: tags.operator || '',
+      });
+    }
+
+    const cellTowers = [];
+    for (const el of (towerJ.elements || [])) {
+      if (el.lat == null || el.lon == null) continue;
+      if (!inInfraBi(el.lat, el.lon)) continue;
+      const tags = el.tags || {};
+      cellTowers.push({
+        id: `osm-tower-${el.id}`, lat: el.lat, lon: el.lon,
+        heightM: tags.height || tags['tower:type'] || '', operator: tags.operator || '',
+        name: tags.name || '', source: 'OpenStreetMap',
+      });
+    }
+
+    infraCache = {
+      powerPlants: [...CURATED_POWER_PLANTS, ...extraPlants],
+      substations,
+      powerLines: osmPowerLinesGeojson(lineJ.elements || []),
+      cellTowers,
+      netFacilities: peering.netFacilities,
+      internetExchanges: peering.internetExchanges,
+      gridMix: HAWAII_ISLAND_GRID_MIX,
+      notes: infraCache.notes,
+    };
+    infraLastPollTs = Date.now();
+    infraLastError = null;
+    saveInfraCacheToDisk();
+    console.log(`[infra] power plants ${infraCache.powerPlants.length}, subs ${substations.length}, lines ${infraCache.powerLines.features.length}, towers ${cellTowers.length}, net fac ${peering.netFacilities.length}`);
+  } catch (e) {
+    infraLastError = e.message;
+    console.error('[infra] poll failed:', e.message);
+  } finally {
+    infraPollInFlight = false;
+  }
+}
+
+// ─── LOCAL DATA: gas prices, traffic counts, remote telescopes, sightings ─────
+// Keyless / open sources for “what’s around town” on Hawaiʻi Island. Per-station
+// live pump prices aren’t published free (GasBuddy needs private GraphQL); we use
+// AAA monthly regional averages from Hawaii Open Data + OSM station locations.
+// HDOT AADT road segments from state GIS; East Hawaiʻi Bluetooth travel-time
+// sensors link to Blyncsy Pulse (no public API). LCO global telescope schedule is
+// fully open. iNaturalist provides community species sightings.
+const LOCAL_BI = { minLat: 18.5, maxLat: 20.6, minLon: -156.5, maxLon: -154.4 };
+const LOCAL_CACHE_PATH = path.join(__dirname, 'data', 'local-cache.json');
+const BLYNCSY_SENSORS = [
+  { id: 'bly-hilo-1', name: 'Kamehameha Ave / Pauahi (Hilo)', lat: 19.725, lon: -155.087 },
+  { id: 'bly-hilo-2', name: 'Kanoelehua / Puainako', lat: 19.699, lon: -155.064 },
+  { id: 'bly-hilo-3', name: 'Kanoelehua / Makaala', lat: 19.688, lon: -155.051 },
+  { id: 'bly-hilo-4', name: 'Hwy 11 / Keaau-Pahoa Rd', lat: 19.623, lon: -155.041 },
+  { id: 'bly-hilo-5', name: 'Hwy 11 / Railroad Ave', lat: 19.602, lon: -155.005 },
+  { id: 'bly-hilo-6', name: 'Keaau / Hwy 11', lat: 19.578, lon: -155.041 },
+];
+const LCO_SITES = {
+  ogg: { name: 'LCO Haleakalā (Maui)', lat: 20.706, lon: -156.257 },
+  lsc: { name: 'LCO Cerro Tololo (Chile)', lat: -30.470, lon: -70.815 },
+  coj: { name: 'LCO Siding Spring (Australia)', lat: -31.273, lon: 149.062 },
+  elp: { name: 'LCO McDonald (Texas)', lat: 30.680, lon: -104.015 },
+  tfn: { name: 'LCO Teide (Canary Islands)', lat: 28.300, lon: -16.511 },
+  sqa: { name: 'LCO Sutherland (South Africa)', lat: -32.376, lon: 20.811 },
+  bpl: { name: 'LCO Siding Spring (backup)', lat: -31.273, lon: 149.062 },
+};
+let localCache = {
+  fuelPrices: { regions: [], note: '', source: 'AAA via Hawaii Open Data' },
+  fuelStations: [],
+  trafficRoads: { type: 'FeatureCollection', features: [] },
+  trafficSensors: BLYNCSY_SENSORS.map(s => ({
+    ...s, source: 'HDOT / Blyncsy', dashboardUrl: 'https://pulse.blyncsy.com/commuter_dashboard/hidot',
+    note: 'Bluetooth travel-time corridor sensor — live delays on Blyncsy Pulse dashboard (no public API).',
+  })),
+  lcoSchedule: [],
+  iNaturalist: [],
+  notes: {
+    fuel: 'AAA monthly regional averages — not live pump prices. OSM marks station locations only.',
+    traffic: 'AADT = annual average daily traffic from HDOT HPMS (static). Blyncsy sensors are East Hawaiʻi only.',
+    lco: 'Las Cumbres Observatory global network — live schedule, not Big Island telescopes (except Maui site).',
+    inat: 'Community nature observations from iNaturalist — not official wildlife surveys.',
+  },
+};
+let localLastPollTs = null, localLastError = null, localPollInFlight = false;
+
+function fetchUrlText(url, headers = {}, redirects = 0) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const mod = u.protocol === 'http:' ? http : https;
+    const req = mod.request({
+      hostname: u.hostname, path: u.pathname + u.search, method: 'GET', headers, timeout: 35000,
+    }, res => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects < 6) {
+        const next = res.headers.location.startsWith('http')
+          ? res.headers.location
+          : `${u.protocol}//${u.hostname}${res.headers.location}`;
+        return fetchUrlText(next, headers, redirects + 1).then(resolve).catch(reject);
+      }
+      let b = '';
+      res.on('data', d => { b += d; });
+      res.on('end', () => (res.statusCode === 200 ? resolve(b) : reject(new Error(`HTTP ${res.statusCode}`))));
+    });
+    req.on('error', e => reject(new Error(e.code || e.message)));
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.end();
+  });
+}
+
+async function fetchCkanResourceUrl(packageId, format) {
+  const j = await fetchJson('opendata.hawaii.gov', `/api/3/action/package_show?id=${packageId}`,
+    { 'User-Agent': 'heleon-tracker' });
+  const r = (j.result.resources || []).find(x => x.format === format);
+  if (!r || !r.url) throw new Error(`no ${format} resource for ${packageId}`);
+  return r.url;
+}
+
+function parseAaaFuelCsv(text) {
+  const lines = text.trim().split('\n').filter(l => l && !l.startsWith('Date'));
+  const rows = lines.map(l => {
+    const p = l.split(',');
+    return { date: p[0].trim(), region: p[1].trim(), fuel: p[2].trim(), price: parseFloat(p[3]), unit: (p[4] || '').trim() };
+  }).filter(r => r.price > 0);
+  const latestDate = rows.reduce((m, r) => (r.date > m ? r.date : m), '');
+  const latest = rows.filter(r => r.date === latestDate);
+  const byRegion = {};
+  for (const r of latest) {
+    if (!byRegion[r.region]) byRegion[r.region] = [];
+    byRegion[r.region].push({ fuel: r.fuel, price: r.price, unit: r.unit, date: r.date });
+  }
+  return { asOf: latestDate, byRegion, rows: latest };
+}
+
+function loadLocalCacheFromDisk() {
+  try {
+    const j = JSON.parse(fs.readFileSync(LOCAL_CACHE_PATH, 'utf8'));
+    localCache = { ...localCache, ...j };
+    localLastPollTs = j.lastPollTs || localLastPollTs;
+  } catch { /* no cache */ }
+}
+function saveLocalCacheToDisk() {
+  try {
+    fs.writeFileSync(LOCAL_CACHE_PATH, JSON.stringify({ lastPollTs: localLastPollTs, ...localCache }));
+  } catch { /* non-fatal */ }
+}
+loadLocalCacheFromDisk();
+
+async function pollLocalFuel() {
+  const url = await fetchCkanResourceUrl('aaa-fuel-prices', 'CSV');
+  const csv = await fetchUrlText(url, { 'User-Agent': 'heleon-tracker' });
+  const parsed = parseAaaFuelCsv(csv);
+  const regions = Object.entries(parsed.byRegion).map(([region, fuels]) => ({ region, fuels }));
+  localCache.fuelPrices = {
+    asOf: parsed.asOf,
+    regions,
+    hilo: parsed.byRegion.Hilo || [],
+    source: 'AAA monthly averages (Hawaii Open Data)',
+    note: 'Statewide/regional monthly averages — not live per-pump prices. GasBuddy has station prices but no keyless public API.',
+    links: [
+      { label: 'Hawaii Open Data — AAA fuel', url: 'https://opendata.hawaii.gov/dataset/aaa-fuel-prices' },
+      { label: 'DBEDT Energy Trends', url: 'https://dbedt.hawaii.gov/economic/qser/energy/' },
+    ],
+  };
+}
+
+async function pollLocalFuelStations() {
+  const bbox = `${LOCAL_BI.minLat},${LOCAL_BI.minLon},${LOCAL_BI.maxLat},${LOCAL_BI.maxLon}`;
+  const j = await fetchOverpass(`[out:json][timeout:35];
+(
+  node["amenity"="fuel"](${bbox});
+  way["amenity"="fuel"](${bbox});
+);
+out center tags 80;`);
+  const stations = [];
+  for (const el of (j.elements || [])) {
+    const c = osmCenter(el);
+    if (!c) continue;
+    const tags = el.tags || {};
+    stations.push({
+      id: `fuel-${el.type}-${el.id}`, name: tags.name || tags.brand || 'Gas station',
+      brand: tags.brand || '', operator: tags.operator || '',
+      lat: c.lat, lon: c.lon, source: 'OpenStreetMap',
+    });
+  }
+  localCache.fuelStations = stations;
+}
+
+async function pollLocalTrafficRoads() {
+  const j = await fetchJson('geodata.hawaii.gov',
+    '/arcgis/rest/services/Transportation/MapServer/12/query?where=island%3D%27Hawaii%27'
+    + '&outFields=route_id,route_name,aadt,f_system_t,island'
+    + '&returnGeometry=true&outSR=4326&f=geojson&resultRecordCount=800',
+    { 'User-Agent': 'heleon-tracker' });
+  const features = (j.features || []).filter(f => (f.properties.aadt || 0) > 0);
+  localCache.trafficRoads = { type: 'FeatureCollection', features };
+  localCache.trafficMeta = {
+    source: 'HDOT HPMS (state GIS)',
+    note: 'Annual Average Daily Traffic — static counts, not live congestion. For live East Hawaiʻi delays see Blyncsy Pulse.',
+    link: 'https://geodata.hawaii.gov/arcgis/rest/services/Transportation/MapServer/12',
+  };
+}
+
+async function pollLocalLco() {
+  const now = new Date();
+  const start = now.toISOString().slice(0, 19);
+  const end = new Date(now.getTime() + 48 * 3600 * 1000).toISOString().slice(0, 19);
+  const j = await fetchJson('observe.lco.global',
+    `/api/schedule/?start_after=${encodeURIComponent(start)}&end_before=${encodeURIComponent(end)}&limit=40`,
+    { 'User-Agent': 'heleon-tracker' });
+  const items = [];
+  for (const row of (j.results || [])) {
+    const site = LCO_SITES[row.site] || { name: `LCO site ${row.site}`, lat: null, lon: null };
+    items.push({
+      id: `lco-${row.id}`, site: row.site, siteName: site.name,
+      lat: site.lat, lon: site.lon, telescope: row.telescope, enclosure: row.enclosure,
+      start: row.start, end: row.end, name: row.name, proposal: row.proposal, state: row.state,
+      source: 'Las Cumbres Observatory', portalUrl: 'https://observe.lco.global/',
+      scheduleUrl: 'https://schedule.lco.global/',
+    });
+  }
+  localCache.lcoSchedule = items;
+}
+
+async function pollLocalINat() {
+  const b = LOCAL_BI;
+  const j = await fetchJson('api.inaturalist.org',
+    `/v1/observations?nelat=${b.maxLat}&nelng=${b.maxLon}&swlat=${b.minLat}&swlng=${b.minLon}`
+    + '&per_page=40&order=desc&order_by=observed_at&photos=true&quality_grade=research,needs_id',
+    { 'User-Agent': 'heleon-tracker' });
+  localCache.iNaturalist = (j.results || []).map(o => {
+    const tax = o.taxon || {};
+    const geo = o.geojson && o.geojson.coordinates;
+    return {
+      id: `inat-${o.id}`, name: tax.preferred_common_name || tax.name || 'Unknown species',
+      species: tax.name || '', iconic: tax.iconic_taxon_name || '',
+      observedAt: o.observed_on || o.time_observed_at,
+      lat: geo ? geo[1] : null, lon: geo ? geo[0] : null,
+      photoUrl: o.photos && o.photos[0] && (o.photos[0].url || '').replace('square', 'medium'),
+      user: o.user && o.user.login, source: 'iNaturalist',
+      pageUrl: `https://www.inaturalist.org/observations/${o.id}`,
+    };
+  }).filter(r => r.lat != null);
+}
+
+async function pollLocal() {
+  if (localPollInFlight) return;
+  localPollInFlight = true;
+  const errs = [];
+  try { await pollLocalFuel(); } catch (e) { errs.push(`fuel: ${e.message}`); }
+  try { await pollLocalFuelStations(); } catch (e) { errs.push(`stations: ${e.message}`); }
+  try { await pollLocalTrafficRoads(); } catch (e) { errs.push(`traffic: ${e.message}`); }
+  try { await pollLocalLco(); } catch (e) { errs.push(`lco: ${e.message}`); }
+  try { await pollLocalINat(); } catch (e) { errs.push(`inat: ${e.message}`); }
+  localLastPollTs = Date.now();
+  localLastError = errs.length ? errs.join('; ') : null;
+  saveLocalCacheToDisk();
+  console.log(`[local] fuel regions ${localCache.fuelPrices.regions.length}, stations ${localCache.fuelStations.length}, roads ${localCache.trafficRoads.features.length}, lco ${localCache.lcoSchedule.length}, inat ${localCache.iNaturalist.length}`);
+  localPollInFlight = false;
+}
+
 // ─── APRS-IS (ham radio real-time positions: stations, vehicles, wx) ──────────
 // Keyless read-only feed from the APRS-Internet System. We connect with an area
 // filter around the Big Island and parse position packets — this surfaces real
@@ -3948,7 +4719,7 @@ function parseAprsPacket(line) {
   let body = payload.slice(1);
   const pos = aprsParseUncompressed(body) || aprsParseCompressed(body);
   if (!pos) return null;
-  if (pos.lat < 18 || pos.lat > 21 || pos.lon < -157 || pos.lon > -154) return null; // Big Island window
+  if (pos.lat < 18.8 || pos.lat > 22.6 || pos.lon < -160.8 || pos.lon > -154.2) return null;
   // Classify by APRS symbol code: '>' car, 'k' truck, '_' wx station, etc.
   const sym = pos.symbol;
   let kind = 'station';
@@ -3965,7 +4736,7 @@ function connectAprs() {
     aprsSock.setEncoding('utf8');
     let buf = '';
     aprsSock.on('connect', () => {
-      aprsSock.write('user HELEON-RO pass -1 vers heleon 1.0 filter r/19.6/-155.5/300\r\n');
+      aprsSock.write('user HELEON-RO pass -1 vers heleon 1.0 filter b/18.80/-160.80/22.60/-154.20\r\n');
     });
     aprsSock.on('data', d => {
       buf += d; const parts = buf.split('\n'); buf = parts.pop();
@@ -4098,8 +4869,42 @@ async function pollMetars() {
 // Community MQTT aggregator — node list, telemetry, neighbours, and text
 // messages. LoRa mesh carries data (not audio); we pull messages + metrics.
 const MESHTASTIC_HOST = 'meshtastic.liamcottle.net';
-async function meshtasticApi(path) {
-  return fetchJson(MESHTASTIC_HOST, path, { 'User-Agent': 'heleon-tracker' });
+const MESHTASTIC_CACHE_PATH = path.join(__dirname, 'data', 'meshtastic-nodes.json');
+// Full node list is ~30 MB — needs a longer timeout than the default 15 s fetchJson.
+const HAWAII_MESH_BBOX = { minLat: 18.8, maxLat: 22.6, minLon: -160.8, maxLon: -154.2 };
+function meshtasticApi(path) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: MESHTASTIC_HOST, path, method: 'GET',
+      headers: { 'User-Agent': 'heleon-tracker' }, timeout: 90000,
+    }, res => {
+      let b = '';
+      res.on('data', d => { b += d; });
+      res.on('end', () => {
+        if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`));
+        try { resolve(JSON.parse(b)); } catch { reject(new Error('bad JSON')); }
+      });
+    });
+    req.on('error', e => reject(new Error(e.code || e.message)));
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.end();
+  });
+}
+function loadMeshtasticCacheFromDisk() {
+  try {
+    const j = JSON.parse(fs.readFileSync(MESHTASTIC_CACHE_PATH, 'utf8'));
+    if (Array.isArray(j.nodes) && j.nodes.length) {
+      meshtasticCache = j.nodes;
+      meshtasticLastPollTs = j.lastPollTs || meshtasticLastPollTs;
+    }
+  } catch { /* no cache yet */ }
+}
+function saveMeshtasticCacheToDisk() {
+  try {
+    fs.writeFileSync(MESHTASTIC_CACHE_PATH, JSON.stringify({
+      lastPollTs: meshtasticLastPollTs, nodes: meshtasticCache,
+    }));
+  } catch { /* non-fatal */ }
 }
 function formatMeshtasticNode(n) {
   return {
@@ -4136,16 +4941,27 @@ let meshtasticCache = [];
 let meshtasticLastPollTs = null, meshtasticLastError = null;
 let meshtasticFeedCache = [];
 let meshtasticFeedLastPoll = null;
+let meshtasticPollInFlight = false;
+loadMeshtasticCacheFromDisk();
+function ensureMeshtasticPoll() {
+  const stale = !meshtasticLastPollTs || Date.now() - meshtasticLastPollTs > 35 * 60 * 1000;
+  if (!meshtasticPollInFlight && (meshtasticCache.length === 0 || stale)) pollMeshtastic();
+}
 async function pollMeshtastic() {
+  if (meshtasticPollInFlight) return;
+  meshtasticPollInFlight = true;
   try {
     const j = await meshtasticApi('/api/v1/nodes');
     const nodes = (j && j.nodes) || (Array.isArray(j) ? j : []);
+    const b = HAWAII_MESH_BBOX;
     meshtasticCache = nodes
       .map(formatMeshtasticNode)
-      .filter(n => n.lat != null && n.lat > 18.5 && n.lat < 20.6 && n.lon > -156.5 && n.lon < -154.4);
+      .filter(n => n.lat != null && n.lat >= b.minLat && n.lat <= b.maxLat && n.lon >= b.minLon && n.lon <= b.maxLon);
     meshtasticLastPollTs = Date.now(); meshtasticLastError = null;
+    saveMeshtasticCacheToDisk();
     pollMeshtasticFeed();
   } catch (e) { meshtasticLastError = e.message; }
+  finally { meshtasticPollInFlight = false; }
 }
 async function pollMeshtasticFeed() {
   if (!meshtasticCache.length) return;
@@ -4379,14 +5195,18 @@ const server = http.createServer((req, res) => {
   fetchWeatherStations();
   pollSummits();
   pollOcean();
+  pollMarine();
+  pollFishingSummary();
+  pollInfrastructure();
+  pollLocal();
   pollAirQuality();
   pollVolcano();
   pollMetars();
   pollRepeaters();
-  pollHibike();
-  setInterval(pollHibike, 60 * 1000);
-  // Meshtastic node list is ~30 MB — delay it past boot and refresh sparingly.
-  setTimeout(pollMeshtastic, 20000);
+  pollMobility();
+  setInterval(pollMobility, 60 * 1000);
+  // Meshtastic node list is ~30 MB — kick off in background (disk cache serves until ready).
+  pollMeshtastic();
   connectAprs();
   setInterval(pollEarthquakes, 5 * 60 * 1000);
   setInterval(pollAlerts, 5 * 60 * 1000);
@@ -4395,6 +5215,10 @@ const server = http.createServer((req, res) => {
   setInterval(fetchWeatherStations, 10 * 60 * 1000);
   setInterval(pollSummits, 5 * 60 * 1000);
   setInterval(pollOcean, 10 * 60 * 1000);
+  setInterval(pollMarine, 30 * 60 * 1000);
+  setInterval(pollFishingSummary, 24 * 60 * 60 * 1000);
+  setInterval(pollInfrastructure, 24 * 60 * 60 * 1000);
+  setInterval(pollLocal, 6 * 60 * 60 * 1000);
   setInterval(pollAirQuality, 15 * 60 * 1000);
   setInterval(pollVolcano, 15 * 60 * 1000);
   setInterval(pollMetars, 10 * 60 * 1000);
