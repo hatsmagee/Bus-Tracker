@@ -55,6 +55,59 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "summit:ukirt": {
+      "title": "Maunakea Observatories",
+      "summary": "The Maunakea Observatories (MKO, also known as Mauna Kea Observatories) are a group of independent astronomical research facilities and large telescope observatories that are located at the summit of Mauna Kea on Hawaiʻi, United States.",
+      "history": [
+        {
+          "year": 1967,
+          "text": "The Astronomy Precinct was established in 1967 and is located on land protected by the Historical Preservation Act for its significance to Hawaiian culture.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        },
+        {
+          "year": 2014,
+          "text": "Until 2014 it was operated by the Joint Astronomy Centre in Hilo and was owned by the United Kingdom Science and Technology Facilities Council.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        },
+        {
+          "year": 2025,
+          "text": "Decommissioning of UKIRT started on July 7th, 2025.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Mauna_Kea_Summit_2021-06-16_33_%28cropped%29.jpg/330px-Mauna_Kea_Summit_2021-06-16_33_%28cropped%29.jpg",
+          "credit": "Wikipedia — Maunakea Observatories (CC/PD)",
+          "caption": "Maunakea Observatories"
+        },
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/UKIRT_small.png/330px-UKIRT_small.png",
+          "credit": "Wikipedia — United Kingdom Infrared Telescope (CC/PD)",
+          "caption": "United Kingdom Infrared Telescope"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        },
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/United_Kingdom_Infrared_Telescope"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Maunakea_Observatories",
+          "https://en.wikipedia.org/wiki/United_Kingdom_Infrared_Telescope"
+        ],
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:06:02.990Z",
+        "reviewed": false
+      },
+      "status": "ok"
     }
   }
 }
