@@ -14,6 +14,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const zlib = require('zlib');
 const { execSync } = require('child_process');
 const WebSocket = require('ws');
 const { parseFeedMessage } = require('./gtfs-rt');
@@ -673,19 +674,6 @@ function upstreamFetch(apiPath) {
 let weatherByVehicle = {}; // vehicleId -> { tempF, code, isDay, ts }
 let weatherLastFetch = 0;
 const WEATHER_TTL_MS = 10 * 60 * 1000;
-
-function fetchJson(host, reqPath) {
-  return new Promise((resolve, reject) => {
-    const req = https.request({ hostname: host, path: reqPath, method: 'GET',
-      headers: { 'User-Agent': 'heleon-tracker' }, timeout: 10000 }, res => {
-      let b = ''; res.on('data', d => b += d);
-      res.on('end', () => { try { resolve(JSON.parse(b)); } catch (e) { reject(e); } });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-    req.end();
-  });
-}
 
 async function refreshWeather() {
   const now = Date.now();
@@ -2054,9 +2042,29 @@ const stoplineMemo = new Map();
 // ─── HTTP SERVER ──────────────────────────────────────────────────────────────
 const MIME = { '.html':'text/html', '.js':'application/javascript', '.css':'text/css', '.ico':'image/x-icon', '.svg':'image/svg+xml', '.png':'image/png', '.json':'application/json' };
 
+// gzip when the client advertises support and the payload is big enough to be
+// worth it (tiny bodies cost more in headers/CPU than they save).
+const GZIP_MIN = 860;
+function acceptsGzip(res) {
+  const ae = (res.req && res.req.headers && res.req.headers['accept-encoding']) || '';
+  return /\bgzip\b/.test(ae);
+}
+function endMaybeGzip(res, status, headers, buf) {
+  if (buf.length >= GZIP_MIN && acceptsGzip(res)) {
+    zlib.gzip(buf, (err, gz) => {
+      if (err) { res.writeHead(status, headers); res.end(buf); return; }
+      res.writeHead(status, { ...headers, 'Content-Encoding': 'gzip', 'Vary': 'Accept-Encoding' });
+      res.end(gz);
+    });
+  } else {
+    res.writeHead(status, headers);
+    res.end(buf);
+  }
+}
+
 function json(res, data, status = 200) {
-  res.writeHead(status, { 'Content-Type':'application/json', 'Access-Control-Allow-Origin':'*' });
-  res.end(JSON.stringify(data));
+  const buf = Buffer.from(JSON.stringify(data));
+  endMaybeGzip(res, status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, buf);
 }
 
 async function handleApi(url, res) {
@@ -3238,12 +3246,53 @@ async function handleApi(url, res) {
   res.writeHead(404); res.end('Not found');
 }
 
+// In-memory static cache: avoid re-reading (and re-gzipping) files on every
+// request. Keyed by absolute path; invalidated when the file's mtime/size
+// changes so edits are still picked up live. Serves ETag/304 and long-lived
+// caching for assets, and gzips text payloads (the 525 KB HTML → ~110 KB).
+const staticCache = new Map(); // fp -> { mtimeMs, size, buf, gz }
+function serveStatic(res, cached, type, etag, cacheControl) {
+  const compressible = /text|json|javascript|svg|xml/.test(type);
+  const headers = { 'Content-Type': type, 'Cache-Control': cacheControl, 'ETag': etag };
+  if (compressible && cached.buf.length >= GZIP_MIN && acceptsGzip(res)) {
+    if (cached.gz) {
+      res.writeHead(200, { ...headers, 'Content-Encoding': 'gzip', 'Vary': 'Accept-Encoding' });
+      res.end(cached.gz);
+    } else {
+      zlib.gzip(cached.buf, (err, gz) => {
+        if (err) { res.writeHead(200, headers); res.end(cached.buf); return; }
+        cached.gz = gz;
+        res.writeHead(200, { ...headers, 'Content-Encoding': 'gzip', 'Vary': 'Accept-Encoding' });
+        res.end(gz);
+      });
+    }
+  } else {
+    res.writeHead(200, headers);
+    res.end(cached.buf);
+  }
+}
 function handleStatic(url, res) {
-  const fp = url.pathname === '/' ? HTML_PATH : path.join(__dirname, url.pathname);
-  fs.readFile(fp, (err, data) => {
-    if (err) { res.writeHead(404); res.end('Not found'); return; }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(fp)] || 'text/plain' });
-    res.end(data);
+  const fp = url.pathname === '/' ? HTML_PATH : path.join(__dirname, decodeURIComponent(url.pathname));
+  if (fp !== HTML_PATH && !fp.startsWith(__dirname + path.sep)) { res.writeHead(403); res.end('Forbidden'); return; }
+  fs.stat(fp, (err, st) => {
+    if (err || !st.isFile()) { res.writeHead(404); res.end('Not found'); return; }
+    const ext = path.extname(fp);
+    const type = MIME[ext] || 'text/plain';
+    const etag = `"${st.mtimeMs.toString(36)}-${st.size.toString(36)}"`;
+    const cacheControl = ext === '.html' ? 'no-cache' : 'public, max-age=604800';
+    if (res.req && res.req.headers['if-none-match'] === etag) {
+      res.writeHead(304, { 'ETag': etag, 'Cache-Control': cacheControl }); res.end(); return;
+    }
+    const cached = staticCache.get(fp);
+    if (cached && cached.mtimeMs === st.mtimeMs && cached.size === st.size) {
+      return serveStatic(res, cached, type, etag, cacheControl);
+    }
+    fs.readFile(fp, (e2, data) => {
+      if (e2) { res.writeHead(404); res.end('Not found'); return; }
+      const entry = { mtimeMs: st.mtimeMs, size: st.size, buf: data, gz: null };
+      staticCache.set(fp, entry);
+      serveStatic(res, entry, type, etag, cacheControl);
+    });
   });
 }
 

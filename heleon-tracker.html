@@ -1189,10 +1189,11 @@ function initMap() {
   // Re-fan overlapping buses whenever the camera settles (overlap is zoom/pan
   // dependent — buses separate as you zoom in).
   map.on('moveend', () => { try { deOverlapMarkers(); } catch (e) {} });
-  // Keep the DOM water-wheel markers scaled to the current zoom (they shrink
-  // when zoomed out so they don't pile up). `zoom` fires continuously so the
-  // resize tracks the pinch/scroll smoothly.
-  map.on('zoom', () => { try { updateWheelScale(); } catch (e) {} try { updateWindScale(); } catch (e) {} try { updateSolarScale(); } catch (e) {} try { updateSummitScale(); } catch (e) {} try { updateScannerScale(); } catch (e) {} });
+  // Keep the DOM markers scaled to the current zoom (they shrink when zoomed
+  // out so they don't pile up). `zoom` fires many times per second during a
+  // pinch/scroll, so coalesce all five rescalers into a single rAF batch —
+  // at most one pass per frame — to avoid layout thrash.
+  map.on('zoom', scheduleMarkerRescale);
   map.on('error', (e) => {
     // Suppress known MapLibre v4 bugs about listener arrays
     if (e?.error?.message?.includes('slice is not a function')) return;
@@ -4276,6 +4277,21 @@ function renderStreamflowWheels() {
 const WHEEL_MIN_Z = 8, WHEEL_MAX_Z = 13;   // zoom range over which scale ramps
 const WHEEL_MIN_SCALE = 0.45, WHEEL_MAX_SCALE = 1;
 const COMPACT_ZOOM = 11.5;                  // below this, wheel-only
+// Coalesce the per-zoom DOM-marker rescalers into one animation frame so a
+// continuous pinch/scroll triggers at most one style pass per frame.
+let _rescaleRaf = 0;
+function scheduleMarkerRescale() {
+  if (_rescaleRaf) return;
+  _rescaleRaf = requestAnimationFrame(() => {
+    _rescaleRaf = 0;
+    try { updateWheelScale(); } catch (e) {}
+    try { updateWindScale(); } catch (e) {}
+    try { updateSolarScale(); } catch (e) {}
+    try { updateSummitScale(); } catch (e) {}
+    try { updateScannerScale(); } catch (e) {}
+  });
+}
+
 function updateWheelScale() {
   if (!mapReady) return;
   const z = map.getZoom();
@@ -9412,10 +9428,14 @@ setInterval(() => {
   if (changed && activeTab === 'hawaii' && !document.hidden) renderHawaiiBrowser();
 }, 20000);
 
-// Tick live clocks in all open stop lists every second
+// Tick live clocks in all open stop lists every second (skip while the tab is
+// backgrounded — nothing is visible to update).
 setInterval(() => {
+  if (document.hidden) return;
+  const els = document.querySelectorAll('[id^="clock-"]');
+  if (!els.length) return;
   const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  document.querySelectorAll('[id^="clock-"]').forEach(el => { el.textContent = t; });
+  els.forEach(el => { el.textContent = t; });
 }, 1000);
 // (fetchTrails already runs in the startup Promise.all above — no duplicate here.)
 </script>
