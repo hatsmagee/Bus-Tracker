@@ -2340,6 +2340,7 @@ async function handleApi(url, res) {
         heritage: feed(heritageCache.length, heritageLastPollTs, heritageLastError),
         assetMedia: feed(assetMediaCache.length, assetMediaLastPollTs, assetMediaLastError),
         timelines: feed(timelinesCache.length, timelinesLastPollTs, timelinesLastError),
+        evCharging: feed(evCache.length, evLastPollTs, evLastError),
         solar: feed(solarCache.length, solarLastPollTs, solarLastError),
         satellites: feed(satelliteCache.length, satelliteLastPollTs, satelliteLastError),
       },
@@ -3121,6 +3122,12 @@ async function handleApi(url, res) {
   if (p === '/api/timelines') {
     return json(res, { ts: Date.now(), lastPollTs: timelinesLastPollTs, lastError: timelinesLastError,
       timelines: timelinesCache });
+  }
+
+  // ── EV CHARGING — NREL Alternative Fuels Data Center registry ──────────────
+  if (p === '/api/ev-charging') {
+    return json(res, { ts: Date.now(), lastPollTs: evLastPollTs, lastError: evLastError,
+      count: evCache.length, stations: evCache });
   }
 
   // ── AIRCRAFT PHOTO — Planespotters public API proxy (keyless, cached) ──────
@@ -4609,13 +4616,20 @@ function osmPowerLinesGeojson(elements) {
     const tags = el.tags || {};
     const coords = el.geometry.map(p => [p.lon, p.lat]);
     if (coords.length < 2) continue;
+    // Highest voltage present (tags like "138000;12000") in volts, for styling
+    // and a transmission/sub-transmission/distribution class.
+    const vmax = Math.max(0, ...String(tags.voltage || '').split(';').map(v => parseInt(v, 10)).filter(Number.isFinite));
+    let cls = 'distribution';
+    if (tags.power === 'line') cls = vmax >= 60000 ? 'transmission' : (vmax >= 20000 ? 'subtransmission' : 'line');
+    else if (tags.power === 'cable') cls = 'cable';
     features.push({
       type: 'Feature',
       geometry: { type: 'LineString', coordinates: coords },
       properties: {
-        voltage: tags.voltage || '',
-        cables: tags.cables || '',
-        operator: tags.operator || '',
+        power: tags.power || 'line', cls, vmax,
+        voltage: tags.voltage || '', cables: tags.cables || '', circuits: tags.circuits || '',
+        frequency: tags.frequency || '', operator: tags.operator || '',
+        name: tags.name || '', ref: tags.ref || '', location: tags.location || '',
       },
     });
   }
@@ -4718,10 +4732,26 @@ out body 200;`);
     } catch (e) { console.warn('[infra] tower OSM:', e.message); }
     await overpassPause();
     try {
-      lineJ = await fetchOverpass(`[out:json][timeout:40];
-way["power"="line"]["voltage"](${bbox});
-out geom 80;`);
-    } catch (e) { console.warn('[infra] lines OSM:', e.message); }
+      // The whole visible grid: high-voltage transmission (power=line), the
+      // distribution network (minor_line), and underground/marine cables.
+      lineJ = await fetchOverpass(`[out:json][timeout:60];
+(
+  way["power"="line"](${bbox});
+  way["power"="minor_line"](${bbox});
+  way["power"="cable"](${bbox});
+);
+out geom 600;`);
+    } catch (e) {
+      console.warn('[infra] lines OSM:', e.message);
+      // Fallback to the lighter transmission-only query if the broad grid query
+      // was rate-limited/timed out, so we at least render the HV backbone.
+      try {
+        await overpassPause();
+        lineJ = await fetchOverpass(`[out:json][timeout:40];
+way["power"="line"](${bbox});
+out geom 200;`);
+      } catch (e2) { console.warn('[infra] lines OSM fallback:', e2.message); }
+    }
     await overpassPause();
     let railJ = { elements: [] };
     try {
@@ -6058,6 +6088,60 @@ async function pollRepeaters() {
   } catch (e) { repeaterLastError = e.message; }
 }
 
+// ─── EV CHARGING STATIONS (US DOE / NREL AFDC, keyless via DEMO_KEY) ──────────
+// The authoritative federal registry of public/private charging stations —
+// networks, connector types, L1/L2/DC-fast port counts, access, pricing, hours.
+// One request/day covers the whole island (well within DEMO_KEY limits); set
+// NREL_API_KEY for your own key. Real-time port occupancy isn't published, so
+// this is the station registry + specs, cached to disk.
+const NREL_API_KEY = process.env.NREL_API_KEY || 'DEMO_KEY';
+const EV_CACHE_PATH = path.join(__dirname, 'data', 'ev-cache.json');
+let evCache = [];
+let evLastPollTs = null, evLastError = null;
+function loadEvCache() {
+  try {
+    const j = JSON.parse(fs.readFileSync(EV_CACHE_PATH, 'utf8'));
+    if (Array.isArray(j.stations) && j.stations.length) { evCache = j.stations; evLastPollTs = j.lastPollTs || null; }
+  } catch (e) { /* no cache yet */ }
+}
+function normalizeEvStation(s) {
+  const conns = String(s.ev_connector_types || (Array.isArray(s.ev_connector_types) ? s.ev_connector_types.join(',') : '') || '');
+  const connArr = Array.isArray(s.ev_connector_types) ? s.ev_connector_types : (conns ? conns.split(/[;,]/).map(x => x.trim()).filter(Boolean) : []);
+  const l1 = Number(s.ev_level1_evse_num) || 0;
+  const l2 = Number(s.ev_level2_evse_num) || 0;
+  const dc = Number(s.ev_dc_fast_num) || 0;
+  return {
+    id: 'nrel-' + s.id, name: s.station_name || 'Charging station',
+    lat: s.latitude, lon: s.longitude,
+    network: s.ev_network && s.ev_network !== 'Non-Networked' ? s.ev_network : (s.ev_network || ''),
+    networkWeb: s.ev_network_web || '',
+    address: [s.street_address, s.city, s.state, s.zip].filter(Boolean).join(', '),
+    city: s.city || '', phone: s.station_phone || '',
+    access: s.access_code || '', accessDetail: s.access_days_time || '',
+    connectors: connArr, level1: l1, level2: l2, dcFast: dc, ports: l1 + l2 + dc,
+    pricing: s.ev_pricing || '', cards: s.cards_accepted || '',
+    facility: s.facility_type || '', ownerType: s.owner_type_code || '',
+    renewable: s.ev_renewable_source || '', workplace: !!s.ev_workplace_charging,
+    openDate: s.open_date || '', lastConfirmed: s.date_last_confirmed || '',
+    fastClass: dc > 0 ? 'dcfast' : (l2 > 0 ? 'level2' : 'level1'),
+  };
+}
+async function pollEv() {
+  try {
+    const j = await fetchJson('developer.nrel.gov',
+      `/api/alt-fuels-stations/v1.json?fuel_type=ELEC&state=HI&status=E&access=public&limit=all&api_key=${encodeURIComponent(NREL_API_KEY)}`,
+      { 'User-Agent': 'heleon-tracker', 'Accept': 'application/json' });
+    const b = BIGISLAND_BBOX;
+    const stations = (j.fuel_stations || [])
+      .filter(s => s.latitude != null && s.longitude != null &&
+        s.latitude >= b.minLat && s.latitude <= b.maxLat && s.longitude >= b.minLon && s.longitude <= b.maxLon)
+      .map(normalizeEvStation);
+    if (stations.length || !evCache.length) { evCache = stations; }
+    evLastPollTs = Date.now(); evLastError = null;
+    try { fs.writeFileSync(EV_CACHE_PATH, JSON.stringify({ lastPollTs: evLastPollTs, stations: evCache })); } catch (e) { /* read-only fs */ }
+  } catch (e) { evLastError = (e && e.message) || 'unknown error'; }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin':'*' }); res.end(); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -6196,6 +6280,9 @@ const server = http.createServer((req, res) => {
   loadTimelinesCache();                             // serve deep-history timelines instantly from disk
   pollTimelines();                                  // resolve timeline event images from Wikipedia
   setInterval(pollTimelines, 24 * 60 * 60 * 1000);
+  loadEvCache();                                    // serve EV charging stations instantly from disk
+  pollEv();                                         // refresh EV registry from NREL AFDC
+  setInterval(pollEv, 24 * 60 * 60 * 1000);
   pollSatellites();
   setInterval(pollSatellites, 20 * 1000); // ISS moves ~7.6 km/s — keep it fresh
   pollRepeaters();

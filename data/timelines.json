@@ -127,6 +127,17 @@
       ]
     },
     {
+      "match": ["electric vehicle", "ev charging", "charging station"],
+      "title": "Electric vehicles in Hawaiʻi",
+      "intro": "Hawaiʻi has among the highest EV adoption rates in the US — a natural fit for an island with short drives, high gas prices, and abundant sun.",
+      "events": [
+        { "year": "2010", "title": "First public chargers", "text": "Hawaiʻi's earliest public charging stations appeared as the first modern highway-capable EVs (Nissan Leaf, Chevy Volt) reached the islands.", "wikiImage": "Charging station", "source": "US DOE AFDC", "sourceUrl": "https://afdc.energy.gov/" },
+        { "year": "2012", "title": "State charging mandate", "text": "A Hawaiʻi law required parking lots with 100+ stalls to provide EV charging — an early nation-leading policy push.", "source": "Hawaiʻi State Energy Office", "sourceUrl": "https://energy.hawaii.gov/" },
+        { "year": "2019", "title": "Hawaiian Electric fast chargers", "text": "The utility began rolling out DC fast-charging hubs across Oʻahu, Maui and Hawaiʻi Island to tackle range anxiety on longer routes.", "wikiImage": "Electric vehicle", "source": "Hawaiian Electric" },
+        { "year": "2030", "title": "Clean-energy target", "text": "Hawaiʻi is legally committed to 100% renewable electricity by 2045, with transportation electrification a key pillar — every charger on this map plugs into that transition.", "source": "Hawaiʻi Clean Energy Initiative", "sourceUrl": "https://www.hawaiicleanenergyinitiative.org/" }
+      ]
+    },
+    {
       "match": ["waipio", "waipiʻo"],
       "title": "Waipiʻo — the Valley of the Kings",
       "intro": "A deep, taro-rich valley that was the political and spiritual heart of ancient Hawaiʻi Island.",

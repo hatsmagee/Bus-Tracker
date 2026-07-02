@@ -794,7 +794,7 @@
         </select>
         <label><input type="checkbox" id="showTrails" onchange="toggleTrails()" checked> Trails</label>
         <label><input type="checkbox" id="showRoutes" onchange="toggleRouteShapes()" checked> Route lines</label>
-        <label><input type="checkbox" id="showControls" onchange="toggleControls()"> Signals &amp; stops</label>
+        <label><input type="checkbox" id="showControls" onchange="toggleControls()" checked> Signals &amp; stops</label>
       </div>
       <div id="routeList"><div class="empty"><div class="empty-icon">🗺️</div>Loading…</div></div>
     </div>
@@ -840,10 +840,10 @@
 
     <div class="tab-content" id="tab-hawaii">
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
-        <label><input type="checkbox" id="showRadar" onchange="toggleRadar()"> Precipitation radar</label>
-        <label><input type="checkbox" id="showTopo" onchange="toggleTopography()"> ⛰️ Topography (elevation)</label>
-        <label><input type="checkbox" id="showPlaces" onchange="togglePlaces()"> 🏛️ Historical & notable places</label>
-        <label><input type="checkbox" id="showHeritage" onchange="toggleHeritage()"> 🛕 Heritage & ancient sites</label>
+        <label><input type="checkbox" id="showRadar" onchange="toggleRadar()" checked> Precipitation radar</label>
+        <label><input type="checkbox" id="showTopo" onchange="toggleTopography()" checked> ⛰️ Topography (elevation)</label>
+        <label><input type="checkbox" id="showPlaces" onchange="togglePlaces()" checked> 🏛️ Historical & notable places</label>
+        <label><input type="checkbox" id="showHeritage" onchange="toggleHeritage()" checked> 🛕 Heritage & ancient sites</label>
       </div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showLava" onchange="toggleLava()"> Lava flow hazard zones</label>
@@ -852,7 +852,7 @@
         <label><input type="checkbox" id="showTsunami" onchange="toggleTsunami()"> Tsunami evacuation zone</label>
       </div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
-        <label><input type="checkbox" id="showQuakes" onchange="toggleQuakes()"> Recent earthquakes (30d)</label>
+        <label><input type="checkbox" id="showQuakes" onchange="toggleQuakes()" checked> Recent earthquakes (30d)</label>
       </div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showWildfire" onchange="toggleWildfire()" checked> Thermal hotspots (satellite)</label>
@@ -861,15 +861,16 @@
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showStreamflow" onchange="toggleStreamflow()" checked> USGS streamflow gauges</label>
         <label><input type="checkbox" id="showWeatherStations" onchange="toggleWeatherStations()" checked> NWS weather stations</label>
-        <label><input type="checkbox" id="showSolar" onchange="toggleSolar()"> ☀️ Solar irradiance</label>
+        <label><input type="checkbox" id="showSolar" onchange="toggleSolar()" checked> ☀️ Solar irradiance</label>
         <span class="vessel-status" id="streamflowStatus"></span>
       </div>
       <div class="section-header">⚡ Grid & Telecom Infrastructure</div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:10px;">
         <label><input type="checkbox" id="showInfraPower" onchange="toggleInfraPower()" checked> Power plants & lines</label>
-        <label><input type="checkbox" id="showInfraCell" onchange="toggleInfraCell()"> Cell / comm towers</label>
-        <label><input type="checkbox" id="showInfraNet" onchange="toggleInfraNet()"> Internet facilities (statewide)</label>
-        <label><input type="checkbox" id="showInfraRail" onchange="toggleInfraRail()"> 🚂 Railways (heritage)</label>
+        <label><input type="checkbox" id="showEv" onchange="toggleEv()" checked> 🔌 EV charging stations</label>
+        <label><input type="checkbox" id="showInfraCell" onchange="toggleInfraCell()" checked> Cell / comm towers</label>
+        <label><input type="checkbox" id="showInfraNet" onchange="toggleInfraNet()" checked> Internet facilities (statewide)</label>
+        <label><input type="checkbox" id="showInfraRail" onchange="toggleInfraRail()" checked> 🚂 Railways (heritage)</label>
       </div>
       <div style="padding:4px 12px;color:var(--muted);font-size:10px;">
         Static reference data — Hawaiian Electric has no public real-time Big Island
@@ -880,10 +881,10 @@
       <div class="section-header">🏪 Local & Community</div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:10px;">
         <label><input type="checkbox" id="showLocalFuel" onchange="toggleLocalFuel()" checked> Gas stations & regional prices</label>
-        <label><input type="checkbox" id="showLocalTraffic" onchange="toggleLocalTraffic()"> Highway traffic counts (AADT)</label>
-        <label><input type="checkbox" id="showLocalSensors" onchange="toggleLocalSensors()"> HDOT traffic sensors (East HI)</label>
-        <label><input type="checkbox" id="showLocalLco" onchange="toggleLocalLco()"> Remote telescopes (LCO schedule)</label>
-        <label><input type="checkbox" id="showLocalInat" onchange="toggleLocalInat()"> Nature sightings (iNaturalist)</label>
+        <label><input type="checkbox" id="showLocalTraffic" onchange="toggleLocalTraffic()" checked> Highway traffic counts (AADT)</label>
+        <label><input type="checkbox" id="showLocalSensors" onchange="toggleLocalSensors()" checked> HDOT traffic sensors (East HI)</label>
+        <label><input type="checkbox" id="showLocalLco" onchange="toggleLocalLco()" checked> Remote telescopes (LCO schedule)</label>
+        <label><input type="checkbox" id="showLocalInat" onchange="toggleLocalInat()" checked> Nature sightings (iNaturalist)</label>
       </div>
       <div style="padding:4px 12px;color:var(--muted);font-size:10px;">
         AAA fuel = monthly regional averages (not live pumps). AADT = annual traffic
@@ -892,10 +893,10 @@
       </div>
       <div class="section-header">🚓 Public Safety Facilities</div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:10px;">
-        <label><input type="checkbox" id="show-police" onchange="toggleFacility('police')"> Police</label>
-        <label><input type="checkbox" id="show-fire" onchange="toggleFacility('fire')"> Fire</label>
-        <label><input type="checkbox" id="show-ems" onchange="toggleFacility('ems')"> EMS</label>
-        <label><input type="checkbox" id="show-trauma" onchange="toggleFacility('trauma')"> Trauma centers</label>
+        <label><input type="checkbox" id="show-police" onchange="toggleFacility('police')" checked> Police</label>
+        <label><input type="checkbox" id="show-fire" onchange="toggleFacility('fire')" checked> Fire</label>
+        <label><input type="checkbox" id="show-ems" onchange="toggleFacility('ems')" checked> EMS</label>
+        <label><input type="checkbox" id="show-trauma" onchange="toggleFacility('trauma')" checked> Trauma centers</label>
       </div>
       <div style="padding:4px 12px;color:var(--muted);font-size:10px;">
         Station pins are reference only. Live dispatch audio for Puna (D-8), Kaʻū (D-7),
@@ -1178,6 +1179,11 @@ function initMap() {
     try { fetchScanner(); } catch (e) {}
     try { fetchInfrastructure(); } catch (e) {}
     try { fetchLocal(); } catch (e) {}
+    try { fetchEv(); } catch (e) {}
+    // Most layers ship on by default now. Setting a checkbox's `checked` in HTML
+    // doesn't fire its onchange, and layers initialise hidden, so invoke each
+    // toggle once here to actually reveal them (lava + tsunami stay off).
+    try { applyDefaultLayers(); } catch (e) { console.error('[map] default layers:', e); }
     // Keep an open click-card glued to its map anchor as the map moves.
     map.on('move', positionMapCard);
     // Click on empty map (no interactive feature) closes the card.
@@ -2334,16 +2340,64 @@ function initMapLayers() {
   wireLayerHover('infra-rail-station', p => `<div style="font-weight:600;">🚂 ${escapeHtml(p.name || 'Station')}</div>`);
   wireLayerHover('infra-rail-line', p => `<div style="font-weight:600;">🚂 ${escapeHtml(p.name || 'Railway')}</div>
     <div style="color:var(--muted);font-size:10px;">${escapeHtml(p.railway || 'rail')}${p.gauge ? ' · ' + escapeHtml(p.gauge) + 'mm gauge' : ''}</div>`);
+  // Grid backbone, coloured by voltage class: transmission (orange) → sub-
+  // transmission (amber) → distribution (grey) → underground/marine cable (cyan).
+  const LINE_COLOR = ['match', ['get', 'cls'],
+    'transmission', '#f97316', 'subtransmission', '#fbbf24',
+    'cable', '#22d3ee', 'distribution', '#8b98a5', /* line */ '#ea580c'];
   map.addLayer({
     id: 'infra-lines-line', type: 'line', source: 'infra-lines',
-    minzoom: 9,
+    minzoom: 8,
     layout: { 'line-join': 'round', 'line-cap': 'round' },
     paint: {
-      'line-color': '#ea580c',
-      'line-width': ['interpolate', ['linear'], ['zoom'], 9, 1.2, 13, 2.5],
-      'line-opacity': 0.65,
+      'line-color': LINE_COLOR,
+      'line-width': ['interpolate', ['linear'], ['zoom'],
+        8, ['match', ['get', 'cls'], 'transmission', 1.6, 'subtransmission', 1.2, 0.6],
+        13, ['match', ['get', 'cls'], 'transmission', 3.4, 'subtransmission', 2.6, 1.4]],
+      'line-opacity': ['match', ['get', 'cls'], 'distribution', 0.5, 0.8],
     },
   });
+  // Animated "flow" overlay on the higher-voltage lines — a bright dash that
+  // marches along the conductor to suggest power moving from plant to load.
+  map.addLayer({
+    id: 'infra-lines-flow', type: 'line', source: 'infra-lines',
+    minzoom: 9,
+    filter: ['any', ['==', ['get', 'cls'], 'transmission'], ['==', ['get', 'cls'], 'subtransmission']],
+    layout: { 'line-join': 'round', 'line-cap': 'round', visibility: 'none' },
+    paint: {
+      'line-color': '#fff7ed',
+      'line-width': ['interpolate', ['linear'], ['zoom'], 9, 1.0, 14, 2.0],
+      'line-opacity': 0.9,
+      'line-dasharray': [0, 4, 3],
+    },
+  });
+  wireLayerHover('infra-lines-line', p => {
+    const v = p.vmax ? (p.vmax >= 1000 ? (p.vmax / 1000) + ' kV' : p.vmax + ' V') : (p.voltage || '—');
+    return `<div style="font-weight:600;">⚡ ${escapeHtml(powerLineTitle(p))}</div>
+      <div style="color:var(--muted);font-size:10px;">${escapeHtml(v)}${p.operator ? ' · ' + escapeHtml(p.operator) : ''}</div>`;
+  });
+  map.on('click', 'infra-lines-line', e => {
+    if (!e.features || !e.features.length) return;
+    const p = e.features[0].properties;
+    showMapCard(buildPowerLineCard(p) + sourceInfoHtml('infra-lines-line', p), [e.lngLat.lng, e.lngLat.lat], `⚡ ${powerLineTitle(p)}`);
+  });
+
+  // ─── EV charging stations (NREL AFDC) ────────────────────────────────────
+  map.addSource('ev', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'ev-icon', type: 'symbol', source: 'ev',
+    layout: {
+      'icon-image': 'marker-ev', 'icon-anchor': 'bottom', 'icon-allow-overlap': false,
+      'icon-size': ICON_SIZE.sm,
+      'text-field': ['case', ['>', ['get', 'dcFast'], 0], '⚡', ''],
+      'text-size': 11, 'text-font': EMOJI_FONT, 'text-anchor': 'top-left', 'text-offset': [0.4, -0.6],
+      'text-allow-overlap': false, 'text-optional': true,
+    },
+    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
+  });
+  wireLayerHover('ev-icon', p => `<div style="font-weight:600;">🔌 ${escapeHtml(p.name || 'Charging station')}</div>
+    <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.network || 'Non-networked')} · ${p.ports || 0} port${p.ports == 1 ? '' : 's'}${p.dcFast > 0 ? ' · DC fast' : ''}</div>`);
+  wireLayerCard('ev-icon', p => ({ title: `🔌 ${p.name || 'EV charging'}`, body: buildEvCard(p) }));
   map.addLayer({
     id: 'infra-subs-circle', type: 'circle', source: 'infra-subs',
     minzoom: 10,
@@ -2697,6 +2751,7 @@ const TWEMOJI = {
   ocean:     '1f30a',   // 🌊
   buoy:      '1f6de',   // 🛟
   power:     '26a1',    // ⚡
+  ev:        '1f50c',   // 🔌
   globe:     '1f310',   // 🌐
   waterqual: '1f4a7',   // 💧
   // Heritage / historical site categories
@@ -2950,6 +3005,28 @@ const DATA_SOURCES = {
     method: 'Packet radio: each station transmits its own position/telemetry, gatewayed to the internet by iGates.',
     instruments: [{ role: 'Reporting device', model: 'TNC / tracker / wx station', maker: 'station-dependent (Kenwood, Byonics, etc.)', detail: 'self-reported' }],
     docs: [{ label: 'APRS-IS', url: 'http://www.aprs-is.net/' }],
+  },
+  'infra-lines-line': {
+    label: 'Power line / grid conductor', provider: 'OpenStreetMap', program: 'Overpass power=line/minor_line/cable',
+    api: [{ url: 'https://overpass-api.de/api/interpreter', format: 'OSM JSON' }],
+    cadence: 'Static map data (daily)', idFields: ['name', 'ref', 'operator'],
+    measures: 'Voltage, circuits, cables, frequency, operator, overhead/underground',
+    method: 'Grid geometry crowd-mapped in OpenStreetMap. Hawaiian Electric publishes no real-time line loading, so this is layout + nameplate specs, not live flow.',
+    instruments: [{ role: 'Data', model: 'OSM power=line tags', maker: 'OpenStreetMap', detail: 'surveyed voltage/cables/operator' }],
+    docs: [{ label: 'OSM Power networks', url: 'https://wiki.openstreetmap.org/wiki/Power_networks' }],
+  },
+  'ev-icon': {
+    label: 'EV charging station', provider: 'US DOE / NREL Alternative Fuels Data Center', program: 'AFDC Station Locator API',
+    api: [{ url: 'https://developer.nrel.gov/api/alt-fuels-stations/v1.json?fuel_type=ELEC&state=HI', format: 'JSON' }],
+    cadence: 'Station registry (daily); not live port occupancy', idFields: ['id', 'name', 'network'],
+    measures: 'Network, connector types, L1/L2/DC-fast port counts, access, pricing, hours',
+    method: 'Authoritative federal registry of public/private charging stations. Aggregates Tesla, ChargePoint, EVgo, Hawaiian Electric and others — manufacturer APIs (Tesla/etc.) are OAuth-gated and not public, so the open AFDC registry is used.',
+    instruments: [
+      { role: 'Level 1', model: '120 V AC (~1.4 kW)', maker: 'J1772', detail: 'slowest; overnight' },
+      { role: 'Level 2', model: '208–240 V AC (~3.3–19.2 kW)', maker: 'J1772 / Tesla', detail: 'most common public' },
+      { role: 'DC fast', model: '400–1000 V DC (50–350 kW)', maker: 'CCS / CHAdeMO / Tesla', detail: 'rapid charging' },
+    ],
+    docs: [{ label: 'NREL AFDC', url: 'https://afdc.energy.gov/fuels/electricity_locations.html' }, { label: 'API', url: 'https://developer.nrel.gov/docs/transportation/alt-fuel-stations-v1/' }],
   },
   'infra-power-icon': {
     label: 'Power generation', provider: 'OpenStreetMap (crowd-mapped) + curated', program: 'Overpass power=plant',
@@ -3786,7 +3863,7 @@ function focusAircraft(icao) {
 // All free/keyless federal/state sources. Hazard-zone polygons are fetched
 // once (static reference geometry); earthquakes/alerts refresh periodically.
 let allQuakes = [];
-let quakesVisible = false, lavaVisible = false, tsunamiVisible = false;
+let quakesVisible = true, lavaVisible = false, tsunamiVisible = false;
 let hazardZonesLoaded = false;
 
 async function fetchHazardZonesOnce() {
@@ -3857,7 +3934,7 @@ async function fetchAlerts() {
 // Precipitation radar (RainViewer) — fetch the current frame list directly
 // from RainViewer's own public endpoint (no server proxy needed, it's already
 // keyless/CORS-open) and point the raster source at the latest frame.
-let radarVisible = false;
+let radarVisible = true;
 let _radarTilesSig = null;
 async function fetchRadarFrame() {
   try {
@@ -4389,7 +4466,7 @@ function updateWindScale() {
 
 // ─── SOLAR sun markers (rays pulse with live irradiance) ─────────────────────
 const solarMarkers = {}; // name -> maplibregl.Marker
-let solarVisible = false;
+let solarVisible = true;
 function sunSvg() {
   const cx = 14, cy = 14, coreR = 5;
   let rays = '';
@@ -4728,8 +4805,8 @@ async function fetchSpaceWeather() {
 }
 
 // Places of interest — historical/notable sites from Wikipedia (photos+notes).
-let placesVisible = false;
-let heritageVisible = false;
+let placesVisible = true;
+let heritageVisible = true;
 async function fetchPlaces() {
   try {
     const res = await fetch('/api/places');
@@ -5157,9 +5234,9 @@ async function fetchMarine() {
 
 const INFRA_FUEL_ICON = { geothermal: '♨️', oil: '🛢️', gas: '🔥', wind: '💨', solar: '☀️', hydro: '💧' };
 let infraPowerVisible = true;
-let infraCellVisible = false;
-let infraNetVisible = false;
-let infraRailVisible = false;
+let infraCellVisible = true;
+let infraNetVisible = true;
+let infraRailVisible = true;
 let infraGridMix = null;
 function toggleInfraRail() {
   infraRailVisible = document.getElementById('showInfraRail').checked;
@@ -5240,11 +5317,145 @@ function toggleInfraPower() {
   infraPowerVisible = document.getElementById('showInfraPower').checked;
   if (mapReady) {
     const v = infraPowerVisible ? 'visible' : 'none';
-    for (const id of ['infra-power-icon', 'infra-subs-circle', 'infra-lines-line']) {
+    for (const id of ['infra-power-icon', 'infra-subs-circle', 'infra-lines-line', 'infra-lines-flow']) {
       if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
     }
+    setPowerFlowAnimating(infraPowerVisible);
   }
   fetchInfrastructure();
+}
+
+// Human title for a power line/cable from its OSM tags.
+function powerLineTitle(p) {
+  if (p.name) return p.name;
+  if (p.ref) return `Line ${p.ref}`;
+  const kind = p.power === 'cable' ? 'Cable' : (p.power === 'minor_line' ? 'Distribution line' : 'Power line');
+  return kind;
+}
+// Full spec card for a grid conductor.
+function buildPowerLineCard(p) {
+  const clsLabel = { transmission: 'Transmission line', subtransmission: 'Sub-transmission line', distribution: 'Distribution line', cable: 'Underground / marine cable', line: 'Power line' }[p.cls] || 'Power line';
+  const clsDesc = {
+    transmission: 'High-voltage backbone that moves bulk power long distances from generating plants toward substations.',
+    subtransmission: 'Medium-voltage lines linking substations and larger loads.',
+    distribution: 'Lower-voltage lines that carry power the last stretch to homes and businesses.',
+    cable: 'Buried or submarine conductor — no overhead towers.',
+    line: 'Overhead power line.',
+  }[p.cls] || '';
+  const volt = p.vmax ? (p.vmax >= 1000 ? (p.vmax / 1000) + ' kV' : p.vmax + ' V') : (p.voltage || '—');
+  const rows = [
+    ['Class', clsLabel],
+    ['Voltage', volt],
+    ['Circuits', p.circuits || '—'],
+    ['Cables/conductors', p.cables || '—'],
+    ['Frequency', p.frequency ? p.frequency + ' Hz' : '—'],
+    ['Operator', p.operator || 'Hawaiian Electric (assumed)'],
+    ['Placement', p.location || (p.power === 'cable' ? 'underground' : 'overhead')],
+  ];
+  const body = rows.map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;padding:2px 0;"><span style="color:var(--muted);">${k}</span><span style="text-align:right;">${escapeHtml(String(v))}</span></div>`).join('');
+  return `<div style="font-size:11px;line-height:1.5;color:#c9d1d9;margin-bottom:6px;">${escapeHtml(clsDesc)}</div>${body}
+    <div style="color:#8b949e;font-size:10px;margin-top:8px;">Grid geometry from OpenStreetMap. Hawaiian Electric publishes no real-time Big Island line loading; voltages/specs are as tagged by OSM surveyors.</div>`;
+}
+// Marching-dash "power flow" animation on the transmission overlay. Steps a set
+// of dash patterns so the bright segment appears to travel along the line.
+// Runs only while the power layer is visible and the tab is foregrounded.
+const POWER_FLOW_FRAMES = [
+  [0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5], [2, 4, 1], [2.5, 4, 0.5],
+  [3, 4, 0], [0, 0.5, 4, 2.5], [0, 1, 4, 2], [0, 1.5, 4, 1.5], [0, 2, 4, 1], [0, 2.5, 4, 0.5],
+];
+let _powerFlowTimer = null, _powerFlowStep = 0;
+function setPowerFlowAnimating(on) {
+  if (_powerFlowTimer) { clearInterval(_powerFlowTimer); _powerFlowTimer = null; }
+  if (!on || !mapReady || !map.getLayer('infra-lines-flow')) return;
+  map.setLayoutProperty('infra-lines-flow', 'visibility', 'visible');
+  _powerFlowTimer = setInterval(() => {
+    if (document.hidden || !infraPowerVisible) return;
+    _powerFlowStep = (_powerFlowStep + 1) % POWER_FLOW_FRAMES.length;
+    try { map.setPaintProperty('infra-lines-flow', 'line-dasharray', POWER_FLOW_FRAMES[_powerFlowStep]); } catch (e) {}
+  }, 120);
+}
+
+// ─── EV CHARGING STATIONS (NREL AFDC) ────────────────────────────────────────
+let allEv = [];
+let evVisible = true;
+async function fetchEv() {
+  try {
+    const data = await (await fetch('/api/ev-charging')).json();
+    allEv = data.stations || [];
+    hawaiiList.ev = allEv;
+    recordHealth('ev', data, allEv.length);
+    hawaiiBrowseRefresh();
+    renderEvMarkers();
+  } catch (e) { /* keep last */ }
+}
+function renderEvMarkers() {
+  if (!mapReady || !map.getSource('ev')) return;
+  const src = map.getSource('ev');
+  if (!evVisible) { src.setData({ type: 'FeatureCollection', features: [] }); return; }
+  src.setData({
+    type: 'FeatureCollection',
+    features: allEv.filter(s => s.lat != null && s.lon != null).map(s => ({
+      type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+      properties: {
+        id: s.id, name: s.name, network: s.network || '', networkWeb: s.networkWeb || '',
+        address: s.address || '', access: s.access || '', accessDetail: s.accessDetail || '',
+        connectors: (s.connectors || []).join(', '), level1: s.level1 || 0, level2: s.level2 || 0,
+        dcFast: s.dcFast || 0, ports: s.ports || 0, pricing: s.pricing || '', cards: s.cards || '',
+        facility: s.facility || '', renewable: s.renewable || '', workplace: s.workplace ? 1 : 0,
+        openDate: s.openDate || '', lastConfirmed: s.lastConfirmed || '', phone: s.phone || '',
+      },
+    })),
+  });
+}
+function toggleEv() {
+  evVisible = document.getElementById('showEv').checked;
+  if (mapReady && map.getLayer('ev-icon')) map.setLayoutProperty('ev-icon', 'visibility', evVisible ? 'visible' : 'none');
+  if (evVisible && !allEv.length) fetchEv(); else renderEvMarkers();
+}
+// A tiny inline SVG bar chart of ports by charging level.
+function evPortChart(l1, l2, dc) {
+  const data = [
+    { label: 'L1', v: l1, color: '#8b98a5' },
+    { label: 'L2', v: l2, color: '#3fb950' },
+    { label: 'DC', v: dc, color: '#f0883e' },
+  ];
+  const max = Math.max(1, l1, l2, dc);
+  const W = 220, H = 74, bw = 44, gap = 24, x0 = 26, base = 54;
+  let bars = '';
+  data.forEach((d, i) => {
+    const x = x0 + i * (bw + gap);
+    const h = Math.round((d.v / max) * 40);
+    const y = base - h;
+    bars += `<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="2" fill="${d.color}"/>`;
+    bars += `<text x="${x + bw / 2}" y="${y - 3}" text-anchor="middle" font-size="10" fill="#e6edf3">${d.v}</text>`;
+    bars += `<text x="${x + bw / 2}" y="${base + 13}" text-anchor="middle" font-size="9.5" fill="#8b949e">${d.label}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:240px;margin:4px 0;">
+    <line x1="18" y1="${base}" x2="${W - 6}" y2="${base}" stroke="#30363d" stroke-width="1"/>${bars}</svg>`;
+}
+function buildEvCard(p) {
+  const l1 = +p.level1 || 0, l2 = +p.level2 || 0, dc = +p.dcFast || 0;
+  const speed = dc > 0 ? 'DC fast charging' : (l2 > 0 ? 'Level 2 (AC)' : 'Level 1 (AC)');
+  const chart = (l1 + l2 + dc > 0) ? `<div style="font-weight:600;font-size:11px;margin-top:6px;">Ports by level</div>${evPortChart(l1, l2, dc)}` : '';
+  const rows = [
+    ['Network', p.network || 'Non-networked'],
+    ['Charging', speed],
+    ['Connectors', p.connectors || '—'],
+    ['Total ports', String(p.ports || 0)],
+    ['Access', [p.access, p.accessDetail].filter(Boolean).join(' · ') || '—'],
+    ['Pricing', p.pricing || '—'],
+    ['Payment', p.cards || '—'],
+    ['Renewable', p.renewable || '—'],
+    ['Last confirmed', p.lastConfirmed || '—'],
+  ];
+  const body = rows.map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;padding:2px 0;"><span style="color:var(--muted);">${k}</span><span style="text-align:right;max-width:62%;">${escapeHtml(String(v))}</span></div>`).join('');
+  const addr = p.address ? `<div style="font-size:11px;color:#c9d1d9;margin-bottom:6px;">📍 ${escapeHtml(p.address)}</div>` : '';
+  const links = [];
+  if (p.networkWeb) links.push(`<a href="${escapeHtml(p.networkWeb)}" target="_blank" rel="noopener" style="color:#58a6ff;">Network site ↗</a>`);
+  if (p.lat != null && p.lon != null) links.push(`<a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}" target="_blank" rel="noopener" style="color:#58a6ff;">Directions ↗</a>`);
+  const linkHtml = links.length ? `<div style="font-size:9.5px;margin-top:6px;">${links.join(' · ')}</div>` : '';
+  return addr + chart + body + linkHtml + timelineHtml('ev', 'electric vehicle charging') +
+    `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Registry data from NREL AFDC. Real-time port availability isn't publicly published; check the network app for live status.</div>`;
 }
 function toggleInfraCell() {
   infraCellVisible = document.getElementById('showInfraCell').checked;
@@ -5262,10 +5473,10 @@ function toggleInfraNet() {
 }
 
 let localFuelVisible = true;
-let localTrafficVisible = false;
-let localSensorsVisible = false;
-let localLcoVisible = false;
-let localInatVisible = false;
+let localTrafficVisible = true;
+let localSensorsVisible = true;
+let localLcoVisible = true;
+let localInatVisible = true;
 
 async function fetchLocal() {
   try {
@@ -5418,7 +5629,7 @@ const hawaiiList = {
   localFuelPrices: {}, localFuelStations: [], localTrafficSensors: [], localLco: [], localInat: [],
   localNotes: {},
   summits: [], scanner: [], ocean: [], waterQuality: [], airquality: [], volcanoAlerts: [], volcanoCams: [], satellites: [], rainfall: [],
-  metars: [], alerts: [], wildfire: [], places: [], heritage: [], solar: [],
+  metars: [], alerts: [], wildfire: [], places: [], heritage: [], solar: [], ev: [],
   facilities: { police: [], fire: [], ems: [], trauma: [] },
 };
 const hawaiiBrowse = { openCats: new Set(['radio']), openItems: new Set() };
@@ -5435,6 +5646,7 @@ const hawaiiMeshDetails = {}; // nodeId -> detail payload
 const SOURCE_HEALTH_CFG = {
   aircraft:   { staleAfterMs: 90 * 1000,   layers: ['aircraft-triangles'] },
   vessels:    { staleAfterMs: 15 * 60000,  layers: ['vessels-icon'] },
+  ev:         { staleAfterMs: 48 * 3600000, layers: ['ev-icon'] },
   ocean:      { staleAfterMs: 60 * 60000,  layers: ['ocean-dot'] },
   summits:    { staleAfterMs: 30 * 60000,  layers: ['summits-dot'] },
   airquality: { staleAfterMs: 60 * 60000,  layers: ['airquality-icon'] },
@@ -6620,7 +6832,7 @@ async function fetchRouteEdges() {
 // ─── TRAFFIC CONTROLS (real OSM signals / stop signs) ───────────────────────
 // Locations only — live red/green states are not published for the Big Island.
 // Off by default (togglable in Routes tab); drawn as small icons on the road.
-let controlsData = null, controlsVisible = false;
+let controlsData = null, controlsVisible = true;
 async function fetchControls() {
   if (controlsData) return controlsData;
   try {
@@ -6660,6 +6872,19 @@ function renderControls() {
     return `<div style="font-weight:600;">${label}</div><div style="font-size:11px;color:var(--muted);">location only — no live state</div>`;
   });
 }
+// Reveal every layer that now ships on by default. Each toggle reads its
+// checkbox (already `checked` in the markup) and flips the layer + lazy-fetches
+// its data. Wrapped individually so one missing layer can't abort the rest.
+function applyDefaultLayers() {
+  const toggles = [
+    'toggleControls', 'toggleRadar', 'toggleTopography', 'togglePlaces', 'toggleHeritage',
+    'toggleQuakes', 'toggleSolar', 'toggleInfraCell', 'toggleInfraNet', 'toggleInfraRail',
+    'toggleLocalTraffic', 'toggleLocalSensors', 'toggleLocalLco', 'toggleLocalInat', 'toggleEv',
+  ];
+  for (const fn of toggles) { try { window[fn] && window[fn](); } catch (e) {} }
+  for (const kind of ['police', 'fire', 'ems', 'trauma']) { try { toggleFacility(kind); } catch (e) {} }
+}
+
 function toggleControls() {
   controlsVisible = document.getElementById('showControls').checked;
   const apply = () => { if (map.getLayer('controls-circle')) map.setLayoutProperty('controls-circle', 'visibility', controlsVisible ? 'visible' : 'none'); };
@@ -8205,7 +8430,7 @@ function positionMapCard() {
 const CARD_LAYERS = ['ocean-dot', 'marine-dot', 'aprs-icon', 'summits-dot', 'weather-stations-icon', 'aircraft-triangles', 'airquality-icon',
   'waterquality-icon', 'volcano-dot', 'metars-dot', 'repeaters-icon', 'infra-power-icon', 'infra-cell-icon', 'infra-net-icon',
   'local-fuel-icon', 'local-sensors-icon', 'local-lco-icon', 'local-inat-icon',
-  'rainfall-icon', 'satellites-icon', 'places-icon', 'heritage-icon'];
+  'rainfall-icon', 'satellites-icon', 'places-icon', 'heritage-icon', 'ev-icon', 'infra-lines-line'];
 // Wire click-to-open-card on a layer. buildCard(props) -> { title, body }.
 function wireLayerCard(layerId, buildCard) {
   map.on('click', layerId, e => {
@@ -9371,6 +9596,7 @@ Promise.all([
   fetchScanner(),
   fetchInfrastructure(),
   fetchLocal(),
+  fetchEv(),
 ]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); ensureHawaiiFacilitiesBrowse().then(() => renderHawaiiBrowser()); renderHawaiiBrowser(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
@@ -9394,7 +9620,7 @@ setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
 setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); fetchTsunami(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchMarine(); if (!document.hidden) fetchInfrastructure(); if (!document.hidden) fetchLocal(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) fetchWaterQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); fetchRainfall(); fetchSpaceWeather(); fetchSkyClock(); fetchSolar(); } }, 15 * 60 * 1000);
+setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchMarine(); if (!document.hidden) fetchInfrastructure(); if (!document.hidden) fetchEv(); if (!document.hidden) fetchLocal(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) fetchWaterQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); fetchRainfall(); fetchSpaceWeather(); fetchSkyClock(); fetchSolar(); } }, 15 * 60 * 1000);
 setInterval(() => { if (!document.hidden && (!hawaiiList.meshtastic || !hawaiiList.meshtastic.length)) fetchMeshtastic(); }, 2 * 60 * 1000);
 // APRS moves faster (vehicles) — refresh more often when it has data.
 setInterval(() => { if (!document.hidden) fetchAprs(); }, 60 * 1000);
