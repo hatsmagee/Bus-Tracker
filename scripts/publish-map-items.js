@@ -1,15 +1,37 @@
 'use strict';
 
 const fs = require('fs');
+const path = require('path');
+const { spawnSync } = require('child_process');
 const github = require('./lib/github');
 const { runSmoke } = require('./smoke-test');
+const { checkServerBoot } = require('./check-server-boot');
 const { readJsonFile, writeJsonFile } = require('./lib/map-items-schema');
 const { loadState, saveState, recordFailure } = require('./lib/agent-state');
-const { MAP_ITEMS_PATH, MAP_ITEMS_STAGED_PATH } = require('./lib/paths');
+const { MAP_ITEMS_PATH, MAP_ITEMS_STAGED_PATH, ROOT } = require('./lib/paths');
 const { checkNoKeysGuard } = require('./lib/no-keys-guard');
 
 function agentEnabled() {
   return process.env.AGENT_ENABLED === '1' || process.env.AGENT_ENABLED === 'true';
+}
+
+// Full pre-push gate: unit tests, then the smoke test (schema + image liveness +
+// syntax), then a real server boot. Every check must pass before we branch/PR
+// to main. Returns { ok, error, detail? }.
+async function runPrePushGate() {
+  const unit = spawnSync('node', [path.join(ROOT, 'scripts', 'test', 'run-tests.js')], { cwd: ROOT, encoding: 'utf8' });
+  process.stdout.write(unit.stdout || '');
+  if (unit.status !== 0) {
+    return { ok: false, error: 'unit tests failed', detail: (unit.stderr || unit.stdout || '').slice(-800) };
+  }
+
+  const smoke = await runSmoke({ minItems: 0 });
+  if (!smoke.ok) return { ok: false, error: 'smoke test failed', detail: (smoke.errors || []).join('; ') };
+
+  const boot = await checkServerBoot();
+  if (!boot.ok) return { ok: false, error: 'server boot check failed', detail: boot.error };
+
+  return { ok: true };
 }
 
 async function publish({ force = false } = {}) {
@@ -35,10 +57,10 @@ async function publish({ force = false } = {}) {
     return { ok: true, message: 'nothing staged' };
   }
 
-  const smoke = await runSmoke({ minItems: 0 });
-  if (!smoke.ok) {
-    recordFailure(state, `smoke failed: ${(smoke.errors || []).join('; ')}`);
-    return { ok: false, error: 'smoke test failed', errors: smoke.errors };
+  const gate = await runPrePushGate();
+  if (!gate.ok) {
+    recordFailure(state, `${gate.error}: ${gate.detail || ''}`);
+    return { ok: false, error: gate.error, detail: gate.detail };
   }
 
   const branch = github.stagingBranchName();

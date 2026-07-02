@@ -21,8 +21,15 @@ services:
         sync: false
       - key: OPENSKY_CLIENT_SECRET
         sync: false
+      # Self-development agent. Off by default; set AGENT_ENABLED=true to turn
+      # on always-on research + gated auto-publish. See README → "Self-
+      # development agent" for the full loop and safety model.
       - key: AGENT_ENABLED
         value: "false"
+      - key: AGENT_AUTO_PUBLISH
+        value: "true"
+      - key: AGENT_RESEARCH_INTERVAL
+        value: "600000"
       - key: AGENT_GITHUB_TOKEN
         sync: false
       - key: AGENT_GITHUB_REPO

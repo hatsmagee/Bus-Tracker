@@ -1027,6 +1027,27 @@
       </div>
 
       <div class="docs-section">
+        <div class="docs-h">🤖 Self-development agent</div>
+        <div class="docs-p">
+          When enabled, a keyless research agent keeps the map's item cards
+          (history, photos, summaries) growing on their own. It
+          <strong style="color:#e6edf3">researches continuously</strong>, pulling
+          real, sourced material from free services (Wikipedia, Wikimedia
+          Commons, DuckDuckGo, Jina Reader) and writing it up via AI Horde —
+          nothing is fabricated. New material is <em>staged</em>, never live yet.
+          Before anything reaches production it must pass a
+          <strong style="color:#58a6ff">three-stage gate</strong>: a unit-test
+          suite, a smoke test (schema + live image checks), and a real server
+          boot. Only on all-green does it open and merge a GitHub PR, which
+          auto-deploys — and every open tab then
+          <strong style="color:#e6edf3">self-refreshes</strong> to the new
+          version. Watch it live on the <strong style="color:#e6edf3">Agent</strong>
+          tab, or follow the little robot as it hops around the map to whatever
+          it's working on.
+        </div>
+      </div>
+
+      <div class="docs-section">
         <div class="docs-h">🔗 Useful links</div>
         <a class="docs-link" href="https://www.myheleonbus.org/" target="_blank">
           <span class="docs-link-icon">🌐</span>
@@ -10055,27 +10076,43 @@ setInterval(() => healStaleSources(false), 45000);
 window.addEventListener('online', () => { try { fetchAll(); } catch (e) {} healStaleSources(true); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) healStaleSources(false); });
 
-// 4) Auto-update: reload when a newer build is deployed. We compare the server's
-//    build id to the one present at load; a mere restart keeps the same id so we
-//    don't reload needlessly, but a redeploy (changed HTML) reloads every tab.
+// 4) Auto-update (event-driven, not polling): a Server-Sent Events channel
+//    streams the server's build id. When a new deploy goes live the old process
+//    dies, EventSource auto-reconnects to the fresh process, and its build id
+//    differs from the one we loaded with → every open tab self-refreshes. Leave
+//    the page open and it keeps itself current as the app evolves.
 let _buildId = null, _reloading = false;
-async function checkForUpdate() {
-  try {
-    const v = await (await fetch('/api/version', { cache: 'no-store' })).json();
-    if (!v || !v.build) return;
-    if (_buildId == null) { _buildId = v.build; return; }
-    if (v.build !== _buildId && !_reloading) {
-      _reloading = true;
-      const b = document.createElement('div');
-      b.textContent = 'New version available — updating…';
-      b.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;background:#1f6feb;color:#fff;padding:8px 16px;border-radius:20px;font:600 13px system-ui;box-shadow:0 4px 16px rgba(0,0,0,.4);';
-      document.body.appendChild(b);
-      setTimeout(() => location.reload(true), 1800);
-    }
-  } catch (e) { /* offline — try again next tick */ }
+function _announceUpdate() {
+  if (_reloading) return;
+  _reloading = true;
+  const b = document.createElement('div');
+  b.textContent = 'New version deployed — updating…';
+  b.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;background:#1f6feb;color:#fff;padding:8px 16px;border-radius:20px;font:600 13px system-ui;box-shadow:0 4px 16px rgba(0,0,0,.4);';
+  document.body.appendChild(b);
+  setTimeout(() => location.reload(true), 1500);
 }
-checkForUpdate();
-setInterval(checkForUpdate, 2 * 60 * 1000);
+function _onVersion(version) {
+  if (!version) return;
+  if (_buildId == null) { _buildId = version; return; }
+  if (version !== _buildId) _announceUpdate();
+}
+function startUpdateStream() {
+  if (typeof EventSource === 'undefined') {
+    // Fallback for the rare no-SSE client: light poll on /api/version.
+    const poll = async () => {
+      try { const v = await (await fetch('/api/version', { cache: 'no-store' })).json(); _onVersion(v && v.version); } catch (e) {}
+    };
+    poll();
+    setInterval(poll, 60 * 1000);
+    return;
+  }
+  const es = new EventSource('/api/events');
+  es.addEventListener('hello', e => { try { _onVersion(JSON.parse(e.data).version); } catch (err) {} });
+  es.addEventListener('deploy', e => { try { _onVersion(JSON.parse(e.data).version); } catch (err) {} });
+  // On error EventSource reconnects on its own; a redeploy triggers reconnect
+  // and the next 'hello' carries the new build id. Nothing to poll.
+}
+startUpdateStream();
 </script>
 </body>
 </html>

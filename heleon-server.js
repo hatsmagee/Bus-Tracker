@@ -31,14 +31,30 @@ process.on('unhandledRejection', (e) => {
   console.error('[fatal] unhandledRejection — staying alive:', (e && (e.stack || e.message)) || e);
 });
 
-// Build id for client auto-update: changes only when the served HTML changes,
-// so a redeploy makes every open tab reload itself, but a plain restart doesn't.
+// Build id for client auto-update: stable for the life of a process, distinct
+// per deploy. Prefer the deploy's git sha (Render sets RENDER_GIT_COMMIT), then
+// local git, then a hash of the client-facing files (HTML + map-items) so a
+// data-only deploy still changes it. Clients compare this across SSE reconnects
+// to detect a fresh deploy and self-refresh; a plain restart keeps the same id.
 const BOOT_TS = Date.now();
+const SERVER_STARTED_AT = new Date().toISOString();
 let BUILD_ID = 'dev';
-try {
-  const st = fs.statSync(path.join(__dirname, 'heleon-tracker.html'));
-  BUILD_ID = `${Math.round(st.mtimeMs)}-${st.size}`;
-} catch { /* fall back to 'dev' */ }
+(() => {
+  const short = s => String(s || '').trim().slice(0, 12);
+  const envSha = process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.SOURCE_VERSION;
+  if (envSha) { BUILD_ID = short(envSha); return; }
+  try {
+    const sha = require('child_process').execSync('git rev-parse --short HEAD', { cwd: __dirname, stdio: ['ignore', 'pipe', 'ignore'] });
+    if (sha && String(sha).trim()) { BUILD_ID = short(sha); return; }
+  } catch {}
+  try {
+    const h = require('crypto').createHash('sha1');
+    for (const f of [path.join(__dirname, 'heleon-tracker.html'), path.join(__dirname, 'data', 'map-items.json')]) {
+      try { h.update(fs.readFileSync(f)); } catch {}
+    }
+    BUILD_ID = h.digest('hex').slice(0, 12);
+  } catch { /* keep 'dev' */ }
+})();
 
 // Big Island bounding box — fleet feed includes parked/relocated buses
 // (e.g. on Oʻahu for maintenance); ignore anything outside Hawaiʻi County.
@@ -84,7 +100,22 @@ function loadMapItems() {
 }
 loadMapItems();
 
+// Connected Server-Sent-Events clients (browser dashboards). Used to push a
+// deploy signal so open pages self-refresh, and to keep-alive through proxies.
+const sseClients = new Set();
+function sseBroadcast(event, dataObj) {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(dataObj)}\n\n`;
+  for (const res of sseClients) {
+    try { res.write(payload); } catch {}
+  }
+}
+
 const AGENT_ENABLED = process.env.AGENT_ENABLED === '1' || process.env.AGENT_ENABLED === 'true';
+// When enabled, after a research cycle stages new work, automatically run the
+// gated publish (unit tests + smoke + server boot) and deploy. The safety gate
+// is what makes "deploy whenever" safe. Set AGENT_AUTO_PUBLISH=false to only
+// stage and require a manual/cron publish.
+const AGENT_AUTO_PUBLISH = process.env.AGENT_AUTO_PUBLISH !== 'false';
 let agentRunInFlight = false;
 // Rolling in-memory log of agent activity so the dashboard can watch what it's
 // doing. Capped so a long-lived process doesn't grow unbounded.
@@ -131,6 +162,64 @@ function agentLogPush(line, level = 'info') {
   agentParseActivity(text);
   // Tab-separated so a restart can reparse the tail; rotation keeps it bounded.
   logRotate.appendLine(AGENT_LOG_FILE, `${ts}\t${level}\t${text.replace(/\t/g, ' ')}`, { maxBytes: 256 * 1024, maxFiles: 3 });
+}
+
+// Does the staged candidates file hold any items awaiting publish?
+function hasStagedWork() {
+  try {
+    const doc = JSON.parse(fs.readFileSync(MAP_ITEMS_STAGED_PATH, 'utf8'));
+    return !!(doc && doc.items && Object.keys(doc.items).length);
+  } catch { return false; }
+}
+
+// Spawn a research/publish run as a child process, streaming its output into the
+// rotating agent log. Shared by the manual endpoint and the always-on loop.
+function spawnAgent(mode) {
+  if (agentRunInFlight) return { ok: false, error: 'agent run already in flight' };
+  agentRunInFlight = true;
+  const script = mode === 'publish'
+    ? path.join(__dirname, 'scripts', 'agent', 'run-publish.js')
+    : path.join(__dirname, 'scripts', 'agent', 'run-research.js');
+  agentLogPush(`── ${mode} run started ──`, 'start');
+  const child = require('child_process').spawn('node', [script], { cwd: __dirname, env: process.env, detached: false });
+  const carry = { out: '', err: '' };
+  const pump = (chunk, key, level) => {
+    carry[key] += chunk;
+    const lines = carry[key].split('\n');
+    carry[key] = lines.pop();
+    for (const l of lines) agentLogPush(l, level);
+  };
+  child.stdout.on('data', d => pump(d.toString(), 'out', 'info'));
+  child.stderr.on('data', d => pump(d.toString(), 'err', 'error'));
+  child.on('close', code => {
+    if (carry.out) agentLogPush(carry.out, 'info');
+    if (carry.err) agentLogPush(carry.err, 'error');
+    agentLogPush(`── ${mode} run finished (exit ${code}) ──`, 'start');
+    agentRunInFlight = false;
+    if (mode === 'publish') loadMapItems();
+    // After a clean research cycle, if there is staged work, chain into a gated
+    // publish so the app can deploy itself whenever — the pre-push gate is what
+    // makes this safe.
+    if (mode === 'research' && code === 0 && AGENT_ENABLED && AGENT_AUTO_PUBLISH && hasStagedWork()) {
+      agentLogPush('staged work detected → running gated publish', 'start');
+      setImmediate(() => spawnAgent('publish'));
+    }
+  });
+  return { ok: true, started: true, mode, pid: child.pid };
+}
+
+// Always-on research: while the service is awake and enabled, keep a research
+// cycle running on an interval so the map is continuously enriched. Skips if a
+// run is in flight or the circuit breaker is open. Publishing to main stays a
+// separate, gated step (manual button or external cron).
+const AGENT_RESEARCH_INTERVAL = Math.max(60000, parseInt(process.env.AGENT_RESEARCH_INTERVAL, 10) || 10 * 60 * 1000);
+function agentAutoResearch() {
+  if (!AGENT_ENABLED || agentRunInFlight) return;
+  try {
+    const st = require('./scripts/lib/agent-state').loadState();
+    if (st.circuitOpen) return;
+  } catch {}
+  spawnAgent('research');
 }
 
 // Server-side road-snapping (Valhalla map-matching, cached + auto-refreshing).
@@ -2353,33 +2442,7 @@ async function handleApi(url, res, req) {
     if (!AGENT_ENABLED) return json(res, { ok: false, error: 'AGENT_ENABLED is false' }, 403);
     if (agentRunInFlight) return json(res, { ok: false, error: 'agent run already in flight' }, 409);
     const mode = (url.searchParams.get('mode') || 'research');
-    agentRunInFlight = true;
-    const script = mode === 'publish'
-      ? path.join(__dirname, 'scripts', 'agent', 'run-publish.js')
-      : path.join(__dirname, 'scripts', 'agent', 'run-research.js');
-    agentLogPush(`── ${mode} run started ──`, 'start');
-    const child = require('child_process').spawn('node', [script], {
-      cwd: __dirname,
-      env: process.env,
-      detached: false,
-    });
-    let carry = { out: '', err: '' };
-    const pump = (chunk, key, level) => {
-      carry[key] += chunk;
-      const lines = carry[key].split('\n');
-      carry[key] = lines.pop();
-      for (const l of lines) agentLogPush(l, level);
-    };
-    child.stdout.on('data', d => pump(d.toString(), 'out', 'info'));
-    child.stderr.on('data', d => pump(d.toString(), 'err', 'error'));
-    child.on('close', code => {
-      if (carry.out) agentLogPush(carry.out, 'info');
-      if (carry.err) agentLogPush(carry.err, 'error');
-      agentLogPush(`── ${mode} run finished (exit ${code}) ──`, 'start');
-      agentRunInFlight = false;
-      if (mode === 'publish') loadMapItems();
-    });
-    return json(res, { ok: true, started: true, mode, pid: child.pid });
+    return json(res, spawnAgent(mode));
   }
 
   if (p === '/api/agent/log') {
@@ -2475,10 +2538,11 @@ async function handleApi(url, res, req) {
     return json(res, { uptime_since: startTime, poll_stats: poll, ping_count_today: pingCount?.n || 0 });
   }
 
-  // Client auto-update probe — the UI polls this and reloads itself when `build`
+  // Client auto-update probe — fallback for clients without SSE (the primary
+  // path is the event-driven /api/events stream). Reloads when `version`/`build`
   // changes (i.e. a new version was deployed).
   if (p === '/api/version') {
-    return json(res, { build: BUILD_ID, bootTs: BOOT_TS, ts: Date.now() });
+    return json(res, { version: BUILD_ID, build: BUILD_ID, bootTs: BOOT_TS, startedAt: SERVER_STARTED_AT, ts: Date.now() });
   }
 
   if (p === '/api/debug/feeds') {
@@ -6415,7 +6479,28 @@ const server = http.createServer((req, res) => {
       uptime_s: Math.round(process.uptime()),
       last_poll_ts: lastPollStats?.ts || null,
       vehicles: latestVehicles?.length || 0,
+      version: BUILD_ID,
     }));
+    return;
+  }
+  // Server-Sent Events: event-driven channel. On connect we push the build id;
+  // when this process dies during a deploy the browser's EventSource auto-
+  // reconnects to the new process and receives a different build id → refresh.
+  if (url.pathname === '/api/events') {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'X-Accel-Buffering': 'no',
+    });
+    res.write('retry: 3000\n\n');
+    res.write(`event: hello\ndata: ${JSON.stringify({ version: BUILD_ID, startedAt: SERVER_STARTED_AT })}\n\n`);
+    sseClients.add(res);
+    // Server keep-alive comment every 25s so proxies (Render) don't drop idle
+    // connections. This is server push, not client polling.
+    const ka = setInterval(() => { try { res.write(': keep-alive\n\n'); } catch {} }, 25000);
+    req.on('close', () => { clearInterval(ka); sseClients.delete(res); });
     return;
   }
   if (url.pathname.startsWith('/api/') || url.pathname === '/proxy') {
@@ -6441,6 +6526,14 @@ const server = http.createServer((req, res) => {
   };
   sweepDisk();
   setInterval(sweepDisk, 24 * 60 * 60 * 1000);
+
+  // Always-on research loop (enabled hosts only). First cycle ~1 min after boot,
+  // then every AGENT_RESEARCH_INTERVAL while the service is awake.
+  if (AGENT_ENABLED) {
+    console.log(`[agent] always-on research enabled (every ${Math.round(AGENT_RESEARCH_INTERVAL / 60000)} min)`);
+    setTimeout(agentAutoResearch, 60 * 1000);
+    setInterval(agentAutoResearch, AGENT_RESEARCH_INTERVAL);
+  }
 
   const shapeCount = dbGet(`SELECT COUNT(*) as n FROM route_shapes`);
   if (!shapeCount || shapeCount.n === 0) {

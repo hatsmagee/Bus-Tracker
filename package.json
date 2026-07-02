@@ -14,7 +14,9 @@
     "agent-research": "node scripts/agent/run-research.js",
     "agent-publish": "node scripts/agent/run-publish.js",
     "smoke-test": "node scripts/smoke-test.js",
-    "test": "node scripts/smoke-test.js"
+    "boot-check": "node scripts/check-server-boot.js",
+    "test:unit": "node scripts/test/run-tests.js",
+    "test": "node scripts/test/run-tests.js"
   },
   "engines": {
     "node": ">=18"

@@ -92,10 +92,11 @@ per-pump live gas prices (GasBuddy GraphQL is not a public keyless API; we use A
 │ Browser (heleon-tracker.html)                           │
 │   - MapLibre GL map, smooth bus interpolation           │
 │   - Sidebar with vehicle cards + scrubber timelines     │
-│   - 4 tabs: Buses / Routes / System / Docs              │
-└────────────┬────────────────────────────────────────────┘
-             │ HTTP /api/* (every 15s)
-┌────────────▼────────────────────────────────────────────┐
+│   - Tabs: Buses / Routes / Hawaiʻi / Agent / System / … │
+│   - Event-driven self-refresh (SSE): reloads on deploy  │
+└──────┬──────────────────────────────────────▲───────────┘
+       │ HTTP /api/* (every 15s)     SSE /api/events (push)
+┌──────▼──────────────────────────────────────┴───────────┐
 │ Node.js server (heleon-server.js)                       │
 │   - Positions from routes/{id}/vehicles (per route) —   │
 │     real speed + heading + route; resilient last-known  │
@@ -106,6 +107,7 @@ per-pump live gas prices (GasBuddy GraphQL is not a public keyless API; we use A
 │   - Static GTFS loader (trips/stop_times/stops)         │
 │   - Open-Meteo weather (batched, cached)                │
 │   - SQLite (sql.js) with periodic prune + VACUUM        │
+│   - Self-development agent (research → gate → deploy)   │
 └────────────┬────────────────────────────────────────────┘
              │ HTTPS
    myheleonbus.org  (Syncromatics RTPI + GTFS-RT)  ·  open-meteo.com
@@ -137,37 +139,84 @@ Set environment variables before starting the server:
 | `POLL_INTERVAL`| 15000 (ms)    | How often to poll the realtime feeds |
 | `MAPTILER_KEY` | (built-in)    | MapTiler API key for basemap tiles   |
 
+Open tabs **self-refresh on deploy**: the browser holds a Server-Sent Events
+stream (`/api/events`) carrying the server's build id. When a new version goes
+live the old process exits, the browser's `EventSource` reconnects to the fresh
+one, sees a new build id, and reloads — event-driven, no polling. The build id
+is the deploy's git commit (falling back to a hash of the HTML + map data, so a
+data-only deploy still triggers a refresh).
+
 ## Self-development agent
 
-After bootstrap, a keyless research agent continuously enriches map item cards
-(history, photos, summaries) and ships smoke-tested PRs to GitHub, which
-auto-deploy on Render. **Off by default** until you enable it.
+A keyless research agent that keeps the map's item cards (history, photos,
+summaries) growing on their own. When enabled it **researches continuously**,
+and once it has vetted new material it runs a full test gate and ships a PR that
+auto-deploys on Render — so the app keeps evolving with no one at the keyboard.
+**Off by default** (`AGENT_ENABLED=false`) until you switch it on.
+
+### The loop
+
+```
+always-on research → stage findings → PRE-PUSH GATE → PR → merge → deploy → tabs self-refresh
+   (every 10 min)                     unit + smoke + boot
+```
+
+1. **Research** — every `AGENT_RESEARCH_INTERVAL` (default 10 min) the server
+   audits the item universe, picks what's missing/stale/thin, gathers real
+   sourced content (DuckDuckGo, Wikipedia, Wikimedia Commons, Jina Reader) and
+   synthesizes a card via AI Horde. Results are *staged*, never live yet.
+2. **Gate** — before anything touches `main`, `npm test` (unit suite) → smoke
+   test (schema + image liveness + `node --check`) → a real server boot on a
+   throwaway port that must serve `/healthz` + `/api/map-items`. Any failure
+   aborts the publish and records a circuit-breaker strike.
+3. **Publish** — on a green gate it branches, commits `data/map-items.json`,
+   opens + squash-merges a PR, and (optionally) pings the Render deploy hook.
+4. **Self-refresh** — the new deploy changes the build id; every open tab
+   reconnects over SSE and reloads itself.
+
+### Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AGENT_ENABLED` | `false` | Master kill switch |
-| `AGENT_ITEM_BUDGET` | `3` | Items researched per cron run |
+| `AGENT_AUTO_PUBLISH` | `true` | After a clean research cycle with staged work, run the gate and publish automatically. Set `false` to only stage (manual/cron publish). |
+| `AGENT_RESEARCH_INTERVAL` | `600000` | Always-on research cadence, ms (min 60 000) |
+| `AGENT_ITEM_BUDGET` | `3` | Items researched per cycle |
 | `AGENT_STALE_DAYS` | `90` | Re-research entries older than this |
 | `AGENT_GITHUB_TOKEN` | unset | Fine-grained PAT with `contents:write` on the app repo |
 | `AGENT_GITHUB_REPO` | unset | `owner/repo` (e.g. `hatsmagee/Bus-Tracker`) |
 | `AGENT_GITHUB_BRANCH` | `main` | Base branch for agent PRs |
 | `AIHORDE_API_KEY` | anon | Optional AI Horde key for faster priority |
-| `RENDER_DEPLOY_HOOK` | unset | POST after PR merge to force immediate deploy |
+| `RENDER_DEPLOY_HOOK` | unset | POST after PR merge to force an immediate deploy |
 
-**CLI (local):**
+### CLI (local)
 
 ```bash
-npm run audit-map-items    # list gaps (72 fixed/named items)
-npm run agent-research     # research up to AGENT_ITEM_BUDGET items
-npm run agent-publish      # smoke test → branch → PR → merge → deploy hook
-npm run smoke-test         # validation gate only
+npm run audit-map-items    # list gaps across the fixed/named item universe
+npm run agent-research     # research up to AGENT_ITEM_BUDGET items → stage
+npm run agent-publish      # full gate → branch → PR → merge → deploy hook
+npm test                   # unit suite (also: npm run test:unit)
+npm run smoke-test         # schema + image-liveness + syntax gate only
+npm run boot-check         # boot the server on the merged data and probe it
 ```
 
-**Safety:** no paid API keys (refuses if `OPENAI_API_KEY` / `TAVILY_API_KEY`
-present); AI Horde stops if down; circuit breaker trips after 3 failures/hour;
-smoke test blocks bad merges; never commits directly to `main`.
+### Safety
 
-**UI:** System tab → Self-Development Agent panel (queue, staged count, run/publish/reset).
+- **No paid keys** — refuses to run if `OPENAI_API_KEY` / `TAVILY_API_KEY` (and
+  friends) are present; everything it uses is free and keyless.
+- **Nothing unverified reaches `main`** — the three-stage gate (unit → smoke →
+  live boot) must pass first; it never commits directly to `main`.
+- **Circuit breaker** trips after 3 failures/hour and needs a manual reset.
+- **AI Horde** is skipped if the service is down; LLaMA2 models are excluded.
+- **Bounded disk** — the activity log is size-capped and rotated, and a daily
+  sweep clears stale temp files, so a light/ephemeral host never fills up.
+
+### Watching it work
+
+- **Agent tab** — live status, staged/captured work, and a streaming activity
+  log (run / publish / reset-breaker controls).
+- **Roaming robot** — a marker that hops around the map to whatever item the
+  agent is researching; hover for its current activity, click to open the tab.
 
 ## Deploying to Render.com
 
@@ -177,8 +226,8 @@ The repo includes `render.yaml` (Blueprint). To deploy:
 2. Connect this repo (`hatsmagee/Bus-Tracker`)
 3. Render reads `render.yaml` and creates the web service.
 4. Wait for the first deploy to finish (~2-3 min).
-5. Copy the live URL Render gives you (e.g.
-   `https://heleon-bus-tracker.onrender.com`).
+5. Copy the live URL Render gives you (this deployment lives at
+   `https://bus-tracker-a36o.onrender.com`).
 
 Render automatically sets `PORT=10000` and `RENDER=1`. The server reads
 those, binds to `0.0.0.0:10000`, and writes its SQLite DB + GTFS zip to
@@ -238,7 +287,7 @@ after logout and survive reboots.
 
 **Setting the URL**
 
-The default URL is `https://heleon-bus-tracker.onrender.com/healthz`.
+The default URL is `https://bus-tracker-a36o.onrender.com/healthz`.
 If Render assigned a different hostname, edit
 `~/.config/systemd/user/heleon-keepalive.service` and update the
 `Environment=HELEON_RENDER_URL=...` line, then
@@ -267,6 +316,22 @@ If Render assigned a different hostname, edit
   roster/names/colors from live GTFS, preserves curated classification, flags drift.
 - `scripts/scrape-schedules.js` — weekly scraper for the agency's schedule PDFs
   (timetables/stops/names) from heleonbus.hawaiicounty.gov → `data/schedules/`.
+- `data/map-items.json` — curated item cards (history/photos/summaries) shown on
+  the map; the self-development agent's source of truth (staged edits live in
+  `data/map-items.staged.json` until a gated PR merges them).
+- `scripts/agent/` — agent entrypoints (`run-research.js`, `run-publish.js`) and
+  `research-agent.js`, the plan → research → synthesize → validate → stage loop.
+- `scripts/audit-map-items.js` — diffs the item universe vs. live data → queue.
+- `scripts/publish-map-items.js` — runs the pre-push gate, then branch → PR →
+  merge → deploy hook.
+- `scripts/smoke-test.js` — schema + image-liveness + syntax validation gate.
+- `scripts/check-server-boot.js` — boots the server on the merged data and
+  confirms it serves `/healthz` + `/api/map-items` (catches runtime breakage).
+- `scripts/test/` — dependency-free unit suite (`npm test`) covering the schema,
+  no-keys guard, AI Horde helpers, log rotation, catalog, GitHub, and audit.
+- `scripts/lib/` — agent building blocks (`aihorde`, `research-sources`,
+  `github`, `agent-state`, `item-catalog`, `map-items-schema`, `no-keys-guard`,
+  `log-rotate`, `paths`).
 - `scripts/keepalive.sh` — bash script that pings the Render URL
 - `render.yaml` — Render Blueprint (web service only)
 - `systemd/heleon-tracker.service` — local tracker systemd unit
