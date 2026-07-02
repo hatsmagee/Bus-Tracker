@@ -622,6 +622,9 @@
       <span id="locateIcon">📍</span><span id="locateText">Locate me</span>
     </div>
     <span class="locate-status" id="locateStatus"></span>
+    <div class="badge" id="tsunamiBadge" style="display:none;cursor:pointer;user-select:none;" onclick="showTsunamiCard()">
+      <span id="tsunamiText">🌊 —</span>
+    </div>
     <div class="badge" id="skyClockBadge" style="display:none;user-select:none;">
       <span id="skyClockText">—</span>
     </div>
@@ -3326,6 +3329,37 @@ async function fetchSpaceWeather() {
   } catch (e) { /* keep last */ }
 }
 
+// Tsunami — PTWC bulletin status (keyless). Header badge, green normally, red
+// for any active warning/watch/advisory. Click opens the full bulletin text.
+let tsunamiData = null;
+async function fetchTsunami() {
+  try {
+    const res = await fetch('/api/tsunami');
+    const data = await res.json();
+    recordHealth('tsunami', data, data.level ? 1 : 0);
+    tsunamiData = data;
+    const badge = document.getElementById('tsunamiBadge');
+    if (!badge) return;
+    if (!data.level || data.level === 'none') { badge.style.display = 'none'; return; }
+    badge.style.display = '';
+    const threat = (data.level === 'warning' || data.level === 'watch' || data.level === 'advisory');
+    badge.className = 'badge ' + (threat ? 'badge-red' : 'badge-green');
+    const label = { warning: 'TSUNAMI WARNING', watch: 'Tsunami Watch', advisory: 'Tsunami Advisory', info: 'No tsunami threat' }[data.level] || 'Tsunami info';
+    document.getElementById('tsunamiText').textContent = `🌊 ${label}`;
+    badge.title = (data.title || label) + ' — click for the PTWC bulletin';
+  } catch (e) { /* keep last */ }
+}
+function showTsunamiCard() {
+  if (!tsunamiData) return;
+  const threat = ['warning','watch','advisory'].includes(tsunamiData.level);
+  const body = `<div style="font-size:12px;line-height:1.5;">
+    <div style="font-weight:700;color:${threat ? '#f85149' : '#3fb950'};margin-bottom:6px;">${escapeHtml(tsunamiData.title || 'Pacific Tsunami Warning Center')}</div>
+    <div style="color:var(--text);white-space:pre-wrap;">${escapeHtml(tsunamiData.summary || 'No active tsunami threat to Hawaiʻi.')}</div>
+    <div style="color:#8b949e;font-size:10px;margin-top:8px;">Pacific Tsunami Warning Center${tsunamiData.updated ? ' · ' + new Date(tsunamiData.updated).toLocaleString() : ''} · <a href="https://www.tsunami.gov/" target="_blank" rel="noopener" style="color:#58a6ff;">tsunami.gov ↗</a></div>
+  </div>`;
+  showMapCard(body, null, '🌊 Tsunami status');
+}
+
 // Sky clock — sun/moon status for the Big Island (keyless, USNO). Header badge.
 function moonEmoji(phase) {
   const p = (phase || '').toLowerCase();
@@ -3934,6 +3968,7 @@ const SOURCE_HEALTH_CFG = {
   rainfall:   { staleAfterMs: 45 * 60000,  layers: ['rainfall-icon'] },
   spaceweather: { staleAfterMs: 60 * 60000, layers: [] },
   skyclock:   { staleAfterMs: 26 * 3600000, layers: [] },
+  tsunami:    { staleAfterMs: 30 * 60000,  layers: [] },
   volcano:    { staleAfterMs: 60 * 60000,  layers: ['volcano-dot'] },
   streamflow: { staleAfterMs: 3 * 3600000, layers: [] },
   weather:    { staleAfterMs: 2 * 3600000, layers: ['weather-stations-icon'] },
@@ -7710,6 +7745,7 @@ Promise.all([
   fetchRainfall(),
   fetchSpaceWeather(),
   fetchSkyClock(),
+  fetchTsunami(),
   fetchMeshtastic(),
   fetchRepeaters(),
   fetchInfrastructure(),
@@ -7736,7 +7772,7 @@ setInterval(() => { if (!document.hidden) fetchHibike(); }, 60000);
 setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
-setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
+setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); fetchTsunami(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
 setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchMarine(); if (!document.hidden) fetchInfrastructure(); if (!document.hidden) fetchLocal(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); fetchRainfall(); fetchSpaceWeather(); fetchSkyClock(); } }, 15 * 60 * 1000);
 setInterval(() => { if (!document.hidden && (!hawaiiList.meshtastic || !hawaiiList.meshtastic.length)) fetchMeshtastic(); }, 2 * 60 * 1000);
 // APRS moves faster (vehicles) — refresh more often when it has data.

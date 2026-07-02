@@ -3051,6 +3051,12 @@ async function handleApi(url, res) {
       ...(spaceWxCache || {}) });
   }
 
+  // ── TSUNAMI — PTWC bulletin status (keyless) ──────────────────────────────
+  if (p === '/api/tsunami') {
+    return json(res, { ts: Date.now(), lastPollTs: tsunamiLastPollTs, lastError: tsunamiLastError,
+      ...(tsunamiCache || {}) });
+  }
+
   // ── SKY CLOCK — sun & moon for the Big Island (keyless) ───────────────────
   if (p === '/api/skyclock') {
     return json(res, { ts: Date.now(), lastPollTs: skyClockLastPollTs, lastError: skyClockLastError,
@@ -4966,6 +4972,35 @@ async function pollMetars() {
   } catch (e) { metarLastError = e.message; }
 }
 
+// ─── TSUNAMI — Pacific Tsunami Warning Center bulletins (keyless Atom) ────────
+// PTWC's Pacific feed (PHEB = Hawaii/Pacific messages). Most of the time it
+// carries only info statements or "no threat"; a real WARNING/WATCH/ADVISORY is
+// the single most important thing a Big Island status board can surface. We
+// classify the latest entry so the UI can flip green→red. Keyless XML.
+let tsunamiCache = null;
+let tsunamiLastPollTs = null, tsunamiLastError = null;
+async function pollTsunami() {
+  try {
+    const xml = await fetchText('www.tsunami.gov', '/events/xml/PHEBAtom.xml',
+      { 'User-Agent': 'heleon-tracker' });
+    // Grab the first <entry>'s title/summary/updated (most recent bulletin).
+    const entry = (xml.match(/<entry>([\s\S]*?)<\/entry>/) || [])[1] || xml;
+    const g = (re) => { const m = entry.match(re); return m ? m[1].replace(/\s+/g, ' ').trim() : null; };
+    const title = g(/<title>([\s\S]*?)<\/title>/);
+    const summary = g(/<summary>([\s\S]*?)<\/summary>/);
+    const updated = g(/<updated>([\s\S]*?)<\/updated>/);
+    const hay = `${title || ''} ${summary || ''}`.toUpperCase();
+    // Severity by keyword — WARNING > WATCH > ADVISORY > info/none.
+    let level = 'none';
+    if (/TSUNAMI WARNING/.test(hay)) level = 'warning';
+    else if (/TSUNAMI WATCH/.test(hay)) level = 'watch';
+    else if (/TSUNAMI ADVISORY/.test(hay)) level = 'advisory';
+    else if (/INFORMATION STATEMENT|NO TSUNAMI|THREAT/.test(hay)) level = 'info';
+    tsunamiCache = { level, title, summary: (summary || '').slice(0, 400), updated };
+    tsunamiLastPollTs = Date.now(); tsunamiLastError = null;
+  } catch (e) { tsunamiLastError = (e && e.message) || 'unknown error'; }
+}
+
 // ─── SKY CLOCK — sun & moon for the Big Island (USNO, keyless) ────────────────
 // Sunrise/sunset + moon phase & illumination for Hilo, refreshed daily. Drives
 // a day/night + moon-phase status badge — the "what time is it on the island"
@@ -5386,6 +5421,8 @@ const server = http.createServer((req, res) => {
   setInterval(pollSpaceWeather, 15 * 60 * 1000);  // Kp updates every 3h; poll loosely
   pollSkyClock();
   setInterval(pollSkyClock, 6 * 60 * 60 * 1000);  // sun/moon change slowly; refresh 4×/day
+  pollTsunami();
+  setInterval(pollTsunami, 5 * 60 * 1000);        // safety feed — check every 5 min
   pollSatellites();
   setInterval(pollSatellites, 20 * 1000); // ISS moves ~7.6 km/s — keep it fresh
   pollRepeaters();
