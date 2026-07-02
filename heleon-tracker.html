@@ -173,6 +173,13 @@
   .gauge-range-btns button { font-size:10px; padding:3px 8px; border-radius:6px;
     border:1px solid #30363d; background:#21262d; color:#8b949e; cursor:pointer; }
   .gauge-range-btns button.active { background:#1f6feb; border-color:#388bfd; color:#fff; }
+  .mesh-feed { max-height:200px; overflow-y:auto; font-family:ui-monospace,monospace; font-size:10px;
+    background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:6px 8px; margin-top:8px; }
+  .mesh-feed .msg { padding:5px 0; border-bottom:1px solid #21262d; line-height:1.35; }
+  .mesh-feed .msg:last-child { border-bottom:none; }
+  .mesh-feed .meta { color:#8b949e; font-size:9px; margin-bottom:2px; }
+  .mesh-feed .txt { color:#e6edf3; word-break:break-word; }
+  .mesh-feed .empty { color:#8b949e; font-style:italic; padding:8px 0; }
   .weather-thermo { display:flex; align-items:center; gap:10px; margin:8px 0 4px; }
   .weather-thermo .tube { width:14px; height:52px; border-radius:7px 7px 4px 4px;
     position:relative; border:1px solid #7f1d1d; background:linear-gradient(180deg,#fecaca,#fef2f2);
@@ -1444,24 +1451,26 @@ function initMapLayers() {
   map.addLayer({
     id: 'meshtastic-icon', type: 'symbol', source: 'meshtastic',
     layout: {
-      'text-field': '📶',
-      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 14, 13, 18],
+      'text-field': ['concat', '📶 ', ['get', 'badge']],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 13, 15],
       'text-font': EMOJI_FONT,
       'text-allow-overlap': true, 'text-ignore-placement': true,
     },
     paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
-  wireLayerHover('meshtastic-icon', p => `<div style="font-weight:600;">📶 ${escapeHtml(p.name)}</div>
-    <div style="color:var(--muted);font-size:10px;">LoRa mesh node · click for details</div>`);
-  wireLayerCard('meshtastic-icon', p => {
-    const rows = [];
-    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
-    if (p.hwName) row('Hardware', p.hwName);
-    if (p.role) row('Role', p.role);
-    if (p.battery != null && p.battery !== '') row('Battery', `${p.battery}%`);
-    if (p.altitude != null && p.altitude !== '') row('Altitude', `${p.altitude} m`);
-    if (p.lastHeard) row('Last heard', new Date(+p.lastHeard).toLocaleString());
-    return { title: `📶 ${p.name}`, body: (rows.join('') || 'Meshtastic node') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Meshtastic mesh via MQTT (meshtastic.liamcottle.net)</div>` };
+  wireLayerHover('meshtastic-icon', p => {
+    const bits = [];
+    if (p.temperature != null && p.temperature !== '') bits.push(`${p.temperature}°C`);
+    if (p.battery != null && p.battery !== '') bits.push(`${p.battery}% batt`);
+    if (p.localNodes != null && p.localNodes !== '') bits.push(`${p.localNodes} local nodes`);
+    return `<div style="font-weight:600;">📶 ${escapeHtml(p.name)}</div>
+      <div style="color:var(--muted);font-size:10px;">${bits.length ? escapeHtml(bits.join(' · ')) + ' · ' : ''}click for mesh traffic</div>`;
+  });
+  map.on('click', 'meshtastic-icon', e => {
+    if (!e.features || !e.features.length) return;
+    const f = e.features[0];
+    const c = f.geometry.coordinates;
+    openMeshtasticCard(f.properties.nodeId, f.properties, c);
   });
 
   // Ham radio repeaters (hearham.com, keyless): every VHF/UHF machine on the
@@ -2587,6 +2596,78 @@ async function fetchMetars() {
 }
 
 // Meshtastic LoRa nodes (keyless community mesh). Always on.
+let meshCardRefreshTimer = null;
+function meshMsgHtml(messages, nodeId) {
+  if (!messages || !messages.length) return '<div class="empty">No text messages captured for this node on the public MQTT feed yet.</div>';
+  return messages.map(m => {
+    const dir = String(m.from) === String(nodeId) ? 'TX' : 'RX';
+    const peer = dir === 'TX' ? m.to : m.from;
+    const t = m.created_at ? new Date(m.created_at).toLocaleString() : '';
+    return `<div class="msg"><div class="meta">${escapeHtml(dir)} · !${Number(peer).toString(16)} · ${escapeHtml(t)}</div><div class="txt">${escapeHtml(m.text || '')}</div></div>`;
+  }).join('');
+}
+function meshTelemetryRows(node, detail) {
+  const rows = [];
+  const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+  if (node.hwName) row('Hardware', node.hwName);
+  if (node.roleName) row('Role', node.roleName);
+  if (node.fw) row('Firmware', node.fw);
+  if (node.region) row('Region', node.region);
+  if (node.modem) row('Modem', node.modem);
+  if (node.altitude != null) row('Altitude', `${node.altitude} m`);
+  if (node.battery != null) row('Battery', `${node.battery}%`);
+  if (node.voltage != null) row('Voltage', `${(+node.voltage).toFixed(2)} V`);
+  if (node.temperature != null) row('Temperature', `${node.temperature}°C`);
+  if (node.humidity != null) row('Humidity', `${node.humidity}%`);
+  if (node.pressure != null) row('Pressure', `${node.pressure} hPa`);
+  if (node.localNodes != null) row('Local mesh nodes', String(node.localNodes));
+  if (node.neighbourCount) row('Neighbours heard', String(node.neighbourCount));
+  if (node.positionUpdated) row('Position updated', new Date(node.positionUpdated).toLocaleString());
+  const dm = (detail.deviceMetrics || [])[0];
+  if (dm && dm.channel_utilization != null) row('Channel util (latest)', `${(+dm.channel_utilization).toFixed(1)}%`);
+  if (dm && dm.air_util_tx != null) row('Air util TX (latest)', `${(+dm.air_util_tx).toFixed(1)}%`);
+  const em = (detail.environmentMetrics || [])[0];
+  if (em && em.temperature != null && node.temperature == null) row('Env temp (latest)', `${em.temperature}°C`);
+  return rows.join('');
+}
+async function openMeshtasticCard(nodeId, props, coords) {
+  showMapCard('<div style="color:#8b949e;">Loading mesh data…</div>', coords, `📶 ${props.name || 'Meshtastic'}`);
+  let detail = { node: null, messages: [], neighbours: {}, deviceMetrics: [], environmentMetrics: [] };
+  try {
+    const res = await fetch(`/api/meshtastic-detail?node=${encodeURIComponent(nodeId)}`);
+    detail = await res.json();
+  } catch (e) { /* show partial */ }
+  const node = detail.node || {
+    name: props.name, shortName: props.shortName, hwName: props.hwName, roleName: props.roleName,
+    fw: props.fw, altitude: props.altitude, battery: props.battery, temperature: props.temperature,
+    localNodes: props.localNodes, neighbourCount: props.neighbourCount, positionUpdated: props.positionUpdated,
+  };
+  const nbHeard = (detail.neighbours && detail.neighbours.nodes_that_we_heard) || [];
+  const nbHearUs = (detail.neighbours && detail.neighbours.nodes_that_heard_us) || [];
+  let nbHtml = '';
+  if (nbHeard.length || nbHearUs.length) {
+    const fmtNb = arr => arr.slice(0, 8).map(n => `!${Number(n.node_id).toString(16)}${n.snr != null ? ` (${n.snr} dB)` : ''}`).join(', ');
+    nbHtml = `<div style="font-size:10px;color:#8b949e;margin-top:6px;line-height:1.4;">`;
+    if (nbHeard.length) nbHtml += `<div><b style="color:#c9d1d9;">Heard:</b> ${escapeHtml(fmtNb(nbHeard))}</div>`;
+    if (nbHearUs.length) nbHtml += `<div><b style="color:#c9d1d9;">Heard us:</b> ${escapeHtml(fmtNb(nbHearUs))}</div>`;
+    nbHtml += '</div>';
+  }
+  const body = (meshTelemetryRows(node, detail) || '<div style="color:#8b949e;">Node on public MQTT map.</div>') + nbHtml +
+    `<div style="font-size:10px;font-weight:700;color:#c9d1d9;margin-top:10px;">📨 Mesh messages (live)</div>
+     <div class="mesh-feed" id="mesh-feed">${meshMsgHtml(detail.messages, nodeId)}</div>
+     <div style="margin-top:8px;font-size:10px;"><a href="https://meshtastic.liamcottle.net/" target="_blank" rel="noopener" style="color:#58a6ff;">Open full Meshtastic map</a> · LoRa data only (not voice)</div>`;
+  showMapCard(body, coords, `📶 ${node.name || props.name} <span style="font-weight:400;color:#8b949e;font-size:10px;">${escapeHtml(props.idHex || '')}</span>`);
+  const refresh = async () => {
+    try {
+      const res = await fetch(`/api/meshtastic-detail?node=${encodeURIComponent(nodeId)}`);
+      const d = await res.json();
+      const el = mapCard && mapCard.querySelector('#mesh-feed');
+      if (el) el.innerHTML = meshMsgHtml(d.messages, nodeId);
+    } catch (e) { /* keep showing last */ }
+  };
+  if (meshCardRefreshTimer) clearInterval(meshCardRefreshTimer);
+  meshCardRefreshTimer = setInterval(refresh, 15000);
+}
 async function fetchMeshtastic() {
   try {
     const res = await fetch('/api/meshtastic');
@@ -2594,8 +2675,13 @@ async function fetchMeshtastic() {
     if (!mapReady || !map.getSource('meshtastic')) return;
     const feats = (data.nodes || []).map(n => ({
       type: 'Feature', geometry: { type: 'Point', coordinates: [n.lon, n.lat] },
-      properties: { name: n.name || n.id, hwName: n.hwName || '', role: n.role || '',
-        battery: n.battery, altitude: n.altitude, lastHeard: n.lastHeard } }));
+      properties: {
+        nodeId: n.id, name: n.name || String(n.id), shortName: n.shortName || '', badge: n.shortName || n.name || String(n.id),
+        idHex: n.idHex || '', hwName: n.hwName || '', roleName: n.roleName || '', fw: n.fw || '',
+        battery: n.battery, voltage: n.voltage, temperature: n.temperature, humidity: n.humidity,
+        altitude: n.altitude, localNodes: n.localNodes, neighbourCount: n.neighbourCount || 0,
+        positionUpdated: n.positionUpdated || n.updatedAt || '',
+      } }));
     map.getSource('meshtastic').setData({ type: 'FeatureCollection', features: feats });
   } catch (e) { /* keep last */ }
 }
@@ -4683,7 +4769,10 @@ function showMapCard(bodyHtml, lngLat, title) {
   mapCard.style.display = 'block';
   positionMapCard();
 }
-function hideMapCard() { if (mapCard) { mapCard.style.display = 'none'; mapCardAnchor = null; } }
+function hideMapCard() {
+  if (meshCardRefreshTimer) { clearInterval(meshCardRefreshTimer); meshCardRefreshTimer = null; }
+  if (mapCard) { mapCard.style.display = 'none'; mapCardAnchor = null; }
+}
 function positionMapCard() {
   if (!mapCard || mapCard.style.display === 'none') return;
   let x, y;
@@ -4701,7 +4790,7 @@ function positionMapCard() {
 
 // Layers whose features open a click-card (and whose empty-space click closes it).
 const CARD_LAYERS = ['ocean-dot', 'aprs-icon', 'summits-dot', 'weather-stations-icon', 'aircraft-triangles', 'airquality-icon',
-  'volcano-dot', 'metars-dot', 'meshtastic-icon', 'repeaters-icon'];
+  'volcano-dot', 'metars-dot', 'repeaters-icon'];
 // Wire click-to-open-card on a layer. buildCard(props) -> { title, body }.
 function wireLayerCard(layerId, buildCard) {
   map.on('click', layerId, e => {

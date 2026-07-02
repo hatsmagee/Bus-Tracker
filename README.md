@@ -66,7 +66,7 @@ noted). All of it is polled server-side, cached, and served from `/api/*`.
 | Volcano | USGS HVO HANS alerts + live webcams | `/api/volcano` | Kīlauea/Mauna Loa color code + alert level, 8 live cams |
 | METARs | NOAA Aviation Weather Center | `/api/metars` | PHTO Hilo, PHKO Kona, PHSF Bradshaw AAF (military) |
 | APRS ham radio | APRS-IS TCP feed (`rotate.aprs2.net`) | `/api/aprs` | keyless RX-only login; real vehicles/stations/wx beacons |
-| Meshtastic / LoRa | meshtastic.liamcottle.net node map | `/api/meshtastic` | LoRa mesh nodes heard on the island |
+| Meshtastic / LoRa | meshtastic.liamcottle.net node map + MQTT text messages | `/api/meshtastic`, `/api/meshtastic-detail`, `/api/meshtastic-feed` | LoRa mesh nodes; click card shows telemetry + live message stream |
 | Ham repeaters | hearham.com open repeater list | `/api/repeaters` | 55 repeaters with frequency/offset/tone |
 | Earthquakes | USGS FDSN GeoJSON | `/api/earthquakes` | Big Island bbox |
 | Wildfire | NASA FIRMS hotspots | `/api/wildfire` | MODIS/VIIRS |

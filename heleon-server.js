@@ -2997,6 +2997,17 @@ async function handleApi(url, res) {
     return json(res, { ts: Date.now(), lastPollTs: meshtasticLastPollTs, lastError: meshtasticLastError,
       count: meshtasticCache.length, nodes: meshtasticCache });
   }
+  if (p === '/api/meshtastic-feed') {
+    return json(res, { ts: Date.now(), lastPollTs: meshtasticFeedLastPoll, messages: meshtasticFeedCache });
+  }
+  if (p === '/api/meshtastic-detail') {
+    const nodeId = q.get('node');
+    if (!nodeId) return json(res, { error: 'node query param required' });
+    try {
+      const detail = await fetchMeshtasticNodeDetail(nodeId);
+      return json(res, { ts: Date.now(), ...detail });
+    } catch (e) { return json(res, { error: e.message, node: null, messages: [] }); }
+  }
 
   // ── HAM REPEATERS (hearham.com, keyless) ──────────────────────────────────
   if (p === '/api/repeaters') {
@@ -3968,29 +3979,96 @@ async function pollMetars() {
 }
 
 // ─── MESHTASTIC / LoRa MESH NODES (liamcottle map API, keyless) ───────────────
-// The community Meshtastic map aggregates nodes heard over MQTT worldwide. We
-// pull the full node list (big — so only every 30 min) and keep just the ones
-// physically on/around the Big Island. These are real LoRa mesh radios people
-// run — solar repeaters on ridgelines, pocket nodes, base stations.
+// Community MQTT aggregator — node list, telemetry, neighbours, and text
+// messages. LoRa mesh carries data (not audio); we pull messages + metrics.
+const MESHTASTIC_HOST = 'meshtastic.liamcottle.net';
+async function meshtasticApi(path) {
+  return fetchJson(MESHTASTIC_HOST, path, { 'User-Agent': 'heleon-tracker' });
+}
+function formatMeshtasticNode(n) {
+  return {
+    id: n.node_id,
+    idHex: n.node_id_hex || ('!' + Number(n.node_id).toString(16)),
+    name: n.long_name || n.short_name || String(n.node_id),
+    shortName: n.short_name || '',
+    lat: n.latitude != null ? n.latitude / 1e7 : null,
+    lon: n.longitude != null ? n.longitude / 1e7 : null,
+    altitude: n.altitude,
+    hw: n.hardware_model,
+    hwName: n.hardware_model_name || '',
+    role: n.role,
+    roleName: n.role_name || '',
+    fw: n.firmware_version || '',
+    region: n.region_name || '',
+    modem: n.modem_preset_name || '',
+    battery: n.battery_level,
+    voltage: n.voltage,
+    temperature: n.temperature,
+    humidity: n.relative_humidity,
+    pressure: n.barometric_pressure,
+    channelUtil: n.channel_utilization,
+    airUtilTx: n.air_util_tx,
+    uptimeSec: n.uptime_seconds,
+    localNodes: n.num_online_local_nodes,
+    neighbourCount: (n.neighbours || []).length,
+    neighbours: (n.neighbours || []).map(nb => ({ id: nb.node_id, snr: nb.snr })),
+    positionUpdated: n.position_updated_at,
+    updatedAt: n.updated_at,
+  };
+}
 let meshtasticCache = [];
 let meshtasticLastPollTs = null, meshtasticLastError = null;
+let meshtasticFeedCache = [];
+let meshtasticFeedLastPoll = null;
 async function pollMeshtastic() {
   try {
-    const j = await fetchJson('meshtastic.liamcottle.net', '/api/v1/nodes',
-      { 'User-Agent': 'heleon-tracker' });
+    const j = await meshtasticApi('/api/v1/nodes');
     const nodes = (j && j.nodes) || (Array.isArray(j) ? j : []);
     meshtasticCache = nodes
-      .map(n => ({
-        id: n.node_id, name: n.long_name || n.short_name || String(n.node_id),
-        shortName: n.short_name || '',
-        lat: n.latitude != null ? n.latitude / 1e7 : null,
-        lon: n.longitude != null ? n.longitude / 1e7 : null,
-        hw: n.hardware_model, role: n.role, fw: n.firmware_version,
-        updatedAt: n.position_updated_at || n.updated_at || null,
-      }))
+      .map(formatMeshtasticNode)
       .filter(n => n.lat != null && n.lat > 18.5 && n.lat < 20.6 && n.lon > -156.5 && n.lon < -154.4);
     meshtasticLastPollTs = Date.now(); meshtasticLastError = null;
+    pollMeshtasticFeed();
   } catch (e) { meshtasticLastError = e.message; }
+}
+async function pollMeshtasticFeed() {
+  if (!meshtasticCache.length) return;
+  try {
+    const biIds = new Set(meshtasticCache.map(n => String(n.id)));
+    const j = await meshtasticApi('/api/v1/text-messages?count=400&order=desc');
+    meshtasticFeedCache = (j.text_messages || []).filter(m =>
+      biIds.has(String(m.from)) || biIds.has(String(m.to)) || biIds.has(String(m.gateway_id))).slice(0, 100);
+    meshtasticFeedLastPoll = Date.now();
+  } catch (e) { /* keep last feed */ }
+}
+async function fetchMeshtasticNodeDetail(nodeId) {
+  const id = encodeURIComponent(nodeId);
+  const dayAgo = Date.now() - 24 * 3600 * 1000;
+  const [dev, env, pwr, posHist, trace, fromMsgs, toMsgs] = await Promise.all([
+    meshtasticApi(`/api/v1/nodes/${id}/device-metrics?count=30&order=desc`).catch(() => ({ device_metrics: [] })),
+    meshtasticApi(`/api/v1/nodes/${id}/environment-metrics?count=30&order=desc`).catch(() => ({ environment_metrics: [] })),
+    meshtasticApi(`/api/v1/nodes/${id}/power-metrics?count=30&order=desc`).catch(() => ({ power_metrics: [] })),
+    meshtasticApi(`/api/v1/nodes/${id}/position-history?time_from=${dayAgo}`).catch(() => ({ position_history: [] })),
+    meshtasticApi(`/api/v1/nodes/${id}/traceroutes?count=15`).catch(() => ({ traceroutes: [] })),
+    meshtasticApi(`/api/v1/text-messages?from=${id}&count=50&order=desc`).catch(() => ({ text_messages: [] })),
+    meshtasticApi(`/api/v1/text-messages?to=${id}&count=50&order=desc`).catch(() => ({ text_messages: [] })),
+  ]);
+  const msgMap = new Map();
+  for (const m of [...(fromMsgs.text_messages || []), ...(toMsgs.text_messages || [])]) msgMap.set(String(m.id), m);
+  const messages = [...msgMap.values()].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 80);
+  const node = meshtasticCache.find(n => String(n.id) === String(nodeId)) || null;
+  let neighbours = { nodes_that_we_heard: [], nodes_that_heard_us: [] };
+  try { neighbours = await meshtasticApi(`/api/v1/nodes/${id}/neighbours`); } catch (e) { /* optional */ }
+  return {
+    node,
+    messages,
+    neighbours,
+    deviceMetrics: dev.device_metrics || [],
+    environmentMetrics: env.environment_metrics || [],
+    powerMetrics: pwr.power_metrics || [],
+    positionHistory: posHist.position_history || [],
+    traceroutes: trace.traceroutes || [],
+  };
 }
 
 // ─── HAM RADIO REPEATERS (hearham.com open API, keyless) ──────────────────────
@@ -4165,6 +4243,7 @@ const server = http.createServer((req, res) => {
   setInterval(pollVolcano, 15 * 60 * 1000);
   setInterval(pollMetars, 10 * 60 * 1000);
   setInterval(pollMeshtastic, 30 * 60 * 1000);
+  setInterval(pollMeshtasticFeed, 2 * 60 * 1000);
   setInterval(pollRepeaters, 24 * 60 * 60 * 1000);
   setInterval(pollHazardZones, 24 * 60 * 60 * 1000);
   setInterval(pollPubSafetyFacilities, 24 * 60 * 60 * 1000);
