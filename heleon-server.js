@@ -3051,6 +3051,12 @@ async function handleApi(url, res) {
       ...(spaceWxCache || {}) });
   }
 
+  // ── PLACES OF INTEREST — Wikipedia (keyless, photos + notes) ──────────────
+  if (p === '/api/places') {
+    return json(res, { ts: Date.now(), lastPollTs: placesLastPollTs, lastError: placesLastError,
+      places: placesCache });
+  }
+
   // ── TSUNAMI — PTWC bulletin status (keyless) ──────────────────────────────
   if (p === '/api/tsunami') {
     return json(res, { ts: Date.now(), lastPollTs: tsunamiLastPollTs, lastError: tsunamiLastError,
@@ -5029,6 +5035,72 @@ async function pollMetars() {
   } catch (e) { metarLastError = e.message; }
 }
 
+// ─── PLACES OF INTEREST — Wikipedia geosearch (keyless, photos + notes) ──────
+// Historical & notable Big Island locations straight from Wikipedia: famous
+// sites, old docks, battle/heiau sites, landmarks, natural features — each with
+// a thumbnail photo and a short extract on click. We geosearch a grid of points
+// across the island, dedupe by pageid, then enrich the set with pageimages +
+// intro extracts in one batched call. Keyless. Refreshed daily (very static).
+const WIKI_GRID = [];
+for (let lat = 19.0; lat <= 20.25; lat += 0.18) {
+  for (let lon = -156.05; lon <= -154.85; lon += 0.18) WIKI_GRID.push([+lat.toFixed(3), +lon.toFixed(3)]);
+}
+let placesCache = [];
+let placesLastPollTs = null, placesLastError = null;
+async function pollPlaces() {
+  try {
+    const found = new Map(); // pageid -> {title, lat, lon}
+    for (const [lat, lon] of WIKI_GRID) {
+      try {
+        const j = await fetchJson('en.wikipedia.org',
+          `/w/api.php?action=query&format=json&list=geosearch&gscoord=${lat}%7C${lon}&gsradius=10000&gslimit=20`,
+          { 'User-Agent': 'heleon-tracker/1.0 (bus map)' });
+        for (const g of ((j.query && j.query.geosearch) || [])) {
+          if (!found.has(g.pageid)) found.set(g.pageid, { title: g.title, lat: g.lat, lon: g.lon });
+        }
+      } catch (e) { /* skip this grid cell */ }
+      await new Promise(r => setTimeout(r, 120)); // be gentle to Wikipedia
+    }
+    // Enrich in batches of 20 pageids with thumbnail + intro extract.
+    const ids = [...found.keys()];
+    const out = [];
+    for (let i = 0; i < ids.length; i += 20) {
+      const batch = ids.slice(i, i + 20);
+      try {
+        const j = await fetchJson('en.wikipedia.org',
+          `/w/api.php?action=query&format=json&prop=pageimages%7Cextracts&piprop=thumbnail&pithumbsize=360&exintro=1&explaintext=1&exsentences=2&pilimit=20&pageids=${batch.join('%7C')}`,
+          { 'User-Agent': 'heleon-tracker/1.0 (bus map)' });
+        for (const p of Object.values((j.query && j.query.pages) || {})) {
+          const base = found.get(p.pageid);
+          if (!base) continue;
+          const extract = (p.extract || '').trim();
+          // Classify for icon: shipwreck / battle / heiau / dock / landmark…
+          const hay = `${p.title} ${extract}`.toLowerCase();
+          let kind = 'landmark';
+          if (/shipwreck|wreck|sunk|sank/.test(hay)) kind = 'wreck';
+          else if (/battle|war|fort|cannon|skirmish/.test(hay)) kind = 'battle';
+          else if (/heiau|temple|sacred|puʻuhonua|puuhonua/.test(hay)) kind = 'heiau';
+          else if (/dock|wharf|pier|harbor|harbour|landing/.test(hay)) kind = 'dock';
+          else if (/waterfall|falls|spring|pond|lake|bay|beach/.test(hay)) kind = 'water';
+          else if (/heritage|historic|national register|monument|memorial/.test(hay)) kind = 'historic';
+          else if (/church|mission|temple|shrine/.test(hay)) kind = 'church';
+          else if (/observatory|telescope/.test(hay)) kind = 'observatory';
+          else if (/park|refuge|forest|reserve/.test(hay)) kind = 'park';
+          out.push({
+            id: p.pageid, title: base.title, lat: base.lat, lon: base.lon, kind,
+            extract: extract.slice(0, 320),
+            thumb: (p.thumbnail && p.thumbnail.source) || null,
+            url: `https://en.wikipedia.org/?curid=${p.pageid}`,
+          });
+        }
+      } catch (e) { /* skip this enrichment batch */ }
+      await new Promise(r => setTimeout(r, 120));
+    }
+    if (out.length) { placesCache = out; placesLastPollTs = Date.now(); placesLastError = null; }
+    else placesLastError = 'no places';
+  } catch (e) { placesLastError = (e && e.message) || 'unknown error'; }
+}
+
 // ─── TSUNAMI — Pacific Tsunami Warning Center bulletins (keyless Atom) ────────
 // PTWC's Pacific feed (PHEB = Hawaii/Pacific messages). Most of the time it
 // carries only info statements or "no threat"; a real WARNING/WATCH/ADVISORY is
@@ -5480,6 +5552,8 @@ const server = http.createServer((req, res) => {
   setInterval(pollSkyClock, 6 * 60 * 60 * 1000);  // sun/moon change slowly; refresh 4×/day
   pollTsunami();
   setInterval(pollTsunami, 5 * 60 * 1000);        // safety feed — check every 5 min
+  pollPlaces();                                    // Wikipedia POIs (slow grid scan)
+  setInterval(pollPlaces, 24 * 60 * 60 * 1000);   // very static — once a day
   pollSatellites();
   setInterval(pollSatellites, 20 * 1000); // ISS moves ~7.6 km/s — keep it fresh
   pollRepeaters();

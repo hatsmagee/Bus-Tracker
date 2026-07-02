@@ -761,6 +761,7 @@
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showRadar" onchange="toggleRadar()"> Precipitation radar</label>
         <label><input type="checkbox" id="showTopo" onchange="toggleTopography()"> ⛰️ Topography (elevation)</label>
+        <label><input type="checkbox" id="showPlaces" onchange="togglePlaces()"> 🏛️ Historical & notable places</label>
       </div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showLava" onchange="toggleLava()"> Lava flow hazard zones</label>
@@ -1793,6 +1794,34 @@ function initMapLayers() {
     if (p.latestIn != null && p.latestIn !== '') row('Latest interval', `${(+p.latestIn).toFixed(2)} in`);
     return { title: `🌧️ ${p.name}`, body: rows.join('') +
       `<div style="color:#8b949e;font-size:10px;margin-top:8px;">USGS rain gauge${p.at ? ' · ' + new Date(p.at).toLocaleString() : ''}</div>` };
+  });
+
+  // Places of interest — historical & notable Big Island sites from Wikipedia
+  // (shipwrecks, battle sites, heiau, old docks, waterfalls, landmarks) with a
+  // photo + notes on click. Kind-based emoji; collision auto-declutters. Off by
+  // default (it's a browse-y layer, not live status).
+  map.addSource('places', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'places-icon', type: 'symbol', source: 'places',
+    minzoom: 9,
+    layout: {
+      visibility: 'none',
+      'text-field': ['match', ['get', 'kind'],
+        'wreck', '🚢', 'battle', '⚔️', 'heiau', '🗿', 'dock', '⚓', 'water', '💦',
+        'historic', '🏛️', 'church', '⛪', 'observatory', '🔭', 'park', '🌲', '📍'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 9, 13, 14, 18],
+      'text-font': EMOJI_FONT,
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 6,
+    },
+    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 },
+  });
+  wireLayerHover('places-icon', p => `<div style="font-weight:600;">${escapeHtml(p.title)}</div>
+    <div style="color:var(--muted);font-size:10px;">click for photo & notes</div>`);
+  wireLayerCard('places-icon', p => {
+    const img = p.thumb ? `<img src="${escapeHtml(p.thumb)}" style="width:100%;border-radius:6px;display:block;margin-bottom:8px;" alt="${escapeHtml(p.title)}"/>` : '';
+    const note = p.extract ? `<div style="font-size:12px;line-height:1.5;color:var(--text);">${escapeHtml(p.extract)}</div>` : '<div style="color:#8b949e;">No summary available.</div>';
+    const link = p.url ? `<div style="margin-top:8px;font-size:10px;"><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener" style="color:#58a6ff;">Read on Wikipedia ↗</a></div>` : '';
+    return { title: escapeHtml(p.title), body: img + note + link };
   });
 
   // Meshtastic / LoRa mesh nodes — real community radios (solar repeaters on
@@ -3452,6 +3481,30 @@ async function fetchSpaceWeather() {
   } catch (e) { /* keep last */ }
 }
 
+// Places of interest — historical/notable sites from Wikipedia (photos+notes).
+let placesVisible = false;
+async function fetchPlaces() {
+  try {
+    const res = await fetch('/api/places');
+    const data = await res.json();
+    recordHealth('places', data, (data.places || []).length);
+    hawaiiList.places = data.places || [];
+    hawaiiBrowseRefresh();
+    if (!mapReady || !map.getSource('places')) return;
+    const feats = (data.places || []).map(pl => ({
+      type: 'Feature', geometry: { type: 'Point', coordinates: [pl.lon, pl.lat] },
+      properties: { id: pl.id, title: pl.title, kind: pl.kind, extract: pl.extract || '', thumb: pl.thumb || '', url: pl.url || '' } }));
+    map.getSource('places').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
+}
+function togglePlaces() {
+  placesVisible = document.getElementById('showPlaces').checked;
+  if (mapReady && map.getLayer('places-icon')) {
+    map.setLayoutProperty('places-icon', 'visibility', placesVisible ? 'visible' : 'none');
+  }
+  if (placesVisible && (!hawaiiList.places || !hawaiiList.places.length)) fetchPlaces();
+}
+
 // Tsunami — PTWC bulletin status (keyless). Header badge, green normally, red
 // for any active warning/watch/advisory. Click opens the full bulletin text.
 let tsunamiData = null;
@@ -4081,7 +4134,7 @@ const hawaiiList = {
   localFuelPrices: {}, localFuelStations: [], localTrafficSensors: [], localLco: [], localInat: [],
   localNotes: {},
   summits: [], ocean: [], airquality: [], volcanoAlerts: [], volcanoCams: [], satellites: [], rainfall: [],
-  metars: [], alerts: [], wildfire: [],
+  metars: [], alerts: [], wildfire: [], places: [],
   facilities: { police: [], fire: [], ems: [], trauma: [] },
 };
 const hawaiiBrowse = { openCats: new Set(['radio']), openItems: new Set() };
@@ -4109,6 +4162,7 @@ const SOURCE_HEALTH_CFG = {
   spaceweather: { staleAfterMs: 60 * 60000, layers: [] },
   skyclock:   { staleAfterMs: 26 * 3600000, layers: [] },
   tsunami:    { staleAfterMs: 30 * 60000,  layers: [] },
+  places:     { staleAfterMs: 48 * 3600000, layers: ['places-icon'] },
   volcano:    { staleAfterMs: 60 * 60000,  layers: ['volcano-dot'] },
   streamflow: { staleAfterMs: 3 * 3600000, layers: [] },
   weather:    { staleAfterMs: 2 * 3600000, layers: ['weather-stations-icon'] },
@@ -4123,7 +4177,7 @@ const CAT_HEALTH_ID = {
   streamflow: 'streamflow', summits: 'summits', ocean: 'ocean',
   marineWebcams: 'marine', marineReefSensors: 'marine',
   airquality: 'airquality', volcano: 'volcano', metars: 'metars', satellites: 'satellites',
-  rainfall: 'rainfall',
+  rainfall: 'rainfall', places: 'places',
 };
 
 // state: 'live' (fresh data), 'stale' (data but poll went quiet), 'empty'
@@ -4555,6 +4609,8 @@ function hawaiiCategories() {
     { id: 'volcano', icon: '🌋', label: 'Volcano Alerts & Webcams', items: volcanoItems },
     { id: 'metars', icon: '✈️', label: 'Aviation METARs', items: hawaiiList.metars },
     { id: 'satellites', icon: '🛰️', label: 'Satellites Overhead', items: hawaiiList.satellites },
+    { id: 'places', icon: '🏛️', label: 'Historical & Notable Places',
+      items: [...(hawaiiList.places || [])].sort((a, b) => String(a.title).localeCompare(b.title)) },
     { id: 'alerts', icon: '⚠️', label: 'Active NWS Alerts', items: hawaiiList.alerts },
     { id: 'quakes', icon: '🌎', label: 'Recent Earthquakes', items: [...allQuakes].sort((a, b) => b.time - a.time) },
     { id: 'wildfire', icon: '🔥', label: 'Wildfire Hotspots', items: hawaiiList.wildfire },
@@ -4603,6 +4659,7 @@ function hawaiiItemSummary(catId, item) {
     case 'metars': return { icon: '✈️', title: `${item.icao} — ${item.name}`, meta: item.fltCat || '' };
     case 'satellites': return { icon: item.emoji || '🛰️', title: item.name, meta: item.overhead ? '🌺 over Hawaiʻi now' : `${Math.round(item.altKm)} km up · ${Math.round(item.distKm)} km away` };
     case 'rainfall': return { icon: (item.accum6hIn >= 1 ? '⛈️' : item.accum6hIn > 0.05 ? '🌧️' : '☁️'), title: item.name, meta: `${(+item.accum6hIn).toFixed(2)}" last 6h` };
+    case 'places': { const e = { wreck:'🚢', battle:'⚔️', heiau:'🗿', dock:'⚓', water:'💦', historic:'🏛️', church:'⛪', observatory:'🔭', park:'🌲' }[item.kind] || '📍'; return { icon: e, title: item.title, meta: (item.extract || '').slice(0, 60) }; }
     case 'alerts': return { icon: '⚠️', title: item.event, meta: item.areaDesc || '' };
     case 'quakes': return { icon: '🌋', title: `M${(+item.mag).toFixed(1)} — ${item.place}`, meta: new Date(item.time).toLocaleDateString() };
     case 'wildfire': return { icon: '🔥', title: 'Thermal hotspot', meta: item.props && item.props.confidence != null ? `confidence ${item.props.confidence}` : '' };
@@ -7890,6 +7947,7 @@ Promise.all([
   fetchSpaceWeather(),
   fetchSkyClock(),
   fetchTsunami(),
+  fetchPlaces(),
   fetchMeshtastic(),
   fetchRepeaters(),
   fetchInfrastructure(),
