@@ -5684,15 +5684,26 @@ async function pollTimelines() {
     await new Promise(r => setTimeout(r, 220));
     return media;
   }
+  // Index previously-resolved images (from the disk-seeded cache) so a poll that
+  // gets rate-limited by Wikipedia never *loses* an image we already had — it can
+  // only add. Keyed by timeline title + event title.
+  const prevImg = new Map();
+  for (const tl of (timelinesCache || [])) {
+    for (const ev of (tl.events || [])) {
+      if (ev.image) prevImg.set(`${tl.title}||${ev.title}`, { image: ev.image, sourceUrl: ev.sourceUrl || null });
+    }
+  }
   const out = [];
   for (const tl of TIMELINE_DEFS) {
     const events = [];
     for (const ev of (tl.events || [])) {
       const media = ev.wikiImage ? await resolveImage(ev.wikiImage) : null;
+      const prev = prevImg.get(`${tl.title || 'History'}||${ev.title || ''}`);
+      const image = (media && media.image) || (prev && prev.image) || null;
       events.push({
         year: ev.year || '', title: ev.title || '', text: ev.text || '',
-        image: (media && media.image) || null,
-        source: ev.source || '', sourceUrl: ev.sourceUrl || (media && media.wikiUrl) || null,
+        image,
+        source: ev.source || '', sourceUrl: ev.sourceUrl || (media && media.wikiUrl) || (prev && prev.sourceUrl) || null,
       });
     }
     out.push({
@@ -6187,7 +6198,7 @@ const SURF_SPOTS = [
   { id: 'honolii', name: 'Honoliʻi Beach Park', region: 'Hilo (East)', lat: 19.760, lon: -155.088, brk: 'rivermouth', skill: 'Intermediate–Advanced', bottom: 'Rock / rivermouth', bestSwell: 'N–NE (winter)', fc: 'Honolii-Beach-Park', desc: 'The Big Island\u2019s premier east-side break — a fast, hollow rivermouth wave just north of Hilo that works much of the year and lights up on winter north swells. The island\u2019s surf heart and contest venue.' },
   { id: 'banyans', name: 'Banyans', region: 'Kailua-Kona (West)', lat: 19.615, lon: -156.001, brk: 'reef', skill: 'Intermediate–Advanced', bottom: 'Lava reef', bestSwell: 'S–SW (summer)', fc: 'Banyans', surfline: 'https://www.surfline.com/surf-report/banyans/5842041f4e65fad6a770889d', desc: 'Kona\u2019s most popular break — a year-round A-frame reef where pro Shane Dorian grew up surfing. Summer S/SW swells march straight in; a hollow right with fun lefts.' },
   { id: 'lymans', name: 'Lymanʻs', region: 'Kailua-Kona (West)', lat: 19.622, lon: -156.003, brk: 'point', skill: 'Advanced', bottom: 'Lava reef point', bestSwell: 'S–SW / W', fc: 'Lymans', desc: 'A long, fast reef point just north of Banyans — one of Kona\u2019s best waves when the swell lines up, with a peeling right that can run a long way. Localized; respect the lineup.' },
-  { id: 'pinetrees', name: 'Pine Trees (Kohanaiki)', region: 'North Kona', lat: 19.686, lon: -156.036, brk: 'reef', skill: 'All levels', bottom: 'Lava reef', bestSwell: 'NW / S', fc: 'Pine-Trees', desc: 'A cluster of reef breaks in the Kohanaiki Beach Park area south of the Kona airport — a fun, mellow right that suits all skill levels and a major local surf community hub.' },
+  { id: 'pinetrees', name: 'Pine Trees (Kohanaiki)', region: 'North Kona', lat: 19.686, lon: -156.036, brk: 'reef', skill: 'All levels', bottom: 'Lava reef', bestSwell: 'NW / S', fc: 'Pine-Trees', youtube: 'jOp_aAXsYmE', youtubeLabel: 'MEGA Lab reef cam — Keahole Point (live, 24/7)', desc: 'A cluster of reef breaks in the Kohanaiki Beach Park area south of the Kona airport — a fun, mellow right that suits all skill levels and a major local surf community hub. The nearby MEGA Lab / NELHA ocean observatory streams a live underwater reef cam 24/7.' },
   { id: 'kahaluu', name: 'Kahaluʻu Bay', region: 'Keauhou (West)', lat: 19.578, lon: -155.967, brk: 'reef', skill: 'Beginner–Intermediate', bottom: 'Reef / sand', bestSwell: 'S', fc: 'Kahaluu', desc: 'The island\u2019s classic learn-to-surf bay — protected, gentle rollers over reef, and world-class snorkeling. Watch for shallow reef and honu (green sea turtles).' },
   { id: 'magicsands', name: 'Magic Sands (Laʻaloa)', region: 'Kailua-Kona (West)', lat: 19.585, lon: -155.965, brk: 'shorebreak', skill: 'Bodyboard / experienced', bottom: 'Sand (seasonal)', bestSwell: 'S–SW', fc: 'Magics', desc: 'Also called Disappearing Sands — the beach\u2019s sand washes away on big swells to expose rock, then returns. A punchy shorebreak beloved by bodyboarders and bodysurfers.' },
   { id: 'oldairport', name: 'Old Kona Airport', region: 'Kailua-Kona (West)', lat: 19.652, lon: -156.010, brk: 'reef', skill: 'Intermediate', bottom: 'Lava reef', bestSwell: 'W / NW', fc: 'Old-Kona-Airport-State-Park', desc: 'Reef breaks fronting the Old Kona Airport State Park — several peaks that pick up west and northwest energy, with easy paved access and parking.' },

@@ -840,7 +840,7 @@
 
     <div class="tab-content" id="tab-hawaii">
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
-        <label><input type="checkbox" id="showRadar" onchange="toggleRadar()" checked> Precipitation radar</label>
+        <label><input type="checkbox" id="showRadar" onchange="toggleRadar()"> Precipitation radar</label>
         <label><input type="checkbox" id="showTopo" onchange="toggleTopography()" checked> ⛰️ Topography (elevation)</label>
         <label><input type="checkbox" id="showPlaces" onchange="togglePlaces()" checked> 🏛️ Historical & notable places</label>
         <label><input type="checkbox" id="showHeritage" onchange="toggleHeritage()" checked> 🛕 Heritage & ancient sites</label>
@@ -1814,7 +1814,7 @@ function initMapLayers() {
     if (p.humidity != null) row('Humidity', `${Math.round(+p.humidity)} %`);
     if (p.windSpeedKmh != null) row('Wind', `${(+p.windSpeedKmh).toFixed(1)} km/h`);
     const foot = `<div style="color:#8b949e;font-size:10px;margin-top:8px;">NWS ${escapeHtml(p.stationId || '')}${p.elevation ? ' · ' + Math.round(+p.elevation) + ' m' : ''}${p.timestamp ? ' · ' + new Date(p.timestamp).toLocaleString() : ''}</div>`;
-    return { title: `🌡️ ${p.name}`, body: thermo + (rows.join('') || 'No current reading.') + foot };
+    return { title: `🌡️ ${p.name}`, body: thermo + (rows.join('') || 'No current reading.') + foot + timelineHtml('weather', 'weather observing station') };
   });
 
   // Ocean stations: NDBC wave/weather buoys + NOAA tide gauges (keyless). Drawn
@@ -1866,7 +1866,7 @@ function initMapLayers() {
         }
       } catch { /* prediction list optional */ }
     }
-    return { title: `${p.kind === 'tide' ? '🌊' : p.kind === 'dart' ? '🚨' : '🛟'} ${p.name}`, body: rows.join('') || 'No current reading.' };
+    return { title: `${p.kind === 'tide' ? '🌊' : p.kind === 'dart' ? '🚨' : '🛟'} ${p.name}`, body: (rows.join('') || 'No current reading.') + timelineHtml('marine', 'marine ocean buoy sea surface') };
   };
   wireLayerHover('ocean-dot', p => `<div style="font-weight:600;">${p.kind === 'tide' ? '🌊' : p.kind === 'dart' ? '🚨' : '🛟'} ${escapeHtml(p.name)}</div>
     <div style="color:var(--muted);font-size:10px;">click for details</div>`);
@@ -1916,7 +1916,7 @@ function initMapLayers() {
   wireLayerHover('aprs-icon', p => `<div style="font-weight:600;font-family:monospace;">📻 ${escapeHtml(p.call)}</div>
     <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.kind)}${p.comment ? ' · ' + escapeHtml(p.comment) : ''}</div>`);
   wireLayerCard('aprs-icon', p => ({ title: `📻 ${p.call}`,
-    body: `<div style="padding:2px 0;"><span style="color:#8b949e;">Type</span> · <b>${escapeHtml(p.kind)}</b></div>${p.comment ? `<div style="margin-top:4px;color:#c9d1d9;">${escapeHtml(p.comment)}</div>` : ''}` }));
+    body: `<div style="padding:2px 0;"><span style="color:#8b949e;">Type</span> · <b>${escapeHtml(p.kind)}</b></div>${p.comment ? `<div style="margin-top:4px;color:#c9d1d9;">${escapeHtml(p.comment)}</div>` : ''}` + timelineHtml('aprs', 'amateur radio aprs') }));
 
   // Air quality / vog — sampled Big Island towns (Open-Meteo, keyless). A dot
   // colored by US AQI (green→maroon) with the AQI number; vog usually hits
@@ -1948,7 +1948,7 @@ function initMapLayers() {
     if (p.pm25 != null) row('PM2.5', `${(+p.pm25).toFixed(1)} µg/m³`);
     if (p.pm10 != null) row('PM10', `${(+p.pm10).toFixed(1)} µg/m³`);
     if (p.so2 != null) row('SO₂ (vog)', `${(+p.so2).toFixed(1)} µg/m³`);
-    return { title: `🌫️ ${p.name} — air quality`, body: rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Open-Meteo${p.at ? ' · ' + p.at : ''}</div>` };
+    return { title: `🌫️ ${p.name} — air quality`, body: rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Open-Meteo${p.at ? ' · ' + p.at : ''}</div>` + timelineHtml('kilauea', 'vog air quality kilauea volcano') };
   });
 
   // Ocean water quality: PacIOOS moored buoys (Hilo Bay, Pelekane Bay). Real
@@ -1984,7 +1984,7 @@ function initMapLayers() {
     const img = p.photo ? `<img src="${escapeHtml(p.photo)}" style="width:100%;border-radius:6px;display:block;margin-bottom:8px;" loading="lazy" alt="${escapeHtml(p.name)}" onerror="this.style.display='none'"/>` : '';
     const desc = p.desc ? `<div style="font-size:12px;line-height:1.5;color:var(--text);margin-bottom:8px;">${escapeHtml(p.desc)}</div>` : '';
     return { title: `💧 ${p.name} — water quality`, body: img + desc + rows.join('') +
-      `<div style="color:#8b949e;font-size:10px;margin-top:8px;">PacIOOS moored buoy${p.at ? ' · ' + new Date(p.at).toLocaleString() : ''}</div>` };
+      `<div style="color:#8b949e;font-size:10px;margin-top:8px;">PacIOOS moored buoy${p.at ? ' · ' + new Date(p.at).toLocaleString() : ''}</div>` + timelineHtml('coral', 'coral reef marine water quality') };
   });
 
   // Volcano: USGS HVO alert badges at Kīlauea/Mauna Loa summits + live webcam
@@ -2059,7 +2059,7 @@ function initMapLayers() {
     const mil = (p.military === true || p.military === 'true') ? `<div style="color:#ca8a04;font-size:10px;margin-top:6px;">⚠ Military airfield — Pōhakuloa Training Area</div>` : '';
     const raw = p.raw ? `<div style="font-family:monospace;font-size:10px;color:#8b949e;margin-top:8px;word-break:break-all;">${escapeHtml(p.raw)}</div>` : '';
     const media = assetMediaHtml(assetMedia(null, p.name, p.icao));
-    return { title: `🛩 ${p.icao} — ${p.name}`, body: media + rows.join('') + mil + raw };
+    return { title: `🛩 ${p.icao} — ${p.name}`, body: media + rows.join('') + mil + raw + timelineHtml('aviation', 'aviation airport ' + (p.name || '')) };
   });
 
   // Satellites — live ISS / Hubble ground position (keyless, wheretheiss.at).
@@ -2106,7 +2106,8 @@ function initMapLayers() {
     const over = (p.overhead === true || p.overhead === 'true')
       ? `<div style="color:#06b6d4;font-weight:700;margin-top:8px;">🌺 Passing over the Hawaiian Islands right now.</div>` : '';
     return { title: `${p.emoji} ${p.name}`, body: rows.join('') + over +
-      `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Live ground track · wheretheiss.at${p.at ? ' · ' + new Date(+p.at).toLocaleTimeString() : ''}</div>` };
+      `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Live ground track · wheretheiss.at${p.at ? ' · ' + new Date(+p.at).toLocaleTimeString() : ''}</div>` +
+      timelineHtml('satellite', 'satellite orbit ' + (p.name || '')) };
   });
 
   // Rainfall — standalone USGS rain gauges (keyless). Emoji intensifies with
@@ -2133,7 +2134,8 @@ function initMapLayers() {
     row('Rain, last 6 h', `${(+p.accum6hIn).toFixed(2)} in`);
     if (p.latestIn != null && p.latestIn !== '') row('Latest interval', `${(+p.latestIn).toFixed(2)} in`);
     return { title: `🌧️ ${p.name}`, body: rows.join('') +
-      `<div style="color:#8b949e;font-size:10px;margin-top:8px;">USGS rain gauge${p.at ? ' · ' + new Date(p.at).toLocaleString() : ''}</div>` };
+      `<div style="color:#8b949e;font-size:10px;margin-top:8px;">USGS rain gauge${p.at ? ' · ' + new Date(p.at).toLocaleString() : ''}</div>` +
+      timelineHtml('rainfall', 'weather observing rainfall') };
   });
 
   // Places of interest — historical & notable Big Island sites from Wikipedia
@@ -2306,7 +2308,7 @@ function initMapLayers() {
     if (!listen) {
       listen = `<div style="margin-top:8px;font-size:10px;color:#8b949e;line-height:1.45;">No public audio stream for this tower. Program your radio with the settings above.</div>`;
     }
-    return { title: `${icon} ${p.callsign} repeater`, body: rows.join('') + about + listen + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">ℹ️ hearham.com · stream is Hawaiʻi linked nets, not this tower alone</div>` };
+    return { title: `${icon} ${p.callsign} repeater`, body: rows.join('') + about + listen + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">ℹ️ hearham.com · stream is Hawaiʻi linked nets, not this tower alone</div>` + timelineHtml('repeater', 'amateur radio repeater ham radio') };
   });
 
   // Power grid — plants, substations, transmission lines (OSM + curated HECO plants).
@@ -2478,7 +2480,7 @@ function initMapLayers() {
     if (p.name) row('Name', escapeHtml(p.name));
     if (p.operator) row('Operator', escapeHtml(p.operator));
     if (p.heightM) row('Height', escapeHtml(String(p.heightM)));
-    return { title: '📶 Communication tower', body: rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Incomplete vs FCC ASR (~130k US structures). <a href="https://www.fcc.gov/BroadbandData/MobileMaps" target="_blank" rel="noopener" style="color:#58a6ff;">FCC mobile coverage maps</a> show modeled LTE/5G, not live load.</div>` };
+    return { title: '📶 Communication tower', body: rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Incomplete vs FCC ASR (~130k US structures). <a href="https://www.fcc.gov/BroadbandData/MobileMaps" target="_blank" rel="noopener" style="color:#58a6ff;">FCC mobile coverage maps</a> show modeled LTE/5G, not live load.</div>` + timelineHtml('telecom', 'telecom cell tower communications internet') };
   });
 
   // Internet colocation + exchange points (PeeringDB — statewide, mostly Oʻahu).
@@ -2508,7 +2510,7 @@ function initMapLayers() {
     if (p.media) row('Media', escapeHtml(p.media));
     let links = '';
     if (p.website) links = `<div style="margin-top:8px;"><a href="${escapeHtml(p.website)}" target="_blank" rel="noopener" style="color:#58a6ff;">Website</a></div>`;
-    return { title: `${p.nkind === 'ix' ? '🔀' : '🌐'} ${p.name}`, body: rows.join('') + links + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Facility registry only — no live backbone traffic API.</div>` };
+    return { title: `${p.nkind === 'ix' ? '🔀' : '🌐'} ${p.name}`, body: rows.join('') + links + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Facility registry only — no live backbone traffic API.</div>` + timelineHtml('internet', 'internet undersea cable data center peering') };
   });
   map.setLayoutProperty('infra-cell-icon', 'visibility', 'none');
   map.setLayoutProperty('infra-net-icon', 'visibility', 'none');
@@ -2583,7 +2585,7 @@ function initMapLayers() {
     if (p.telescope) row('Telescope', escapeHtml(p.telescope));
     if (p.start) row('Start (UTC)', escapeHtml(String(p.start).slice(0, 16).replace('T', ' ')));
     if (p.state) row('State', escapeHtml(p.state));
-    return { title: `🔭 ${p.siteName || 'LCO'}`, body: rows.join('') + `<div style="margin-top:8px;font-size:10px;"><a href="https://schedule.lco.global/" target="_blank" rel="noopener" style="color:#58a6ff;">LCO schedule ↗</a> · global network (Maui site is nearest)</div>` };
+    return { title: `🔭 ${p.siteName || 'LCO'}`, body: rows.join('') + `<div style="margin-top:8px;font-size:10px;"><a href="https://schedule.lco.global/" target="_blank" rel="noopener" style="color:#58a6ff;">LCO schedule ↗</a> · global network (Maui site is nearest)</div>` + timelineHtml('mauna kea', 'mauna kea astronomy telescope') };
   });
   wireLayerHover('local-inat-icon', p => `<div style="font-weight:600;">🦋 ${escapeHtml(p.name)}</div>
     <div style="color:var(--muted);font-size:10px;">iNaturalist · ${p.observedAt ? escapeHtml(String(p.observedAt).slice(0, 10)) : ''}</div>`);
@@ -3966,7 +3968,7 @@ async function fetchAlerts() {
 // Precipitation radar (RainViewer) — fetch the current frame list directly
 // from RainViewer's own public endpoint (no server proxy needed, it's already
 // keyless/CORS-open) and point the raster source at the latest frame.
-let radarVisible = true;
+let radarVisible = false;
 let _radarTilesSig = null;
 async function fetchRadarFrame() {
   try {
@@ -5226,7 +5228,7 @@ function openMarineCard(props, coords) {
       p.depth != null ? hawaiiDetailRow('📏', 'Depth', `${p.depth} m`) : '',
       hawaiiDetailRow('🔗', 'Dashboard', p.pageUrl ? `<a href="${escapeHtml(p.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff">Aqualink site ↗</a>` : '—'),
     ].join('');
-    showMapCard(rows + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Open-ocean temperature spotter — live readings on Aqualink (no public GPS for fishing boats).</div>`,
+    showMapCard(rows + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Open-ocean temperature spotter — live readings on Aqualink (no public GPS for fishing boats).</div>` + timelineHtml('coral', 'coral reef marine'),
       coords, `🌡️ ${p.name}`);
     return;
   }
@@ -5234,7 +5236,7 @@ function openMarineCard(props, coords) {
     embedType: p.embedType, embedUrl: p.embedUrl, imageUrl: p.imageUrl,
     pageUrl: p.pageUrl, source: p.source, name: p.name,
   };
-  showMapCard(buildWebcamCardBody(media), coords, `🐠 ${p.name}`);
+  showMapCard(buildWebcamCardBody(media) + timelineHtml('coral', 'coral reef marine'), coords, `🐠 ${p.name}`);
   wireWebcamCardRefresh();
 }
 
@@ -5386,7 +5388,8 @@ function buildPowerLineCard(p) {
   ];
   const body = rows.map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;padding:2px 0;"><span style="color:var(--muted);">${k}</span><span style="text-align:right;">${escapeHtml(String(v))}</span></div>`).join('');
   return `<div style="font-size:11px;line-height:1.5;color:#c9d1d9;margin-bottom:6px;">${escapeHtml(clsDesc)}</div>${body}
-    <div style="color:#8b949e;font-size:10px;margin-top:8px;">Grid geometry from OpenStreetMap. Hawaiian Electric publishes no real-time Big Island line loading; voltages/specs are as tagged by OSM surveyors.</div>`;
+    <div style="color:#8b949e;font-size:10px;margin-top:8px;">Grid geometry from OpenStreetMap. Hawaiian Electric publishes no real-time Big Island line loading; voltages/specs are as tagged by OSM surveyors.</div>` +
+    timelineHtml('power-grid', 'power grid power line hawaiian electric transmission');
 }
 // Marching-dash "power flow" animation on the transmission overlay. Steps a set
 // of dash patterns so the bright segment appears to travel along the line.
@@ -5594,13 +5597,22 @@ function buildSurfCard(p) {
   if (s.fc) links.push(`<a href="https://www.surf-forecast.com/breaks/${encodeURIComponent(s.fc)}/webcams/latest" target="_blank" rel="noopener" style="color:#58a6ff;">Surf cam ↗</a>`,
                        `<a href="https://www.surf-forecast.com/breaks/${encodeURIComponent(s.fc)}/forecasts/latest" target="_blank" rel="noopener" style="color:#58a6ff;">7-day forecast ↗</a>`);
   if (s.lat != null && s.lon != null) links.push(`<a href="https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lon}" target="_blank" rel="noopener" style="color:#58a6ff;">Directions ↗</a>`);
+  let embed = '';
+  if (s.youtube) {
+    const yid = String(s.youtube).replace(/[^A-Za-z0-9_-]/g, '');
+    embed = `<div style="font-weight:600;font-size:11px;margin-top:8px;">📹 Live stream — ${escapeHtml(s.youtubeLabel || 'YouTube live')}</div>
+      <div style="position:relative;width:100%;padding-top:56.25%;margin:4px 0;border-radius:6px;overflow:hidden;background:#000;">
+        <iframe src="https://www.youtube-nocookie.com/embed/${yid}?autoplay=0&mute=1&playsinline=1" title="Live cam" loading="lazy"
+          style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+      </div>`;
+  }
   const camNote = `<div style="font-weight:600;font-size:11px;margin-top:8px;">📹 Live cams & report</div>
     <div style="font-size:10px;margin-top:3px;">${links.join(' · ')}</div>`;
   const dirs = (s.camDirectories || []).map(d => `<a href="${escapeHtml(d.url)}" target="_blank" rel="noopener" style="color:#58a6ff;">${escapeHtml(d.label)} ↗</a>`).join(' · ');
   const dirHtml = dirs ? `<div style="font-size:9.5px;color:#8b949e;margin-top:4px;">More Big Island cams: ${dirs}</div>` : '';
   return meta + desc + live + chart +
     `<div style="font-weight:600;font-size:11px;margin-top:6px;">Break info</div>` + info +
-    camNote + dirHtml + timelineHtml(s.id, 'surf ' + (s.name || '')) +
+    embed + camNote + dirHtml + timelineHtml(s.id, 'surf ' + (s.name || '')) +
     `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Waves/swell/wind from Open-Meteo Marine (WAM/ICON models), refreshed hourly. Cameras are hosted by Surfline / resorts.</div>`;
 }
 function toggleInfraCell() {
@@ -7024,7 +7036,7 @@ function renderControls() {
 // its data. Wrapped individually so one missing layer can't abort the rest.
 function applyDefaultLayers() {
   const toggles = [
-    'toggleControls', 'toggleRadar', 'toggleTopography', 'togglePlaces', 'toggleHeritage',
+    'toggleControls', 'toggleTopography', 'togglePlaces', 'toggleHeritage',
     'toggleQuakes', 'toggleSolar', 'toggleInfraCell', 'toggleInfraNet', 'toggleInfraRail',
     'toggleLocalTraffic', 'toggleLocalSensors', 'toggleLocalLco', 'toggleLocalInat', 'toggleEv', 'toggleSurf',
   ];

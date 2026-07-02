@@ -2,6 +2,87 @@
   "_comment": "Deeply-researched historical timelines attached to map cards. Each timeline matches a card by lowercased name/id substring (match[]) and/or explicit ids[]. Events are dated, sourced, and may name a Wikipedia article (wikiImage) that pollTimelines() resolves to a real thumbnail at poll time (so image URLs never rot). Sources beyond Wikipedia are welcome via sourceUrl. Rendered as a vertical scrolling timeline in the card body. Cached to data/timelines-cache.json.",
   "timelines": [
     {
+      "match": ["aviation", "airport", "airfield", "metar", "keahole", "kona international", "hilo international", "waimea-kohala", "upolu"],
+      "title": "Aviation on Hawaiʻi Island",
+      "intro": "From grass strips to jet gateways — how the Big Island learned to fly.",
+      "events": [
+        { "year": "1918", "title": "First flights", "text": "Early military and barnstorming flights reached Hawaiʻi Island, landing on beaches, polo fields and rough pasture strips long before paved runways existed.", "wikiImage": "Aviation in Hawaii", "source": "Hawaii Aviation" },
+        { "year": "1928", "title": "ʻŌpihikao & early airfields", "text": "The Territory of Hawaiʻi began grading dedicated landing fields around the island as inter-island air service took hold.", "source": "Hawaii Aviation", "sourceUrl": "https://aviation.hawaii.gov/" },
+        { "year": "1949", "title": "General Lyman Field, Hilo", "text": "Hilo\u2019s airport — today\u2019s Hilo International (ITO) — was named for Brigadier General Albert Kualiʻi Brickwood Lyman, the first Native Hawaiian to reach general rank.", "wikiImage": "Hilo International Airport", "source": "Wikipedia" },
+        { "year": "1970", "title": "Keāhole (Kona) opens", "text": "Ke-ʻahole Airport opened on the lava fields north of Kailua-Kona, replacing the cramped old town airport and opening West Hawaiʻi to jet tourism.", "wikiImage": "Kona International Airport", "source": "Wikipedia" },
+        { "year": "1993", "title": "Renamed for an astronaut", "text": "Kona\u2019s airport was renamed Ellison Onizuka Kona International Airport at Keāhole, honoring the Kealakekua-born Challenger astronaut.", "wikiImage": "Ellison Onizuka", "source": "Wikipedia" }
+      ]
+    },
+    {
+      "match": ["amateur radio", "ham radio", "repeater", "aprs", "arrl"],
+      "title": "Amateur radio in Hawaiʻi",
+      "intro": "Volunteer operators have knit the islands together — and been a lifeline when disaster cuts the cables.",
+      "events": [
+        { "year": "1912", "title": "Wireless reaches the islands", "text": "Amateur \u201cwireless\u201d experimenters were on the air in Hawaiʻi within years of the technology\u2019s birth, spanning ocean distances that made the territory a radio proving ground.", "wikiImage": "Amateur radio", "source": "ARRL" },
+        { "year": "1946", "title": "Tsunami lifeline", "text": "When the 1946 Aleutian tsunami devastated Hilo and severed communications, amateur operators relayed emergency traffic — cementing ham radio\u2019s civil-defense role in Hawaiʻi.", "wikiImage": "1946 Aleutian Islands earthquake", "source": "ARRL" },
+        { "year": "1970s", "title": "Repeaters on the summits", "text": "VHF/UHF repeaters placed on Mauna Kea, Mauna Loa and Kohala gave hand-helds island-wide reach — the same mountaintop sites still carry today\u2019s repeaters shown on this map.", "wikiImage": "Repeater", "source": "ARRL" },
+        { "year": "1990s", "title": "APRS packet tracking", "text": "The Automatic Packet Reporting System let operators share GPS positions, weather and messages over radio — the live APRS stations on this map are its modern descendants.", "wikiImage": "Automatic Packet Reporting System", "source": "Wikipedia" },
+        { "year": "Today", "title": "Emergency service", "text": "ARES/RACES volunteers drill for hurricanes, tsunamis and eruptions, providing backup communication when commercial networks fail.", "source": "ARRL", "sourceUrl": "http://www.arrl.org/" }
+      ]
+    },
+    {
+      "match": ["undersea cable", "submarine cable", "internet", "data center", "datacenter", "peering", "fiber", "telecom", "cell tower", "communications"],
+      "title": "Wiring Hawaiʻi — cables & the internet",
+      "intro": "The most isolated islands on Earth stay connected by a bundle of cables under the Pacific.",
+      "events": [
+        { "year": "1902", "title": "First telegraph cable", "text": "The Commercial Pacific Cable reached Hawaiʻi, giving the islands near-instant contact with the U.S. mainland for the first time — replacing weeks-long ship mail.", "wikiImage": "Commercial Pacific Cable Company", "source": "Wikipedia" },
+        { "year": "1957", "title": "First telephone cable", "text": "HAW-1, the first transpacific telephone cable, linked Hawaiʻi to California, carrying live voice across the ocean.", "wikiImage": "Transpacific telephone cable", "source": "Wikipedia" },
+        { "year": "1964", "title": "COMPAC & the global loop", "text": "Hawaiʻi became a key relay on the Commonwealth Pacific cable, a hub between North America, Australia and Asia.", "source": "Wikipedia" },
+        { "year": "1990s\u20132000s", "title": "Fiber-optic era", "text": "Modern fiber cables (Southern Cross, Japan-US, and others) landed on Oʻahu, turning Hawaiʻi into a mid-Pacific internet crossroads with carrier-neutral data centers and peering.", "wikiImage": "Submarine communications cable", "source": "Wikipedia" },
+        { "year": "Today", "title": "New landings", "text": "Hyperscale cables (SEA-US, and newer systems) continue to land in the islands, and inter-island fiber plus cellular networks — the towers and facilities on this map — carry it the last mile.", "source": "TeleGeography", "sourceUrl": "https://www.submarinecablemap.com/" }
+      ]
+    },
+    {
+      "match": ["satellite", "orbit", "space station", " iss"],
+      "title": "Watching the skies — satellites over Hawaiʻi",
+      "intro": "Hawaiʻi\u2019s clear mid-Pacific skies make it a prime spot to track what\u2019s in orbit.",
+      "events": [
+        { "year": "1957", "title": "Sputnik & the space age", "text": "The first artificial satellite launched a new era; volunteer Moonwatch teams — including some in Hawaiʻi — helped track early satellites by eye.", "wikiImage": "Sputnik 1", "source": "Wikipedia" },
+        { "year": "1961", "title": "Hawaiʻi tracking stations", "text": "NASA established tracking and telemetry facilities in the Pacific, using Hawaiʻi\u2019s position to follow spacecraft over the ocean during Mercury and Apollo.", "wikiImage": "Manned Space Flight Network", "source": "NASA" },
+        { "year": "1998", "title": "The ISS begins", "text": "The International Space Station\u2019s first module launched; the station now circles Earth every ~90 minutes and is often visible passing over the islands — tracked live on this map.", "wikiImage": "International Space Station", "source": "NASA" },
+        { "year": "Today", "title": "Open orbital data", "text": "Public two-line element sets and APIs let anyone compute where satellites are in real time — that\u2019s exactly how the moving satellite tracks here are drawn.", "source": "CelesTrak", "sourceUrl": "https://celestrak.org/" }
+      ]
+    },
+    {
+      "match": ["coral", "reef", "marine ", "snorkel", "ocean buoy", "sea surface"],
+      "title": "Hawaiʻi\u2019s coral reefs",
+      "intro": "Living reefs ring the Big Island — nurseries, breakwaters, and a climate barometer.",
+      "events": [
+        { "year": "ancient", "title": "Reefs in Hawaiian life", "text": "Reefs (koʻa) fed Hawaiian communities and were managed under the ahupuaʻa system and kapu, with fishing seasons that protected spawning.", "wikiImage": "Coral reef", "source": "Wikipedia" },
+        { "year": "1900s", "title": "Scientific study", "text": "Marine stations and the University of Hawaiʻi began systematic reef research, mapping species and monitoring reef health around the islands.", "wikiImage": "Marine biology", "source": "UH" },
+        { "year": "2015\u20132016", "title": "Mass bleaching", "text": "Record ocean heat caused the worst coral bleaching in Hawaiʻi\u2019s recorded history, killing large stretches of West Hawaiʻi reef and spurring new protections.", "wikiImage": "Coral bleaching", "source": "NOAA" },
+        { "year": "2021", "title": "Live reef monitoring", "text": "The MEGA Lab / NELHA ocean observatory off Kona began streaming a 24/7 underwater reef cam paired with a smart buoy — real-time reef science you can watch (see the Pine Trees surf card).", "wikiImage": "Coral reef", "source": "MEGA Lab", "sourceUrl": "https://themegalab.org/livestream" }
+      ]
+    },
+    {
+      "match": ["weather station", "rain gauge", "rainfall", "climate observing", "weather observing"],
+      "title": "Weather watching in Hawaiʻi",
+      "intro": "From the wettest spots on Earth to a Mauna Loa record that changed the world, Hawaiʻi is a climate laboratory.",
+      "events": [
+        { "year": "1883", "title": "Kaimū & early records", "text": "Systematic weather and rainfall observation spread across the Kingdom of Hawaiʻi, with plantation and government observers logging the islands\u2019 extreme rainfall gradients.", "wikiImage": "Climate of Hawaii", "source": "NWS" },
+        { "year": "1956", "title": "Mauna Loa Observatory", "text": "NOAA established the Mauna Loa Observatory high above the inversion layer — one of the most important atmospheric monitoring sites on the planet.", "wikiImage": "Mauna Loa Observatory", "source": "NOAA", "sourceUrl": "https://gml.noaa.gov/obop/mlo/" },
+        { "year": "1958", "title": "The Keeling Curve", "text": "Charles Keeling began measuring atmospheric CO₂ at Mauna Loa, producing the iconic rising curve that became the defining record of human-caused climate change.", "wikiImage": "Keeling Curve", "source": "Scripps" },
+        { "year": "Today", "title": "Dense island networks", "text": "NWS stations, rain gauges, and streamflow sensors — shown live on this map — track Hawaiʻi\u2019s famously local weather, where one valley floods while the next stays dry.", "source": "National Weather Service", "sourceUrl": "https://www.weather.gov/hfo/" }
+      ]
+    },
+    {
+      "match": ["power grid", "power line", "power plant", "hawaiian electric", "transmission", "substation", "hydroelectric", "geothermal", "distribution line"],
+      "title": "Powering Hawaiʻi Island",
+      "intro": "An isolated island grid — no mainland to lean on — pushing toward 100% renewable energy.",
+      "events": [
+        { "year": "1890s", "title": "First electric lights", "text": "Hawaiʻi was an early adopter of electricity; ʻIolani Palace on Oʻahu had electric light before the White House, and plantations built their own generating plants on the Big Island.", "wikiImage": "Hawaiian Electric Industries", "source": "Wikipedia" },
+        { "year": "1900s", "title": "Plantation hydro", "text": "Sugar plantations harnessed Kohala and Hāmākua streams for hydroelectric power to run mills and irrigation flumes — some sites still generate today.", "wikiImage": "Hydroelectricity", "source": "Wikipedia" },
+        { "year": "1993", "title": "Puna Geothermal", "text": "The Puna Geothermal Venture began tapping Kīlauea\u2019s heat for electricity — a significant, and at times controversial, share of the island\u2019s power (idled by the 2018 eruption, later restarted).", "wikiImage": "Puna Geothermal Venture", "source": "Wikipedia" },
+        { "year": "2000s\u20132010s", "title": "Wind & solar", "text": "Wind farms at South Point and Upolu Point and a wave of solar farms and rooftop PV reshaped the island grid, which has among the highest renewable penetration in the U.S.", "wikiImage": "Wind power in Hawaii", "source": "Hawaiian Electric" },
+        { "year": "2045", "title": "100% renewable target", "text": "Hawaiʻi is legally committed to 100% renewable electricity by 2045. The plants, lines, and substations on this map are the physical grid delivering that transition.", "source": "Hawaiʻi Clean Energy Initiative", "sourceUrl": "https://www.hawaiicleanenergyinitiative.org/" }
+      ]
+    },
+    {
       "match": ["kilauea", "kīlauea", "halemaumau", "halemaʻumaʻu"],
       "ids": ["Kilauea"],
       "title": "Kīlauea — a history of fire",
