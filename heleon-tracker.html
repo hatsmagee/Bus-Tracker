@@ -186,6 +186,33 @@
     background:rgba(255,255,255,.9); border:1px solid #fde68a; border-radius:9px; padding:1px 5px; }
   .solar-sun.compact .ss-label { display:none; }
 
+  /* ─── OBSERVATORY markers (summit telescopes — sweeping beam when live) ────
+     Animated dome + beam when readings are fresh; shrinks and dims when stale.
+     Badge shows temp/wind/CO₂ beside the scope, never under the animation. */
+  @keyframes scopeSweep { 0%,100% { transform: rotate(-35deg); opacity:.85; } 50% { transform: rotate(35deg); opacity:1; } }
+  @keyframes domeGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(124,58,237,.35); } 50% { box-shadow: 0 0 8px 2px rgba(124,58,237,.55); } }
+  .observatory { cursor:pointer; position:relative; width:0; height:0; }
+  .observatory .obs-scale { position:absolute; left:0; top:0;
+    transform: translate(-16px, -16px) scale(var(--obsc, 1)); transform-origin:16px 16px;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); display:flex; align-items:center; gap:4px; }
+  .observatory .obs-rig { position:relative; width:32px; height:32px; flex-shrink:0; }
+  .observatory .obs-dome { position:absolute; inset:2px 4px 8px 4px; border-radius:50% 50% 40% 40%;
+    background:linear-gradient(180deg,#ddd6fe,#7c3aed); border:1.5px solid #5b21b6;
+    animation: domeGlow 3s ease-in-out infinite; }
+  .observatory .obs-beam { position:absolute; left:15px; top:14px; width:14px; height:2px;
+    background:linear-gradient(90deg,#c4b5fd,#fef08a); border-radius:1px; transform-origin:0 50%;
+    animation: scopeSweep 4s ease-in-out infinite; }
+  .observatory .obs-tripod { position:absolute; left:10px; right:10px; bottom:0; height:8px;
+    border-left:2px solid #64748b; border-right:2px solid #64748b;
+    border-bottom:2px solid #64748b; border-radius:0 0 4px 4px; }
+  .observatory .obs-badge { font-size:10px; font-weight:700; color:#5b21b6;
+    background:rgba(255,255,255,.93); border:1px solid #ddd6fe; border-radius:9px;
+    padding:1px 5px; white-space:nowrap; line-height:1.3; }
+  .observatory.stale .obs-dome { animation:none; background:linear-gradient(180deg,#e2e8f0,#94a3b8); border-color:#64748b; }
+  .observatory.stale .obs-beam { animation:none; opacity:.35; background:#94a3b8; }
+  .observatory.stale .obs-badge { color:#64748b; border-color:#cbd5e1; }
+  .observatory.compact .obs-badge { position:absolute; left:50%; top:34px; transform:translateX(-50%); font-size:9px; }
+
   /* ─── RADIO-TOWER markers (ham repeater / cell tower with pulsing rings) ────
      A tower + 1 or 2 pulse rings expanding outward. Pulsing lets you see
      'something is broadcasting/repeating here' at a glance. Same zero-size
@@ -288,6 +315,10 @@
     color:#fef08a; transform:translateY(50%); white-space:nowrap; pointer-events:none; }
   .stream-level-meter.primary .now-tag { color:#b45309; }
   .stream-gauge .rate .tag-now { color:#0369a1; font-weight:800; margin-right:2px; }
+  /* When the vertical meter is visible it already shows the current level — hide
+     the numeric rate pill so the same value isn't printed twice beside the wheel. */
+  .stream-gauge.kind-flow:not(.compact) .rate { display:none; }
+  .stream-gauge.kind-both:not(.compact) .rate { max-width:72px; overflow:hidden; text-overflow:ellipsis; }
   .staff-gauge-svg { width:22px; height:40px; display:block; }
   .gauge-chart-wrap { margin-top:10px; }
   .gauge-chart { width:100%; height:120px; display:block; background:#0d1117;
@@ -1157,7 +1188,7 @@ function initMap() {
   // Keep the DOM water-wheel markers scaled to the current zoom (they shrink
   // when zoomed out so they don't pile up). `zoom` fires continuously so the
   // resize tracks the pinch/scroll smoothly.
-  map.on('zoom', () => { try { updateWheelScale(); } catch (e) {} try { updateWindScale(); } catch (e) {} try { updateSolarScale(); } catch (e) {} });
+  map.on('zoom', () => { try { updateWheelScale(); } catch (e) {} try { updateWindScale(); } catch (e) {} try { updateSolarScale(); } catch (e) {} try { updateSummitScale(); } catch (e) {} });
   map.on('error', (e) => {
     // Suppress known MapLibre v4 bugs about listener arrays
     if (e?.error?.message?.includes('slice is not a function')) return;
@@ -1196,6 +1227,32 @@ function initTerrainRelief() {
       'hillshade-illumination-direction': 315,
     },
   }, beforeId);
+}
+
+function buildSummitCard(p) {
+  const r = JSON.parse(p.readings || '{}');
+  const rows = [];
+  const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+  if (r.tempC != null) row('Temperature', `${(+r.tempC).toFixed(1)} °C`);
+  if (r.dewpointC != null) row('Dew point', `${(+r.dewpointC).toFixed(1)} °C`);
+  if (r.humidity != null) row('Humidity', `${Math.round(r.humidity)} %`);
+  if (r.windMph != null) row('Wind', `${(+r.windMph).toFixed(0)} mph` + (r.windDir ? ` ${r.windDir}` : '') + (r.windGustMph ? ` (gust ${Math.round(r.windGustMph)})` : ''));
+  else if (r.windMs != null) row('Wind', `${(+r.windMs).toFixed(1)} m/s` + (r.windDir != null ? ` @ ${Math.round(r.windDir)}°` : ''));
+  else if (r.windKt != null) row('Wind', `${(+r.windKt).toFixed(0)} kt` + (r.windDir != null ? ` @ ${Math.round(r.windDir)}°` : ''));
+  if (r.pressureMb != null) row('Pressure', `${Math.round(r.pressureMb)} mb`);
+  if (r.co2ppm != null) {
+    row('CO₂', `${(+r.co2ppm).toFixed(2)} ppm` + (r.co2Cadence ? ` (${r.co2Cadence})` : ''));
+    if (r.co2OneYearAgo != null) row('vs 1 year ago', `${(+r.co2ppm - +r.co2OneYearAgo >= 0 ? '+' : '')}${(+r.co2ppm - +r.co2OneYearAgo).toFixed(2)} ppm`);
+    if (r.co2TenYearsAgo != null) row('vs 10 years ago', `+${(+r.co2ppm - +r.co2TenYearsAgo).toFixed(1)} ppm`);
+  }
+  let extra = '';
+  if (p.note) extra += `<div style="margin-top:8px;font-size:10px;color:#d29922;line-height:1.45;">${escapeHtml(p.note)}</div>`;
+  if (p.webcamUrl) extra += `<div style="margin-top:8px;"><img src="${escapeHtml(p.webcamUrl)}" alt="Observatory webcam" style="width:100%;border-radius:8px;border:1px solid #30363d;"></div>`;
+  const links = [];
+  if (p.pageUrl) links.push(`<a href="${escapeHtml(p.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">Observatory page ↗</a>`);
+  if (p.source) links.push(`<span style="color:#8b949e;">${escapeHtml(p.source)}</span>`);
+  const foot = `<div style="color:#8b949e;font-size:10px;margin-top:8px;">${p.elevM ? Math.round(p.elevM) + ' m elev' : ''}${r.readingTs ? ' · ' + r.readingTs : ''}${r.co2Year ? ' · CO₂ ' + r.co2Year : ''}${links.length ? '<br>' + links.join(' · ') : ''}</div>`;
+  return { title: `🔭 ${p.name}`, body: (rows.join('') || 'No current reading.') + extra + foot };
 }
 
 function initMapLayers() {
@@ -1321,7 +1378,7 @@ function initMapLayers() {
     id: 'vessels-icon', type: 'symbol', source: 'vessels',
     layout: {
       'icon-image': 'marker-vessel',
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 8, 0.7, 12, 0.9, 15, 1.1],
+      'icon-size': ICON_SIZE.lg,
       'icon-rotate': ['get', 'heading'],
       'icon-rotation-alignment': 'map',
       'icon-allow-overlap': true,
@@ -1357,7 +1414,7 @@ function initMapLayers() {
     layout: {
       'icon-image': 'marker-hibike', 'icon-anchor': 'left', 'icon-allow-overlap': true,
       'icon-ignore-placement': true,
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.6, 14, 0.8],
+      'icon-size': ICON_SIZE.md,
       'text-field': ['get', 'bikes'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 10, 11, 14, 14],
       'text-font': EMOJI_FONT,
@@ -1541,12 +1598,15 @@ function initMapLayers() {
   map.addLayer({
     id: 'wildfire-icon', type: 'symbol', source: 'wildfire',
     layout: {
-      'text-field': '🔥',
-      'text-size': ['interpolate', ['linear'], ['get', 'frp'], 0, 12, 50, 16, 200, 22],
-      'text-font': EMOJI_FONT,
-      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 3,
+      'icon-image': 'marker-wildfire', 'icon-allow-overlap': false,
+      'icon-size': ['interpolate', ['linear'], ['get', 'frp'], 0, 0.75, 50, 0.95, 200, 1.15],
+      'text-field': ['concat', ['to-string', ['round', ['get', 'frp']]], ' MW'],
+      'text-size': ['interpolate', ['linear'], ['get', 'frp'], 0, 10, 50, 12, 200, 14],
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-anchor': 'left', 'text-offset': [1.4, 0],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 5,
     },
-    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
+    paint: { 'text-color': '#dc2626', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
   });
   wireLayerHover('wildfire-icon', p => `
     <div style="font-weight:600;">🔥 Thermal hotspot (satellite)</div>
@@ -1622,7 +1682,7 @@ function initMapLayers() {
       // every system; falls back to a sky-condition emoji inside the text
       // for a richer reading (☀️/🌧️/⛅…) when one is reported.
       'icon-image': 'marker-weather', 'icon-anchor': 'left', 'icon-allow-overlap': false,
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.55, 12, 0.7],
+      'icon-size': ICON_SIZE.sm,
       'text-field': ['concat',
         ['coalesce', ['get', 'wxIcon'], ''], ' ',
         ['case', ['has', 'temperatureC'], ['concat', ['to-string', ['round', ['get', 'temperatureC']]], '°'], '']],
@@ -1661,10 +1721,14 @@ function initMapLayers() {
   map.addLayer({
     id: 'ocean-dot', type: 'symbol', source: 'ocean',
     layout: {
-      'text-field': ['concat', ['get', 'icon'], ' ', ['get', 'badge']],
+      'icon-image': ['match', ['get', 'kind'], 'tide', 'marker-ocean', 'dart', 'marker-wildfire', 'marker-buoy'],
+      'icon-anchor': 'left', 'icon-allow-overlap': false,
+      'icon-size': ICON_SIZE.sm,
+      'text-field': ['get', 'badge'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 6, 11, 12, 14],
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 6,
+      'text-anchor': 'left', 'text-offset': [1.5, 0],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 8,
     },
     paint: { 'text-color': '#075985', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
@@ -1733,12 +1797,16 @@ function initMapLayers() {
   map.addLayer({
     id: 'aprs-icon', type: 'symbol', source: 'aprs',
     layout: {
-      'text-field': ['match', ['get', 'kind'], 'vehicle', '🚗', 'weather', '🌤', 'boat', '⛵', '📻'],
-      'text-size': ['interpolate', ['linear'], ['zoom'], 8, 14, 14, 20],
-      'text-font': EMOJI_FONT,
+      'icon-image': 'marker-aprs', 'icon-anchor': 'left', 'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      'icon-size': ICON_SIZE.sm,
+      'text-field': ['get', 'call'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 14, 13],
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-anchor': 'left', 'text-offset': [1.4, 0],
       'text-allow-overlap': true, 'text-ignore-placement': true,
     },
-    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+    paint: { 'text-color': '#1e40af', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
   wireLayerHover('aprs-icon', p => `<div style="font-weight:600;font-family:monospace;">📻 ${escapeHtml(p.call)}</div>
     <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.kind)}${p.comment ? ' · ' + escapeHtml(p.comment) : ''}</div>`);
@@ -1753,7 +1821,7 @@ function initMapLayers() {
     id: 'airquality-icon', type: 'symbol', source: 'airquality',
     layout: {
       'icon-image': 'marker-aqi', 'icon-anchor': 'left', 'icon-allow-overlap': false,
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.55, 12, 0.7],
+      'icon-size': ICON_SIZE.sm,
       'text-field': ['to-string', ['get', 'usAqi']],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 12, 14],
       'text-font': EMOJI_FONT,
@@ -1786,7 +1854,7 @@ function initMapLayers() {
     id: 'volcano-dot', type: 'symbol', source: 'volcano',
     layout: {
       'icon-image': 'marker-volcano', 'icon-anchor': 'left', 'icon-allow-overlap': false,
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.55, 12, 0.7],
+      'icon-size': ICON_SIZE.sm,
       'text-field': ['case', ['==', ['get', 'kind'], 'alert'], ['get', 'badge'], 'cam'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, ['case', ['==', ['get', 'kind'], 'alert'], 13, 10], 12, ['case', ['==', ['get', 'kind'], 'alert'], 16, 14]],
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
@@ -1820,7 +1888,7 @@ function initMapLayers() {
     id: 'metars-dot', type: 'symbol', source: 'metars',
     layout: {
       'icon-image': 'marker-metar', 'icon-anchor': 'left', 'icon-allow-overlap': false,
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.5, 12, 0.65],
+      'icon-size': ICON_SIZE.sm,
       'text-field': ['get', 'icao'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, 10, 12, 13],
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
@@ -1901,7 +1969,7 @@ function initMapLayers() {
     id: 'rainfall-icon', type: 'symbol', source: 'rainfall',
     layout: {
       'icon-image': 'marker-rainfall', 'icon-anchor': 'left', 'icon-allow-overlap': false,
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.55, 12, 0.7],
+      'icon-size': ICON_SIZE.sm,
       'text-field': ['concat', ['to-string', ['get', 'accum6hIn']], '"'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 12, 14],
       'text-font': EMOJI_FONT,
@@ -1931,7 +1999,7 @@ function initMapLayers() {
     layout: {
       visibility: 'none',
       'icon-image': 'marker-place', 'icon-anchor': 'left', 'icon-allow-overlap': false,
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.65, 14, 0.9],
+      'icon-size': ICON_SIZE.md,
       'text-field': ['match', ['get', 'kind'],
         'wreck', '🚢', 'battle', '⚔️', 'heiau', '🗿', 'dock', '⚓', 'water', '💦',
         'historic', '🏛️', 'church', '⛪', 'observatory', '🔭', 'park', '🌲', '📍'],
@@ -1994,7 +2062,7 @@ function initMapLayers() {
       // (no missing-font text). Text is the callsign only, anchored to the
       // right of the icon. Calm navy color instead of alarming red.
       'icon-image': 'marker-repeater', 'icon-anchor': 'left', 'icon-allow-overlap': false,
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 7, 0.5, 11, 0.6, 13, 0.7],
+      'icon-size': ICON_SIZE.md,
       'text-field': ['get', 'callsign'],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, 10, 11, 12, 13, 14],
       'text-font': EMOJI_FONT,
@@ -2116,10 +2184,13 @@ function initMapLayers() {
   map.addLayer({
     id: 'infra-power-icon', type: 'symbol', source: 'infra-power',
     layout: {
-      'text-field': ['concat', ['get', 'icon'], ' ', ['coalesce', ['get', 'badge'], '']],
+      'icon-image': 'marker-power', 'icon-anchor': 'left', 'icon-allow-overlap': false,
+      'icon-size': ICON_SIZE.sm,
+      'text-field': ['coalesce', ['get', 'badge'], ['get', 'fuel']],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 12, 14],
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+      'text-anchor': 'left', 'text-offset': [1.4, 0],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 6,
     },
     paint: { 'text-color': '#7c2d12', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
@@ -2146,10 +2217,10 @@ function initMapLayers() {
     id: 'infra-cell-icon', type: 'symbol', source: 'infra-cell',
     minzoom: 10,
     layout: {
-      'text-field': '📶',
-      'text-size': ['interpolate', ['linear'], ['zoom'], 10, 10, 14, 14],
-      'text-font': EMOJI_FONT,
-      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 2,
+      'icon-image': 'marker-meshtastic', 'icon-allow-overlap': false,
+      'icon-size': ICON_SIZE.sm,
+      'text-size': 0,
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
     },
     paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
   });
@@ -2169,10 +2240,13 @@ function initMapLayers() {
   map.addLayer({
     id: 'infra-net-icon', type: 'symbol', source: 'infra-net',
     layout: {
-      'text-field': ['match', ['get', 'nkind'], 'ix', '🔀', '🌐'],
-      'text-size': ['interpolate', ['linear'], ['zoom'], 6, 12, 11, 15],
-      'text-font': EMOJI_FONT,
-      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+      'icon-image': 'marker-globe', 'icon-anchor': 'left', 'icon-allow-overlap': false,
+      'icon-size': ICON_SIZE.sm,
+      'text-field': ['get', 'name'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 6, 10, 11, 12],
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-anchor': 'left', 'text-offset': [1.4, 0],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 6,
     },
     paint: { 'text-color': '#1d4ed8', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
@@ -2285,40 +2359,20 @@ function initMapLayers() {
   map.addLayer({
     id: 'summits-dot', type: 'symbol', source: 'summits',
     layout: {
-      'text-field': ['concat', '🔭 ', ['get', 'badge']],
-      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 12, 12, 15],
+      visibility: 'none',
+      'icon-image': 'marker-summit', 'icon-anchor': 'left', 'icon-allow-overlap': false,
+      'icon-size': ICON_SIZE.md,
+      'text-field': ['get', 'badge'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 12, 14],
       'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 6,
+      'text-anchor': 'left', 'text-offset': [1.5, 0],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 8,
     },
-    paint: { 'text-color': '#6b21a8', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+    paint: { 'text-color': '#5b21b6', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
   wireLayerHover('summits-dot', p => `<div style="font-weight:600;">🔭 ${escapeHtml(p.name)}</div>
     <div style="color:var(--muted);font-size:10px;">click for details</div>`);
-  wireLayerCard('summits-dot', p => {
-    const r = JSON.parse(p.readings || '{}');
-    const rows = [];
-    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
-    if (r.tempC != null) row('Temperature', `${(+r.tempC).toFixed(1)} °C`);
-    if (r.dewpointC != null) row('Dew point', `${(+r.dewpointC).toFixed(1)} °C`);
-    if (r.humidity != null) row('Humidity', `${Math.round(r.humidity)} %`);
-    if (r.windMph != null) row('Wind', `${(+r.windMph).toFixed(0)} mph` + (r.windDir ? ` ${r.windDir}` : '') + (r.windGustMph ? ` (gust ${Math.round(r.windGustMph)})` : ''));
-    else if (r.windMs != null) row('Wind', `${(+r.windMs).toFixed(1)} m/s` + (r.windDir != null ? ` @ ${Math.round(r.windDir)}°` : ''));
-    else if (r.windKt != null) row('Wind', `${(+r.windKt).toFixed(0)} kt` + (r.windDir != null ? ` @ ${Math.round(r.windDir)}°` : ''));
-    if (r.pressureMb != null) row('Pressure', `${Math.round(r.pressureMb)} mb`);
-    if (r.co2ppm != null) {
-      row('CO₂', `${(+r.co2ppm).toFixed(2)} ppm` + (r.co2Cadence ? ` (${r.co2Cadence})` : ''));
-      if (r.co2OneYearAgo != null) row('vs 1 year ago', `${(+r.co2ppm - +r.co2OneYearAgo >= 0 ? '+' : '')}${(+r.co2ppm - +r.co2OneYearAgo).toFixed(2)} ppm`);
-      if (r.co2TenYearsAgo != null) row('vs 10 years ago', `+${(+r.co2ppm - +r.co2TenYearsAgo).toFixed(1)} ppm`);
-    }
-    let extra = '';
-    if (p.note) extra += `<div style="margin-top:8px;font-size:10px;color:#d29922;line-height:1.45;">${escapeHtml(p.note)}</div>`;
-    if (p.webcamUrl) extra += `<div style="margin-top:8px;"><img src="${escapeHtml(p.webcamUrl)}" alt="Observatory webcam" style="width:100%;border-radius:8px;border:1px solid #30363d;"></div>`;
-    const links = [];
-    if (p.pageUrl) links.push(`<a href="${escapeHtml(p.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">Observatory page ↗</a>`);
-    if (p.source) links.push(`<span style="color:#8b949e;">${escapeHtml(p.source)}</span>`);
-    const foot = `<div style="color:#8b949e;font-size:10px;margin-top:8px;">${p.elevM ? Math.round(p.elevM) + ' m elev' : ''}${r.readingTs ? ' · ' + r.readingTs : ''}${r.co2Year ? ' · CO₂ ' + r.co2Year : ''}${links.length ? '<br>' + links.join(' · ') : ''}</div>`;
-    return { title: `🔭 ${p.name}`, body: (rows.join('') || 'No current reading.') + extra + foot };
-  });
+  wireLayerCard('summits-dot', buildSummitCard);
 
   // Public-safety facility markers — static reference locations, off by
   // default so they don't clutter the map; toggled from the Hawaiʻi tab.
@@ -2464,6 +2518,20 @@ const TWEMOJI = {
   rainfall:  '1f327',   // 🌧
   meshtastic:'1f4f6',   // 📶
   place:     '1f3db',   // 🏛
+  summit:    '1f52d',   // 🔭
+  wildfire:  '1f525',   // 🔥
+  aprs:      '1f4fb',   // 📻
+  ocean:     '1f30a',   // 🌊
+  buoy:      '1f6de',   // 🛟
+  power:     '26a1',    // ⚡
+  globe:     '1f310',   // 🌐
+};
+const ICON_PX = 40;
+const ICON_Z = (z0, s0, z1, s1, z2, s2) => ['interpolate', ['linear'], ['zoom'], z0, s0, z1, s1, z2, s2];
+const ICON_SIZE = {
+  sm:  ICON_Z(7, 0.72, 12, 0.88, 15, 1.05),
+  md:  ICON_Z(7, 0.78, 12, 0.95, 15, 1.12),
+  lg:  ICON_Z(7, 0.85, 12, 1.05, 15, 1.2),
 };
 const _iconReady = { p: null };
 function loadMarkerImage(kind) {
@@ -2473,14 +2541,14 @@ function loadMarkerImage(kind) {
   // this works fully offline / behind firewalls. Rendered to ImageData via
   // an <img> + canvas so MapLibre can use it as a sprite.
   return new Promise((resolve) => {
-    const img = new Image(32, 32);
+    const img = new Image(ICON_PX, ICON_PX);
     img.onload = () => {
       const c = document.createElement('canvas');
-      c.width = 32; c.height = 32;
+      c.width = ICON_PX; c.height = ICON_PX;
       const x = c.getContext('2d');
-      x.clearRect(0, 0, 32, 32);
-      x.drawImage(img, 0, 0, 32, 32);
-      try { map.addImage(`marker-${kind}`, x.getImageData(0, 0, 32, 32), { pixelRatio: 2 }); resolve(true); }
+      x.clearRect(0, 0, ICON_PX, ICON_PX);
+      x.drawImage(img, 0, 0, ICON_PX, ICON_PX);
+      try { map.addImage(`marker-${kind}`, x.getImageData(0, 0, ICON_PX, ICON_PX), { pixelRatio: 2 }); resolve(true); }
       catch (e) { resolve(null); }
     };
     img.onerror = () => resolve(null);
@@ -3130,6 +3198,8 @@ let streamflowVisible = true; // water-wheel gauges shown by default
 let streamflowData = null;
 let streamflowStats = {}; // site_no -> { allMin, allMax, todayMedian, … }
 const streamWheelMarkers = {}; // site_no -> maplibregl.Marker
+const summitMarkers = {}; // id -> maplibregl.Marker
+let summitData = [];
 async function fetchStreamflow() {
   try {
     const res = await fetch('/api/streamflow');
@@ -3662,28 +3732,106 @@ async function fetchSummits() {
     const res = await fetch('/api/summits');
     const data = await res.json();
     recordHealth('summits', data, (data.summits || []).length);
+    summitData = data.summits || [];
     if (!mapReady || !map.getSource('summits')) return;
-    const feats = (data.summits || []).map(s => {
+    const feats = summitData.map(s => {
       const r = s.readings || {};
       let badge = '';
       if (r.tempC != null) badge = `${(+r.tempC).toFixed(0)}°C`;
       else if (r.co2ppm != null) badge = `${(+r.co2ppm).toFixed(0)}ppm`;
       else if (r.windMph != null) badge = `${Math.round(r.windMph)}mph`;
+      const live = Object.keys(r).length > 0 && (sourceHealth.summits?.state === 'live' || sourceHealth.summits?.state === 'empty');
       return { type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
         properties: {
-          name: s.name, elevM: s.elevM, badge, source: s.source || '',
-          pageUrl: s.pageUrl || '', webcamUrl: s.webcamUrl || '', note: s.note || '',
+          id: s.id, name: s.name, elevM: s.elevM, badge, live: live ? 1 : 0,
+          source: s.source || '', pageUrl: s.pageUrl || '', webcamUrl: s.webcamUrl || '', note: s.note || '',
           readings: JSON.stringify(r),
         } };
     });
     map.getSource('summits').setData({ type: 'FeatureCollection', features: feats });
-    hawaiiList.summits = (data.summits || []).map((s, i) => ({
+    renderSummitMarkers();
+    hawaiiList.summits = summitData.map((s, i) => ({
       id: s.id || String(i), name: s.name, lon: s.lon, lat: s.lat, elevM: s.elevM,
       readings: s.readings || {}, source: s.source || '', pageUrl: s.pageUrl || '',
       webcamUrl: s.webcamUrl || '', note: s.note || '',
     }));
     hawaiiBrowseRefresh();
   } catch (e) { /* keep last */ }
+}
+
+function summitBadge(s) {
+  const r = s.readings || {};
+  if (r.tempC != null) return `${(+r.tempC).toFixed(0)}°C`;
+  if (r.co2ppm != null) return `${(+r.co2ppm).toFixed(0)}ppm`;
+  if (r.windMph != null) return `${Math.round(r.windMph)}mph`;
+  if (r.windMs != null) return `${(+r.windMs).toFixed(0)}m/s`;
+  return '—';
+}
+
+function summitIsLive(s) {
+  const r = s.readings || {};
+  if (!Object.keys(r).length) return false;
+  const st = sourceHealth.summits?.state;
+  return st === 'live' || (st !== 'stale' && st !== 'error');
+}
+
+function renderSummitMarkers() {
+  if (!mapReady) return;
+  const seen = new Set();
+  for (const s of summitData) {
+    const id = s.id || s.name;
+    seen.add(id);
+    const live = summitIsLive(s);
+    const badge = summitBadge(s);
+    const props = {
+      name: s.name, elevM: s.elevM, badge, source: s.source || '',
+      pageUrl: s.pageUrl || '', webcamUrl: s.webcamUrl || '', note: s.note || '',
+      readings: JSON.stringify(s.readings || {}),
+    };
+    let m = summitMarkers[id];
+    if (!m) {
+      const el = document.createElement('div');
+      el.className = 'observatory';
+      el.innerHTML = `<div class="obs-scale"><div class="obs-rig"><div class="obs-dome"></div><div class="obs-beam"></div><div class="obs-tripod"></div></div><span class="obs-badge"></span></div>`;
+      m = new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([s.lon, s.lat]).addTo(map);
+      el.onclick = (e) => {
+        e.stopPropagation();
+        const { title, body } = buildSummitCard(props);
+        showMapCard(body, [s.lon, s.lat], title);
+      };
+      el.title = `${s.name} — ${badge}${live ? '' : ' (stale)'}`;
+      summitMarkers[id] = m;
+    }
+    const el = m.getElement();
+    el.classList.toggle('stale', !live);
+    el.querySelector('.obs-badge').textContent = badge;
+    el.title = `${s.name} — ${badge}${live ? '' : ' (stale)'}`;
+    m.setLngLat([s.lon, s.lat]);
+  }
+  for (const id of Object.keys(summitMarkers)) {
+    if (!seen.has(id)) { summitMarkers[id].remove(); delete summitMarkers[id]; }
+  }
+  updateSummitScale();
+}
+
+const SUMMIT_MIN_Z = 7, SUMMIT_MAX_Z = 12;
+const SUMMIT_LIVE_SCALE = { min: 0.55, max: 1.05 };
+const SUMMIT_STALE_SCALE = { min: 0.38, max: 0.72 };
+const SUMMIT_COMPACT_Z = 10;
+function updateSummitScale() {
+  if (!mapReady) return;
+  const z = map.getZoom();
+  const t = Math.max(0, Math.min(1, (z - SUMMIT_MIN_Z) / (SUMMIT_MAX_Z - SUMMIT_MIN_Z)));
+  const compact = z < SUMMIT_COMPACT_Z;
+  for (const id of Object.keys(summitMarkers)) {
+    const el = summitMarkers[id].getElement();
+    const live = !el.classList.contains('stale');
+    const sc = live ? SUMMIT_LIVE_SCALE : SUMMIT_STALE_SCALE;
+    const scale = (sc.min + t * (sc.max - sc.min)).toFixed(3);
+    el.style.setProperty('--obsc', scale);
+    el.classList.toggle('compact', compact);
+  }
 }
 
 // Air quality / vog sampled across Big Island towns. Always on.
@@ -4508,10 +4656,16 @@ function applyLayerHealthDim(id, state) {
         ? [['text-opacity', dim ? 0.4 : 1], ['icon-opacity', dim ? 0.45 : 1]]
         : [['circle-opacity', dim ? 0.35 : 0.9]];
       for (const [k, v] of props) {
-        // Only set properties the layer actually has, to avoid console spam.
         try { map.setPaintProperty(lyr, k, v); } catch { /* prop N/A for this layer */ }
       }
     } catch { /* layer not paintable yet */ }
+  }
+  if (id === 'summits' && summitData.length) {
+    for (const s of summitData) {
+      const m = summitMarkers[s.id];
+      if (m) m.getElement().classList.toggle('stale', dim);
+    }
+    try { updateSummitScale(); } catch { /* map not ready */ }
   }
 }
 
@@ -7342,7 +7496,7 @@ function deOverlapMarkers() {
   // solar suns) against each other. Each cluster gets fanned out into a tiny
   // ring so the icons never visually pile on top of each other. Buses are
   // skipped here — their dynamic motion places them before this pass anyway.
-  for (const dict of [Object.values(streamWheelMarkers || {}), Object.values(windTurbineMarkers || {}), Object.values(solarMarkers || {})]) {
+  for (const dict of [Object.values(streamWheelMarkers || {}), Object.values(windTurbineMarkers || {}), Object.values(solarMarkers || {}), Object.values(summitMarkers || {})]) {
     if (!dict.length) continue;
     const pts2 = dict.map(m => { const p = map.project(m.getLngLat()); return { m, x: p.x, y: p.y }; });
     const used2 = new Set(); const THRESH2 = 30; // px

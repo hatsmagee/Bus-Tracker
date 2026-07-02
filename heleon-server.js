@@ -2310,6 +2310,29 @@ async function handleApi(url, res) {
     return json(res, { uptime_since: startTime, poll_stats: poll, ping_count_today: pingCount?.n || 0 });
   }
 
+  if (p === '/api/debug/feeds') {
+    const feed = (count, ts, err) => ({ count, lastPollTs: ts, lastError: err || null });
+    return json(res, {
+      ts: Date.now(),
+      uptimeMs: Date.now() - startTime,
+      vehicles: latestVehicles.length,
+      feeds: {
+        aircraft: feed(aircraftCache.length, aircraftLastPollTs, aircraftLastError),
+        vessels: feed(vesselCache?.size || 0, vesselLastConnectTs, vesselLastError),
+        summits: feed(summitCache.length, summitLastPollTs, summitLastError),
+        repeaters: feed(repeaterCache.length, repeaterLastPollTs, repeaterLastError),
+        aprs: feed(aprsCache.size, aprsLastRxTs, aprsLastError),
+        meshtastic: feed(meshtasticCache.length, meshtasticLastPollTs, meshtasticLastError),
+        weather: feed(weatherStationsCache?.features?.length || 0, weatherStationsLastPollTs, weatherStationsLastError),
+        streamflow: feed(streamflowCache?.features?.length || 0, streamflowLastPollTs, streamflowLastError),
+        ocean: feed(oceanCache.length, oceanLastPollTs, oceanLastError),
+        airquality: feed(airQualityCache.length, airQualityLastPollTs, airQualityLastError),
+        solar: feed(solarCache.length, solarLastPollTs, solarLastError),
+        satellites: feed(satelliteCache.length, satelliteLastPollTs, satelliteLastError),
+      },
+    });
+  }
+
   if (p === '/api/eta') {
     const vid = parseInt(q.get('vehicle_id'));
     const v = latestVehicles.find(x => x.id === vid);
