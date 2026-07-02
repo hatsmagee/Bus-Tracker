@@ -147,6 +147,34 @@
   .stream-wheel.no-flow .rig { width:18px; height:18px; }
   .stream-wheel.no-flow .stream { display:none; }
   .stream-wheel.no-flow .rate { font-size:8px; padding:0 3px; opacity:.85; }
+  /* Vertical discharge meter: all-time min (bottom) → max (top); yellow tick =
+     today's median; cyan fill = current value. Shown beside the water wheel. */
+  .stream-level-meter { width:11px; height:38px; flex-shrink:0; position:relative;
+    border-radius:4px; overflow:hidden; border:1px solid #0c4a6e;
+    background:linear-gradient(180deg,#164e63 0%,#0c4a6e 100%);
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.35); }
+  .stream-level-meter .fill { position:absolute; left:0; right:0; bottom:0;
+    background:linear-gradient(180deg,#67e8f9,#0891b2); opacity:.92; }
+  .stream-level-meter .median { position:absolute; left:-1px; right:-1px; height:2px;
+    background:#fde047; opacity:.85; pointer-events:none; }
+  .stream-level-meter .needle { position:absolute; left:-2px; right:-2px; height:3px;
+    background:#fef9c3; box-shadow:0 0 3px rgba(0,0,0,.55); pointer-events:none; }
+  .gauge-chart-wrap { margin-top:10px; }
+  .gauge-chart { width:100%; height:120px; display:block; background:#0d1117;
+    border-radius:8px; border:1px solid #30363d; }
+  .gauge-range-btns { display:flex; gap:4px; margin-top:6px; flex-wrap:wrap; }
+  .gauge-range-btns button { font-size:10px; padding:3px 8px; border-radius:6px;
+    border:1px solid #30363d; background:#21262d; color:#8b949e; cursor:pointer; }
+  .gauge-range-btns button.active { background:#1f6feb; border-color:#388bfd; color:#fff; }
+  .weather-thermo { display:flex; align-items:center; gap:10px; margin:8px 0 4px; }
+  .weather-thermo .tube { width:14px; height:52px; border-radius:7px 7px 4px 4px;
+    position:relative; border:1px solid #7f1d1d; background:linear-gradient(180deg,#fecaca,#fef2f2);
+    overflow:hidden; box-shadow:inset 0 1px 2px rgba(0,0,0,.15); }
+  .weather-thermo .tube .mercury { position:absolute; left:2px; right:2px; bottom:2px;
+    border-radius:3px; background:linear-gradient(180deg,#ef4444,#b91c1c); }
+  .weather-thermo .bulb { width:18px; height:18px; border-radius:50%; margin-left:-16px;
+    background:radial-gradient(circle at 35% 35%,#fca5a5,#dc2626); border:1px solid #991b1b;
+    align-self:flex-end; margin-bottom:-2px; }
 
   /* ─── OCCUPANCY BAR (inside bus marker) ───────────────────────────── */
   .bus-occ-bar {
@@ -1265,11 +1293,12 @@ function initMapLayers() {
   wireLayerCard('weather-stations-dot', p => {
     const rows = [];
     const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+    const thermo = p.temperatureC != null ? weatherThermometerHtml(+p.temperatureC) : '';
     if (p.temperatureC != null) row('Temperature', `${(+p.temperatureC).toFixed(1)} °C`);
     if (p.humidity != null) row('Humidity', `${Math.round(+p.humidity)} %`);
     if (p.windSpeedKmh != null) row('Wind', `${(+p.windSpeedKmh).toFixed(1)} km/h`);
     const foot = `<div style="color:#8b949e;font-size:10px;margin-top:8px;">NWS ${escapeHtml(p.stationId || '')}${p.elevation ? ' · ' + Math.round(+p.elevation) + ' m' : ''}${p.timestamp ? ' · ' + new Date(p.timestamp).toLocaleString() : ''}</div>`;
-    return { title: `🌡️ ${p.name}`, body: (rows.join('') || 'No current reading.') + foot };
+    return { title: `🌡️ ${p.name}`, body: thermo + (rows.join('') || 'No current reading.') + foot };
   });
 
   // Ocean stations: NDBC wave/weather buoys + NOAA tide gauges (keyless). Drawn
@@ -2212,6 +2241,7 @@ const facilityLoaded = { police: false, fire: false, ems: false, trauma: false }
 // Streamflow (USGS NWIS) — same refresh cadence as the other Hawaiʻi-tab live data.
 let streamflowVisible = true; // water-wheel gauges shown by default
 let streamflowData = null;
+let streamflowStats = {}; // site_no -> { allMin, allMax, todayMedian, … }
 const streamWheelMarkers = {}; // site_no -> maplibregl.Marker
 async function fetchStreamflow() {
   try {
@@ -2223,9 +2253,129 @@ async function fetchStreamflow() {
       map.getSource('streamflow').setData(streamflowVisible ? streamflowData : { type: 'FeatureCollection', features: [] });
     }
     renderStreamflowWheels();
+    fetchStreamflowStats();
     const el = document.getElementById('streamflowStatus');
     if (el) el.textContent = `${(streamflowData.features || []).length} active gauges reporting`;
   } catch (e) { /* keep last data on screen */ }
+}
+async function fetchStreamflowStats() {
+  try {
+    const res = await fetch('/api/streamflow-stats');
+    const data = await res.json();
+    streamflowStats = data.stats || {};
+    renderStreamflowWheels();
+  } catch (e) { /* meters stay blank until stats load */ }
+}
+function levelPct(val, min, max) {
+  const span = max - min;
+  if (!(span > 0) || val == null) return null;
+  return Math.max(0, Math.min(1, (val - min) / span));
+}
+function streamLevelMeterHtml(cur, stats) {
+  if (!stats || stats.allMin == null || stats.allMax == null || cur == null) return '';
+  const pct = levelPct(cur, stats.allMin, stats.allMax);
+  if (pct == null) return '';
+  const medPct = stats.todayMedian != null ? levelPct(stats.todayMedian, stats.allMin, stats.allMax) : null;
+  const tip = `All-time ${stats.allMin.toFixed(0)}–${stats.allMax.toFixed(0)} ft³/s (${stats.beginYr || '?'}–${stats.endYr || '?'})` +
+    (stats.todayMedian != null ? ` · today median ${stats.todayMedian.toFixed(0)}` : '');
+  return `<div class="stream-level-meter" title="${escapeHtml(tip)}">
+    <div class="fill" style="height:${(pct * 100).toFixed(1)}%"></div>
+    ${medPct != null ? `<div class="median" style="bottom:${(medPct * 100).toFixed(1)}%"></div>` : ''}
+    <div class="needle" style="bottom:${(pct * 100).toFixed(1)}%"></div>
+  </div>`;
+}
+function weatherThermometerHtml(tempC) {
+  const lo = 5, hi = 35;
+  const pct = Math.max(0, Math.min(1, (tempC - lo) / (hi - lo)));
+  return `<div class="weather-thermo">
+    <div style="font-size:10px;color:#8b949e;line-height:1.3;text-align:right;">
+      <div>${hi}°</div><div style="margin-top:28px;">${lo}°</div>
+    </div>
+    <div class="tube"><div class="mercury" style="height:${(pct * 88 + 8).toFixed(0)}%"></div></div>
+    <div class="bulb"></div>
+    <div style="font-size:18px;font-weight:700;color:#fca5a5;">${tempC.toFixed(1)}°C</div>
+  </div>`;
+}
+function drawGaugeHistoryChart(canvas, series) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width = canvas.clientWidth * (window.devicePixelRatio || 1);
+  const h = canvas.height = canvas.clientHeight * (window.devicePixelRatio || 1);
+  ctx.clearRect(0, 0, w, h);
+  const pts = (series || []).filter(p => p.value != null && !isNaN(+p.value));
+  if (!pts.length) {
+    ctx.fillStyle = '#8b949e'; ctx.font = `${11 * (window.devicePixelRatio || 1)}px sans-serif`;
+    ctx.fillText('No history available', 12, h / 2);
+    return;
+  }
+  const pad = 8 * (window.devicePixelRatio || 1);
+  const vals = pts.map(p => +p.value);
+  let ymin = Math.min(...vals), ymax = Math.max(...vals);
+  if (ymin === ymax) { ymin -= 1; ymax += 1; }
+  const x0 = pad, y0 = pad, x1 = w - pad, y1 = h - pad;
+  ctx.strokeStyle = '#30363d'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); ctx.lineTo(x1, y1); ctx.stroke();
+  ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 1.5 * (window.devicePixelRatio || 1);
+  ctx.beginPath();
+  const xy = [];
+  pts.forEach((p, i) => {
+    const x = x0 + (i / Math.max(1, pts.length - 1)) * (x1 - x0);
+    const y = y1 - ((+p.value - ymin) / (ymax - ymin)) * (y1 - y0);
+    xy.push([x, y]);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  if (xy.length) {
+    ctx.fillStyle = 'rgba(56,189,248,.12)';
+    ctx.beginPath();
+    xy.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+    ctx.lineTo(xy[xy.length - 1][0], y1); ctx.lineTo(xy[0][0], y1); ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = '#8b949e'; ctx.font = `${9 * (window.devicePixelRatio || 1)}px monospace`;
+  ctx.fillText(ymax.toFixed(0), x0 + 2, y0 + 10);
+  ctx.fillText(ymin.toFixed(0), x0 + 2, y1 - 2);
+}
+async function openStreamGaugeCard(site, props, coords) {
+  const cfs = props.value != null ? +props.value : null;
+  const stats = streamflowStats[site];
+  const readings = props.readings || {};
+  const fmt = r => `${(+r.value).toFixed(Math.abs(r.value) < 10 ? 1 : 0)} ${r.unit}`;
+  const rows = [];
+  const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+  if (cfs != null) row('Discharge', `${cfs.toFixed(cfs < 10 ? 1 : 0)} ft³/s`);
+  for (const [key, r] of Object.entries(readings)) {
+    if (key === 'discharge') continue;
+    row(r.label, fmt(r));
+  }
+  if (stats && stats.allMin != null) {
+    row('All-time min', `${stats.allMin.toFixed(0)} ft³/s (${stats.allMinYr || '?'})`);
+    row('All-time max', `${stats.allMax.toFixed(0)} ft³/s (${stats.allMaxYr || '?'})`);
+    if (stats.todayMedian != null) row('Today median', `${stats.todayMedian.toFixed(0)} ft³/s`);
+    if (stats.todayP10 != null && stats.todayP90 != null) {
+      row('Today normal', `${stats.todayP10.toFixed(0)}–${stats.todayP90.toFixed(0)} ft³/s`);
+    }
+  }
+  const meter = cfs != null && stats ? streamLevelMeterHtml(cfs, stats) : '';
+  const body = (meter ? `<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">${meter}<div style="flex:1;font-size:10px;color:#8b949e;line-height:1.4;">Vertical bar = current discharge vs all-time range. Yellow tick = today's median.</div></div>` : '') +
+    (rows.join('') || '<div style="color:#8b949e;">No current reading.</div>') +
+    `<div class="gauge-chart-wrap"><canvas class="gauge-chart"></canvas><div class="gauge-range-btns">
+      <button type="button" data-range="week">Week</button>
+      <button type="button" data-range="month">Month</button>
+      <button type="button" data-range="year" class="active">Year</button>
+      <button type="button" data-range="5yr">5 years</button>
+    </div></div>` +
+    `<div style="color:#8b949e;font-size:10px;margin-top:8px;">USGS ${escapeHtml(site)}${props.ts ? ' · ' + new Date(props.ts).toLocaleString() : ''}</div>`;
+  showMapCard(body, coords, `💧 ${props.name || 'Stream gauge'}`);
+  const canvas = mapCard.querySelector('.gauge-chart');
+  const loadRange = async range => {
+    mapCard.querySelectorAll('.gauge-range-btns button').forEach(b => b.classList.toggle('active', b.dataset.range === range));
+    try {
+      const res = await fetch(`/api/gauge-history?site=${encodeURIComponent(site)}&range=${encodeURIComponent(range)}`);
+      const data = await res.json();
+      drawGaugeHistoryChart(canvas, data.series);
+    } catch (e) { drawGaugeHistoryChart(canvas, []); }
+  };
+  mapCard.querySelectorAll('.gauge-range-btns button').forEach(b => { b.onclick = () => loadRange(b.dataset.range); });
+  loadRange('year');
 }
 
 // Map a discharge (ft³/s) to a wheel spin duration (seconds/rev): trickle spins
@@ -2310,20 +2460,18 @@ function renderStreamflowWheels() {
       const uid = 'ww' + String(site).replace(/[^a-z0-9]/gi, '');
       const el = document.createElement('div');
       el.className = 'stream-wheel';
-      el.innerHTML = `<div class="rig">${woodenWheelSvg(uid)}<div class="stream"></div></div><span class="rate"></span>`;
+      el.innerHTML = `<div class="rig">${woodenWheelSvg(uid)}<div class="stream"></div></div><div class="meter-slot"></div><span class="rate"></span>`;
       m = new maplibregl.Marker({ element: el, anchor: 'center' })
         .setLngLat(f.geometry.coordinates).addTo(map);
       streamWheelMarkers[site] = m;
     }
     const el = m.getElement();
+    const meterSlot = el.querySelector('.meter-slot');
+    if (meterSlot) meterSlot.innerHTML = hasFlow ? streamLevelMeterHtml(cfs, streamflowStats[site]) : '';
     // Gauges with no discharge read as SECONDARY: shrink them so they don't
     // crowd the flowing wheels, and don't animate a stream that isn't measured.
     el.classList.toggle('no-flow', !hasFlow);
-    el.onclick = () => showLayerHover(
-      `<div style="font-weight:600;">💧 ${escapeHtml(p.name || 'Stream gauge')}</div>
-       <div style="color:var(--muted);font-size:11px;">${escapeHtml(allTxt)}</div>
-       <div style="color:var(--muted);font-size:10px;">USGS ${escapeHtml(site)}${p.ts ? ' · ' + new Date(p.ts).toLocaleString() : ''}</div>`,
-      window.innerWidth / 2, 80);
+    el.onclick = e => { e.stopPropagation(); openStreamGaugeCard(site, p, f.geometry.coordinates); };
     el.title = `${p.name || 'USGS gauge'} — ${allTxt}`;
     const wheel = el.querySelector('.wheel-spin');
     const stream = el.querySelector('.stream');
@@ -5652,7 +5800,7 @@ setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
 setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); } }, 15 * 60 * 1000);
+setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); } }, 15 * 60 * 1000);
 // APRS moves faster (vehicles) — refresh more often when it has data.
 setInterval(() => { if (!document.hidden) fetchAprs(); }, 60 * 1000);
 
