@@ -861,6 +861,7 @@
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label><input type="checkbox" id="showStreamflow" onchange="toggleStreamflow()" checked> USGS streamflow gauges</label>
         <label><input type="checkbox" id="showWeatherStations" onchange="toggleWeatherStations()" checked> NWS weather stations</label>
+        <label><input type="checkbox" id="showSurf" onchange="toggleSurf()" checked> 🏄 Surf breaks & beaches</label>
         <label><input type="checkbox" id="showSolar" onchange="toggleSolar()" checked> ☀️ Solar irradiance</label>
         <span class="vessel-status" id="streamflowStatus"></span>
       </div>
@@ -1180,6 +1181,7 @@ function initMap() {
     try { fetchInfrastructure(); } catch (e) {}
     try { fetchLocal(); } catch (e) {}
     try { fetchEv(); } catch (e) {}
+    try { fetchSurf(); } catch (e) {}
     // Most layers ship on by default now. Setting a checkbox's `checked` in HTML
     // doesn't fire its onchange, and layers initialise hidden, so invoke each
     // toggle once here to actually reveal them (lava + tsunami stay off).
@@ -2398,6 +2400,23 @@ function initMapLayers() {
   wireLayerHover('ev-icon', p => `<div style="font-weight:600;">🔌 ${escapeHtml(p.name || 'Charging station')}</div>
     <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.network || 'Non-networked')} · ${p.ports || 0} port${p.ports == 1 ? '' : 's'}${p.dcFast > 0 ? ' · DC fast' : ''}</div>`);
   wireLayerCard('ev-icon', p => ({ title: `🔌 ${p.name || 'EV charging'}`, body: buildEvCard(p) }));
+
+  // ─── Surf & beaches (Open-Meteo waves + curated breaks) ───────────────────
+  map.addSource('surf', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'surf-icon', type: 'symbol', source: 'surf',
+    layout: {
+      'icon-image': 'marker-surf', 'icon-anchor': 'bottom', 'icon-allow-overlap': false,
+      'icon-size': ICON_SIZE.md,
+      'text-field': ['case', ['has', 'waveFt'], ['concat', ['to-string', ['get', 'waveFt']], ' ft'], ''],
+      'text-size': 11, 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-anchor': 'top', 'text-offset': [0, 0.3], 'text-allow-overlap': false, 'text-optional': true,
+    },
+    paint: { 'text-color': '#0b7285', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 },
+  });
+  wireLayerHover('surf-icon', p => `<div style="font-weight:600;">🏄 ${escapeHtml(p.name || 'Surf spot')}</div>
+    <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.region || '')}${p.waveFt ? ' · ' + p.waveFt + ' ft' : ''}${p.wavePeriod ? ' @ ' + p.wavePeriod + 's' : ''}</div>`);
+  wireLayerCard('surf-icon', p => ({ title: `🏄 ${p.name || 'Surf spot'}`, body: buildSurfCard(p) }));
   map.addLayer({
     id: 'infra-subs-circle', type: 'circle', source: 'infra-subs',
     minzoom: 10,
@@ -2752,6 +2771,7 @@ const TWEMOJI = {
   buoy:      '1f6de',   // 🛟
   power:     '26a1',    // ⚡
   ev:        '1f50c',   // 🔌
+  surf:      '1f3c4',   // 🏄
   globe:     '1f310',   // 🌐
   waterqual: '1f4a7',   // 💧
   // Heritage / historical site categories
@@ -3014,6 +3034,18 @@ const DATA_SOURCES = {
     method: 'Grid geometry crowd-mapped in OpenStreetMap. Hawaiian Electric publishes no real-time line loading, so this is layout + nameplate specs, not live flow.',
     instruments: [{ role: 'Data', model: 'OSM power=line tags', maker: 'OpenStreetMap', detail: 'surveyed voltage/cables/operator' }],
     docs: [{ label: 'OSM Power networks', url: 'https://wiki.openstreetmap.org/wiki/Power_networks' }],
+  },
+  'surf-icon': {
+    label: 'Surf break / beach', provider: 'Open-Meteo Marine + curated breaks', program: 'Open-Meteo Marine & Forecast API',
+    api: [{ url: 'https://marine-api.open-meteo.com/v1/marine', format: 'JSON' }, { url: 'https://api.open-meteo.com/v1/forecast', format: 'JSON' }],
+    cadence: 'Wave model hourly; positions/descriptions curated', idFields: ['id', 'name'],
+    measures: 'Wave height, wave period/direction, primary swell, wind, sea-surface temp; 48 h wave forecast',
+    method: 'Curated Big Island surf breaks & beaches with live wave/swell/wind from Open-Meteo (WAM/ICON global wave models, nearest sea cell). Cameras are hosted by Surfline/resorts — ToS-restricted for embedding — so each spot links out to its live cam + forecast page and the public cam directories.',
+    instruments: [
+      { role: 'Wave model', model: 'ECMWF WAM / DWD ICON-Waves', maker: 'Open-Meteo', detail: 'global spectral wave forecast' },
+      { role: 'Wind', model: 'ICON / GFS 10 m wind', maker: 'Open-Meteo', detail: 'surf-quality wind' },
+    ],
+    docs: [{ label: 'Open-Meteo Marine', url: 'https://open-meteo.com/en/docs/marine-weather-api' }],
   },
   'ev-icon': {
     label: 'EV charging station', provider: 'US DOE / NREL Alternative Fuels Data Center', program: 'AFDC Station Locator API',
@@ -5457,6 +5489,120 @@ function buildEvCard(p) {
   return addr + chart + body + linkHtml + timelineHtml('ev', 'electric vehicle charging') +
     `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Registry data from NREL AFDC. Real-time port availability isn't publicly published; check the network app for live status.</div>`;
 }
+
+// ─── SURF & BEACHES (Open-Meteo waves + curated breaks + cam links) ───────────
+let allSurf = [];
+let surfVisible = true;
+const M_TO_FT = 3.28084;
+function degToCard(d) {
+  if (d == null || isNaN(d)) return '';
+  const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+  return dirs[Math.round(((d % 360) / 22.5)) % 16];
+}
+async function fetchSurf() {
+  try {
+    const data = await (await fetch('/api/surf')).json();
+    allSurf = data.spots || [];
+    hawaiiList.surf = allSurf;
+    recordHealth('surf', data, allSurf.length);
+    hawaiiBrowseRefresh();
+    renderSurfMarkers();
+  } catch (e) { /* keep last */ }
+}
+function renderSurfMarkers() {
+  if (!mapReady || !map.getSource('surf')) return;
+  const src = map.getSource('surf');
+  if (!surfVisible) { src.setData({ type: 'FeatureCollection', features: [] }); return; }
+  src.setData({
+    type: 'FeatureCollection',
+    features: allSurf.filter(s => s.lat != null && s.lon != null).map(s => {
+      const c = s.current || {};
+      const waveFt = c.waveHeightM != null ? Math.round(c.waveHeightM * M_TO_FT * 10) / 10 : null;
+      const props = {
+        id: s.id, name: s.name, region: s.region || '', brk: s.brk || '', skill: s.skill || '',
+        bottom: s.bottom || '', bestSwell: s.bestSwell || '', desc: s.desc || '',
+        fc: s.fc || '', surfline: s.surfline || '',
+        wavePeriod: c.wavePeriod != null ? Math.round(c.wavePeriod) : '',
+        _spot: JSON.stringify(s),
+      };
+      if (waveFt != null) props.waveFt = waveFt;
+      return { type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] }, properties: props };
+    }),
+  });
+}
+function toggleSurf() {
+  surfVisible = document.getElementById('showSurf').checked;
+  if (mapReady && map.getLayer('surf-icon')) map.setLayoutProperty('surf-icon', 'visibility', surfVisible ? 'visible' : 'none');
+  if (surfVisible && !allSurf.length) fetchSurf(); else renderSurfMarkers();
+}
+// Inline SVG area chart of the next 48h wave height (in feet).
+function surfWaveChart(times, heightsM) {
+  const h = (heightsM || []).filter(v => v != null);
+  if (h.length < 4) return '';
+  const ft = (heightsM || []).map(v => v == null ? null : v * M_TO_FT);
+  const W = 260, H = 96, padL = 26, padB = 16, padT = 8, x0 = padL, x1 = W - 6, y0 = H - padB, y1 = padT;
+  const vals = ft.filter(v => v != null);
+  const max = Math.max(1, Math.ceil(Math.max(...vals)));
+  const n = ft.length;
+  const xAt = i => x0 + (i / (n - 1)) * (x1 - x0);
+  const yAt = v => y0 - (v / max) * (y0 - y1);
+  let d = '', area = '';
+  ft.forEach((v, i) => { if (v == null) return; const cmd = d ? 'L' : 'M'; d += `${cmd}${xAt(i).toFixed(1)},${yAt(v).toFixed(1)} `; });
+  area = `M${xAt(0).toFixed(1)},${y0} ` + ft.map((v, i) => v == null ? '' : `L${xAt(i).toFixed(1)},${yAt(v).toFixed(1)} `).join('') + `L${xAt(n - 1).toFixed(1)},${y0} Z`;
+  // Hour ticks: now, +12, +24, +36
+  let ticks = '';
+  [0, 12, 24, 36].forEach(hr => { if (hr < n) { const x = xAt(hr); ticks += `<line x1="${x}" y1="${y0}" x2="${x}" y2="${y0 + 3}" stroke="#8b949e"/><text x="${x}" y="${H - 3}" text-anchor="middle" font-size="8.5" fill="#8b949e">${hr === 0 ? 'now' : '+' + hr + 'h'}</text>`; } });
+  const gy = [max, Math.round(max / 2)];
+  let grid = gy.map(g => `<line x1="${x0}" y1="${yAt(g)}" x2="${x1}" y2="${yAt(g)}" stroke="#30363d" stroke-width="0.6"/><text x="${x0 - 3}" y="${yAt(g) + 3}" text-anchor="end" font-size="8.5" fill="#8b949e">${g}</text>`).join('');
+  return `<div style="font-weight:600;font-size:11px;margin-top:6px;">Wave height — next 48 h (ft)</div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:280px;margin:2px 0;">
+      ${grid}<path d="${area}" fill="#22d3ee" fill-opacity="0.16"/><path d="${d}" fill="none" stroke="#0891b2" stroke-width="1.8"/>${ticks}</svg>`;
+}
+function buildSurfCard(p) {
+  let s = {};
+  try { s = p._spot ? JSON.parse(p._spot) : p; } catch { s = p; }
+  const c = s.current || {};
+  const waveFt = c.waveHeightM != null ? (c.waveHeightM * M_TO_FT) : null;
+  const swellFt = c.swellHeightM != null ? (c.swellHeightM * M_TO_FT) : null;
+  const sstF = c.sstC != null ? (c.sstC * 9 / 5 + 32) : null;
+  const airF = c.airC != null ? (c.airC * 9 / 5 + 32) : null;
+  const meta = `<div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#8b949e;margin-bottom:6px;">${escapeHtml([s.region, s.brk, s.skill].filter(Boolean).join(' · '))}</div>`;
+  const desc = s.desc ? `<div style="font-size:12px;line-height:1.55;color:var(--text);margin-bottom:8px;">${escapeHtml(s.desc)}</div>` : '';
+  let live = '';
+  if (c && c.waveHeightM != null) {
+    const rows = [
+      ['Surf', waveFt != null ? `${waveFt.toFixed(1)} ft (${c.waveHeightM} m)${c.wavePeriod ? ' @ ' + Math.round(c.wavePeriod) + 's' : ''}${c.waveDir != null ? ' from ' + degToCard(c.waveDir) : ''}` : '—'],
+      ['Primary swell', swellFt != null ? `${swellFt.toFixed(1)} ft${c.swellPeriod ? ' @ ' + Math.round(c.swellPeriod) + 's' : ''}${c.swellDir != null ? ' from ' + degToCard(c.swellDir) + ' (' + Math.round(c.swellDir) + '°)' : ''}` : '—'],
+      ['Wind', c.windKn != null ? `${Math.round(c.windKn)} kn${c.windDir != null ? ' from ' + degToCard(c.windDir) : ''}` : '—'],
+      ['Water temp', sstF != null ? `${Math.round(sstF)}°F (${Math.round(c.sstC)}°C)` : '—'],
+      ['Air temp', airF != null ? `${Math.round(airF)}°F` : '—'],
+    ];
+    live = `<div style="font-weight:600;font-size:11px;margin:2px 0 2px;">Live conditions</div>` +
+      rows.map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;padding:2px 0;"><span style="color:var(--muted);">${k}</span><span style="text-align:right;max-width:66%;">${escapeHtml(String(v))}</span></div>`).join('');
+  } else {
+    live = `<div style="font-size:11px;color:var(--muted);margin:4px 0;">Live wave data loading…</div>`;
+  }
+  const chart = s.chart ? surfWaveChart(s.chart.time, s.chart.waveHeight) : '';
+  const info = [
+    ['Break type', s.brk || '—'],
+    ['Bottom', s.bottom || '—'],
+    ['Best swell', s.bestSwell || '—'],
+    ['Skill', s.skill || '—'],
+  ].map(([k, v]) => `<div style="display:flex;justify-content:space-between;gap:10px;font-size:11px;padding:2px 0;"><span style="color:var(--muted);">${k}</span><span style="text-align:right;">${escapeHtml(String(v))}</span></div>`).join('');
+  const links = [];
+  if (s.surfline) links.push(`<a href="${escapeHtml(s.surfline)}" target="_blank" rel="noopener" style="color:#58a6ff;">Surfline cam & report ↗</a>`);
+  if (s.fc) links.push(`<a href="https://www.surf-forecast.com/breaks/${encodeURIComponent(s.fc)}/webcams/latest" target="_blank" rel="noopener" style="color:#58a6ff;">Surf cam ↗</a>`,
+                       `<a href="https://www.surf-forecast.com/breaks/${encodeURIComponent(s.fc)}/forecasts/latest" target="_blank" rel="noopener" style="color:#58a6ff;">7-day forecast ↗</a>`);
+  if (s.lat != null && s.lon != null) links.push(`<a href="https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lon}" target="_blank" rel="noopener" style="color:#58a6ff;">Directions ↗</a>`);
+  const camNote = `<div style="font-weight:600;font-size:11px;margin-top:8px;">📹 Live cams & report</div>
+    <div style="font-size:10px;margin-top:3px;">${links.join(' · ')}</div>`;
+  const dirs = (s.camDirectories || []).map(d => `<a href="${escapeHtml(d.url)}" target="_blank" rel="noopener" style="color:#58a6ff;">${escapeHtml(d.label)} ↗</a>`).join(' · ');
+  const dirHtml = dirs ? `<div style="font-size:9.5px;color:#8b949e;margin-top:4px;">More Big Island cams: ${dirs}</div>` : '';
+  return meta + desc + live + chart +
+    `<div style="font-weight:600;font-size:11px;margin-top:6px;">Break info</div>` + info +
+    camNote + dirHtml + timelineHtml(s.id, 'surf ' + (s.name || '')) +
+    `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Waves/swell/wind from Open-Meteo Marine (WAM/ICON models), refreshed hourly. Cameras are hosted by Surfline / resorts.</div>`;
+}
 function toggleInfraCell() {
   infraCellVisible = document.getElementById('showInfraCell').checked;
   if (mapReady && map.getLayer('infra-cell-icon')) {
@@ -5629,7 +5775,7 @@ const hawaiiList = {
   localFuelPrices: {}, localFuelStations: [], localTrafficSensors: [], localLco: [], localInat: [],
   localNotes: {},
   summits: [], scanner: [], ocean: [], waterQuality: [], airquality: [], volcanoAlerts: [], volcanoCams: [], satellites: [], rainfall: [],
-  metars: [], alerts: [], wildfire: [], places: [], heritage: [], solar: [], ev: [],
+  metars: [], alerts: [], wildfire: [], places: [], heritage: [], solar: [], ev: [], surf: [],
   facilities: { police: [], fire: [], ems: [], trauma: [] },
 };
 const hawaiiBrowse = { openCats: new Set(['radio']), openItems: new Set() };
@@ -5647,6 +5793,7 @@ const SOURCE_HEALTH_CFG = {
   aircraft:   { staleAfterMs: 90 * 1000,   layers: ['aircraft-triangles'] },
   vessels:    { staleAfterMs: 15 * 60000,  layers: ['vessels-icon'] },
   ev:         { staleAfterMs: 48 * 3600000, layers: ['ev-icon'] },
+  surf:       { staleAfterMs: 3 * 3600000,  layers: ['surf-icon'] },
   ocean:      { staleAfterMs: 60 * 60000,  layers: ['ocean-dot'] },
   summits:    { staleAfterMs: 30 * 60000,  layers: ['summits-dot'] },
   airquality: { staleAfterMs: 60 * 60000,  layers: ['airquality-icon'] },
@@ -6879,7 +7026,7 @@ function applyDefaultLayers() {
   const toggles = [
     'toggleControls', 'toggleRadar', 'toggleTopography', 'togglePlaces', 'toggleHeritage',
     'toggleQuakes', 'toggleSolar', 'toggleInfraCell', 'toggleInfraNet', 'toggleInfraRail',
-    'toggleLocalTraffic', 'toggleLocalSensors', 'toggleLocalLco', 'toggleLocalInat', 'toggleEv',
+    'toggleLocalTraffic', 'toggleLocalSensors', 'toggleLocalLco', 'toggleLocalInat', 'toggleEv', 'toggleSurf',
   ];
   for (const fn of toggles) { try { window[fn] && window[fn](); } catch (e) {} }
   for (const kind of ['police', 'fire', 'ems', 'trauma']) { try { toggleFacility(kind); } catch (e) {} }
@@ -8430,7 +8577,7 @@ function positionMapCard() {
 const CARD_LAYERS = ['ocean-dot', 'marine-dot', 'aprs-icon', 'summits-dot', 'weather-stations-icon', 'aircraft-triangles', 'airquality-icon',
   'waterquality-icon', 'volcano-dot', 'metars-dot', 'repeaters-icon', 'infra-power-icon', 'infra-cell-icon', 'infra-net-icon',
   'local-fuel-icon', 'local-sensors-icon', 'local-lco-icon', 'local-inat-icon',
-  'rainfall-icon', 'satellites-icon', 'places-icon', 'heritage-icon', 'ev-icon', 'infra-lines-line'];
+  'rainfall-icon', 'satellites-icon', 'places-icon', 'heritage-icon', 'ev-icon', 'surf-icon', 'infra-lines-line'];
 // Wire click-to-open-card on a layer. buildCard(props) -> { title, body }.
 function wireLayerCard(layerId, buildCard) {
   map.on('click', layerId, e => {
@@ -9597,6 +9744,7 @@ Promise.all([
   fetchInfrastructure(),
   fetchLocal(),
   fetchEv(),
+  fetchSurf(),
 ]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); ensureHawaiiFacilitiesBrowse().then(() => renderHawaiiBrowser()); renderHawaiiBrowser(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
@@ -9620,7 +9768,7 @@ setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
 setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); fetchTsunami(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchMarine(); if (!document.hidden) fetchInfrastructure(); if (!document.hidden) fetchEv(); if (!document.hidden) fetchLocal(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) fetchWaterQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); fetchRainfall(); fetchSpaceWeather(); fetchSkyClock(); fetchSolar(); } }, 15 * 60 * 1000);
+setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchMarine(); if (!document.hidden) fetchInfrastructure(); if (!document.hidden) fetchEv(); if (!document.hidden) fetchSurf(); if (!document.hidden) fetchLocal(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) fetchWaterQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); fetchRainfall(); fetchSpaceWeather(); fetchSkyClock(); fetchSolar(); } }, 15 * 60 * 1000);
 setInterval(() => { if (!document.hidden && (!hawaiiList.meshtastic || !hawaiiList.meshtastic.length)) fetchMeshtastic(); }, 2 * 60 * 1000);
 // APRS moves faster (vehicles) — refresh more often when it has data.
 setInterval(() => { if (!document.hidden) fetchAprs(); }, 60 * 1000);
@@ -9682,7 +9830,7 @@ const SELF_HEAL_FETCH = {
   satellites: fetchSatellites, rainfall: fetchRainfall, spaceweather: fetchSpaceWeather,
   places: fetchPlaces, tsunami: fetchTsunami, skyclock: fetchSkyClock, volcano: fetchVolcano,
   metars: fetchMetars, meshtastic: fetchMeshtastic, ocean: fetchOcean, marine: fetchMarine,
-  ev: fetchEv, aprs: fetchAprs, weather: fetchWeatherStations, mobility: fetchHibike,
+  ev: fetchEv, aprs: fetchAprs, weather: fetchWeatherStations, mobility: fetchHibike, surf: fetchSurf,
 };
 const _healLast = {}; // id -> last repair attempt ts (per-source throttle)
 function healStaleSources(force) {

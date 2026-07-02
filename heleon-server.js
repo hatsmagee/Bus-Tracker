@@ -2367,6 +2367,7 @@ async function handleApi(url, res) {
         assetMedia: feed(assetMediaCache.length, assetMediaLastPollTs, assetMediaLastError),
         timelines: feed(timelinesCache.length, timelinesLastPollTs, timelinesLastError),
         evCharging: feed(evCache.length, evLastPollTs, evLastError),
+        surf: feed(surfCache.length, surfLastPollTs, surfLastError),
         solar: feed(solarCache.length, solarLastPollTs, solarLastError),
         satellites: feed(satelliteCache.length, satelliteLastPollTs, satelliteLastError),
       },
@@ -3154,6 +3155,14 @@ async function handleApi(url, res) {
   if (p === '/api/ev-charging') {
     return json(res, { ts: Date.now(), lastPollTs: evLastPollTs, lastError: evLastError,
       count: evCache.length, stations: evCache });
+  }
+
+  // ── SURF & BEACHES — Open-Meteo marine + wind, curated breaks + cam links ───
+  if (p === '/api/surf') {
+    return json(res, { ts: Date.now(), lastPollTs: surfLastPollTs, lastError: surfLastError,
+      count: (surfCache.length || SURF_SPOTS.length),
+      spots: (surfCache.length ? surfCache : surfDefaults()),
+      camDirectories: SURF_CAM_DIRECTORIES });
   }
 
   // ── AIRCRAFT PHOTO — Planespotters public API proxy (keyless, cached) ──────
@@ -6168,6 +6177,84 @@ async function pollEv() {
   } catch (e) { evLastError = (e && e.message) || 'unknown error'; }
 }
 
+// ─── SURF & BEACHES (Open-Meteo Marine + wind, keyless) ──────────────────────
+// Curated Big Island surf breaks & beaches, each enriched with live wave/swell
+// data and a 48-hour wave forecast for the in-card chart, plus wind for surf
+// quality. Cameras are hosted by Surfline/resorts (ToS-restricted for embedding)
+// so each spot links out to its live cam + forecast page and the public cam
+// directories. One marine + one wind request per poll covers every spot.
+const SURF_SPOTS = [
+  { id: 'honolii', name: 'Honoliʻi Beach Park', region: 'Hilo (East)', lat: 19.760, lon: -155.088, brk: 'rivermouth', skill: 'Intermediate–Advanced', bottom: 'Rock / rivermouth', bestSwell: 'N–NE (winter)', fc: 'Honolii-Beach-Park', desc: 'The Big Island\u2019s premier east-side break — a fast, hollow rivermouth wave just north of Hilo that works much of the year and lights up on winter north swells. The island\u2019s surf heart and contest venue.' },
+  { id: 'banyans', name: 'Banyans', region: 'Kailua-Kona (West)', lat: 19.615, lon: -156.001, brk: 'reef', skill: 'Intermediate–Advanced', bottom: 'Lava reef', bestSwell: 'S–SW (summer)', fc: 'Banyans', surfline: 'https://www.surfline.com/surf-report/banyans/5842041f4e65fad6a770889d', desc: 'Kona\u2019s most popular break — a year-round A-frame reef where pro Shane Dorian grew up surfing. Summer S/SW swells march straight in; a hollow right with fun lefts.' },
+  { id: 'lymans', name: 'Lymanʻs', region: 'Kailua-Kona (West)', lat: 19.622, lon: -156.003, brk: 'point', skill: 'Advanced', bottom: 'Lava reef point', bestSwell: 'S–SW / W', fc: 'Lymans', desc: 'A long, fast reef point just north of Banyans — one of Kona\u2019s best waves when the swell lines up, with a peeling right that can run a long way. Localized; respect the lineup.' },
+  { id: 'pinetrees', name: 'Pine Trees (Kohanaiki)', region: 'North Kona', lat: 19.686, lon: -156.036, brk: 'reef', skill: 'All levels', bottom: 'Lava reef', bestSwell: 'NW / S', fc: 'Pine-Trees', desc: 'A cluster of reef breaks in the Kohanaiki Beach Park area south of the Kona airport — a fun, mellow right that suits all skill levels and a major local surf community hub.' },
+  { id: 'kahaluu', name: 'Kahaluʻu Bay', region: 'Keauhou (West)', lat: 19.578, lon: -155.967, brk: 'reef', skill: 'Beginner–Intermediate', bottom: 'Reef / sand', bestSwell: 'S', fc: 'Kahaluu', desc: 'The island\u2019s classic learn-to-surf bay — protected, gentle rollers over reef, and world-class snorkeling. Watch for shallow reef and honu (green sea turtles).' },
+  { id: 'magicsands', name: 'Magic Sands (Laʻaloa)', region: 'Kailua-Kona (West)', lat: 19.585, lon: -155.965, brk: 'shorebreak', skill: 'Bodyboard / experienced', bottom: 'Sand (seasonal)', bestSwell: 'S–SW', fc: 'Magics', desc: 'Also called Disappearing Sands — the beach\u2019s sand washes away on big swells to expose rock, then returns. A punchy shorebreak beloved by bodyboarders and bodysurfers.' },
+  { id: 'oldairport', name: 'Old Kona Airport', region: 'Kailua-Kona (West)', lat: 19.652, lon: -156.010, brk: 'reef', skill: 'Intermediate', bottom: 'Lava reef', bestSwell: 'W / NW', fc: 'Old-Kona-Airport-State-Park', desc: 'Reef breaks fronting the Old Kona Airport State Park — several peaks that pick up west and northwest energy, with easy paved access and parking.' },
+  { id: 'honls', name: 'Honlʻs (Waiaha)', region: 'Kailua-Kona (West)', lat: 19.630, lon: -156.000, brk: 'reef', skill: 'Intermediate', bottom: 'Lava reef', bestSwell: 'S–SW', fc: 'Waiaha-Rivermouth-Honls', desc: 'A consistent reef/rivermouth peak in downtown Kona (Waiaha) — an accessible, popular wave that works on summer south swells right in front of town.' },
+  { id: 'kuabay', name: 'Kua Bay (Maniniʻōwali)', region: 'North Kona', lat: 19.813, lon: -156.021, brk: 'shorebreak', skill: 'Bodyboard / experienced', bottom: 'Sand', bestSwell: 'NW / W', fc: 'Kua-Bay', desc: 'A stunning white-sand bay that turns into a heavy, sand-sucking shorebreak on winter NW swells — spectacular to watch, serious for bodyboarders and bodysurfers.' },
+  { id: 'hapuna', name: 'Hapuna Beach', region: 'Kohala (West)', lat: 19.993, lon: -155.825, brk: 'shorebreak', skill: 'Bodyboard / beginner (small days)', bottom: 'Sand', bestSwell: 'NW / W', fc: 'Hapuna', desc: 'The island\u2019s largest white-sand beach — gentle on calm days, but a powerful shorebreak when NW swells arrive. Prime bodyboarding and bodysurfing.' },
+  { id: 'abay', name: 'Anaehoʻomalu (A-Bay)', region: 'Waikoloa (West)', lat: 19.917, lon: -155.887, brk: 'reef', skill: 'Beginner–Intermediate', bottom: 'Reef / sand', bestSwell: 'S / NW', fc: 'Anaehoomalu-Bay-A-Bay', desc: 'A resort-fronting bay at Waikoloa with mellow reef peaks and SUP/longboard-friendly waves — a relaxed West Hawaiʻi option with full beach amenities.' },
+  { id: 'kawaihae', name: 'Kawaihae Breakwater', region: 'Kohala (West)', lat: 20.036, lon: -155.830, brk: 'reef', skill: 'Intermediate', bottom: 'Reef', bestSwell: 'NW', fc: 'Kawaihae-Breakwater', desc: 'A north Kohala reef break near Kawaihae Harbor that favors NW swells — less crowded, with a strong local following.' },
+  { id: 'pohoiki', name: 'Pohoiki (Isaac Hale)', region: 'Puna (East)', lat: 19.457, lon: -154.843, brk: 'reef', skill: 'Intermediate–Advanced', bottom: 'Lava reef', bestSwell: 'S / E', fc: 'Pohoiki', desc: 'Puna\u2019s main surf spot at Isaac Hale Beach Park — dramatically reshaped by the 2018 Kīlauea lower-East-Rift eruption, which created a new black-sand beach and altered the lineup. Still surfed and central to the Puna community.' },
+  { id: 'richardsons', name: 'Richardsonʻs Ocean Park', region: 'Hilo (East)', lat: 19.736, lon: -155.020, brk: 'reef', skill: 'Beginner–Intermediate', bottom: 'Reef / black sand', bestSwell: 'N–NE', fc: 'Richardsons', desc: 'A protected black-sand cove east of Hilo — small, friendly reef waves plus superb snorkeling, a favorite for families and learners.' },
+  { id: 'punaluu', name: 'Punaluʻu (Black Sand)', region: 'Kaʻū (South)', lat: 19.135, lon: -155.505, brk: 'beach', skill: 'Experienced', bottom: 'Black sand / reef', bestSwell: 'S', fc: 'Punaluu', desc: 'The famous Kaʻū black-sand beach and honu haul-out — surfable on south swells but with strong currents and cold freshwater springs; beauty first, surf second.' },
+];
+const SURF_CAM_DIRECTORIES = [
+  { label: 'Live Surf Cam Hawaiʻi (Big Island)', url: 'https://livesurfcamhawaii.com/bigisland/bigisland.html' },
+  { label: 'Big Island Live View (30+ cams)', url: 'https://bigislandliveview.com/' },
+  { label: 'Hawaiʻi Guide webcams', url: 'https://www.hawaii-guide.com/webcams' },
+];
+const SURF_CACHE_PATH = path.join(__dirname, 'data', 'surf-cache.json');
+let surfCache = [];
+let surfLastPollTs = null, surfLastError = null;
+function loadSurfCache() {
+  try {
+    const j = JSON.parse(fs.readFileSync(SURF_CACHE_PATH, 'utf8'));
+    if (Array.isArray(j.spots) && j.spots.length) { surfCache = j.spots; surfLastPollTs = j.lastPollTs || null; }
+  } catch { /* no cache yet */ }
+}
+function surfDefaults() {
+  // Serve spot metadata immediately (icons + descriptions + cam links) even
+  // before the first live poll lands.
+  return SURF_SPOTS.map(s => ({ ...s, camDirectories: SURF_CAM_DIRECTORIES, current: null, chart: null }));
+}
+async function pollSurf() {
+  try {
+    const lats = SURF_SPOTS.map(s => s.lat).join(',');
+    const lons = SURF_SPOTS.map(s => s.lon).join(',');
+    const marine = await fetchJson('marine-api.open-meteo.com',
+      `/v1/marine?latitude=${lats}&longitude=${lons}&current=wave_height,wave_direction,wave_period,swell_wave_height,swell_wave_period,swell_wave_direction,wind_wave_height,sea_surface_temperature&hourly=wave_height,swell_wave_height&forecast_days=2&cell_selection=sea&timezone=Pacific%2FHonolulu`,
+      { 'User-Agent': 'heleon-tracker' });
+    let wx = { };
+    try {
+      wx = await fetchJson('api.open-meteo.com',
+        `/v1/forecast?latitude=${lats}&longitude=${lons}&current=wind_speed_10m,wind_direction_10m,temperature_2m&wind_speed_unit=kn&timezone=Pacific%2FHonolulu`,
+        { 'User-Agent': 'heleon-tracker' });
+    } catch (e) { console.warn('[surf] wind:', e.message); }
+    const marr = Array.isArray(marine) ? marine : [marine];
+    const warr = Array.isArray(wx) ? wx : [wx];
+    const r2 = (v) => (v == null ? null : Math.round(v * 100) / 100);
+    surfCache = SURF_SPOTS.map((s, i) => {
+      const m = marr[i] || {}, c = m.current || {}, h = m.hourly || {};
+      const w = warr[i] || {}, wc = w.current || {};
+      return {
+        ...s, camDirectories: SURF_CAM_DIRECTORIES,
+        current: {
+          waveHeightM: r2(c.wave_height), waveDir: c.wave_direction, wavePeriod: r2(c.wave_period),
+          swellHeightM: r2(c.swell_wave_height), swellPeriod: r2(c.swell_wave_period), swellDir: c.swell_wave_direction,
+          windWaveM: r2(c.wind_wave_height), sstC: r2(c.sea_surface_temperature),
+          windKn: r2(wc.wind_speed_10m), windDir: wc.wind_direction_10m, airC: r2(wc.temperature_2m),
+          time: c.time || null,
+        },
+        chart: { time: (h.time || []).slice(0, 48), waveHeight: (h.wave_height || []).slice(0, 48).map(r2), swellHeight: (h.swell_wave_height || []).slice(0, 48).map(r2) },
+      };
+    });
+    surfLastPollTs = Date.now(); surfLastError = null;
+    try { fs.writeFileSync(SURF_CACHE_PATH, JSON.stringify({ lastPollTs: surfLastPollTs, spots: surfCache })); } catch { /* read-only fs */ }
+  } catch (e) { surfLastError = (e && e.message) || 'unknown error'; }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin':'*' }); res.end(); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -6309,6 +6396,9 @@ const server = http.createServer((req, res) => {
   loadEvCache();                                    // serve EV charging stations instantly from disk
   pollEv();                                         // refresh EV registry from NREL AFDC
   setInterval(pollEv, 24 * 60 * 60 * 1000);
+  loadSurfCache();                                  // serve surf spots (+ last waves) instantly from disk
+  pollSurf();                                       // refresh wave/swell/wind for every break
+  setInterval(pollSurf, 60 * 60 * 1000);            // wave model updates hourly
   pollSatellites();
   setInterval(pollSatellites, 20 * 1000); // ISS moves ~7.6 km/s — keep it fresh
   pollRepeaters();
@@ -6379,6 +6469,7 @@ const server = http.createServer((req, res) => {
   // down source isn't hammered. Everything self-corrects within minutes.
   const HEAL_TARGETS = [
     { name: 'evCharging', run: pollEv,             maxAgeMs: 26 * 3600e3, ts: () => evLastPollTs,        err: () => evLastError },
+    { name: 'surf', run: pollSurf,                 maxAgeMs: 3 * 3600e3,  ts: () => surfLastPollTs,      err: () => surfLastError },
     { name: 'infrastructure', run: pollInfrastructure, maxAgeMs: 26 * 3600e3, ts: () => infraLastPollTs, err: () => infraLastError },
     { name: 'timelines', run: pollTimelines,       maxAgeMs: 26 * 3600e3, ts: () => timelinesLastPollTs, err: () => timelinesLastError },
     { name: 'heritage', run: pollHeritage,         maxAgeMs: 26 * 3600e3, ts: () => heritageLastPollTs,  err: () => heritageLastError },

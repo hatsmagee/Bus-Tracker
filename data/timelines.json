@@ -127,6 +127,18 @@
       ]
     },
     {
+      "match": ["surf ", "surfing", "surf spot", "surf break", "heʻe nalu"],
+      "title": "Surfing in Hawaiʻi — heʻe nalu",
+      "intro": "Surfing was born in Hawaiʻi. Heʻe nalu (wave-sliding) was woven into Hawaiian life for centuries before it spread to the world.",
+      "events": [
+        { "year": "pre-1778", "title": "Heʻe nalu", "text": "Surfing was central to ancient Hawaiian society — chiefs rode long olo boards, commoners the shorter alaia, with special breaks, chants, and kapu governing the surf.", "wikiImage": "Surfing", "source": "Bishop Museum" },
+        { "year": "1779", "title": "First written account", "text": "Lt. James King, completing Cook\u2019s journals, recorded Hawaiians surfing at Kealakekua Bay on the Big Island — the earliest European description of the sport.", "wikiImage": "Kealakekua Bay", "source": "Cook expedition journals" },
+        { "year": "1800s", "title": "Suppression & survival", "text": "Missionary influence and population collapse pushed surfing to the margins through the 19th century, but it never died out on Hawaiian shores.", "source": "Hawaiian history" },
+        { "year": "1900s", "title": "Revival", "text": "Duke Kahanamoku and the Waikīkī beach boys revived and spread surfing worldwide in the early 20th century, cementing Hawaiʻi as the sport\u2019s home.", "wikiImage": "Duke Kahanamoku", "source": "Surfing history" },
+        { "year": "2018", "title": "Pohoiki reshaped", "text": "The Kīlauea lower-East-Rift eruption buried Puna\u2019s coast and dramatically remade Pohoiki (Isaac Hale) — creating a new black-sand beach and altering one of the island\u2019s main east-side breaks.", "wikiImage": "2018 lower Puna eruption", "source": "USGS HVO" }
+      ]
+    },
+    {
       "match": ["electric vehicle", "ev charging", "charging station"],
       "title": "Electric vehicles in Hawaiʻi",
       "intro": "Hawaiʻi has among the highest EV adoption rates in the US — a natural fit for an island with short drives, high gas prices, and abundant sun.",
