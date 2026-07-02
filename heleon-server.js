@@ -3900,6 +3900,22 @@ async function pollSpaceWeather() {
 // NWS weather stations — Big Island fixed weather stations (HELCO *HE* and
 // Hawaii Island *HI* suffixes in NWS naming) with real-time observations:
 // temperature, dewpoint, humidity, wind, barometer. Refreshed every 10 min.
+// Map an NWS text description to a sky-condition emoji so the weather markers
+// read as little weather glyphs (☀️/⛅/🌧️…) instead of a bare thermometer number.
+function wxConditionEmoji(desc) {
+  const d = (desc || '').toLowerCase();
+  if (!d) return '🌡️';
+  if (/thunder|t-storm|tstm/.test(d)) return '⛈️';
+  if (/snow|flurr|sleet|ice|wintry/.test(d)) return '🌨️';
+  if (/rain|shower|drizzle|precip/.test(d)) return '🌧️';
+  if (/fog|mist|haze|smoke/.test(d)) return '🌫️';
+  if (/overcast|cloudy/.test(d)) return '☁️';
+  if (/mostly cloudy|broken/.test(d)) return '🌥️';
+  if (/partly|scattered|few/.test(d)) return '⛅';
+  if (/clear|sunny|fair/.test(d)) return '☀️';
+  if (/wind|breez/.test(d)) return '💨';
+  return '🌡️';
+}
 let weatherStationsCache = null;
 let weatherStationsLastPollTs = null, weatherStationsLastError = null;
 async function fetchWeatherStationsState() {
@@ -3940,6 +3956,7 @@ async function fetchWeatherStationsState() {
             windGustKmh: C(o.windGust),
             pressurePa: C(o.barometricPressure),
             textDescription: o.textDescription || '',
+            wxIcon: wxConditionEmoji(o.textDescription || ''),
             timestamp: C(o.timestamp),
           },
         };

@@ -1498,7 +1498,11 @@ function initMapLayers() {
   map.addLayer({
     id: 'weather-stations-icon', type: 'symbol', source: 'weather-stations',
     layout: {
-      'text-field': ['concat', '🌡️ ', ['to-string', ['round', ['get', 'temperatureC']]], '°'],
+      // Lead with a live sky-condition glyph (☀️/⛅/🌧️…) so the marker reads as
+      // a little weather icon, not a bare number. Falls back to 🌡️ when no
+      // description. Temperature follows in °C.
+      'text-field': ['concat', ['coalesce', ['get', 'wxIcon'], '🌡️'], ' ',
+        ['case', ['has', 'temperatureC'], ['concat', ['to-string', ['round', ['get', 'temperatureC']]], '°'], '']],
       'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 12, 14],
       'text-font': EMOJI_FONT,
       'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
@@ -4437,7 +4441,7 @@ function hawaiiItemSummary(catId, item) {
     case 'meshtastic': return { icon: '📶', title: item.name || item.idHex, meta: [item.hwName, item.battery != null ? `🔋${item.battery}%` : ''].filter(Boolean).join(' · ') };
     case 'mobility': return { icon: '🚲', title: item.name, meta: `${item.systemName || ''} · ${item.bikes ?? 0} bikes` };
     case 'aprs': return { icon: item.kind === 'vehicle' ? '🚗' : item.kind === 'boat' ? '⛵' : '📻', title: item.call, meta: item.kind || 'APRS' };
-    case 'weather': return { icon: '🌡️', title: item.name, meta: item.temperatureC != null ? `${(+item.temperatureC).toFixed(0)}°C · ${item.textDescription || ''}` : item.stationId };
+    case 'weather': return { icon: item.wxIcon || '🌡️', title: item.name, meta: item.temperatureC != null ? `🌡️ ${(+item.temperatureC).toFixed(0)}°C · ${item.textDescription || ''}` : item.stationId };
     case 'streamflow': {
       const rd = item.readings || {};
       if (item.value != null) return { icon: '⚙️', title: item.name, meta: `${(+item.value).toFixed(0)} ft³/s flow` };
