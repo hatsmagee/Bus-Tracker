@@ -2326,6 +2326,7 @@ async function handleApi(url, res) {
         weather: feed(weatherStationsCache?.features?.length || 0, weatherStationsLastPollTs, weatherStationsLastError),
         streamflow: feed(streamflowCache?.features?.length || 0, streamflowLastPollTs, streamflowLastError),
         ocean: feed(oceanCache.length, oceanLastPollTs, oceanLastError),
+        waterQuality: feed(waterQualityCache.length, waterQualityLastPollTs, waterQualityLastError),
         airquality: feed(airQualityCache.length, airQualityLastPollTs, airQualityLastError),
         scanner: feed(SCANNER_FEEDS.length, Date.now(), null),
         solar: feed(solarCache.length, solarLastPollTs, solarLastError),
@@ -3056,6 +3057,12 @@ async function handleApi(url, res) {
   if (p === '/api/volcano') {
     return json(res, { ts: Date.now(), lastPollTs: volcanoLastPollTs, lastError: volcanoLastError,
       alerts: volcanoCache.alerts, webcams: volcanoCache.webcams });
+  }
+
+  // ── OCEAN WATER QUALITY — PacIOOS moored buoys (keyless) ──────────────────
+  if (p === '/api/water-quality') {
+    return json(res, { ts: Date.now(), lastPollTs: waterQualityLastPollTs, lastError: waterQualityLastError,
+      buoys: waterQualityCache });
   }
 
   // ── AVIATION METARs (airports + Bradshaw AAF military field, keyless) ─────
@@ -5078,30 +5085,115 @@ const HVO_WEBCAMS = [
   { id: 'HLcam',  name: 'Mauna Loa NW flank (from Hualālai)',     lat: 19.6890, lon: -155.8645 },
 ];
 const hvoWebcamUrl = id => `https://volcanoes.usgs.gov/cams/${id}/images/M.jpg`;
+// USGS Volcano Number (VNUM) per Big Island volcano — used to pull the official
+// HVO daily/weekly update narrative from the CAP (Common Alerting Protocol) RSS
+// feed so cards show the real, human-written status ("not erupting; forecasts
+// based on summit inflation indicate another lava fountaining episode is
+// likely between July 7 and 14") instead of just a color code.
+const VOLCANO_VNUM = {
+  'Kilauea': '332010', 'Mauna Loa': '332020', 'Hualalai': '332040', 'Mauna Kea': '332030',
+};
+// Every Big Island volcano gets a badge on the map, not only the elevated ones,
+// so the update narrative is meaningful even at GREEN/NORMAL (e.g. Mauna Loa).
+const VOLC_COORDS = {
+  'Kilauea': { lat: 19.421, lon: -155.287 },
+  'Mauna Loa': { lat: 19.475, lon: -155.608 },
+  'Hualalai': { lat: 19.692, lon: -155.87 },
+  'Mauna Kea': { lat: 19.821, lon: -155.468 },
+};
+function capTag(xml, tag) {
+  const m = new RegExp('<' + tag + '>([\\s\\S]*?)</' + tag + '>').exec(xml || '');
+  return m ? m[1].replace(/\s+/g, ' ').trim() : '';
+}
+// Pull the latest HVO update narrative for one volcano from its CAP RSS feed.
+async function fetchVolcanoUpdate(vnum) {
+  try {
+    const xml = await fetchText('volcanoes.usgs.gov', `/hans-public/rss/cap/volcano/${vnum}`,
+      { 'User-Agent': 'Mozilla/5.0 heleon-tracker' });
+    return {
+      headline: capTag(xml, 'headline'),
+      summary: capTag(xml, 'description'),
+      sent: capTag(xml, 'sent'),
+      expires: capTag(xml, 'expires'),
+    };
+  } catch { return null; }
+}
 let volcanoCache = { alerts: [], webcams: HVO_WEBCAMS.map(c => ({ ...c, imageUrl: hvoWebcamUrl(c.id) })) };
 let volcanoLastPollTs = null, volcanoLastError = null;
 async function pollVolcano() {
   try {
     const j = await fetchJson('volcanoes.usgs.gov', '/hans-public/api/volcano/getElevatedVolcanoes',
       { 'User-Agent': 'heleon-tracker' });
-    // Big Island volcano coordinates for placing the alert badge.
-    const VOLC_COORDS = {
-      'Kilauea': { lat: 19.421, lon: -155.287 },
-      'Mauna Loa': { lat: 19.475, lon: -155.608 },
-      'Hualalai': { lat: 19.692, lon: -155.87 },
-      'Mauna Kea': { lat: 19.821, lon: -155.468 },
-    };
-    const alerts = (Array.isArray(j) ? j : [])
-      .filter(v => v.obs_abbr === 'hvo' && VOLC_COORDS[v.volcano_name])
-      .map(v => ({
-        volcano: v.volcano_name,
-        colorCode: v.color_code, alertLevel: v.alert_level,
-        sentUtc: v.sent_utc, noticeUrl: v.notice_url,
-        ...VOLC_COORDS[v.volcano_name],
-      }));
+    const elevated = new Map();
+    for (const v of (Array.isArray(j) ? j : [])) {
+      if (v.obs_abbr === 'hvo' && VOLC_COORDS[v.volcano_name]) elevated.set(v.volcano_name, v);
+    }
+    // Build one badge per Big Island volcano. Elevated ones use the live HANS
+    // color/level; the rest default to the standard GREEN / NORMAL background.
+    const names = Object.keys(VOLC_COORDS);
+    const updates = await Promise.all(names.map(n => fetchVolcanoUpdate(VOLCANO_VNUM[n])));
+    const alerts = names.map((name, i) => {
+      const v = elevated.get(name);
+      const u = updates[i] || {};
+      return {
+        volcano: name,
+        colorCode: v ? v.color_code : 'GREEN',
+        alertLevel: v ? v.alert_level : 'NORMAL',
+        sentUtc: v ? v.sent_utc : (u.sent || ''),
+        noticeUrl: v ? v.notice_url : `https://www.usgs.gov/volcanoes/${name.toLowerCase().replace(/\s+/g, '-')}`,
+        headline: u.headline || '',
+        summary: u.summary || '',
+        updateSent: u.sent || '',
+        ...VOLC_COORDS[name],
+      };
+    });
     volcanoCache.alerts = alerts;
     volcanoLastPollTs = Date.now(); volcanoLastError = null;
   } catch (e) { volcanoLastError = e.message; }
+}
+
+// ─── OCEAN WATER QUALITY (PacIOOS ERDDAP, keyless) ───────────────────────────
+// PacIOOS (Pacific Islands Ocean Observing System, a NOAA IOOS partner at UH
+// Mānoa) runs moored water-quality buoys in Big Island bays that report every
+// 15 min over an open ERDDAP server — real-time sea temperature, salinity,
+// turbidity, chlorophyll, dissolved oxygen and pH. This is genuine in-situ
+// coastal sensor data (bleaching / runoff / bloom conditions) not a model.
+const PACIOOS_HOST = 'pae-paha.pacioos.hawaii.edu';
+const WATER_QUALITY_BUOYS = [
+  { id: 'wqb_04', name: 'Hilo Bay', lat: 19.7341, lon: -155.082,
+    desc: 'PacIOOS moored water-quality buoy in Hilo Bay off the Wailoa/Wailuku river mouths — the wettest harbor in the state, where storm runoff, sediment plumes and freshwater lensing are routinely measured.',
+    photo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Hilo_Bay.jpg/640px-Hilo_Bay.jpg' },
+  { id: 'wqb_05', name: 'Pelekane Bay', lat: 20.019, lon: -155.822,
+    desc: 'PacIOOS water-quality buoy at Pelekane Bay / Kawaihae, adjacent to Puʻukoholā Heiau. Monitors sediment and freshwater impacts on the fringing coral reef in West Hawaiʻi.',
+    photo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Puukohola_Heiau_National_Historic_Site.jpg/640px-Puukohola_Heiau_National_Historic_Site.jpg' },
+];
+let waterQualityCache = [];
+let waterQualityLastPollTs = null, waterQualityLastError = null;
+async function pollWaterQuality() {
+  const out = [];
+  for (const b of WATER_QUALITY_BUOYS) {
+    try {
+      const j = await fetchJson(PACIOOS_HOST,
+        `/erddap/tabledap/${b.id}.json?time,latitude,longitude,temperature,salinity,turbidity,chlorophyll,oxygen,oxygen_saturation,ph&time%3E=max(time)-12hours`,
+        { 'User-Agent': 'heleon-tracker' });
+      const rows = (j.table && j.table.rows) || [];
+      if (!rows.length) continue;
+      const cols = j.table.columnNames;
+      const ix = n => cols.indexOf(n);
+      const r = rows[rows.length - 1]; // most recent reading in the window
+      const at = r[ix('time')];
+      // Skip buoys whose newest reading is more than ~10 days stale (offline mooring).
+      if (Date.parse(at) < Date.now() - 10 * 864e5) continue;
+      out.push({
+        id: b.id, name: b.name, lat: b.lat, lon: b.lon, desc: b.desc, photo: b.photo,
+        temperature: r[ix('temperature')], salinity: r[ix('salinity')],
+        turbidity: r[ix('turbidity')], chlorophyll: r[ix('chlorophyll')],
+        oxygen: r[ix('oxygen')], oxygenSat: r[ix('oxygen_saturation')], ph: r[ix('ph')],
+        at,
+      });
+    } catch (e) { waterQualityLastError = e.message; }
+  }
+  if (out.length) { waterQualityCache = out; waterQualityLastPollTs = Date.now(); waterQualityLastError = null; }
 }
 
 // ─── AVIATION METARs (aviationweather.gov, keyless) ───────────────────────────
@@ -5761,6 +5853,8 @@ const server = http.createServer((req, res) => {
   pollLocal();
   pollAirQuality();
   pollVolcano();
+  pollWaterQuality();
+  setInterval(pollWaterQuality, 15 * 60 * 1000); // PacIOOS buoys report every 15 min
   pollMetars();
   pollRainfall();
   setInterval(pollRainfall, 10 * 60 * 1000);      // rain gauges report ~15 min

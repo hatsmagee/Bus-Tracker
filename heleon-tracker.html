@@ -1169,6 +1169,7 @@ function initMap() {
     try { fetchMarine(); } catch (e) {}
     try { fetchAprs(); } catch (e) {}
     try { fetchAirQuality(); } catch (e) {}
+    try { fetchWaterQuality(); } catch (e) {}
     try { fetchVolcano(); } catch (e) {}
     try { fetchMetars(); } catch (e) {}
     try { fetchMeshtastic(); } catch (e) {}
@@ -1893,6 +1894,42 @@ function initMapLayers() {
     return { title: `🌫️ ${p.name} — air quality`, body: rows.join('') + `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Open-Meteo${p.at ? ' · ' + p.at : ''}</div>` };
   });
 
+  // Ocean water quality: PacIOOS moored buoys (Hilo Bay, Pelekane Bay). Real
+  // in-situ sensors reporting sea temp/salinity/turbidity/chlorophyll/DO/pH
+  // every 15 min. Card carries a real photo of the bay + a description.
+  map.addSource('waterquality', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'waterquality-icon', type: 'symbol', source: 'waterquality',
+    layout: {
+      'icon-image': 'marker-waterqual', 'icon-anchor': 'left', 'icon-allow-overlap': false,
+      'icon-size': ICON_SIZE.md,
+      'text-field': ['concat', ['to-string', ['round', ['get', 'temperature']]], '°C'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 12, 14],
+      'text-font': EMOJI_FONT,
+      'text-anchor': 'left', 'text-offset': [1.4, 0],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+    },
+    paint: { 'text-color': '#0369a1', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+  });
+  wireLayerHover('waterquality-icon', p => `<div style="font-weight:600;">💧 ${escapeHtml(p.name)} water buoy</div>
+    <div style="color:var(--muted);font-size:11px;">${(+p.temperature).toFixed(1)}°C · click for reef & bay conditions</div>`);
+  wireLayerCard('waterquality-icon', p => {
+    const rows = [];
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+    const n = (v, d) => (v != null && v !== '' && Number.isFinite(+v)) ? (+v).toFixed(d) : null;
+    if (n(p.temperature, 1)) row('Sea temperature', `${n(p.temperature, 1)} °C`);
+    if (n(p.salinity, 1)) row('Salinity', `${n(p.salinity, 1)} psu`);
+    if (n(p.turbidity, 1)) row('Turbidity', `${n(p.turbidity, 1)} NTU`);
+    if (n(p.chlorophyll, 2)) row('Chlorophyll', `${n(p.chlorophyll, 2)} µg/L`);
+    if (n(p.oxygen, 2)) row('Dissolved O₂', `${n(p.oxygen, 2)} mg/L`);
+    if (n(p.oxygenSat, 0)) row('O₂ saturation', `${n(p.oxygenSat, 0)} %`);
+    if (n(p.ph, 2)) row('pH', n(p.ph, 2));
+    const img = p.photo ? `<img src="${escapeHtml(p.photo)}" style="width:100%;border-radius:6px;display:block;margin-bottom:8px;" loading="lazy" alt="${escapeHtml(p.name)}" onerror="this.style.display='none'"/>` : '';
+    const desc = p.desc ? `<div style="font-size:12px;line-height:1.5;color:var(--text);margin-bottom:8px;">${escapeHtml(p.desc)}</div>` : '';
+    return { title: `💧 ${p.name} — water quality`, body: img + desc + rows.join('') +
+      `<div style="color:#8b949e;font-size:10px;margin-top:8px;">PacIOOS moored buoy${p.at ? ' · ' + new Date(p.at).toLocaleString() : ''}</div>` };
+  });
+
   // Volcano: USGS HVO alert badges at Kīlauea/Mauna Loa summits + live webcam
   // points. Clicking a webcam opens a card with the live USGS JPEG (refreshed
   // continuously by HVO — public domain). Keyless.
@@ -1916,12 +1953,17 @@ function initMapLayers() {
     : `<div style="font-weight:600;">📷 ${escapeHtml(p.name)}</div><div style="color:var(--muted);font-size:10px;">click for live view</div>`);
   wireLayerCard('volcano-dot', p => {
     if (p.kind === 'alert') {
+      const dot = p.color === 'RED' ? '#dc2626' : p.color === 'ORANGE' ? '#ea580c' : p.color === 'YELLOW' ? '#ca8a04' : p.color === 'GREEN' ? '#16a34a' : '#6b7280';
+      const head = p.headline ? `<div style="font-size:11px;color:#8b949e;margin-bottom:6px;">${escapeHtml(p.headline)}</div>` : '';
+      const summary = p.summary ? `<div style="color:#c9d1d9;font-size:12px;line-height:1.5;">${escapeHtml(p.summary)}</div>` : '<div style="color:#8b949e;">No current update text.</div>';
+      const link = p.noticeUrl ? `<div style="margin-top:8px;font-size:10px;"><a href="${escapeHtml(p.noticeUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">Latest HVO notice ↗</a></div>` : '';
+      const when = p.at ? (isNaN(+p.at) ? String(p.at) : new Date(+p.at).toLocaleString()) : '';
       return { title: `🌋 ${p.name}`, body:
         `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-          <span style="width:12px;height:12px;border-radius:50%;background:${p.color === 'RED' ? '#dc2626' : p.color === 'ORANGE' ? '#ea580c' : p.color === 'YELLOW' ? '#ca8a04' : '#6b7280'};"></span>
+          <span style="width:12px;height:12px;border-radius:50%;background:${dot};"></span>
           <b>${escapeHtml(p.badge)}</b></div>
-        <div style="color:#c9d1d9;">${escapeHtml(p.summary || '')}</div>
-        <div style="color:#8b949e;font-size:10px;margin-top:8px;">USGS Hawaiian Volcano Observatory${p.at ? ' · ' + new Date(+p.at).toLocaleString() : ''}</div>` };
+        ${head}${summary}${link}
+        <div style="color:#8b949e;font-size:10px;margin-top:8px;">USGS Hawaiian Volcano Observatory${when ? ' · ' + when : ''}</div>` };
     }
     // Webcam: live view in card (image refreshes, or YouTube/Luma embed).
     return { title: `📷 ${p.name}`, body: buildWebcamCardBody(p) };
@@ -2572,6 +2614,7 @@ const TWEMOJI = {
   buoy:      '1f6de',   // 🛟
   power:     '26a1',    // ⚡
   globe:     '1f310',   // 🌐
+  waterqual: '1f4a7',   // 💧
 };
 const ICON_PX = 40;
 const ICON_Z = (z0, s0, z1, s1, z2, s2) => ['interpolate', ['linear'], ['zoom'], z0, s0, z1, s1, z2, s2];
@@ -3955,6 +3998,24 @@ async function fetchAirQuality() {
   } catch (e) { /* keep last */ }
 }
 
+// Ocean water quality — PacIOOS moored buoys (Hilo Bay, Pelekane Bay), keyless.
+async function fetchWaterQuality() {
+  try {
+    const res = await fetch('/api/water-quality');
+    const data = await res.json();
+    recordHealth('waterquality', data, (data.buoys || []).length);
+    hawaiiList.waterQuality = (data.buoys || []).map(b => ({ id: b.id, ...b }));
+    hawaiiBrowseRefresh();
+    if (!mapReady || !map.getSource('waterquality')) return;
+    const feats = (data.buoys || []).map(b => ({
+      type: 'Feature', geometry: { type: 'Point', coordinates: [b.lon, b.lat] },
+      properties: { name: b.name, temperature: b.temperature, salinity: b.salinity,
+        turbidity: b.turbidity, chlorophyll: b.chlorophyll, oxygen: b.oxygen,
+        oxygenSat: b.oxygenSat, ph: b.ph, desc: b.desc, photo: b.photo, at: b.at } }));
+    map.getSource('waterquality').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
+}
+
 // Satellites — live ISS / Hubble ground track (keyless, wheretheiss.at).
 async function fetchSatellites() {
   try {
@@ -4143,7 +4204,8 @@ async function fetchVolcano() {
     for (const a of (data.alerts || [])) {
       feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
         properties: { kind: 'alert', name: a.volcano, badge: `${a.colorCode}/${a.alertLevel}`,
-          color: a.colorCode, summary: a.summary || '', at: a.sentTs || '' } });
+          color: a.colorCode, summary: a.summary || '', headline: a.headline || '',
+          noticeUrl: a.noticeUrl || '', at: a.sentUtc || a.sentTs || '' } });
     }
     for (const c of (data.webcams || [])) {
       feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [c.lon, c.lat] },
@@ -4674,7 +4736,7 @@ const hawaiiList = {
   infraPower: [], infraSubs: [], infraCell: [], infraNet: [], infraGridMix: null, railways: [],
   localFuelPrices: {}, localFuelStations: [], localTrafficSensors: [], localLco: [], localInat: [],
   localNotes: {},
-  summits: [], scanner: [], ocean: [], airquality: [], volcanoAlerts: [], volcanoCams: [], satellites: [], rainfall: [],
+  summits: [], scanner: [], ocean: [], waterQuality: [], airquality: [], volcanoAlerts: [], volcanoCams: [], satellites: [], rainfall: [],
   metars: [], alerts: [], wildfire: [], places: [], solar: [],
   facilities: { police: [], fire: [], ems: [], trauma: [] },
 };
@@ -4695,6 +4757,7 @@ const SOURCE_HEALTH_CFG = {
   ocean:      { staleAfterMs: 60 * 60000,  layers: ['ocean-dot'] },
   summits:    { staleAfterMs: 30 * 60000,  layers: ['summits-dot'] },
   airquality: { staleAfterMs: 60 * 60000,  layers: ['airquality-icon'] },
+  waterquality: { staleAfterMs: 3 * 60 * 60000, layers: ['waterquality-icon'] },
   aprs:       { staleAfterMs: 30 * 60000,  layers: ['aprs-icon'] },
   meshtastic: { staleAfterMs: 60 * 60000,  layers: ['meshtastic-icon'] },
   metars:     { staleAfterMs: 90 * 60000,  layers: ['metars-dot'] },
@@ -4718,7 +4781,7 @@ const CAT_HEALTH_ID = {
   aprs: 'aprs', meshtastic: 'meshtastic', mobility: 'mobility', weather: 'weather',
   streamflow: 'streamflow', summits: 'summits', ocean: 'ocean',
   marineWebcams: 'marine', marineReefSensors: 'marine',
-  airquality: 'airquality', volcano: 'volcano', metars: 'metars', satellites: 'satellites',
+  airquality: 'airquality', waterquality: 'waterquality', volcano: 'volcano', metars: 'metars', satellites: 'satellites',
   rainfall: 'rainfall', places: 'places', solar: 'solar',
 };
 
@@ -5055,6 +5118,19 @@ function hawaiiItemBody(catId, item) {
         hawaiiDetailRow('💨', 'PM10', item.pm10 != null ? `${item.pm10} µg/m³` : '—') +
         hawaiiDetailRow('🌋', 'SO₂', item.so2 != null ? `${item.so2} µg/m³` : '—') +
         hawaiiMapBtn(item.lon, item.lat, 10);
+    case 'waterquality': {
+      const n = (v, d) => (v != null && v !== '' && Number.isFinite(+v)) ? (+v).toFixed(d) : '—';
+      const img = item.photo ? `<img src="${escapeHtml(item.photo)}" style="width:100%;border-radius:6px;display:block;margin-bottom:8px;" loading="lazy" alt="${escapeHtml(item.name)}" onerror="this.style.display='none'"/>` : '';
+      const desc = item.desc ? `<div style="font-size:12px;line-height:1.5;margin-bottom:8px;color:var(--muted);">${escapeHtml(item.desc)}</div>` : '';
+      return img + desc +
+        hawaiiDetailRow('🌡️', 'Sea temp', `${n(item.temperature, 1)} °C`) +
+        hawaiiDetailRow('🧂', 'Salinity', `${n(item.salinity, 1)} psu`) +
+        hawaiiDetailRow('🌫️', 'Turbidity', `${n(item.turbidity, 1)} NTU`) +
+        hawaiiDetailRow('🌿', 'Chlorophyll', `${n(item.chlorophyll, 2)} µg/L`) +
+        hawaiiDetailRow('🫧', 'Dissolved O₂', `${n(item.oxygen, 2)} mg/L`) +
+        hawaiiDetailRow('⚗️', 'pH', n(item.ph, 2)) +
+        hawaiiMapBtn(item.lon, item.lat, 12);
+    }
     case 'volcano':
       if (item.kind === 'webcam') {
         return buildWebcamCardBody({ embedType: 'image', imageUrl: item.imageUrl, name: item.name, source: 'USGS HVO', pageUrl: 'https://www.usgs.gov/observatories/hvo/multimedia/webcams' }) +
@@ -5156,6 +5232,7 @@ function hawaiiCategories() {
     { id: 'localInat', icon: '🦋', label: 'Nature Sightings (iNaturalist)',
       items: [...hawaiiList.localInat].sort((a, b) => String(b.observedAt).localeCompare(String(a.observedAt))) },
     { id: 'airquality', icon: '🌫️', label: 'Air Quality / Vog', items: hawaiiList.airquality },
+    { id: 'waterquality', icon: '💧', label: 'Ocean Water Quality', items: hawaiiList.waterQuality },
     { id: 'solar', icon: '☀️', label: 'Solar Irradiance', items: hawaiiList.solar },
     { id: 'volcano', icon: '🌋', label: 'Volcano Alerts & Webcams', items: volcanoItems },
     { id: 'metars', icon: '✈️', label: 'Aviation METARs', items: hawaiiList.metars },
@@ -5207,6 +5284,7 @@ function hawaiiItemSummary(catId, item) {
     case 'localLco': return { icon: '🔭', title: item.siteName || item.site, meta: [item.name, item.start ? String(item.start).slice(0, 10) : ''].filter(Boolean).join(' · ') };
     case 'localInat': return { icon: '🦋', title: item.name, meta: item.observedAt ? String(item.observedAt).slice(0, 10) : '' };
     case 'airquality': return { icon: '🌫️', title: item.name, meta: item.usAqi != null ? `AQI ${item.usAqi}` : '' };
+    case 'waterquality': return { icon: '💧', title: item.name, meta: item.temperature != null ? `${(+item.temperature).toFixed(1)}°C sea temp` : '' };
     case 'solar': return { icon: '☀️', title: item.name, meta: `${Math.round(item.ghi || 0)} W/m²${item.uv != null ? ' · UV ' + (+item.uv).toFixed(1) : ''}` };
     case 'volcano': return { icon: item.kind === 'webcam' ? '📷' : '🌋', title: item.name, meta: item.kind === 'webcam' ? 'Live webcam' : `${item.colorCode}/${item.alertLevel}` };
     case 'metars': return { icon: '✈️', title: `${item.icao} — ${item.name}`, meta: item.fltCat || '' };
@@ -7433,8 +7511,9 @@ function positionMapCard() {
 
 // Layers whose features open a click-card (and whose empty-space click closes it).
 const CARD_LAYERS = ['ocean-dot', 'marine-dot', 'aprs-icon', 'summits-dot', 'weather-stations-icon', 'aircraft-triangles', 'airquality-icon',
-  'volcano-dot', 'metars-dot', 'repeaters-icon', 'infra-power-icon', 'infra-cell-icon', 'infra-net-icon',
-  'local-fuel-icon', 'local-sensors-icon', 'local-lco-icon', 'local-inat-icon'];
+  'waterquality-icon', 'volcano-dot', 'metars-dot', 'repeaters-icon', 'infra-power-icon', 'infra-cell-icon', 'infra-net-icon',
+  'local-fuel-icon', 'local-sensors-icon', 'local-lco-icon', 'local-inat-icon',
+  'rainfall-icon', 'satellites-icon', 'places-icon'];
 // Wire click-to-open-card on a layer. buildCard(props) -> { title, body }.
 function wireLayerCard(layerId, buildCard) {
   map.on('click', layerId, e => {
@@ -8582,6 +8661,7 @@ Promise.all([
   fetchMarine(),
   fetchAprs(),
   fetchAirQuality(),
+  fetchWaterQuality(),
   fetchVolcano(),
   fetchMetars(),
   fetchSatellites(),
@@ -8619,7 +8699,7 @@ setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
 setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); fetchTsunami(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchMarine(); if (!document.hidden) fetchInfrastructure(); if (!document.hidden) fetchLocal(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); fetchRainfall(); fetchSpaceWeather(); fetchSkyClock(); fetchSolar(); } }, 15 * 60 * 1000);
+setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchMarine(); if (!document.hidden) fetchInfrastructure(); if (!document.hidden) fetchLocal(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) fetchWaterQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); fetchRainfall(); fetchSpaceWeather(); fetchSkyClock(); fetchSolar(); } }, 15 * 60 * 1000);
 setInterval(() => { if (!document.hidden && (!hawaiiList.meshtastic || !hawaiiList.meshtastic.length)) fetchMeshtastic(); }, 2 * 60 * 1000);
 // APRS moves faster (vehicles) — refresh more often when it has data.
 setInterval(() => { if (!document.hidden) fetchAprs(); }, 60 * 1000);
