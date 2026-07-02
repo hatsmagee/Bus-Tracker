@@ -3039,6 +3039,12 @@ async function handleApi(url, res) {
     return json(res, { ts: Date.now(), lastPollTs: metarLastPollTs, lastError: metarLastError, metars: metarCache });
   }
 
+  // ── SATELLITES — live ISS/Hubble position (keyless) ───────────────────────
+  if (p === '/api/satellites') {
+    return json(res, { ts: Date.now(), lastPollTs: satelliteLastPollTs, lastError: satelliteLastError,
+      satellites: satelliteCache });
+  }
+
   // ── MESHTASTIC / LoRa mesh nodes (keyless) ────────────────────────────────
   if (p === '/api/meshtastic') {
     ensureMeshtasticPoll();
@@ -4871,6 +4877,54 @@ async function pollMetars() {
   } catch (e) { metarLastError = e.message; }
 }
 
+// ─── SATELLITES — live ISS position (wheretheiss.at, keyless) ─────────────────
+// Real-time ground-track position of the International Space Station (and any
+// other NORAD ids we add). Keyless, single tiny JSON per object. Rendered as a
+// moving 🛰 marker with its footprint; a nice "nerdy real-time" layer that fits
+// the RTS-status vibe. Distance-from-Hawaii + overhead flag computed here so the
+// UI can highlight when the ISS is actually passing over the islands.
+const SATELLITES = [
+  { id: 25544, name: 'ISS (International Space Station)', emoji: '🛰️' },
+  { id: 20580, name: 'Hubble Space Telescope', emoji: '🔭' },
+];
+const HAWAII_CENTER = { lat: 20.3, lon: -157.0 };
+let satelliteCache = [];
+let satelliteLastPollTs = null, satelliteLastError = null;
+function haversineKm(a, b, c, d) {
+  const R = 6371, toR = x => x * Math.PI / 180;
+  const dLat = toR(c - a), dLon = toR(d - b);
+  const s = Math.sin(dLat/2)**2 + Math.cos(toR(a))*Math.cos(toR(c))*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+async function pollSatellites() {
+  try {
+    const out = [];
+    for (const sat of SATELLITES) {
+      try {
+        const j = await fetchJson('api.wheretheiss.at', `/v1/satellites/${sat.id}`,
+          { 'User-Agent': 'heleon-tracker' });
+        if (j && j.latitude != null && j.longitude != null) {
+          const distKm = haversineKm(HAWAII_CENTER.lat, HAWAII_CENTER.lon, j.latitude, j.longitude);
+          // Radio horizon (visibility footprint) radius for the given altitude —
+          // "overhead" if Hawaii falls within that circle.
+          const altKm = j.altitude || 420;
+          const footprintKm = Math.acos(6371 / (6371 + altKm)) * 6371;
+          out.push({
+            id: sat.id, name: sat.name, emoji: sat.emoji,
+            lat: j.latitude, lon: j.longitude,
+            altKm: Math.round(altKm), velKmh: j.velocity ? Math.round(j.velocity) : null,
+            footprintKm: Math.round(footprintKm),
+            distKm: Math.round(distKm), overhead: distKm < footprintKm,
+            visibility: j.visibility || null, at: (j.timestamp ? j.timestamp * 1000 : Date.now()),
+          });
+        }
+      } catch (e) { /* skip this satellite this cycle */ }
+    }
+    if (out.length) { satelliteCache = out; satelliteLastPollTs = Date.now(); satelliteLastError = null; }
+    else satelliteLastError = 'no satellite data';
+  } catch (e) { satelliteLastError = e.message; }
+}
+
 // ─── MESHTASTIC / LoRa MESH NODES (liamcottle map API, keyless) ───────────────
 // Community MQTT aggregator — node list, telemetry, neighbours, and text
 // messages. LoRa mesh carries data (not audio); we pull messages + metrics.
@@ -5208,6 +5262,8 @@ const server = http.createServer((req, res) => {
   pollAirQuality();
   pollVolcano();
   pollMetars();
+  pollSatellites();
+  setInterval(pollSatellites, 20 * 1000); // ISS moves ~7.6 km/s — keep it fresh
   pollRepeaters();
   pollMobility();
   setInterval(pollMobility, 60 * 1000);

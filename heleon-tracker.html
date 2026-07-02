@@ -1633,6 +1633,50 @@ function initMapLayers() {
     return { title: `🛩 ${p.icao} — ${p.name}`, body: rows.join('') + mil + raw };
   });
 
+  // Satellites — live ISS / Hubble ground position (keyless, wheretheiss.at).
+  // A translucent footprint ring shows the radio/visibility horizon; the emoji
+  // marks the sub-satellite point. When it's actually over Hawaiʻi the ring
+  // glows. Poll is fast (20s) so the track visibly creeps across the map.
+  map.addSource('satellites', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'satellites-footprint', type: 'circle', source: 'satellites',
+    paint: {
+      // Footprint radius is huge (~2000 km) — draw it as a zoom-scaled circle so
+      // it reads as coverage without dominating at high zoom.
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 60, 6, 320, 9, 1400],
+      'circle-color': ['case', ['get', 'overhead'], '#22d3ee', '#64748b'],
+      'circle-opacity': ['case', ['get', 'overhead'], 0.16, 0.06],
+      'circle-stroke-color': ['case', ['get', 'overhead'], '#06b6d4', '#94a3b8'],
+      'circle-stroke-width': ['case', ['get', 'overhead'], 1.5, 0.6],
+      'circle-stroke-opacity': ['case', ['get', 'overhead'], 0.7, 0.3],
+    },
+  });
+  map.addLayer({
+    id: 'satellites-icon', type: 'symbol', source: 'satellites',
+    layout: {
+      'text-field': ['get', 'emoji'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 3, 16, 8, 24],
+      'text-font': EMOJI_FONT,
+      'text-allow-overlap': true, 'text-ignore-placement': true,
+    },
+    paint: { 'text-halo-color': '#0b1020', 'text-halo-width': 1.4 },
+  });
+  wireLayerHover('satellites-icon', p => `<div style="font-weight:600;">${p.emoji} ${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:11px;">${Math.round(p.altKm)} km up · ${p.overhead === true || p.overhead === 'true' ? '🌺 over Hawaiʻi now!' : Math.round(p.distKm) + ' km away'}</div>`);
+  wireLayerCard('satellites-icon', p => {
+    const rows = [];
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+    row('Altitude', `${Math.round(p.altKm).toLocaleString()} km`);
+    if (p.velKmh) row('Speed', `${Math.round(p.velKmh).toLocaleString()} km/h`);
+    row('Ground position', `${(+p.lat).toFixed(2)}, ${(+p.lon).toFixed(2)}`);
+    row('Distance from Hawaiʻi', `${Math.round(p.distKm).toLocaleString()} km`);
+    if (p.visibility) row('Sunlight', p.visibility);
+    const over = (p.overhead === true || p.overhead === 'true')
+      ? `<div style="color:#06b6d4;font-weight:700;margin-top:8px;">🌺 Passing over the Hawaiian Islands right now.</div>` : '';
+    return { title: `${p.emoji} ${p.name}`, body: rows.join('') + over +
+      `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Live ground track · wheretheiss.at${p.at ? ' · ' + new Date(+p.at).toLocaleTimeString() : ''}</div>` };
+  });
+
   // Meshtastic / LoRa mesh nodes — real community radios (solar repeaters on
   // ridgelines, pocket nodes) heard over MQTT. Keyless.
   map.addSource('meshtastic', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
@@ -3113,6 +3157,26 @@ async function fetchAirQuality() {
   } catch (e) { /* keep last */ }
 }
 
+// Satellites — live ISS / Hubble ground track (keyless, wheretheiss.at).
+async function fetchSatellites() {
+  try {
+    const res = await fetch('/api/satellites');
+    const data = await res.json();
+    recordHealth('satellites', data, (data.satellites || []).length);
+    hawaiiList.satellites = (data.satellites || []).map(s => ({ id: String(s.id), ...s }));
+    hawaiiBrowseRefresh();
+    if (!mapReady || !map.getSource('satellites')) return;
+    const feats = (data.satellites || []).map(s => ({
+      type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+      properties: {
+        id: s.id, name: s.name, emoji: s.emoji, altKm: s.altKm, velKmh: s.velKmh,
+        lat: s.lat, lon: s.lon, distKm: s.distKm, overhead: !!s.overhead,
+        visibility: s.visibility || '', at: s.at || Date.now(),
+      } }));
+    map.getSource('satellites').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
+}
+
 // Volcano alerts + HVO webcams (USGS HANS, keyless). Always on.
 async function fetchVolcano() {
   try {
@@ -3625,7 +3689,7 @@ const hawaiiList = {
   infraPower: [], infraSubs: [], infraCell: [], infraNet: [], infraGridMix: null,
   localFuelPrices: {}, localFuelStations: [], localTrafficSensors: [], localLco: [], localInat: [],
   localNotes: {},
-  summits: [], ocean: [], airquality: [], volcanoAlerts: [], volcanoCams: [],
+  summits: [], ocean: [], airquality: [], volcanoAlerts: [], volcanoCams: [], satellites: [],
   metars: [], alerts: [], wildfire: [],
   facilities: { police: [], fire: [], ems: [], trauma: [] },
 };
@@ -3649,6 +3713,7 @@ const SOURCE_HEALTH_CFG = {
   aprs:       { staleAfterMs: 30 * 60000,  layers: ['aprs-icon'] },
   meshtastic: { staleAfterMs: 60 * 60000,  layers: ['meshtastic-icon'] },
   metars:     { staleAfterMs: 90 * 60000,  layers: ['metars-dot'] },
+  satellites: { staleAfterMs: 5 * 60000,   layers: ['satellites-icon'] },
   volcano:    { staleAfterMs: 60 * 60000,  layers: ['volcano-dot'] },
   streamflow: { staleAfterMs: 3 * 3600000, layers: [] },
   weather:    { staleAfterMs: 2 * 3600000, layers: ['weather-stations-icon'] },
@@ -3662,7 +3727,7 @@ const CAT_HEALTH_ID = {
   aprs: 'aprs', meshtastic: 'meshtastic', mobility: 'mobility', weather: 'weather',
   streamflow: 'streamflow', summits: 'summits', ocean: 'ocean',
   marineWebcams: 'marine', marineReefSensors: 'marine',
-  airquality: 'airquality', volcano: 'volcano', metars: 'metars',
+  airquality: 'airquality', volcano: 'volcano', metars: 'metars', satellites: 'satellites',
 };
 
 // state: 'live' (fresh data), 'stale' (data but poll went quiet), 'empty'
@@ -4091,6 +4156,7 @@ function hawaiiCategories() {
     { id: 'airquality', icon: '🌫️', label: 'Air Quality / Vog', items: hawaiiList.airquality },
     { id: 'volcano', icon: '🌋', label: 'Volcano Alerts & Webcams', items: volcanoItems },
     { id: 'metars', icon: '✈️', label: 'Aviation METARs', items: hawaiiList.metars },
+    { id: 'satellites', icon: '🛰️', label: 'Satellites Overhead', items: hawaiiList.satellites },
     { id: 'alerts', icon: '⚠️', label: 'Active NWS Alerts', items: hawaiiList.alerts },
     { id: 'quakes', icon: '🌎', label: 'Recent Earthquakes', items: [...allQuakes].sort((a, b) => b.time - a.time) },
     { id: 'wildfire', icon: '🔥', label: 'Wildfire Hotspots', items: hawaiiList.wildfire },
@@ -4137,6 +4203,7 @@ function hawaiiItemSummary(catId, item) {
     case 'airquality': return { icon: '🌫️', title: item.name, meta: item.usAqi != null ? `AQI ${item.usAqi}` : '' };
     case 'volcano': return { icon: item.kind === 'webcam' ? '📷' : '🌋', title: item.name, meta: item.kind === 'webcam' ? 'Live webcam' : `${item.colorCode}/${item.alertLevel}` };
     case 'metars': return { icon: '✈️', title: `${item.icao} — ${item.name}`, meta: item.fltCat || '' };
+    case 'satellites': return { icon: item.emoji || '🛰️', title: item.name, meta: item.overhead ? '🌺 over Hawaiʻi now' : `${Math.round(item.altKm)} km up · ${Math.round(item.distKm)} km away` };
     case 'alerts': return { icon: '⚠️', title: item.event, meta: item.areaDesc || '' };
     case 'quakes': return { icon: '🌋', title: `M${(+item.mag).toFixed(1)} — ${item.place}`, meta: new Date(item.time).toLocaleDateString() };
     case 'wildfire': return { icon: '🔥', title: 'Thermal hotspot', meta: item.props && item.props.confidence != null ? `confidence ${item.props.confidence}` : '' };
@@ -7407,6 +7474,7 @@ Promise.all([
   fetchAirQuality(),
   fetchVolcano(),
   fetchMetars(),
+  fetchSatellites(),
   fetchMeshtastic(),
   fetchRepeaters(),
   fetchInfrastructure(),
@@ -7438,6 +7506,8 @@ setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow()
 setInterval(() => { if (!document.hidden && (!hawaiiList.meshtastic || !hawaiiList.meshtastic.length)) fetchMeshtastic(); }, 2 * 60 * 1000);
 // APRS moves faster (vehicles) — refresh more often when it has data.
 setInterval(() => { if (!document.hidden) fetchAprs(); }, 60 * 1000);
+// Satellites move FAST (ISS ~7.6 km/s) — refresh often so the track creeps live.
+setInterval(() => { if (!document.hidden) fetchSatellites(); }, 20 * 1000);
 
 // Fast initial catch-up: on a fresh page load the server's first OpenSky/AIS poll
 // may not have completed yet, so the startup fetch returns 0 and the map looks
