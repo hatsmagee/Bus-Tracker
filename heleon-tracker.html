@@ -182,6 +182,46 @@
   .stream-ctrl .stream-play-btn:hover:not(:disabled) { background:#2ea043; }
   .stream-ctrl .stream-stop-btn { background:#da3633; border-color:#f85149; color:#fff; }
   .stream-ctrl .stream-status { font-size:10px; color:#8b949e; flex:1; min-width:0; }
+
+  /* ─── Hawaiʻi tab: collapsible layer browser ─────────────────────────── */
+  .hawaii-browser { flex:1; min-height:0; }
+  .hawaii-cat { border-bottom:1px solid var(--border); }
+  .hawaii-cat-h {
+    display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer;
+    user-select:none; background:#0d1117; font-weight:600; font-size:12px;
+  }
+  .hawaii-cat-h:hover { background:#161b22; }
+  .hawaii-cat-h .cnt { font-size:10px; color:var(--muted); font-weight:500; margin-left:4px; }
+  .hawaii-cat-h .chev { margin-left:auto; color:var(--muted); font-size:10px; transition:transform .15s; }
+  .hawaii-cat.open .hawaii-cat-h .chev { transform:rotate(90deg); }
+  .hawaii-cat-items { display:none; }
+  .hawaii-cat.open .hawaii-cat-items { display:block; }
+  .hawaii-item { border-top:1px solid var(--border); }
+  .hawaii-item-h {
+    display:flex; align-items:flex-start; gap:8px; padding:8px 12px 8px 22px;
+    cursor:pointer; font-size:12px;
+  }
+  .hawaii-item-h:hover { background:rgba(255,255,255,.03); }
+  .hawaii-item.open .hawaii-item-h { background:rgba(31,111,235,.1); }
+  .hawaii-item-ico { font-size:16px; line-height:1.2; flex-shrink:0; width:22px; text-align:center; }
+  .hawaii-item-txt { flex:1; min-width:0; }
+  .hawaii-item-title { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hawaii-item-meta { font-size:10px; color:var(--muted); margin-top:2px; line-height:1.35; }
+  .hawaii-item-chev { color:var(--muted); font-size:9px; margin-top:3px; flex-shrink:0; transition:transform .15s; }
+  .hawaii-item.open .hawaii-item-chev { transform:rotate(90deg); }
+  .hawaii-item-body {
+    display:none; padding:8px 12px 12px 46px; font-size:11px; color:#c9d1d9;
+    line-height:1.5; border-top:1px dashed var(--border); background:rgba(0,0,0,.15);
+  }
+  .hawaii-item.open .hawaii-item-body { display:block; }
+  .hawaii-detail-row { display:flex; justify-content:space-between; gap:10px; padding:2px 0; }
+  .hawaii-detail-row span:first-child { color:#8b949e; flex-shrink:0; }
+  .hawaii-detail-row span:last-child { text-align:right; font-weight:600; }
+  .hawaii-map-btn {
+    margin-top:8px; font-size:10px; padding:4px 10px; border-radius:6px; cursor:pointer;
+    border:1px solid #30363d; background:#21262d; color:#58a6ff;
+  }
+  .hawaii-map-btn:hover { background:#30363d; }
   .mesh-feed { max-height:200px; overflow-y:auto; font-family:ui-monospace,monospace; font-size:10px;
     background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:6px 8px; margin-top:8px; }
   .mesh-feed .msg { padding:5px 0; border-bottom:1px solid #21262d; line-height:1.35; }
@@ -651,15 +691,11 @@
         Station locations only — neither Hawaiʻi Police nor Hawaiʻi Fire
         publishes a live dispatch/incident feed.
       </div>
-      <div class="section-header">📻 Live Radio</div>
-      <div style="padding:6px 12px 4px;color:var(--muted);font-size:10px;">
-        Click to play directly in your browser — no logins, no keys, no leaving the page.
+      <div class="section-header">🗂️ Browse all layers</div>
+      <div style="padding:4px 12px 6px;color:var(--muted);font-size:10px;">
+        Expand a category, then tap any item for full details. Use <b style="color:#58a6ff;">Show on map</b> to fly there.
       </div>
-      <div id="radioList"></div>
-      <div class="section-header">⚠️ Active NWS Alerts</div>
-      <div id="alertsList"><div class="empty"><div class="empty-icon">🌤️</div>Loading…</div></div>
-      <div class="section-header">🌎 Recent Earthquakes</div>
-      <div id="quakeList"><div class="empty"><div class="empty-icon">🌋</div>Loading…</div></div>
+      <div id="hawaiiBrowser" class="hawaii-browser"><div class="empty" style="padding:16px;"><div class="empty-icon">🌺</div>Loading layers…</div></div>
       <div style="padding:8px 12px;color:var(--muted);font-size:10px;">
         Sources: <a href="https://www.usgs.gov/" target="_blank" style="color:#58a6ff">USGS Earthquake Hazards</a> ·
         <a href="https://www.weather.gov/" target="_blank" style="color:#58a6ff">National Weather Service</a> ·
@@ -2255,7 +2291,7 @@ async function fetchQuakes() {
     const data = await res.json();
     allQuakes = data.earthquakes || [];
     renderQuakeMarkers();
-    renderQuakeList(data);
+    hawaiiBrowseRefresh();
   } catch (e) { /* keep last-known quakes on screen */ }
 }
 function renderQuakeMarkers() {
@@ -2270,23 +2306,6 @@ function renderQuakeMarkers() {
       properties: { mag: q.mag, place: q.place, time: q.time, depthKm: q.depthKm },
     })),
   });
-}
-function renderQuakeList(data) {
-  const el = document.getElementById('quakeList');
-  if (!el) return;
-  if (!allQuakes.length) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">🌋</div>No M1.5+ earthquakes near Hawaiʻi Island in the last 30 days.</div>`;
-    return;
-  }
-  const sorted = [...allQuakes].sort((a, b) => b.time - a.time);
-  el.innerHTML = sorted.slice(0, 30).map(q => `
-    <div class="vessel-row" onclick="focusQuake('${q.id}')">
-      <div class="vessel-icon">🌋</div>
-      <div class="vessel-info">
-        <div class="vessel-name">M${q.mag.toFixed(1)} — ${escapeHtml(q.place)}</div>
-        <div class="vessel-meta"><span>${new Date(q.time).toLocaleString()}</span><span>depth ${q.depthKm.toFixed(1)} km</span></div>
-      </div>
-    </div>`).join('');
 }
 function focusQuake(id) {
   const q = allQuakes.find(x => x.id === id);
@@ -2310,26 +2329,12 @@ function toggleTsunami() {
 }
 
 async function fetchAlerts() {
-  const el = document.getElementById('alertsList');
   try {
     const res = await fetch('/api/alerts');
     const data = await res.json();
-    if (!el) return;
-    if (!data.count) {
-      el.innerHTML = `<div class="empty"><div class="empty-icon">🌤️</div>No active NWS watches or warnings for Hawaiʻi right now.</div>`;
-      return;
-    }
-    el.innerHTML = data.alerts.map(a => `
-      <div class="vessel-row">
-        <div class="vessel-icon">⚠️</div>
-        <div class="vessel-info">
-          <div class="vessel-name">${escapeHtml(a.event)}</div>
-          <div class="vessel-meta"><span>${escapeHtml(a.areaDesc || '')}</span></div>
-        </div>
-      </div>`).join('');
-  } catch (e) {
-    if (el) el.innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div>Couldn't load NWS alerts.</div>`;
-  }
+    hawaiiList.alerts = data.alerts || [];
+    hawaiiBrowseRefresh();
+  } catch (e) { /* keep last */ }
 }
 
 // Precipitation radar (RainViewer) — fetch the current frame list directly
@@ -2364,6 +2369,10 @@ async function fetchWildfire() {
     }
     const el = document.getElementById('wildfireStatus');
     if (el) el.textContent = data.count ? `${data.count} thermal hotspot${data.count === 1 ? '' : 's'} detected` : 'No thermal hotspots detected right now';
+    hawaiiList.wildfire = ((data.geojson && data.geojson.features) || []).map((f, i) => ({
+      id: String(i), lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1], props: f.properties,
+    }));
+    hawaiiBrowseRefresh();
   } catch (e) { /* keep last-known on screen */ }
 }
 function toggleWildfire() {
@@ -2392,6 +2401,13 @@ async function fetchStreamflow() {
     fetchStreamflowStats();
     const el = document.getElementById('streamflowStatus');
     if (el) el.textContent = `${(streamflowData.features || []).length} active gauges reporting`;
+    hawaiiList.streamflow = (streamflowData.features || []).map(f => {
+      const c = f.geometry.coordinates;
+      const p = f.properties || {};
+      return { id: p.site_no, site_no: p.site_no, name: p.name, lon: c[0], lat: c[1],
+        value: p.value, readings: p.readings, ts: p.ts };
+    });
+    hawaiiBrowseRefresh();
   } catch (e) { /* keep last data on screen */ }
 }
 async function fetchStreamflowStats() {
@@ -2670,6 +2686,10 @@ async function fetchSummits() {
         properties: { name: s.name, elevM: s.elevM, badge, readings: JSON.stringify(r) } };
     });
     map.getSource('summits').setData({ type: 'FeatureCollection', features: feats });
+    hawaiiList.summits = (data.summits || []).map((s, i) => ({
+      id: String(i), name: s.name, lon: s.lon, lat: s.lat, elevM: s.elevM, readings: s.readings || {},
+    }));
+    hawaiiBrowseRefresh();
   } catch (e) { /* keep last */ }
 }
 
@@ -2683,6 +2703,8 @@ async function fetchAirQuality() {
       type: 'Feature', geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
       properties: { name: p.name, usAqi: p.usAqi != null ? p.usAqi : 0, pm25: p.pm25, pm10: p.pm10, so2: p.so2, at: p.at } }));
     map.getSource('airquality').setData({ type: 'FeatureCollection', features: feats });
+    hawaiiList.airquality = (data.points || []).map((p, i) => ({ id: String(i), ...p }));
+    hawaiiBrowseRefresh();
   } catch (e) { /* keep last */ }
 }
 
@@ -2703,6 +2725,9 @@ async function fetchVolcano() {
         properties: { kind: 'webcam', name: c.name, imageUrl: c.imageUrl, color: 'CAM' } });
     }
     map.getSource('volcano').setData({ type: 'FeatureCollection', features: feats });
+    hawaiiList.volcanoAlerts = (data.alerts || []).map((a, i) => ({ id: `a${i}`, kind: 'alert', ...a }));
+    hawaiiList.volcanoCams = (data.webcams || []).map((c, i) => ({ id: `c${i}`, kind: 'webcam', ...c }));
+    hawaiiBrowseRefresh();
   } catch (e) { /* keep last */ }
 }
 
@@ -2718,6 +2743,8 @@ async function fetchMetars() {
         windDir: m.windDir, windKt: m.windKt, visibSm: m.visibSm, altimInHg: m.altimInHg,
         military: !!m.military, raw: m.raw || '' } }));
     map.getSource('metars').setData({ type: 'FeatureCollection', features: feats });
+    hawaiiList.metars = (data.metars || []).map(m => ({ id: m.icao, ...m }));
+    hawaiiBrowseRefresh();
   } catch (e) { /* keep last */ }
 }
 
@@ -2798,6 +2825,8 @@ async function fetchMeshtastic() {
   try {
     const res = await fetch('/api/meshtastic');
     const data = await res.json();
+    hawaiiList.meshtastic = (data.nodes || []).map(n => ({ id: n.id, nodeId: n.id, ...n }));
+    hawaiiBrowseRefresh();
     if (!mapReady || !map.getSource('meshtastic')) return;
     const feats = (data.nodes || []).map(n => ({
       type: 'Feature', geometry: { type: 'Point', coordinates: [n.lon, n.lat] },
@@ -2817,6 +2846,9 @@ async function fetchRepeaters() {
   try {
     const res = await fetch('/api/repeaters');
     const data = await res.json();
+    hawaiiList.repeaters = (data.repeaters || []).filter(r => r.lat && r.lon)
+      .map((r, i) => ({ id: `${r.callsign}-${i}`, ...r }));
+    hawaiiBrowseRefresh();
     if (!mapReady || !map.getSource('repeaters')) return;
     const feats = (data.repeaters || []).filter(r => r.lat && r.lon).map(r => ({
       type: 'Feature', geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
@@ -2840,6 +2872,8 @@ async function fetchOcean() {
   try {
     const res = await fetch('/api/ocean');
     const data = await res.json();
+    hawaiiList.ocean = (data.stations || []).map((s, i) => ({ id: String(i), ...s }));
+    hawaiiBrowseRefresh();
     if (!mapReady || !map.getSource('ocean')) return;
     const feats = (data.stations || []).map(s => {
       const r = s.readings || {};
@@ -2860,6 +2894,8 @@ async function fetchAprs() {
   try {
     const res = await fetch('/api/aprs');
     const data = await res.json();
+    hawaiiList.aprs = (data.stations || []).map((s, i) => ({ id: s.call || String(i), ...s }));
+    hawaiiBrowseRefresh();
     if (!mapReady || !map.getSource('aprs')) return;
     const feats = (data.stations || []).map(s => ({
       type: 'Feature', geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
@@ -2877,6 +2913,12 @@ async function fetchWeatherStations() {
     if (mapReady && map.getSource('weather-stations')) {
       map.getSource('weather-stations').setData(weatherStationsVisible ? data.geojson : { type: 'FeatureCollection', features: [] });
     }
+    hawaiiList.weather = ((data.geojson && data.geojson.features) || []).map(f => {
+      const c = f.geometry.coordinates;
+      const p = f.properties || {};
+      return { id: p.stationId || p.name, lon: c[0], lat: c[1], ...p };
+    });
+    hawaiiBrowseRefresh();
   } catch (e) { /* keep last data on screen */ }
 }
 function toggleWeatherStations() {
@@ -2901,6 +2943,331 @@ async function toggleFacility(kind) {
       facilityLoaded[kind] = true;
     } catch (e) { /* leave empty */ }
   }
+}
+
+}
+
+// ─── HAWAIʻI TAB BROWSER (collapsible category + item lists) ─────────────────
+const hawaiiList = {
+  repeaters: [], meshtastic: [], aprs: [], weather: [], streamflow: [],
+  summits: [], ocean: [], airquality: [], volcanoAlerts: [], volcanoCams: [],
+  metars: [], alerts: [], wildfire: [],
+  facilities: { police: [], fire: [], ems: [], trauma: [] },
+};
+const hawaiiBrowse = { openCats: new Set(['radio']), openItems: new Set() };
+const hawaiiMeshDetails = {}; // nodeId -> detail payload
+
+function hawaiiDetailRow(e, k, v) {
+  if (v == null || v === '') return '';
+  return `<div class="hawaii-detail-row"><span>${e} ${escapeHtml(k)}</span><span>${v}</span></div>`;
+}
+function hawaiiMapBtn(lon, lat, zoom) {
+  if (lon == null || lat == null) return '';
+  return `<button type="button" class="hawaii-map-btn" onclick="hawaiiFlyTo(${lon},${lat},${zoom || 12})">📍 Show on map</button>`;
+}
+function hawaiiFlyTo(lon, lat, zoom) {
+  if (!mapReady) return;
+  map.flyTo({ center: [lon, lat], zoom: zoom || 12 });
+  switchTab('hawaii');
+}
+window.hawaiiFlyTo = hawaiiFlyTo;
+
+function toggleHawaiiCat(catId) {
+  if (hawaiiBrowse.openCats.has(catId)) hawaiiBrowse.openCats.delete(catId);
+  else hawaiiBrowse.openCats.add(catId);
+  renderHawaiiBrowser();
+}
+window.toggleHawaiiCat = toggleHawaiiCat;
+
+async function toggleHawaiiItem(catId, itemId) {
+  const key = `${catId}:${itemId}`;
+  if (hawaiiBrowse.openItems.has(key)) hawaiiBrowse.openItems.delete(key);
+  else {
+    hawaiiBrowse.openItems.add(key);
+    if (catId === 'meshtastic' && !hawaiiMeshDetails[itemId]) {
+      try {
+        const res = await fetch(`/api/meshtastic-detail?node=${encodeURIComponent(itemId)}`);
+        hawaiiMeshDetails[itemId] = await res.json();
+      } catch { hawaiiMeshDetails[itemId] = { error: true }; }
+      renderHawaiiBrowser();
+      return;
+    }
+  }
+  renderHawaiiBrowser();
+}
+window.toggleHawaiiItem = toggleHawaiiItem;
+function toggleHawaiiItemEl(el) {
+  if (!el || !el.dataset) return;
+  toggleHawaiiItem(el.dataset.cat, el.dataset.item);
+}
+window.toggleHawaiiItemEl = toggleHawaiiItemEl;
+
+async function ensureHawaiiFacilitiesBrowse() {
+  for (const kind of ['police', 'fire', 'ems', 'trauma']) {
+    if (hawaiiList.facilities[kind].length) continue;
+    try {
+      const data = await (await fetch(`/api/facilities/${kind}`)).json();
+      hawaiiList.facilities[kind] = (data.features || []).map((f, i) => {
+        const p = f.properties || {};
+        const c = f.geometry && f.geometry.coordinates;
+        const name = p.name || p.facility_name || p.unit_name || p.alt_name || `Station ${i + 1}`;
+        return { id: String(f.id ?? i), name, lon: c && c[0], lat: c && c[1], props: p, kind };
+      }).sort((a, b) => a.name.localeCompare(b.name));
+    } catch { /* empty */ }
+  }
+}
+
+function hawaiiRadioDetail(item) {
+  return hawaiiDetailRow('📍', 'Coverage', item.kind) +
+    hawaiiDetailRow('📝', 'About', escapeHtml(item.desc)) +
+    `<div class="stream-ctrl" style="margin-top:8px;">
+      <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(item.url)}">▶️ Play</button>
+      <button type="button" class="stream-stop-btn" disabled>⏹️ Stop</button>
+    </div>`;
+}
+
+function hawaiiRepeaterDetail(r) {
+  let html = '';
+  if (r.typeLabel) html += hawaiiDetailRow(r.icon || '📡', 'Type', escapeHtml(r.typeLabel));
+  if (r.group) html += hawaiiDetailRow('🕸️', 'Network', escapeHtml(r.group));
+  if (r.internetNode) html += hawaiiDetailRow('🌐', 'Internet node', escapeHtml(r.internetNode));
+  html += hawaiiDetailRow('📻', 'Frequency', `${r.freqMhz} MHz`);
+  if (r.offsetMhz != null && +r.offsetMhz !== 0) html += hawaiiDetailRow('↕️', 'Offset', `${+r.offsetMhz > 0 ? '+' : ''}${r.offsetMhz} MHz`);
+  if (r.tone) html += hawaiiDetailRow('🔊', 'Tone', r.tone);
+  if (r.mode) html += hawaiiDetailRow('📡', 'Mode', r.mode);
+  if (r.power) html += hawaiiDetailRow('⚡', 'Power', escapeHtml(r.power));
+  if (r.city) html += hawaiiDetailRow('📍', 'Location', escapeHtml(r.city));
+  if (r.restriction) html += hawaiiDetailRow('🔒', 'Access', escapeHtml(r.restriction));
+  html += hawaiiDetailRow(r.operational === false ? '🔴' : '🟢', 'Status', r.operational === false ? 'Off air' : 'On air');
+  if (r.description) html += `<div style="margin-top:6px;padding:6px 8px;background:#0d1117;border-radius:6px;white-space:pre-wrap;">📝 ${escapeHtml(r.description)}</div>`;
+  if (r.listenStream) {
+    html += `<div class="stream-ctrl" style="margin-top:8px;">
+      <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(r.listenStream)}">▶️ Play nets</button>
+      <button type="button" class="stream-stop-btn" disabled>⏹️ Stop</button>
+      <span class="stream-status" style="font-size:9px;">${escapeHtml(r.listenLabel || '')}</span>
+    </div>`;
+  }
+  return html + hawaiiMapBtn(r.lon, r.lat, 11);
+}
+
+function hawaiiMeshDetail(n) {
+  const d = hawaiiMeshDetails[n.id];
+  let html = hawaiiDetailRow('🆔', 'Node', escapeHtml(n.idHex || String(n.id)));
+  if (n.shortName) html += hawaiiDetailRow('🏷️', 'Short name', escapeHtml(n.shortName));
+  if (n.hwName) html += hawaiiDetailRow('🔧', 'Hardware', escapeHtml(n.hwName));
+  if (n.roleName) html += hawaiiDetailRow('👤', 'Role', escapeHtml(n.roleName));
+  if (n.fw) html += hawaiiDetailRow('💾', 'Firmware', escapeHtml(n.fw));
+  if (n.altitude != null) html += hawaiiDetailRow('⛰️', 'Altitude', `${n.altitude} m`);
+  if (n.battery != null) html += hawaiiDetailRow('🔋', 'Battery', `${n.battery}%`);
+  if (n.temperature != null) html += hawaiiDetailRow('🌡️', 'Temperature', `${n.temperature}°C`);
+  if (n.localNodes != null) html += hawaiiDetailRow('📶', 'Local nodes', String(n.localNodes));
+  if (n.neighbourCount) html += hawaiiDetailRow('📡', 'Neighbours', String(n.neighbourCount));
+  if (d && !d.error) {
+    html += meshTelemetryRows(d.node || n, d);
+    if (d.messages && d.messages.length) {
+      html += `<div style="font-weight:700;margin-top:8px;font-size:10px;">📨 Recent messages</div>`;
+      html += `<div class="mesh-feed" style="max-height:120px;overflow-y:auto;margin-top:4px;">${meshMsgHtml(d.messages.slice(0, 8), n.id)}</div>`;
+    }
+  } else if (d && d.error) html += `<div style="color:#8b949e;margin-top:6px;">Couldn't load mesh detail.</div>`;
+  else html += `<div style="color:#8b949e;margin-top:6px;">Loading mesh telemetry…</div>`;
+  return html + hawaiiMapBtn(n.lon, n.lat, 13);
+}
+
+function hawaiiItemBody(catId, item) {
+  switch (catId) {
+    case 'radio': return hawaiiRadioDetail(item);
+    case 'repeaters': return hawaiiRepeaterDetail(item);
+    case 'meshtastic': return hawaiiMeshDetail(item);
+    case 'aprs':
+      return hawaiiDetailRow('📻', 'Callsign', escapeHtml(item.call)) +
+        hawaiiDetailRow('🏷️', 'Kind', escapeHtml(item.kind || 'station')) +
+        (item.comment ? `<div style="margin-top:4px;">💬 ${escapeHtml(item.comment)}</div>` : '') +
+        hawaiiMapBtn(item.lon, item.lat, 12);
+    case 'weather': {
+      const p = item;
+      let h = hawaiiDetailRow('🆔', 'Station', escapeHtml(p.stationId || ''));
+      h += hawaiiDetailRow('📍', 'Name', escapeHtml(p.name || ''));
+      if (p.temperatureC != null) h += hawaiiDetailRow('🌡️', 'Temperature', `${(+p.temperatureC).toFixed(1)}°C`);
+      if (p.humidity != null) h += hawaiiDetailRow('💧', 'Humidity', `${Math.round(p.humidity)}%`);
+      if (p.windSpeedKmh != null) h += hawaiiDetailRow('💨', 'Wind', `${(+p.windSpeedKmh).toFixed(0)} km/h`);
+      if (p.textDescription) h += hawaiiDetailRow('☁️', 'Conditions', escapeHtml(p.textDescription));
+      return h + hawaiiMapBtn(item.lon, item.lat, 11);
+    }
+    case 'streamflow': {
+      const p = item, rd = p.readings || {};
+      let h = hawaiiDetailRow('🆔', 'Site', escapeHtml(p.site_no || ''));
+      h += hawaiiDetailRow('📍', 'River', escapeHtml(p.name || ''));
+      for (const k of Object.values(rd)) {
+        if (k && k.value != null) h += hawaiiDetailRow('💧', k.label || 'Reading', `${(+k.value).toFixed(2)} ${k.unit || ''}`);
+      }
+      if (p.ts) h += hawaiiDetailRow('🕐', 'Updated', new Date(p.ts).toLocaleString());
+      return h + hawaiiMapBtn(item.lon, item.lat, 12);
+    }
+    case 'summits': {
+      const r = item.readings || {};
+      let h = hawaiiDetailRow('⛰️', 'Elevation', item.elevM ? `${Math.round(item.elevM)} m` : '—');
+      if (r.tempC != null) h += hawaiiDetailRow('🌡️', 'Temperature', `${(+r.tempC).toFixed(1)}°C`);
+      if (r.windKt != null) h += hawaiiDetailRow('💨', 'Wind', `${(+r.windKt).toFixed(0)} kt`);
+      if (r.co2ppm != null) h += hawaiiDetailRow('🫧', 'CO₂', `${(+r.co2ppm).toFixed(2)} ppm`);
+      return h + hawaiiMapBtn(item.lon, item.lat, 10);
+    }
+    case 'ocean': {
+      const r = item.readings || {};
+      let h = hawaiiDetailRow('🏷️', 'Type', item.kind === 'tide' ? '🌊 Tide' : item.kind === 'dart' ? '🚨 Tsunami buoy' : '🛟 NDBC buoy');
+      if (r.waveHtM != null) h += hawaiiDetailRow('🌊', 'Wave height', `${(+r.waveHtM).toFixed(1)} m`);
+      if (r.waterLevelFt != null) h += hawaiiDetailRow('📏', 'Water level', `${(+r.waterLevelFt).toFixed(1)} ft`);
+      if (r.waterTempC != null) h += hawaiiDetailRow('🌡️', 'Water temp', `${(+r.waterTempC).toFixed(1)}°C`);
+      return h + hawaiiMapBtn(item.lon, item.lat, 10);
+    }
+    case 'airquality':
+      return hawaiiDetailRow('🌫️', 'US AQI', item.usAqi != null ? String(item.usAqi) : '—') +
+        hawaiiDetailRow('🫧', 'PM2.5', item.pm25 != null ? `${item.pm25} µg/m³` : '—') +
+        hawaiiDetailRow('💨', 'PM10', item.pm10 != null ? `${item.pm10} µg/m³` : '—') +
+        hawaiiDetailRow('🌋', 'SO₂', item.so2 != null ? `${item.so2} µg/m³` : '—') +
+        hawaiiMapBtn(item.lon, item.lat, 10);
+    case 'volcano':
+      if (item.kind === 'webcam') {
+        return hawaiiDetailRow('📷', 'Live cam', escapeHtml(item.name)) +
+          (item.imageUrl ? `<div style="margin-top:6px;"><img src="${escapeHtml(item.imageUrl)}" alt="" style="max-width:100%;border-radius:6px;border:1px solid #30363d;"></div>` : '') +
+          hawaiiMapBtn(item.lon, item.lat, 10);
+      }
+      return hawaiiDetailRow('🌋', 'Volcano', escapeHtml(item.name)) +
+        hawaiiDetailRow('🚦', 'Alert', `${item.colorCode || ''}/${item.alertLevel || ''}`) +
+        (item.summary ? `<div style="margin-top:6px;white-space:pre-wrap;">📝 ${escapeHtml(item.summary)}</div>` : '') +
+        hawaiiMapBtn(item.lon, item.lat, 9);
+    case 'metars':
+      return hawaiiDetailRow('✈️', 'ICAO', escapeHtml(item.icao)) +
+        hawaiiDetailRow('📍', 'Airport', escapeHtml(item.name)) +
+        hawaiiDetailRow('🌤️', 'Flight category', escapeHtml(item.fltCat || '—')) +
+        hawaiiDetailRow('🌡️', 'Temp', item.tempC != null ? `${item.tempC}°C` : '—') +
+        hawaiiDetailRow('💨', 'Wind', item.windKt != null ? `${item.windKt} kt @ ${item.windDir || 0}°` : '—') +
+        hawaiiDetailRow('👁️', 'Visibility', item.visibSm != null ? `${item.visibSm} sm` : '—') +
+        (item.raw ? `<div style="margin-top:6px;font-family:monospace;font-size:10px;color:#8b949e;">${escapeHtml(item.raw)}</div>` : '') +
+        hawaiiMapBtn(item.lon, item.lat, 11);
+    case 'alerts':
+      return hawaiiDetailRow('⚠️', 'Event', escapeHtml(item.event)) +
+        hawaiiDetailRow('📍', 'Area', escapeHtml(item.areaDesc || '')) +
+        (item.headline ? `<div style="margin-top:6px;">📰 ${escapeHtml(item.headline)}</div>` : '') +
+        (item.description ? `<div style="margin-top:4px;white-space:pre-wrap;font-size:10px;color:#8b949e;">${escapeHtml(String(item.description).slice(0, 400))}</div>` : '');
+    case 'quakes':
+      return hawaiiDetailRow('📊', 'Magnitude', `M${(+item.mag).toFixed(1)}`) +
+        hawaiiDetailRow('📍', 'Place', escapeHtml(item.place)) +
+        hawaiiDetailRow('⬇️', 'Depth', `${(+item.depthKm).toFixed(1)} km`) +
+        hawaiiDetailRow('🕐', 'Time', new Date(item.time).toLocaleString()) +
+        hawaiiMapBtn(item.lon, item.lat, 10);
+    case 'wildfire': {
+      const p = item.props || {};
+      return hawaiiDetailRow('🔥', 'Confidence', p.confidence != null ? String(p.confidence) : '—') +
+        hawaiiDetailRow('⚡', 'FRP', p.frp != null ? `${p.frp} MW` : '—') +
+        hawaiiDetailRow('🕐', 'Detected', p.acq_date ? `${p.acq_date} ${p.acq_time || ''}` : '—') +
+        hawaiiDetailRow('🌙', 'Day/night', escapeHtml(p.daynight || '—')) +
+        hawaiiMapBtn(item.lon, item.lat, 12);
+    }
+    case 'police': case 'fire': case 'ems': case 'trauma': {
+      const p = item.props || {};
+      let h = '';
+      if (p.address) h += hawaiiDetailRow('🏠', 'Address', escapeHtml(p.address + (p.city ? ', ' + p.city : '')));
+      if (p.district) h += hawaiiDetailRow('📍', 'District', escapeHtml(p.district));
+      if (p.trauma_level) h += hawaiiDetailRow('🏥', 'Trauma level', escapeHtml(String(p.trauma_level)));
+      if (p.type) h += hawaiiDetailRow('🏷️', 'Type', escapeHtml(p.type));
+      if (p.status) h += hawaiiDetailRow('🟢', 'Status', escapeHtml(p.status));
+      return h + hawaiiMapBtn(item.lon, item.lat, 13);
+    }
+    default: return '';
+  }
+}
+
+function hawaiiCategories() {
+  const volcanoItems = [
+    ...hawaiiList.volcanoAlerts.map((a, i) => ({ id: `a${i}`, kind: 'alert', ...a })),
+    ...hawaiiList.volcanoCams.map((c, i) => ({ id: `c${i}`, kind: 'webcam', ...c })),
+  ];
+  return [
+    { id: 'radio', icon: '📻', label: 'Live Radio Streams',
+      items: RADIO_STATIONS.map((s, i) => ({ id: String(i), ...s })) },
+    { id: 'repeaters', icon: '📡', label: 'Ham Repeaters',
+      items: [...hawaiiList.repeaters].sort((a, b) => String(a.callsign).localeCompare(b.callsign)) },
+    { id: 'meshtastic', icon: '📶', label: 'Meshtastic / LoRa',
+      items: [...hawaiiList.meshtastic].sort((a, b) => String(a.name).localeCompare(b.name)) },
+    { id: 'aprs', icon: '📻', label: 'APRS Stations',
+      items: [...hawaiiList.aprs].sort((a, b) => String(a.call).localeCompare(b.call)) },
+    { id: 'weather', icon: '🌡️', label: 'NWS Weather Stations',
+      items: [...hawaiiList.weather].sort((a, b) => String(a.name).localeCompare(b.name)) },
+    { id: 'streamflow', icon: '💧', label: 'USGS Streamflow Gauges',
+      items: [...hawaiiList.streamflow].sort((a, b) => String(a.name).localeCompare(b.name)) },
+    { id: 'summits', icon: '🔭', label: 'Summit Observatories', items: hawaiiList.summits },
+    { id: 'ocean', icon: '🌊', label: 'Ocean Buoys & Tides', items: hawaiiList.ocean },
+    { id: 'airquality', icon: '🌫️', label: 'Air Quality / Vog', items: hawaiiList.airquality },
+    { id: 'volcano', icon: '🌋', label: 'Volcano Alerts & Webcams', items: volcanoItems },
+    { id: 'metars', icon: '✈️', label: 'Aviation METARs', items: hawaiiList.metars },
+    { id: 'alerts', icon: '⚠️', label: 'Active NWS Alerts', items: hawaiiList.alerts },
+    { id: 'quakes', icon: '🌎', label: 'Recent Earthquakes', items: [...allQuakes].sort((a, b) => b.time - a.time) },
+    { id: 'wildfire', icon: '🔥', label: 'Wildfire Hotspots', items: hawaiiList.wildfire },
+    { id: 'police', icon: '🚓', label: 'Police Stations', items: hawaiiList.facilities.police },
+    { id: 'fire', icon: '🚒', label: 'Fire Stations', items: hawaiiList.facilities.fire },
+    { id: 'ems', icon: '🚑', label: 'EMS Stations', items: hawaiiList.facilities.ems },
+    { id: 'trauma', icon: '🏥', label: 'Trauma Centers', items: hawaiiList.facilities.trauma },
+  ];
+}
+
+function hawaiiItemSummary(catId, item) {
+  switch (catId) {
+    case 'radio': return { icon: item.icon || '📻', title: item.name, meta: item.kind };
+    case 'repeaters': return { icon: item.icon || '📡', title: item.callsign, meta: `${item.freqMhz} MHz · ${item.typeLabel || item.group || 'FM'}` };
+    case 'meshtastic': return { icon: '📶', title: item.name || item.idHex, meta: [item.hwName, item.battery != null ? `🔋${item.battery}%` : ''].filter(Boolean).join(' · ') };
+    case 'aprs': return { icon: '📻', title: item.call, meta: item.kind || 'APRS' };
+    case 'weather': return { icon: '🌡️', title: item.name, meta: item.temperatureC != null ? `${(+item.temperatureC).toFixed(0)}°C · ${item.textDescription || ''}` : item.stationId };
+    case 'streamflow': return { icon: '💧', title: item.name, meta: item.value != null ? `${(+item.value).toFixed(0)} ft³/s` : 'gauge reporting' };
+    case 'summits': return { icon: '🔭', title: item.name, meta: item.elevM ? `${Math.round(item.elevM)} m` : '' };
+    case 'ocean': return { icon: item.kind === 'tide' ? '🌊' : item.kind === 'dart' ? '🚨' : '🛟', title: item.name, meta: item.kind };
+    case 'airquality': return { icon: '🌫️', title: item.name, meta: item.usAqi != null ? `AQI ${item.usAqi}` : '' };
+    case 'volcano': return { icon: item.kind === 'webcam' ? '📷' : '🌋', title: item.name, meta: item.kind === 'webcam' ? 'Live webcam' : `${item.colorCode}/${item.alertLevel}` };
+    case 'metars': return { icon: '✈️', title: `${item.icao} — ${item.name}`, meta: item.fltCat || '' };
+    case 'alerts': return { icon: '⚠️', title: item.event, meta: item.areaDesc || '' };
+    case 'quakes': return { icon: '🌋', title: `M${(+item.mag).toFixed(1)} — ${item.place}`, meta: new Date(item.time).toLocaleDateString() };
+    case 'wildfire': return { icon: '🔥', title: 'Thermal hotspot', meta: item.props && item.props.confidence != null ? `confidence ${item.props.confidence}` : '' };
+    case 'police': case 'fire': case 'ems': case 'trauma': return { icon: { police: '🚓', fire: '🚒', ems: '🚑', trauma: '🏥' }[catId], title: item.name, meta: item.props && (item.props.address || item.props.city) || '' };
+    default: return { icon: '📍', title: item.name || 'Item', meta: '' };
+  }
+}
+
+function renderHawaiiBrowser() {
+  const el = document.getElementById('hawaiiBrowser');
+  if (!el) return;
+  const cats = hawaiiCategories();
+  el.innerHTML = cats.map(cat => {
+    const open = hawaiiBrowse.openCats.has(cat.id);
+    const items = cat.items || [];
+    const itemHtml = items.length ? items.map((item, idx) => {
+      const id = String(item.id ?? item.nodeId ?? item.callsign ?? item.icao ?? item.site_no ?? item.name ?? idx);
+      const key = `${cat.id}:${id}`;
+      const openItem = hawaiiBrowse.openItems.has(key);
+      const sum = hawaiiItemSummary(cat.id, item);
+      return `<div class="hawaii-item${openItem ? ' open' : ''}">
+        <div class="hawaii-item-h" data-cat="${cat.id}" data-item="${escapeHtml(id)}" onclick="toggleHawaiiItemEl(this)">
+          <div class="hawaii-item-ico">${sum.icon}</div>
+          <div class="hawaii-item-txt">
+            <div class="hawaii-item-title">${escapeHtml(sum.title)}</div>
+            ${sum.meta ? `<div class="hawaii-item-meta">${escapeHtml(sum.meta)}</div>` : ''}
+          </div>
+          <div class="hawaii-item-chev">▶</div>
+        </div>
+        <div class="hawaii-item-body">${openItem ? hawaiiItemBody(cat.id, item) : ''}</div>
+      </div>`;
+    }).join('') : `<div style="padding:10px 22px;font-size:11px;color:var(--muted);">No items in this layer right now.</div>`;
+    return `<div class="hawaii-cat${open ? ' open' : ''}">
+      <div class="hawaii-cat-h" onclick="toggleHawaiiCat('${cat.id}')">
+        <span>${cat.icon}</span><span>${escapeHtml(cat.label)}</span>
+        <span class="cnt">(${items.length})</span><span class="chev">▶</span>
+      </div>
+      <div class="hawaii-cat-items">${itemHtml}</div>
+    </div>`;
+  }).join('');
+  wireRepeaterStreamControls(el);
+}
+
+function hawaiiBrowseRefresh() {
+  if (activeTab === 'hawaii') renderHawaiiBrowser();
 }
 
 // ─── LIVE RADIO STREAMS ─────────────────────────────────────────────────────
@@ -3008,24 +3375,7 @@ function pickStream(url) {
   audioEl.crossOrigin = 'anonymous';
   audioEl.play().catch(e => console.warn('audio play blocked:', e));
 }
-function renderRadioList() {
-  const el = document.getElementById('radioList');
-  if (!el) return;
-  el.innerHTML = RADIO_STATIONS.map(s => `
-    <div class="vessel-row" style="align-items:flex-start;">
-      <div class="vessel-icon">${s.icon || '📻'}</div>
-      <div class="vessel-info" style="min-width:0;">
-        <div class="vessel-name">${s.icon || '📻'} ${escapeHtml(s.name)}</div>
-        <div class="vessel-meta"><span>📍 ${escapeHtml(s.kind)}</span></div>
-        ${s.desc ? `<div style="font-size:10px;color:var(--muted);line-height:1.45;margin-top:4px;">📝 ${escapeHtml(s.desc)}</div>` : ''}
-        <div class="stream-ctrl" style="margin-top:6px;">
-          <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(s.url)}">▶️ Play</button>
-          <button type="button" class="stream-stop-btn" disabled>⏹️ Stop</button>
-        </div>
-      </div>
-    </div>`).join('');
-  wireRepeaterStreamControls(el);
-}
+function renderRadioList() { renderHawaiiBrowser(); }
 
 // Learned/observed stops (places buses repeatedly dwell that aren't official).
 let learnedStops = [];
@@ -5656,7 +6006,12 @@ function switchTab(name) {
   if (name === 'fleet') fetchFleet();
   if (name === 'boats') fetchVessels();
   if (name === 'aircraft') fetchAircraft();
-  if (name === 'hawaii') { fetchQuakes(); fetchAlerts(); fetchWildfire(); fetchHazardZonesOnce(); if (radarVisible) fetchRadarFrame(); renderRadioList(); }
+  if (name === 'hawaii') {
+    fetchQuakes(); fetchAlerts(); fetchWildfire(); fetchHazardZonesOnce();
+    if (radarVisible) fetchRadarFrame();
+    ensureHawaiiFacilitiesBrowse().then(() => renderHawaiiBrowser());
+    renderHawaiiBrowser();
+  }
 }
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
 
@@ -6133,7 +6488,7 @@ Promise.all([
   fetchMetars(),
   fetchMeshtastic(),
   fetchRepeaters(),
-]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); });
+]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); ensureHawaiiFacilitiesBrowse().then(() => renderHawaiiBrowser()); renderHawaiiBrowser(); });
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
 setInterval(() => { if (activeTab === 'system' && !document.hidden) { pollLearn(); fetchApiStats(); } }, 5000);
