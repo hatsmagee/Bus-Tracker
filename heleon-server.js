@@ -2327,6 +2327,7 @@ async function handleApi(url, res) {
         streamflow: feed(streamflowCache?.features?.length || 0, streamflowLastPollTs, streamflowLastError),
         ocean: feed(oceanCache.length, oceanLastPollTs, oceanLastError),
         airquality: feed(airQualityCache.length, airQualityLastPollTs, airQualityLastError),
+        scanner: feed(SCANNER_FEEDS.length, Date.now(), null),
         solar: feed(solarCache.length, solarLastPollTs, solarLastError),
         satellites: feed(satelliteCache.length, satelliteLastPollTs, satelliteLastError),
       },
@@ -3126,6 +3127,11 @@ async function handleApi(url, res) {
   if (p === '/api/repeaters') {
     return json(res, { ts: Date.now(), lastPollTs: repeaterLastPollTs, lastError: repeaterLastError,
       count: repeaterCache.length, repeaters: repeaterCache });
+  }
+
+  // ── PUBLIC-SAFETY SCANNER (Broadcastify MP3, keyless in-browser) ───────────
+  if (p === '/api/scanner') {
+    return json(res, { ts: Date.now(), feeds: SCANNER_FEEDS });
   }
 
   // ── AIR QUALITY / VOG (Open-Meteo, keyless) ───────────────────────────────
@@ -5477,6 +5483,30 @@ let repeaterLastPollTs = null, repeaterLastError = null;
 const HAWAII_HAM_BROADCASTIFY_PAGE = 'https://www.broadcastify.com/listen/feed/27598';
 const HAWAII_HAM_STREAM = 'https://broadcastify.cdnstream1.com/27598';
 const KIWISDR_MAP = 'https://rx.kiwisdr.com/';
+// Big Island Puna / Volcano / Kaʻū police & fire dispatch + HVNP federal traffic.
+// Receiver at Kulani Cone site 11 (Volcano); P25 Phase 2 simulcast. Broadcastify
+// feed 40256 — same keyless MP3 pattern as the linked-ham feed above.
+const SCANNER_FEEDS = [{
+  id: 'puna-volcano-kau',
+  feedId: 40256,
+  name: 'Puna · Volcano · Kaʻū Public Safety',
+  shortName: 'D-7 / D-8 / HVNP',
+  streamUrl: 'https://broadcastify.cdnstream1.com/40256',
+  pageUrl: 'https://www.broadcastify.com/listen/feed/40256',
+  lat: 19.399,
+  lon: -155.282,
+  elevM: 1247,
+  site: 'Kulani Cone site 11 (Volcano)',
+  genre: 'Public Safety',
+  system: 'P25 Phase 2',
+  districts: [
+    { id: 'D-7', label: 'Kaʻū District', detail: 'Naʻalehu station · 700-series units' },
+    { id: 'D-8', label: 'Puna District', detail: 'Pāhoa station · 800-series units' },
+    { id: 'HVNP', label: 'Hawaiʻi Volcanoes NP Police', detail: 'Federal · NAC 526 · 169.625 MHz' },
+  ],
+  frequenciesMhz: ['155.2275', '155.3625', '155.625', '156.1125', '169.625'],
+  note: 'Hawaiʻi County Police & Fire dispatch for east/south Big Island plus HVNP park police/traffic. Audio via Broadcastify — may include brief ads on free tier.',
+}];
 function cleanRepeaterDescription(s) {
   if (!s) return '';
   return String(s).replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\r/g, '').trim().slice(0, 900);

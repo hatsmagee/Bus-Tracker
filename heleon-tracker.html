@@ -897,8 +897,9 @@
         <label><input type="checkbox" id="show-trauma" onchange="toggleFacility('trauma')"> Trauma centers</label>
       </div>
       <div style="padding:4px 12px;color:var(--muted);font-size:10px;">
-        Station locations only — neither Hawaiʻi Police nor Hawaiʻi Fire
-        publishes a live dispatch/incident feed.
+        Station pins are reference only. Live dispatch audio for Puna (D-8), Kaʻū (D-7),
+        and Hawaiʻi Volcanoes NP is on the map at Kulani Cone and in
+        <b style="color:#58a6ff;">Public Safety Scanner</b> below.
       </div>
       <div class="section-header">🗂️ Browse all layers</div>
       <div style="padding:4px 12px 6px;color:var(--muted);font-size:10px;">
@@ -1172,6 +1173,7 @@ function initMap() {
     try { fetchMetars(); } catch (e) {}
     try { fetchMeshtastic(); } catch (e) {}
     try { fetchRepeaters(); } catch (e) {}
+    try { fetchScanner(); } catch (e) {}
     try { fetchInfrastructure(); } catch (e) {}
     try { fetchLocal(); } catch (e) {}
     // Keep an open click-card glued to its map anchor as the map moves.
@@ -1188,7 +1190,7 @@ function initMap() {
   // Keep the DOM water-wheel markers scaled to the current zoom (they shrink
   // when zoomed out so they don't pile up). `zoom` fires continuously so the
   // resize tracks the pinch/scroll smoothly.
-  map.on('zoom', () => { try { updateWheelScale(); } catch (e) {} try { updateWindScale(); } catch (e) {} try { updateSolarScale(); } catch (e) {} try { updateSummitScale(); } catch (e) {} });
+  map.on('zoom', () => { try { updateWheelScale(); } catch (e) {} try { updateWindScale(); } catch (e) {} try { updateSolarScale(); } catch (e) {} try { updateSummitScale(); } catch (e) {} try { updateScannerScale(); } catch (e) {} });
   map.on('error', (e) => {
     // Suppress known MapLibre v4 bugs about listener arrays
     if (e?.error?.message?.includes('slice is not a function')) return;
@@ -1253,6 +1255,38 @@ function buildSummitCard(p) {
   if (p.source) links.push(`<span style="color:#8b949e;">${escapeHtml(p.source)}</span>`);
   const foot = `<div style="color:#8b949e;font-size:10px;margin-top:8px;">${p.elevM ? Math.round(p.elevM) + ' m elev' : ''}${r.readingTs ? ' · ' + r.readingTs : ''}${r.co2Year ? ' · CO₂ ' + r.co2Year : ''}${links.length ? '<br>' + links.join(' · ') : ''}</div>`;
   return { title: `🔭 ${p.name}`, body: (rows.join('') || 'No current reading.') + extra + foot };
+}
+
+function buildScannerCard(f) {
+  const rows = [];
+  const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;text-align:right;">${v}</span></div>`);
+  row('Receiver', escapeHtml(f.site || 'Kulani Cone'));
+  row('System', escapeHtml(f.system || 'P25'));
+  if (f.elevM) row('Elevation', `${Math.round(f.elevM)} m`);
+  if ((f.districts || []).length) {
+    rows.push(`<div style="margin-top:8px;font-size:10px;font-weight:700;color:#8b949e;">Districts on this feed</div>`);
+    for (const d of f.districts) {
+      rows.push(`<div style="padding:4px 0;font-size:11px;"><b>${escapeHtml(d.id)}</b> · ${escapeHtml(d.label)}<div style="color:#8b949e;font-size:10px;">${escapeHtml(d.detail || '')}</div></div>`);
+    }
+  }
+  if ((f.frequenciesMhz || []).length) {
+    row('Frequencies', escapeHtml(f.frequenciesMhz.join(' · ') + ' MHz'));
+  }
+  let listen = '';
+  if (f.streamUrl) {
+    listen = `<div class="repeater-stream" style="margin-top:10px;padding:10px;background:#0d1117;border:1px solid #30363d;border-radius:8px;">
+      <div style="font-size:10px;color:#8b949e;margin-bottom:6px;">🔊 Live dispatch (Broadcastify feed ${f.feedId || '40256'})</div>
+      <div class="stream-ctrl">
+        <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(f.streamUrl)}">▶️ Play</button>
+        <button type="button" class="stream-stop-btn" disabled>⏹️ Stop</button>
+        <span class="stream-status">Ready — tap Play</span>
+      </div></div>`;
+  }
+  const links = [];
+  if (f.pageUrl) links.push(`<a href="${escapeHtml(f.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">🔊 Broadcastify page ↗</a>`);
+  if (links.length) listen += `<div style="margin-top:8px;font-size:11px;">${links.join('')}</div>`;
+  if (f.note) listen += `<div style="margin-top:8px;font-size:10px;color:#8b949e;line-height:1.45;">${escapeHtml(f.note)}</div>`;
+  return { title: `🚨 ${f.name}`, body: rows.join('') + listen };
 }
 
 function initMapLayers() {
@@ -3200,6 +3234,8 @@ let streamflowStats = {}; // site_no -> { allMin, allMax, todayMedian, … }
 const streamWheelMarkers = {}; // site_no -> maplibregl.Marker
 const summitMarkers = {}; // id -> maplibregl.Marker
 let summitData = [];
+let scannerFeed = null;
+let scannerMarker = null;
 async function fetchStreamflow() {
   try {
     const res = await fetch('/api/streamflow');
@@ -3813,6 +3849,52 @@ function renderSummitMarkers() {
     if (!seen.has(id)) { summitMarkers[id].remove(); delete summitMarkers[id]; }
   }
   updateSummitScale();
+}
+
+async function fetchScanner() {
+  try {
+    const res = await fetch('/api/scanner');
+    const data = await res.json();
+    const feeds = data.feeds || [];
+    scannerFeed = feeds[0] || null;
+    hawaiiList.scanner = feeds;
+    hawaiiBrowseRefresh();
+    renderScannerMarker();
+  } catch (e) { /* keep last */ }
+}
+
+function renderScannerMarker() {
+  if (!mapReady || !scannerFeed) return;
+  const f = scannerFeed;
+  if (!scannerMarker) {
+    const el = document.createElement('div');
+    el.className = 'radio-tower';
+    el.innerHTML = `<div class="rt-scale"><div class="rt-ring" style="border-color:#dc2626;"></div><div class="rt-ring r2" style="border-color:#f97316;"></div><div class="rt-tower"></div><div class="rt-top">🚨</div><span class="rt-label">${escapeHtml(f.shortName || 'PS')}</span></div>`;
+    scannerMarker = new maplibregl.Marker({ element: el, anchor: 'center' })
+      .setLngLat([f.lon, f.lat]).addTo(map);
+    el.onclick = (e) => {
+      e.stopPropagation();
+      const { title, body } = buildScannerCard(f);
+      showMapCard(body, [f.lon, f.lat], title);
+    };
+    el.title = `${f.name} — tap to listen`;
+  } else {
+    scannerMarker.setLngLat([f.lon, f.lat]);
+    const lbl = scannerMarker.getElement().querySelector('.rt-label');
+    if (lbl) lbl.textContent = f.shortName || 'PS';
+  }
+  updateScannerScale();
+}
+
+const SCANNER_MIN_Z = 7, SCANNER_MAX_Z = 12, SCANNER_COMPACT_Z = 9;
+function updateScannerScale() {
+  if (!scannerMarker) return;
+  const z = map.getZoom();
+  const t = Math.max(0, Math.min(1, (z - SCANNER_MIN_Z) / (SCANNER_MAX_Z - SCANNER_MIN_Z)));
+  const scale = (0.55 + t * 0.5).toFixed(3);
+  const el = scannerMarker.getElement();
+  el.style.setProperty('--rtc', scale);
+  el.classList.toggle('compact', z < SCANNER_COMPACT_Z);
 }
 
 const SUMMIT_MIN_Z = 7, SUMMIT_MAX_Z = 12;
@@ -4569,7 +4651,7 @@ const hawaiiList = {
   infraPower: [], infraSubs: [], infraCell: [], infraNet: [], infraGridMix: null, railways: [],
   localFuelPrices: {}, localFuelStations: [], localTrafficSensors: [], localLco: [], localInat: [],
   localNotes: {},
-  summits: [], ocean: [], airquality: [], volcanoAlerts: [], volcanoCams: [], satellites: [], rainfall: [],
+  summits: [], scanner: [], ocean: [], airquality: [], volcanoAlerts: [], volcanoCams: [], satellites: [], rainfall: [],
   metars: [], alerts: [], wildfire: [], places: [], solar: [],
   facilities: { police: [], fire: [], ems: [], trauma: [] },
 };
@@ -4810,6 +4892,7 @@ function hawaiiMeshDetail(n) {
 function hawaiiItemBody(catId, item) {
   switch (catId) {
     case 'radio': return hawaiiRadioDetail(item);
+    case 'scanner': return buildScannerCard(item).body + hawaiiMapBtn(item.lon, item.lat, 11);
     case 'repeaters': return hawaiiRepeaterDetail(item);
     case 'meshtastic': return hawaiiMeshDetail(item);
     case 'mobility':
@@ -5008,6 +5091,7 @@ function hawaiiCategories() {
   return [
     { id: 'radio', icon: '📻', label: 'Live Radio Streams',
       items: RADIO_STATIONS.map((s, i) => ({ id: String(i), ...s })) },
+    { id: 'scanner', icon: '🚨', label: 'Public Safety Scanner', items: hawaiiList.scanner },
     { id: 'repeaters', icon: '📡', label: 'Ham Repeaters',
       items: [...hawaiiList.repeaters].sort((a, b) => String(a.callsign).localeCompare(b.callsign)) },
     { id: 'meshtastic', icon: '📶', label: 'Meshtastic / LoRa',
@@ -5068,6 +5152,7 @@ function hawaiiCategories() {
 function hawaiiItemSummary(catId, item) {
   switch (catId) {
     case 'radio': return { icon: item.icon || '📻', title: item.name, meta: item.kind };
+    case 'scanner': return { icon: '🚨', title: item.name, meta: item.shortName || 'D-7 · D-8 · HVNP' };
     case 'repeaters': return { icon: item.icon || '📡', title: item.callsign, meta: `${item.freqMhz} MHz · ${item.typeLabel || item.group || 'FM'}` };
     case 'meshtastic': return { icon: '📶', title: item.name || item.idHex, meta: [item.hwName, item.battery != null ? `🔋${item.battery}%` : ''].filter(Boolean).join(' · ') };
     case 'mobility': return { icon: '🚲', title: item.name, meta: `${item.systemName || ''} · ${item.bikes ?? 0} bikes` };
@@ -5160,6 +5245,13 @@ function hawaiiBrowseRefresh() {
 // play in an <audio> element. Each station's URL is verified to send
 // "Access-Control-Allow-Origin: *" so the browser can stream cross-origin.
 const RADIO_STATIONS = [
+  {
+    icon: '🚨',
+    name: 'Puna · Volcano · Kaʻū Public Safety',
+    kind: 'Hawaiʻi County Police & Fire · Broadcastify 40256',
+    desc: 'Live dispatch from Kulani Cone (Volcano): D-7 Kaʻū (Naʻalehu · 700 units), D-8 Puna (Pāhoa · 800 units), and Hawaiʻi Volcanoes NP federal police on 169.625 MHz. P25 Phase 2 simulcast.',
+    url: 'https://broadcastify.cdnstream1.com/40256',
+  },
   {
     icon: '📰',
     name: 'HPR-1 News & Talk',
@@ -7496,7 +7588,7 @@ function deOverlapMarkers() {
   // solar suns) against each other. Each cluster gets fanned out into a tiny
   // ring so the icons never visually pile on top of each other. Buses are
   // skipped here — their dynamic motion places them before this pass anyway.
-  for (const dict of [Object.values(streamWheelMarkers || {}), Object.values(windTurbineMarkers || {}), Object.values(solarMarkers || {}), Object.values(summitMarkers || {})]) {
+  for (const dict of [Object.values(streamWheelMarkers || {}), Object.values(windTurbineMarkers || {}), Object.values(solarMarkers || {}), Object.values(summitMarkers || {}), scannerMarker ? [scannerMarker] : []]) {
     if (!dict.length) continue;
     const pts2 = dict.map(m => { const p = map.project(m.getLngLat()); return { m, x: p.x, y: p.y }; });
     const used2 = new Set(); const THRESH2 = 30; // px
@@ -8450,6 +8542,7 @@ Promise.all([
   fetchSolar(),
   fetchMeshtastic(),
   fetchRepeaters(),
+  fetchScanner(),
   fetchInfrastructure(),
   fetchLocal(),
 ]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); ensureHawaiiFacilitiesBrowse().then(() => renderHawaiiBrowser()); renderHawaiiBrowser(); });
