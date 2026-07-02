@@ -1258,7 +1258,7 @@ function buildSummitCard(p) {
   if (p.pageUrl) links.push(`<a href="${escapeHtml(p.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">Observatory page ↗</a>`);
   if (p.source) links.push(`<span style="color:#8b949e;">${escapeHtml(p.source)}</span>`);
   const foot = `<div style="color:#8b949e;font-size:10px;margin-top:8px;">${p.elevM ? Math.round(p.elevM) + ' m elev' : ''}${r.readingTs ? ' · ' + r.readingTs : ''}${r.co2Year ? ' · CO₂ ' + r.co2Year : ''}${links.length ? '<br>' + links.join(' · ') : ''}</div>`;
-  return { title: `🔭 ${p.name}`, body: (rows.join('') || 'No current reading.') + extra + foot + timelineHtml(p.id, p.name) };
+  return { title: `🔭 ${p.name}`, body: (rows.join('') || 'No current reading.') + extra + foot + timelineHtml(p.id, p.name) + sourceInfoHtml('summits', p) };
 }
 
 function buildScannerCard(f) {
@@ -1469,9 +1469,10 @@ function initMapLayers() {
       </div>
       <div style="font-family:monospace;font-size:10px;color:var(--muted);margin-top:6px;">${(+p.lat).toFixed(4)}, ${(+p.lon).toFixed(4)}</div>
       <div style="font-size:9.5px;margin-top:6px;">${links.join(' · ')}</div>
+      ${sourceInfoHtml('vessels', p)}
     </div>`;
     if (vesselPopup) vesselPopup.remove();
-    vesselPopup = new maplibregl.Popup({ offset: 12, maxWidth: '280px' })
+    vesselPopup = new maplibregl.Popup({ offset: 12, maxWidth: '300px' })
       .setLngLat(e.lngLat).setHTML(html).addTo(map);
     if (name) fillVesselInfo(infoId, name);
   });
@@ -1575,9 +1576,10 @@ function initMapLayers() {
       </div>
       <div style="font-family:monospace;font-size:10px;color:var(--muted);margin-top:6px;">${(+p.lat).toFixed(4)}, ${(+p.lon).toFixed(4)}</div>
       <div style="font-size:9.5px;margin-top:6px;">${links.join(' · ')}</div>
+      ${sourceInfoHtml('aircraft', p)}
     </div>`;
     if (aircraftPopup) aircraftPopup.remove();
-    aircraftPopup = new maplibregl.Popup({ offset: 12, maxWidth: '300px' })
+    aircraftPopup = new maplibregl.Popup({ offset: 12, maxWidth: '320px' })
       .setLngLat(e.lngLat).setHTML(html).addTo(map);
     if (hex || reg) fillAircraftPhoto(photoId, hex, reg);
   });
@@ -2798,6 +2800,292 @@ function timelineHtml(id, name) {
       <span style="margin-left:auto;font-size:9.5px;color:#8b949e;">${tl.events.length} events · scroll</span>
     </div>
     <div id="${uid}" style="display:block;margin-top:8px;">${intro}${rows}</div>
+  </div>`;
+}
+
+// ─── Source & instrumentation registry ───────────────────────────────────────
+// Full provenance for every layer: the real provider/program, the exact API
+// endpoint(s) and format, refresh cadence, the live station/sensor identifier
+// (pulled from the feature's own properties), what it measures with units, and
+// the actual instrument hardware the network uses — down to model numbers where
+// the network publishes a standard suite. Honest by design: where a value is
+// modeled or computed (not a physical sensor) the panel says so.
+const DATA_SOURCES = {
+  'weather-stations-icon': {
+    label: 'Surface weather station', provider: 'NOAA / National Weather Service', program: 'api.weather.gov observations (ASOS/AWOS + cooperating mesonet)',
+    api: [{ url: 'https://api.weather.gov/stations/{id}/observations/latest', format: 'GeoJSON (JSON-LD)' }],
+    cadence: 'Station reports every 20–60 min; app refreshes ~15 min', idFields: ['stationId', 'id', 'station', 'name'],
+    measures: 'Air temp, dew point, humidity, wind speed/direction/gust, barometric pressure, visibility, sky/ceiling',
+    method: 'Automated Surface/Weather Observing System (ASOS/AWOS) — the FAA/NWS airport weather standard.',
+    instruments: [
+      { role: 'Temperature / dew point', model: 'Vaisala HMP155 (newer) / HO-1088 hygrothermometer', maker: 'Vaisala', detail: 'aspirated RTD + capacitive RH' },
+      { role: 'Wind', model: 'Vaisala WMT700 sonic / Belfort cup-and-vane', maker: 'Vaisala / Belfort', detail: '2-min & 5-s gust' },
+      { role: 'Pressure', model: 'triple-redundant digital barometers', maker: 'Vaisala PTB series', detail: 'voting average' },
+      { role: 'Visibility', model: 'FS11P forward-scatter visibility sensor', maker: 'Vaisala', detail: 'extinction coefficient' },
+      { role: 'Cloud height', model: 'CL31 / CT12K laser ceilometer', maker: 'Vaisala', detail: 'pulsed diode LIDAR' },
+      { role: 'Precip', model: 'AWPAG all-weather precip gauge / heated tipping bucket', maker: 'OTT / Vaisala', detail: '0.01 in resolution' },
+    ],
+    docs: [{ label: 'NWS API', url: 'https://www.weather.gov/documentation/services-web-api' }, { label: 'ASOS User Guide', url: 'https://www.weather.gov/media/asos/aum-toc.pdf' }],
+  },
+  'metars-dot': {
+    label: 'Aviation weather (METAR)', provider: 'NOAA Aviation Weather Center', program: 'aviationweather.gov data API',
+    api: [{ url: 'https://aviationweather.gov/api/data/metar?ids={ICAO}&format=json', format: 'JSON' }],
+    cadence: 'Hourly METAR + SPECI on change', idFields: ['icao', 'station', 'name'],
+    measures: 'Wind, visibility, weather, sky condition, temp/dew point, altimeter, raw METAR string',
+    method: 'Same ASOS/AWOS airfield sensors as surface stations, encoded in the international METAR format for aviation.',
+    instruments: [
+      { role: 'Sensor suite', model: 'ASOS/AWOS-3 airfield array', maker: 'Vaisala / All Weather Inc.', detail: 'ceilometer, forward-scatter visibility, sonic wind, barometer, hygrothermometer' },
+    ],
+    docs: [{ label: 'AWC API', url: 'https://aviationweather.gov/data/api/' }],
+  },
+  'ocean-dot': {
+    label: 'Ocean / weather buoy', provider: 'NOAA National Data Buoy Center', program: 'NDBC realtime2 + CO-OPS tides',
+    api: [{ url: 'https://www.ndbc.noaa.gov/data/realtime2/{id}.txt', format: 'fixed-width text' }, { url: 'https://api.tidesandcurrents.noaa.gov/api/prod/', format: 'JSON' }],
+    cadence: 'Buoy 10–60 min; DART tsunami 15 min (event mode faster)', idFields: ['id', 'station', 'name'],
+    measures: 'Wave height/period/direction, sea-surface temp, wind, pressure, air temp; DART = bottom pressure / sea level',
+    method: 'Moored discus/foam hull with a data-collection payload transmitting via GOES satellite.',
+    instruments: [
+      { role: 'Wind', model: 'RM Young 05103 / sonic anemometer', maker: 'R.M. Young', detail: 'twin, averaged' },
+      { role: 'Waves', model: 'onboard accelerometer / MO payload', maker: 'NDBC ARES/DACT', detail: 'heave spectra → Hs, Tp, direction' },
+      { role: 'Barometer', model: 'digital pressure transducer', maker: 'AIR / Vaisala', detail: 'sea-level corrected' },
+      { role: 'DART', model: 'BPR bottom pressure recorder + acoustic modem', maker: 'NOAA PMEL', detail: 'detects cm-scale tsunami' },
+    ],
+    docs: [{ label: 'NDBC station page', url: 'https://www.ndbc.noaa.gov/' }, { label: 'CO-OPS', url: 'https://tidesandcurrents.noaa.gov/' }],
+  },
+  'marine-dot': {
+    label: 'Tide / coastal station', provider: 'NOAA CO-OPS + NDBC', program: 'Tides & Currents / National Water Level Program',
+    api: [{ url: 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter', format: 'JSON' }],
+    cadence: '6-min water level; predictions continuous', idFields: ['id', 'station', 'name'],
+    measures: 'Water level (vs datum), predicted tide, water temp, met',
+    method: 'Primary acoustic/microwave water-level sensor in a stilling well, referenced to a tidal datum.',
+    instruments: [
+      { role: 'Water level', model: 'Aquatrak acoustic ranging / microwave radar (WLS)', maker: 'NOAA NWLON', detail: '6-min averaged, redundant' },
+      { role: 'Backup', model: 'pressure sensor / float', maker: 'Design Analysis / OTT', detail: 'cross-check' },
+    ],
+    docs: [{ label: 'CO-OPS API', url: 'https://api.tidesandcurrents.noaa.gov/api/prod/' }],
+  },
+  'waterquality-icon': {
+    label: 'Ocean water-quality buoy', provider: 'PacIOOS — Pacific Islands Ocean Observing System (UH Mānoa)', program: 'PacIOOS Water Quality Buoy network (ERDDAP)',
+    api: [{ url: 'https://pae-paha.pacioos.hawaii.edu/erddap/', format: 'ERDDAP JSON/CSV' }],
+    cadence: 'Typically 15–60 min telemetry', idFields: ['id', 'station', 'name'],
+    measures: 'Temperature, salinity, dissolved O₂, turbidity, chlorophyll, pH, depth',
+    method: 'Nearshore moored buoy carrying a multi-parameter water-quality sonde on a subsurface package.',
+    instruments: [
+      { role: 'Water quality sonde', model: 'YSI EXO2 multiparameter sonde', maker: 'Xylem / YSI', detail: 'wiped optical DO, conductivity, turbidity, chlorophyll, pH ports' },
+      { role: 'CTD (some sites)', model: 'Sea-Bird SBE 16plus / SBE 37', maker: 'Sea-Bird Scientific', detail: 'conductivity-temp-depth' },
+    ],
+    docs: [{ label: 'PacIOOS WQ buoys', url: 'https://www.pacioos.hawaii.edu/water/wqbuoys/' }],
+  },
+  'rainfall-icon': {
+    label: 'Precipitation gauge', provider: 'USGS Water Resources', program: 'NWIS instantaneous values (param 00045 precip)',
+    api: [{ url: 'https://waterservices.usgs.gov/nwis/iv/?stateCd=hi&parameterCd=00045', format: 'WaterML JSON' }],
+    cadence: '5–15 min, telemetered hourly via GOES', idFields: ['site_no', 'id', 'name'],
+    measures: 'Incremental precipitation (in), 6-hour accumulation',
+    method: 'Tipping-bucket rain gauge on a USGS gaging station data logger.',
+    instruments: [
+      { role: 'Rain gauge', model: 'tipping-bucket (0.01 in/tip)', maker: 'OTT / Texas Electronics TE525', detail: 'heated variants at elevation' },
+      { role: 'Logger / telemetry', model: 'DCP with GOES radio', maker: 'Sutron / OTT', detail: 'satellite data collection platform' },
+    ],
+    docs: [{ label: 'USGS NWIS', url: 'https://waterservices.usgs.gov/' }],
+  },
+  'airquality-icon': {
+    label: 'Air quality (modeled)', provider: 'Open-Meteo — Copernicus CAMS', program: 'Air-Quality API',
+    api: [{ url: 'https://air-quality-api.open-meteo.com/v1/air-quality', format: 'JSON' }],
+    cadence: 'Hourly model output', idFields: ['id', 'name'],
+    measures: 'PM2.5, PM10, ozone, NO₂, SO₂, CO, US AQI, dust',
+    method: 'MODELED — not a local sensor. Copernicus CAMS global atmospheric-composition model, interpolated to the point. Great for volcanic vog trends; not a regulatory monitor.',
+    instruments: [{ role: 'Source model', model: 'CAMS global (ECMWF)', maker: 'Copernicus', detail: 'assimilates satellite + ground data' }],
+    docs: [{ label: 'Open-Meteo AQ', url: 'https://open-meteo.com/en/docs/air-quality-api' }, { label: 'CAMS', url: 'https://atmosphere.copernicus.eu/' }],
+  },
+  'volcano-dot': {
+    label: 'Volcano monitoring', provider: 'USGS Hawaiian Volcano Observatory', program: 'Volcano Notification Service / CAP alerts',
+    api: [{ url: 'https://volcanoes.usgs.gov/hans-public/api/', format: 'JSON / CAP RSS' }],
+    cadence: 'Alert level on change; daily updates', idFields: ['name', 'id'],
+    measures: 'Alert level & color code, seismicity, ground deformation, gas emission, thermal',
+    method: 'Multi-instrument network: seismometers, GPS/GNSS, tiltmeters, InSAR, gas spectrometers, webcams, thermal cameras.',
+    instruments: [
+      { role: 'Seismic', model: 'broadband + short-period seismometers', maker: 'Nanometrics / Guralp', detail: 'earthquake & tremor' },
+      { role: 'Deformation', model: 'continuous GNSS + borehole tiltmeters', maker: 'Trimble / Pinnacle', detail: 'mm-scale inflation' },
+      { role: 'Gas', model: 'DOAS / FTIR SO₂ spectrometers', maker: 'HVO', detail: 'emission rate' },
+      { role: 'Thermal / visual', model: 'fixed webcams + thermal cameras', maker: 'HVO', detail: 'lava lake & vents' },
+    ],
+    docs: [{ label: 'HVO', url: 'https://www.usgs.gov/observatories/hvo' }],
+  },
+  'summits': {
+    label: 'Mauna Loa Baseline Observatory', provider: 'NOAA Global Monitoring Laboratory', program: 'MLO in-situ trace-gas & meteorology (Keeling Curve site)',
+    api: [{ url: 'https://gml.noaa.gov/webdata/ccgg/trends/co2/', format: 'text' }],
+    cadence: 'CO₂ daily & weekly means; met hourly', idFields: ['id', 'name'],
+    measures: 'Atmospheric CO₂ (ppm), temp, wind, RH, pressure',
+    method: 'World-reference background CO₂ record since 1958, high on Mauna Loa above the marine boundary layer.',
+    instruments: [
+      { role: 'CO₂ analyzer', model: 'NDIR (LI-COR LI-7000) / CRDS Picarro G2301', maker: 'LI-COR / Picarro', detail: 'calibrated to WMO scale' },
+      { role: 'Meteorology', model: 'GML met tower suite', maker: 'NOAA GML', detail: 'wind, T, RH, P' },
+    ],
+    docs: [{ label: 'NOAA GML MLO', url: 'https://gml.noaa.gov/obop/mlo/' }, { label: 'Keeling Curve', url: 'https://keelingcurve.ucsd.edu/' }],
+  },
+  'satellites-icon': {
+    label: 'Satellite (computed track)', provider: 'WhereTheISS.at', program: 'SGP4 orbit propagation from public TLEs',
+    api: [{ url: 'https://api.wheretheiss.at/v1/satellites/{id}', format: 'JSON' }],
+    cadence: 'Position computed live each poll', idFields: ['id', 'name'],
+    measures: 'Sub-satellite lat/lon, altitude, velocity, footprint, visibility',
+    method: 'COMPUTED — not a sensor. Position is propagated from NORAD two-line element sets (TLEs) using the SGP4 model.',
+    instruments: [{ role: 'Orbit source', model: 'NORAD TLE + SGP4', maker: 'CelesTrak / Space-Track', detail: 'geometric ground track' }],
+    docs: [{ label: 'WhereTheISS.at', url: 'https://wheretheiss.at/w/developer' }],
+  },
+  'repeaters-icon': {
+    label: 'Amateur-radio repeater', provider: 'HearHam open repeater database', program: 'Community-maintained repeater directory',
+    api: [{ url: 'https://hearham.com/api/repeaters/v1', format: 'JSON' }],
+    cadence: 'Static directory (daily pull)', idFields: ['callsign', 'name'],
+    measures: 'Frequency, offset, tone (CTCSS/DCS), mode (FM/DMR/…), node, power, status',
+    method: 'A fixed transceiver that re-transmits ham signals to extend range — directory data, not live telemetry.',
+    instruments: [{ role: 'Station', model: 'community repeater (varies)', maker: 'operator-owned', detail: 'freq/tone/mode as listed' }],
+    docs: [{ label: 'HearHam', url: 'https://hearham.com/' }],
+  },
+  'aprs-icon': {
+    label: 'APRS station (ham telemetry)', provider: 'APRS-Internet System', program: 'rotate.aprs2.net area feed (read-only)',
+    api: [{ url: 'aprs-is TCP 14580 — area filter', format: 'APRS packet' }],
+    cadence: 'Real-time as stations beacon', idFields: ['call', 'callsign', 'name'],
+    measures: 'Position, symbol, course/speed, and station-reported weather/telemetry',
+    method: 'Packet radio: each station transmits its own position/telemetry, gatewayed to the internet by iGates.',
+    instruments: [{ role: 'Reporting device', model: 'TNC / tracker / wx station', maker: 'station-dependent (Kenwood, Byonics, etc.)', detail: 'self-reported' }],
+    docs: [{ label: 'APRS-IS', url: 'http://www.aprs-is.net/' }],
+  },
+  'infra-power-icon': {
+    label: 'Power generation', provider: 'OpenStreetMap (crowd-mapped) + curated', program: 'Overpass power=plant',
+    api: [{ url: 'https://overpass-api.de/api/interpreter', format: 'OSM JSON' }],
+    cadence: 'Static map data (daily)', idFields: ['id', 'name'],
+    measures: 'Plant name, fuel/source, mapped capacity (no live MW feed published)',
+    method: 'Facility footprints from OpenStreetMap; HECO does not publish real-time per-plant output.',
+    instruments: [{ role: 'Data', model: 'OSM power=plant/generator tags', maker: 'OpenStreetMap', detail: 'community-surveyed' }],
+    docs: [{ label: 'OSM power', url: 'https://wiki.openstreetmap.org/wiki/Power' }],
+  },
+  'infra-cell-icon': {
+    label: 'Comm / cell tower', provider: 'OpenStreetMap', program: 'Overpass man_made=tower / communication',
+    api: [{ url: 'https://overpass-api.de/api/interpreter', format: 'OSM JSON' }],
+    cadence: 'Static map data (daily)', idFields: ['id', 'name'],
+    measures: 'Tower location & type (crowd-mapped)',
+    method: 'Community-surveyed structure locations; not carrier telemetry.',
+    instruments: [{ role: 'Data', model: 'OSM tower tags', maker: 'OpenStreetMap', detail: 'community-surveyed' }],
+    docs: [{ label: 'OSM', url: 'https://www.openstreetmap.org/' }],
+  },
+  'infra-net-icon': {
+    label: 'Internet facility', provider: 'PeeringDB + OpenStreetMap', program: 'Data centers / IX / landing points',
+    api: [{ url: 'https://www.peeringdb.com/api/', format: 'JSON' }],
+    cadence: 'Static (daily)', idFields: ['id', 'name'],
+    measures: 'Facility name, type (data center / exchange / cable landing)',
+    method: 'Registry + crowd-mapped infrastructure; no live traffic feed.',
+    instruments: [{ role: 'Data', model: 'PeeringDB / OSM records', maker: 'PeeringDB', detail: 'operator-registered' }],
+    docs: [{ label: 'PeeringDB', url: 'https://www.peeringdb.com/' }],
+  },
+  'local-sensors-icon': {
+    label: 'Traffic / road segment', provider: 'Hawaiʻi DOT + OpenStreetMap', program: 'State roads reference',
+    api: [{ url: 'state GIS / OSM', format: 'GeoJSON' }],
+    cadence: 'Reference geometry', idFields: ['id', 'name'],
+    measures: 'Road name/segment context',
+    method: 'Reference road data — not live loop-detector counts.',
+    instruments: [{ role: 'Data', model: 'roadway centerlines', maker: 'HDOT / OSM', detail: 'reference' }],
+    docs: [{ label: 'HDOT', url: 'https://hidot.hawaii.gov/' }],
+  },
+  'local-lco-icon': {
+    label: 'Las Cumbres Observatory node', provider: 'Las Cumbres Observatory (LCOGT)', program: 'Robotic telescope network — Haleakalā/Maui node schedule',
+    api: [{ url: 'https://observe.lco.global/api/', format: 'JSON' }],
+    cadence: 'Observation schedule', idFields: ['siteName', 'name', 'id'],
+    measures: 'Telescope site, aperture, current program',
+    method: 'Global robotic telescope network; schedule/telemetry via LCO API.',
+    instruments: [{ role: 'Telescope', model: '0.4 m / 1 m / 2 m (Faulkes) robotic', maker: 'LCOGT', detail: 'CCD/CMOS imagers + spectrographs' }],
+    docs: [{ label: 'LCO', url: 'https://lco.global/' }],
+  },
+  'local-inat-icon': {
+    label: 'Species observation', provider: 'iNaturalist', program: 'Community nature observations API',
+    api: [{ url: 'https://api.inaturalist.org/v1/observations', format: 'JSON' }],
+    cadence: 'Live community submissions', idFields: ['id', 'name'],
+    measures: 'Species, observer, date, photo, research-grade status',
+    method: 'Crowd-sourced sightings with photos — not an official survey.',
+    instruments: [{ role: 'Device', model: 'phone camera / GPS', maker: 'observer', detail: 'geotagged photo' }],
+    docs: [{ label: 'iNaturalist API', url: 'https://api.inaturalist.org/v1/docs/' }],
+  },
+  'local-fuel-icon': {
+    label: 'Fuel price', provider: 'Community fuel price data', program: 'Big Island gas prices',
+    api: [{ url: 'aggregated price feed', format: 'JSON' }],
+    cadence: 'Daily', idFields: ['id', 'name'],
+    measures: 'Station, grade prices',
+    method: 'Reported/aggregated retail prices.',
+    instruments: [{ role: 'Data', model: 'reported prices', maker: 'community', detail: 'not live pump data' }],
+    docs: [],
+  },
+  'places-icon': {
+    label: 'Place / point of interest', provider: 'OpenStreetMap + Wikipedia', program: 'Overpass + Wikipedia enrichment',
+    api: [{ url: 'https://overpass-api.de/api/interpreter', format: 'OSM JSON' }, { url: 'https://en.wikipedia.org/w/api.php', format: 'JSON' }],
+    cadence: 'Static (daily)', idFields: ['id', 'title', 'name'],
+    measures: 'Name, type, description, photo',
+    method: 'Community geodata enriched with encyclopedic content.',
+    instruments: [{ role: 'Data', model: 'OSM node + Wikipedia', maker: 'OSM / Wikimedia', detail: 'reference' }],
+    docs: [{ label: 'OpenStreetMap', url: 'https://www.openstreetmap.org/' }],
+  },
+  'heritage-icon': {
+    label: 'Heritage / historic site', provider: 'Curated + Wikipedia/NPS', program: 'Heritage registry with encyclopedic enrichment',
+    api: [{ url: '/api/heritage (Wikipedia action API)', format: 'JSON' }],
+    cadence: 'Static (daily enrichment)', idFields: ['id', 'name'],
+    measures: 'Category, history, photo, sources',
+    method: 'Hand-curated site list enriched with photos and write-ups; see the History timeline on this card.',
+    instruments: [{ role: 'Data', model: 'curated + Wikipedia/NPS', maker: 'various', detail: 'reference' }],
+    docs: [{ label: 'NPS Hawaiʻi', url: 'https://www.nps.gov/state/hi/' }],
+  },
+  'vessels': {
+    label: 'Ship (AIS)', provider: 'AISStream / AIS-IS', program: 'Automatic Identification System',
+    api: [{ url: 'aisstream.io websocket', format: 'AIS NMEA' }],
+    cadence: 'Real-time as the ship transmits', idFields: ['mmsi', 'name'],
+    measures: 'Position, speed, heading, MMSI, ship type, name',
+    method: 'AIS transponder aboard the vessel self-reports via VHF, received by coastal/space receivers.',
+    instruments: [{ role: 'Transponder', model: 'Class A/B AIS (SOTDMA/CSTDMA)', maker: 'shipboard (Furuno, etc.)', detail: 'GNSS position + gyro heading' }],
+    docs: [{ label: 'About AIS', url: 'https://www.navcen.uscg.gov/ais-overview' }],
+  },
+  'aircraft': {
+    label: 'Aircraft (ADS-B)', provider: 'OpenSky Network', program: 'Crowd-sourced ADS-B receivers',
+    api: [{ url: 'https://opensky-network.org/api/states/all', format: 'JSON' }],
+    cadence: 'App polls ~12 s (anonymous tier)', idFields: ['icao24', 'callsign', 'registration'],
+    measures: 'Position, altitude, velocity, track, callsign, ICAO24 hex, ground flag',
+    method: 'The aircraft broadcasts its GNSS position on 1090 MHz (ADS-B); volunteer receivers feed OpenSky.',
+    instruments: [{ role: 'Transponder', model: 'Mode S / 1090ES ADS-B Out', maker: 'avionics (varies)', detail: 'GNSS-derived position' }],
+    docs: [{ label: 'OpenSky', url: 'https://opensky-network.org/' }],
+  },
+};
+let _srcSeq = 0;
+function sourceInfoHtml(key, props) {
+  const s = DATA_SOURCES[key];
+  if (!s) return '';
+  const uid = 'src' + (++_srcSeq);
+  // Resolve the live station/sensor identifier from this feature's properties.
+  let liveId = '';
+  if (props) for (const f of (s.idFields || [])) {
+    if (props[f] != null && String(props[f]).trim() !== '') { liveId = String(props[f]).trim(); break; }
+  }
+  const row = (k, v) => v ? `<div style="margin-top:4px;"><span style="color:#8b949e;">${k}:</span> ${v}</div>` : '';
+  const instr = (s.instruments || []).map(i =>
+    `<div style="padding:4px 0 4px 10px;border-left:2px solid #30363d;margin-top:4px;">
+      <div style="font-weight:600;font-size:11px;color:#e6edf3;">${escapeHtml(i.role)}</div>
+      <div style="font-size:10.5px;color:#c9d1d9;">${escapeHtml(i.model)}${i.maker ? ` <span style="color:#8b949e;">· ${escapeHtml(i.maker)}</span>` : ''}</div>
+      ${i.detail ? `<div style="font-size:9.5px;color:#8b949e;">${escapeHtml(i.detail)}</div>` : ''}
+    </div>`).join('');
+  const apis = (s.api || []).map(a =>
+    `<div style="font-size:10px;color:#c9d1d9;margin-top:3px;word-break:break-all;"><code style="color:#79c0ff;">${escapeHtml(a.url)}</code>${a.format ? ` <span style="color:#8b949e;">(${escapeHtml(a.format)})</span>` : ''}</div>`).join('');
+  const docs = (s.docs || []).map(d => `<a href="${escapeHtml(d.url)}" target="_blank" rel="noopener" style="color:#58a6ff;">${escapeHtml(d.label)} ↗</a>`).join(' · ');
+  const body = `
+    ${row('Provider', escapeHtml(s.provider || ''))}
+    ${row('Program', escapeHtml(s.program || ''))}
+    ${liveId ? row('This station/ID', `<code style="color:#79c0ff;">${escapeHtml(liveId)}</code>`) : ''}
+    ${row('Measures', escapeHtml(s.measures || ''))}
+    ${row('Refresh', escapeHtml(s.cadence || ''))}
+    ${s.method ? `<div style="margin-top:6px;font-size:10.5px;line-height:1.5;color:#c9d1d9;">${escapeHtml(s.method)}</div>` : ''}
+    ${instr ? `<div style="margin-top:6px;font-weight:600;font-size:11px;color:#e6edf3;">🔧 Instrumentation</div>${instr}` : ''}
+    ${apis ? `<div style="margin-top:6px;font-weight:600;font-size:11px;color:#e6edf3;">🔌 API</div>${apis}` : ''}
+    ${docs ? `<div style="margin-top:6px;font-size:9.5px;">${docs}</div>` : ''}`;
+  return `<div style="margin-top:10px;border-top:1px solid #30363d;padding-top:8px;">
+    <div onclick="(function(el){var b=document.getElementById('${uid}');var open=b.style.display!=='none';b.style.display=open?'none':'block';el.querySelector('.src-caret').textContent=open?'▸':'▾';})(this)" style="cursor:pointer;display:flex;align-items:center;gap:6px;font-weight:700;font-size:12px;color:#e6edf3;user-select:none;">
+      <span class="src-caret">▸</span><span>🛰️ Source &amp; instrumentation</span>
+      <span style="margin-left:auto;font-size:9.5px;color:#8b949e;">${escapeHtml(s.label || '')}</span>
+    </div>
+    <div id="${uid}" style="display:none;margin-top:6px;font-size:11px;">${body}</div>
   </div>`;
 }
 
@@ -7910,7 +8198,7 @@ function wireLayerCard(layerId, buildCard) {
     const f = e.features[0];
     const { title, body } = buildCard(f.properties);
     const c = f.geometry && f.geometry.type === 'Point' ? f.geometry.coordinates : [e.lngLat.lng, e.lngLat.lat];
-    showMapCard(body, c, title);
+    showMapCard(body + sourceInfoHtml(layerId, f.properties), c, title);
   });
 }
 
