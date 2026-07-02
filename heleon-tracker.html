@@ -121,10 +121,17 @@
      inline `transform: translate(...)` on it every frame to pin it to its
      coordinate. We must NOT put our own `transform` here or it fights MapLibre
      and the marker drifts loose. The zoom SCALE goes on the inner wrapper. */
-  .stream-gauge { cursor:pointer; }
-  .stream-gauge .gauge-scale { display:flex; align-items:center; gap:5px;
-    transform: scale(var(--wsc, 1)); transform-origin: 17px center;
-    transition: transform .12s ease-out; }
+  /* Root is a ZERO-SIZE point pinned by MapLibre (anchor:'center'). Making the
+     root take no space means MapLibre's box-measurement can't shift when the
+     inner content scales or collapses — the wheel stays welded to its coord at
+     every zoom. The content is absolutely positioned so the WHEEL CENTER sits
+     exactly on that point (wheel center is 17px right, ~17px down from the
+     content's top-left, so translate(-17px,-50%-ish) via left/top offsets). */
+  .stream-gauge { cursor:pointer; position:relative; width:0; height:0; }
+  .stream-gauge .gauge-scale { position:absolute; left:0; top:0;
+    display:flex; align-items:center; gap:5px;
+    transform: translate(-17px, -15px) scale(var(--wsc, 1));
+    transform-origin: 17px 15px; }
   /* Zoomed way out: collapse to just the wheel — hide the meter + rate label so
      the map isn't cluttered with wide readout rows. The flowing-water strip
      under the wheel STAYS (it's part of the wheel, not clutter). */
@@ -578,6 +585,9 @@
       <span id="locateIcon">📍</span><span id="locateText">Locate me</span>
     </div>
     <span class="locate-status" id="locateStatus"></span>
+    <div class="badge" id="spaceWxBadge" style="display:none;user-select:none;">
+      <div class="pulse" id="spaceWxDot" style="background:#3fb950;"></div><span id="spaceWxText">Kp —</span>
+    </div>
     <span style="font-size:10px;color:var(--muted)" id="lastUpdate"></span>
   </div>
 </header>
@@ -1666,6 +1676,33 @@ function initMapLayers() {
       ? `<div style="color:#06b6d4;font-weight:700;margin-top:8px;">🌺 Passing over the Hawaiian Islands right now.</div>` : '';
     return { title: `${p.emoji} ${p.name}`, body: rows.join('') + over +
       `<div style="color:#8b949e;font-size:10px;margin-top:8px;">Live ground track · wheretheiss.at${p.at ? ' · ' + new Date(+p.at).toLocaleTimeString() : ''}</div>` };
+  });
+
+  // Rainfall — standalone USGS rain gauges (keyless). Emoji intensifies with
+  // the last-6h accumulation (☁️ trace → 🌧️ → ⛈️ heavy), colored blue. Auto-
+  // declutters via collision so it never turns into a wall of raindrops.
+  map.addSource('rainfall', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'rainfall-icon', type: 'symbol', source: 'rainfall',
+    layout: {
+      'text-field': ['concat',
+        ['case', ['>=', ['get', 'accum6hIn'], 1], '⛈️', ['>', ['get', 'accum6hIn'], 0.05], '🌧️', '☁️'],
+        ' ', ['to-string', ['get', 'accum6hIn']], '"'],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 11, 12, 14],
+      'text-font': EMOJI_FONT,
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 5,
+    },
+    paint: { 'text-color': '#1d4ed8', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+  });
+  wireLayerHover('rainfall-icon', p => `<div style="font-weight:600;">🌧️ ${escapeHtml(p.name)}</div>
+    <div style="color:var(--muted);font-size:11px;">${(+p.accum6hIn).toFixed(2)}" in last 6h · click for detail</div>`);
+  wireLayerCard('rainfall-icon', p => {
+    const rows = [];
+    const row = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;"><span style="color:#8b949e;">${k}</span><span style="font-weight:600;">${v}</span></div>`);
+    row('Rain, last 6 h', `${(+p.accum6hIn).toFixed(2)} in`);
+    if (p.latestIn != null && p.latestIn !== '') row('Latest interval', `${(+p.latestIn).toFixed(2)} in`);
+    return { title: `🌧️ ${p.name}`, body: rows.join('') +
+      `<div style="color:#8b949e;font-size:10px;margin-top:8px;">USGS rain gauge${p.at ? ' · ' + new Date(p.at).toLocaleString() : ''}</div>` };
   });
 
   // Meshtastic / LoRa mesh nodes — real community radios (solar repeaters on
@@ -3012,12 +3049,11 @@ function renderStreamflowWheels() {
       // Content lives inside .gauge-scale so we can zoom-scale it WITHOUT
       // touching the root element's transform (MapLibre owns that for pinning).
       el.innerHTML = `<div class="gauge-scale"><div class="rig"></div><div class="meter-slot"></div><span class="rate"></span></div>`;
-      // Anchor at the element's LEFT edge, not its center: the row is
-      // [wheel][meter][rate] laid out horizontally, so centering the whole
-      // row would push the wheel (the thing that marks the gauge's spot) far
-      // to the left of the actual coordinate. Left-anchoring pins the wheel on
-      // the point and lets the meter + label trail off to the right.
-      m = new maplibregl.Marker({ element: el, anchor: 'left', offset: [-17, 0] })
+      // Root is a zero-size point; MapLibre pins its center to the coordinate.
+      // The inner .gauge-scale is CSS-translated so the WHEEL CENTER lands on
+      // that point (and scales around it), so the wheel stays welded to its
+      // location at every zoom while the meter/label trail off to the right.
+      m = new maplibregl.Marker({ element: el, anchor: 'center' })
         .setLngLat(f.geometry.coordinates).addTo(map);
       streamWheelMarkers[site] = m;
     }
@@ -3167,6 +3203,40 @@ async function fetchSatellites() {
         visibility: s.visibility || '', at: s.at || Date.now(),
       } }));
     map.getSource('satellites').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
+}
+
+// Rainfall — standalone USGS rain gauges (keyless).
+async function fetchRainfall() {
+  try {
+    const res = await fetch('/api/rainfall');
+    const data = await res.json();
+    recordHealth('rainfall', data, (data.gauges || []).length);
+    hawaiiList.rainfall = (data.gauges || []).map(g => ({ id: g.site_no, ...g }));
+    hawaiiBrowseRefresh();
+    if (!mapReady || !map.getSource('rainfall')) return;
+    const feats = (data.gauges || []).map(g => ({
+      type: 'Feature', geometry: { type: 'Point', coordinates: [g.lon, g.lat] },
+      properties: { site_no: g.site_no, name: g.name, accum6hIn: g.accum6hIn, latestIn: g.latestIn, at: g.at } }));
+    map.getSource('rainfall').setData({ type: 'FeatureCollection', features: feats });
+  } catch (e) { /* keep last */ }
+}
+
+// Space weather — NOAA SWPC planetary Kp index (keyless). Header badge only.
+async function fetchSpaceWeather() {
+  try {
+    const res = await fetch('/api/space-weather');
+    const data = await res.json();
+    recordHealth('spaceweather', data, data.kp != null ? 1 : 0);
+    const badge = document.getElementById('spaceWxBadge');
+    if (!badge) return;
+    if (data.kp == null) { badge.style.display = 'none'; return; }
+    badge.style.display = '';
+    const kp = +data.kp;
+    const color = kp >= 7 ? '#dc2626' : kp >= 5 ? '#ea580c' : kp >= 4 ? '#ca8a04' : '#3fb950';
+    badge.title = `Geomagnetic activity: ${data.level}${data.auroraPossible ? ' — aurora possible at high latitudes' : ''} (NOAA SWPC)`;
+    badge.querySelector('#spaceWxDot').style.background = color;
+    badge.querySelector('#spaceWxText').textContent = `Kp ${kp.toFixed(0)}`;
   } catch (e) { /* keep last */ }
 }
 
@@ -3682,7 +3752,7 @@ const hawaiiList = {
   infraPower: [], infraSubs: [], infraCell: [], infraNet: [], infraGridMix: null,
   localFuelPrices: {}, localFuelStations: [], localTrafficSensors: [], localLco: [], localInat: [],
   localNotes: {},
-  summits: [], ocean: [], airquality: [], volcanoAlerts: [], volcanoCams: [], satellites: [],
+  summits: [], ocean: [], airquality: [], volcanoAlerts: [], volcanoCams: [], satellites: [], rainfall: [],
   metars: [], alerts: [], wildfire: [],
   facilities: { police: [], fire: [], ems: [], trauma: [] },
 };
@@ -3707,6 +3777,8 @@ const SOURCE_HEALTH_CFG = {
   meshtastic: { staleAfterMs: 60 * 60000,  layers: ['meshtastic-icon'] },
   metars:     { staleAfterMs: 90 * 60000,  layers: ['metars-dot'] },
   satellites: { staleAfterMs: 5 * 60000,   layers: ['satellites-icon'] },
+  rainfall:   { staleAfterMs: 45 * 60000,  layers: ['rainfall-icon'] },
+  spaceweather: { staleAfterMs: 60 * 60000, layers: [] },
   volcano:    { staleAfterMs: 60 * 60000,  layers: ['volcano-dot'] },
   streamflow: { staleAfterMs: 3 * 3600000, layers: [] },
   weather:    { staleAfterMs: 2 * 3600000, layers: ['weather-stations-icon'] },
@@ -3721,6 +3793,7 @@ const CAT_HEALTH_ID = {
   streamflow: 'streamflow', summits: 'summits', ocean: 'ocean',
   marineWebcams: 'marine', marineReefSensors: 'marine',
   airquality: 'airquality', volcano: 'volcano', metars: 'metars', satellites: 'satellites',
+  rainfall: 'rainfall',
 };
 
 // state: 'live' (fresh data), 'stale' (data but poll went quiet), 'empty'
@@ -4120,6 +4193,8 @@ function hawaiiCategories() {
       items: [...hawaiiList.weather].sort((a, b) => String(a.name).localeCompare(b.name)) },
     { id: 'streamflow', icon: '💧', label: 'USGS River Gauges',
       items: [...hawaiiList.streamflow].sort((a, b) => String(a.name).localeCompare(b.name)) },
+    { id: 'rainfall', icon: '🌧️', label: 'Rain Gauges',
+      items: [...hawaiiList.rainfall].sort((a, b) => (b.accum6hIn || 0) - (a.accum6hIn || 0)) },
     { id: 'summits', icon: '🔭', label: 'Summit Observatories', items: hawaiiList.summits },
     { id: 'ocean', icon: '🌊', label: 'Ocean Buoys & Tides', items: hawaiiList.ocean },
     { id: 'marineWebcams', icon: '🐠', label: 'Reef & Ocean Webcams',
@@ -4197,6 +4272,7 @@ function hawaiiItemSummary(catId, item) {
     case 'volcano': return { icon: item.kind === 'webcam' ? '📷' : '🌋', title: item.name, meta: item.kind === 'webcam' ? 'Live webcam' : `${item.colorCode}/${item.alertLevel}` };
     case 'metars': return { icon: '✈️', title: `${item.icao} — ${item.name}`, meta: item.fltCat || '' };
     case 'satellites': return { icon: item.emoji || '🛰️', title: item.name, meta: item.overhead ? '🌺 over Hawaiʻi now' : `${Math.round(item.altKm)} km up · ${Math.round(item.distKm)} km away` };
+    case 'rainfall': return { icon: (item.accum6hIn >= 1 ? '⛈️' : item.accum6hIn > 0.05 ? '🌧️' : '☁️'), title: item.name, meta: `${(+item.accum6hIn).toFixed(2)}" last 6h` };
     case 'alerts': return { icon: '⚠️', title: item.event, meta: item.areaDesc || '' };
     case 'quakes': return { icon: '🌋', title: `M${(+item.mag).toFixed(1)} — ${item.place}`, meta: new Date(item.time).toLocaleDateString() };
     case 'wildfire': return { icon: '🔥', title: 'Thermal hotspot', meta: item.props && item.props.confidence != null ? `confidence ${item.props.confidence}` : '' };
@@ -7476,6 +7552,8 @@ Promise.all([
   fetchVolcano(),
   fetchMetars(),
   fetchSatellites(),
+  fetchRainfall(),
+  fetchSpaceWeather(),
   fetchMeshtastic(),
   fetchRepeaters(),
   fetchInfrastructure(),
@@ -7503,7 +7581,7 @@ setInterval(() => { if (!document.hidden) fetchAircraft(); }, 30000);
 // Earthquakes/alerts change slowly — the server itself only polls every 5 min,
 // so there's no benefit to refreshing the UI faster than that.
 setInterval(() => { if (!document.hidden) { fetchQuakes(); fetchAlerts(); fetchWildfire(); if (radarVisible) fetchRadarFrame(); } }, 5 * 60 * 1000);
-setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchMarine(); if (!document.hidden) fetchInfrastructure(); if (!document.hidden) fetchLocal(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); } }, 15 * 60 * 1000);
+setInterval(() => { if (!document.hidden && streamflowVisible) fetchStreamflow(); if (!document.hidden && weatherStationsVisible) fetchWeatherStations(); if (!document.hidden) fetchSummits(); if (!document.hidden) fetchOcean(); if (!document.hidden) fetchMarine(); if (!document.hidden) fetchInfrastructure(); if (!document.hidden) fetchLocal(); if (!document.hidden) fetchAirQuality(); if (!document.hidden) { fetchVolcano(); fetchMetars(); fetchMeshtastic(); fetchRepeaters(); fetchRainfall(); fetchSpaceWeather(); } }, 15 * 60 * 1000);
 setInterval(() => { if (!document.hidden && (!hawaiiList.meshtastic || !hawaiiList.meshtastic.length)) fetchMeshtastic(); }, 2 * 60 * 1000);
 // APRS moves faster (vehicles) — refresh more often when it has data.
 setInterval(() => { if (!document.hidden) fetchAprs(); }, 60 * 1000);

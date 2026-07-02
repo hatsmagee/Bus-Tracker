@@ -3039,6 +3039,18 @@ async function handleApi(url, res) {
     return json(res, { ts: Date.now(), lastPollTs: metarLastPollTs, lastError: metarLastError, metars: metarCache });
   }
 
+  // ── RAINFALL — standalone USGS rain gauges (keyless) ──────────────────────
+  if (p === '/api/rainfall') {
+    return json(res, { ts: Date.now(), lastPollTs: rainfallLastPollTs, lastError: rainfallLastError,
+      gauges: rainfallCache });
+  }
+
+  // ── SPACE WEATHER — NOAA SWPC Kp index (keyless) ──────────────────────────
+  if (p === '/api/space-weather') {
+    return json(res, { ts: Date.now(), lastPollTs: spaceWxLastPollTs, lastError: spaceWxLastError,
+      ...(spaceWxCache || {}) });
+  }
+
   // ── SATELLITES — live ISS/Hubble position (keyless) ───────────────────────
   if (p === '/api/satellites') {
     return json(res, { ts: Date.now(), lastPollTs: satelliteLastPollTs, lastError: satelliteLastError,
@@ -3800,6 +3812,71 @@ async function pollStreamflow() {
   } catch (e) {
     streamflowLastError = (e && e.message) || 'unknown error';
   }
+}
+
+// ─── RAINFALL — standalone USGS rain gauges (keyless) ────────────────────────
+// The streamflow poller restricts to siteType=ST (streams), so it misses the
+// dozens of DEDICATED rain gauges USGS runs on the Big Island (Saddle Rd,
+// Honoliʻi, Kīholo, Kawainui…). Those report precip (param 00045) without any
+// stream. Pull them separately so we can show live rainfall accumulation with
+// an animated rain icon that intensifies with the rate.
+let rainfallCache = [];
+let rainfallLastPollTs = null, rainfallLastError = null;
+async function pollRainfall() {
+  try {
+    const data = await fetchJson('waterservices.usgs.gov',
+      `/nwis/iv/?format=json&stateCd=hi&parameterCd=00045&siteStatus=active&period=PT6H`,
+      { 'User-Agent': 'heleon-tracker' });
+    const ts = (data.value && data.value.timeSeries) || [];
+    const bySite = new Map();
+    for (const s of ts) {
+      const g = s.sourceInfo.geoLocation.geogLocation;
+      const lat = g.latitude, lon = g.longitude;
+      if (lat < BIGISLAND_BBOX.minLat || lat > BIGISLAND_BBOX.maxLat ||
+          lon < BIGISLAND_BBOX.minLon || lon > BIGISLAND_BBOX.maxLon) continue;
+      const siteNo = s.sourceInfo.siteCode[0].value;
+      const vals = (s.values && s.values[0] && s.values[0].value) || [];
+      // Sum the incremental precip readings over the window (each is inches
+      // since the previous reading) for a "last 6h" accumulation, and keep the
+      // most recent single reading as the current rate.
+      let accum = 0, latestVal = null, latestTime = null;
+      for (const v of vals) {
+        const num = parseFloat(v.value);
+        if (!Number.isFinite(num) || num <= -999999 || num < 0) continue;
+        accum += num;
+        latestVal = num; latestTime = v.dateTime;
+      }
+      if (latestVal == null) continue;
+      bySite.set(siteNo, {
+        site_no: siteNo, name: s.sourceInfo.siteName, lat, lon,
+        latestIn: latestVal, accum6hIn: +accum.toFixed(2), at: latestTime,
+      });
+    }
+    rainfallCache = [...bySite.values()];
+    rainfallLastPollTs = Date.now(); rainfallLastError = null;
+  } catch (e) { rainfallLastError = (e && e.message) || 'unknown error'; }
+}
+
+// ─── SPACE WEATHER — NOAA SWPC planetary K-index (keyless) ───────────────────
+// Global geomagnetic activity (Kp 0-9). Not Big-Island-specific, but it's the
+// live "space weather" readout for an RTS status board — aurora potential, HF
+// radio propagation (relevant to the ham layer), GPS accuracy. One tiny JSON.
+let spaceWxCache = null;
+let spaceWxLastPollTs = null, spaceWxLastError = null;
+async function pollSpaceWeather() {
+  try {
+    const j = await fetchJson('services.swpc.noaa.gov',
+      '/products/noaa-planetary-k-index.json', { 'User-Agent': 'heleon-tracker' });
+    // First row is the header; data rows are [time_tag, Kp, a_running, station_count].
+    if (Array.isArray(j) && j.length > 1) {
+      const last = j[j.length - 1];
+      const kp = parseFloat(last[1]);
+      const level = kp >= 7 ? 'severe storm' : kp >= 5 ? 'geomagnetic storm'
+        : kp >= 4 ? 'active' : 'quiet';
+      spaceWxCache = { kp, level, at: last[0], auroraPossible: kp >= 5 };
+      spaceWxLastPollTs = Date.now(); spaceWxLastError = null;
+    } else spaceWxLastError = 'unexpected response';
+  } catch (e) { spaceWxLastError = (e && e.message) || 'unknown error'; }
 }
 
 // NWS weather stations — Big Island fixed weather stations (HELCO *HE* and
@@ -5262,6 +5339,10 @@ const server = http.createServer((req, res) => {
   pollAirQuality();
   pollVolcano();
   pollMetars();
+  pollRainfall();
+  setInterval(pollRainfall, 10 * 60 * 1000);      // rain gauges report ~15 min
+  pollSpaceWeather();
+  setInterval(pollSpaceWeather, 15 * 60 * 1000);  // Kp updates every 3h; poll loosely
   pollSatellites();
   setInterval(pollSatellites, 20 * 1000); // ISS moves ~7.6 km/s — keep it fresh
   pollRepeaters();
