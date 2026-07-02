@@ -108,6 +108,335 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "summit:irtf": {
+      "title": "NASA Infrared Telescope Facility",
+      "summary": "The NASA Infrared Telescope Facility (NASA IRTF) is a 3.2-meter (10 ft) telescope optimized for use in infrared astronomy and located at the Mauna Kea Observatory in Hawaii.",
+      "history": [
+        {
+          "year": 2000,
+          "text": "This requirement has resulted in an instrument which provides spectral resolutions of R~1000-2000 across 0.8-2.4 μm, 2.0-4.1 μm, and 2.3-5.5 μm, using prism cross-dispersers (15 arcsec-long slits).",
+          "source": "https://en.wikipedia.org/wiki/NASA_Infrared_Telescope_Facility"
+        },
+        {
+          "year": 2012,
+          "text": "NSFCam2 was taken off of the telescope in Fall 2012 to upgrade its array to a higher quality engineering grade Hawaii 2RG array with a new array controller.",
+          "source": "https://en.wikipedia.org/wiki/NASA_Infrared_Telescope_Facility"
+        },
+        {
+          "year": 2019,
+          "text": "As of 2019, iSHELL was the second-most heavily used instrument at IRTF (after SpeX). .",
+          "source": "https://en.wikipedia.org/wiki/NASA_Infrared_Telescope_Facility"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Afshin_Darian_-_NASA_Infrared_Telescope_Facility.jpg/330px-Afshin_Darian_-_NASA_Infrared_Telescope_Facility.jpg",
+          "credit": "Wikipedia — NASA Infrared Telescope Facility (CC/PD)",
+          "caption": "NASA Infrared Telescope Facility"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/NASA_Infrared_Telescope_Facility"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/NASA_Infrared_Telescope_Facility"
+        ],
+        "resolvedTitle": "NASA Infrared Telescope Facility",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:35:39.226Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "summit:subaru": {
+      "title": "Subaru Telescope",
+      "summary": "Subaru Telescope (すばる望遠鏡, Subaru Bōenkyō) is the 8.2-metre (320 in) telescope of the National Astronomical Observatory of Japan, located at the Mauna Kea Observatory on Hawaii.",
+      "history": [
+        {
+          "year": 1984,
+          "text": "In 1984, the University of Tokyo formed an engineering working group to develop and study the concept of a 7.5-metre (300 in) telescope.",
+          "source": "https://en.wikipedia.org/wiki/Subaru_Telescope"
+        },
+        {
+          "year": 1985,
+          "text": "In 1985, the astronomy committee of Japan's science council gave top priority to the development of a \"Japan National Large Telescope\" (JNLT), and in 1986, the University of Tokyo signed an agreement with the University of Hawaiʻi to build…",
+          "source": "https://en.wikipedia.org/wiki/Subaru_Telescope"
+        },
+        {
+          "year": 1988,
+          "text": "In 1988, the National Astronomical Observatory of Japan was formed through a reorganization of the University's Tokyo Astronomical Observatory, to oversee the JNLT and other large national astronomy projects.",
+          "source": "https://en.wikipedia.org/wiki/Subaru_Telescope"
+        },
+        {
+          "year": 1991,
+          "text": "Construction of the telescope began in April 1991, and later that year, a public contest gave the telescope its official name, Subaru Telescope.",
+          "source": "https://en.wikipedia.org/wiki/Subaru_Telescope"
+        },
+        {
+          "year": 1998,
+          "text": "Construction was completed in 1998, and the first scientific images were taken in January 1999.",
+          "source": "https://en.wikipedia.org/wiki/Subaru_Telescope"
+        },
+        {
+          "year": 2005,
+          "text": "It had the largest monolithic primary mirror in the world from its commissioning until the Large Binocular Telescope opened in 2005. .",
+          "source": "https://en.wikipedia.org/wiki/Subaru_Telescope"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/MaunaKea_Subaru.jpg/330px-MaunaKea_Subaru.jpg",
+          "credit": "Wikipedia — Subaru Telescope (CC/PD)",
+          "caption": "Subaru Telescope"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Subaru_Telescope"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Subaru_Telescope"
+        ],
+        "resolvedTitle": "Subaru Telescope",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:35:40.512Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "summit:keck": {
+      "title": "W. M. Keck Observatory",
+      "summary": "Keck Observatory is an astronomical observatory with two telescopes at an elevation of 4,145 meters (13,600 ft) near the summit of Mauna Kea in the U.S. state of Hawaii.",
+      "history": [
+        {
+          "year": 1977,
+          "text": "With a concept first proposed in 1977, telescope designers Terry Mast, of the University of California, Berkeley, and Jerry Nelson of Lawrence Berkeley Laboratory had been developing the technology necessary to build a large, ground-based…",
+          "source": "https://en.wikipedia.org/wiki/W._M._Keck_Observatory"
+        },
+        {
+          "year": 1985,
+          "text": "Keck Foundation gave $70 million to fund the construction of the Keck I telescope, which began in September 1985.",
+          "source": "https://en.wikipedia.org/wiki/W._M._Keck_Observatory"
+        },
+        {
+          "year": 1990,
+          "text": "First light occurred on November 24, 1990, using 9 of the eventual 36 segments.",
+          "source": "https://en.wikipedia.org/wiki/W._M._Keck_Observatory"
+        },
+        {
+          "year": 1991,
+          "text": "When construction of the first telescope was well advanced, further donations allowed the construction of a second telescope starting in 1991.",
+          "source": "https://en.wikipedia.org/wiki/W._M._Keck_Observatory"
+        },
+        {
+          "year": 1993,
+          "text": "Both telescopes have 10 m (33 ft) aperture primary mirrors, and, when completed in 1993 (Keck I) and 1996 (Keck II), they were the largest optical reflecting telescopes in the world.",
+          "source": "https://en.wikipedia.org/wiki/W._M._Keck_Observatory"
+        },
+        {
+          "year": 2006,
+          "text": "They have been the third and fourth largest since 2006. .",
+          "source": "https://en.wikipedia.org/wiki/W._M._Keck_Observatory"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/KeckTelescopes-hi.png/330px-KeckTelescopes-hi.png",
+          "credit": "Wikipedia — W. M. Keck Observatory (CC/PD)",
+          "caption": "W. M. Keck Observatory"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/W._M._Keck_Observatory"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/W._M._Keck_Observatory"
+        ],
+        "resolvedTitle": "W. M. Keck Observatory",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:35:41.926Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "summit:jcmt": {
+      "title": "James Clerk Maxwell Telescope",
+      "summary": "The James Clerk Maxwell Telescope (JCMT) is a submillimetre-wavelength radio telescope at Mauna Kea Observatory in Hawaii, US.",
+      "history": [
+        {
+          "year": 1975,
+          "text": "After a series of proposals and debates, in 1975, the SRC millimetre steering committee concluded that it would be possible to construct a 15-metre diameter telescope capable of observing at wavelengths down to 750–800 μm.",
+          "source": "https://en.wikipedia.org/wiki/James_Clerk_Maxwell_Telescope"
+        },
+        {
+          "year": 1983,
+          "text": "Building work started in 1983 and went well.",
+          "source": "https://en.wikipedia.org/wiki/James_Clerk_Maxwell_Telescope"
+        },
+        {
+          "year": 1984,
+          "text": "In 1984, the telescope was shipped from England to Hawaii.",
+          "source": "https://en.wikipedia.org/wiki/James_Clerk_Maxwell_Telescope"
+        },
+        {
+          "year": 1987,
+          "text": "The JCMT started operations in 1987, and was funded until February 2015 by a partnership between the United Kingdom and Canada, and the Netherlands.",
+          "source": "https://en.wikipedia.org/wiki/James_Clerk_Maxwell_Telescope"
+        },
+        {
+          "year": 2013,
+          "text": "In 2013 the Netherlands withdrew, and until 2015 the shares became UK 75 per cent, Canada 25 per cent.",
+          "source": "https://en.wikipedia.org/wiki/James_Clerk_Maxwell_Telescope"
+        },
+        {
+          "year": 2015,
+          "text": "In March 2015 the operation of the JCMT was taken over by the East Asian Observatory.",
+          "source": "https://en.wikipedia.org/wiki/James_Clerk_Maxwell_Telescope"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/JCMT_on_Mauna_Kea.jpg/330px-JCMT_on_Mauna_Kea.jpg",
+          "credit": "Wikipedia — James Clerk Maxwell Telescope (CC/PD)",
+          "caption": "James Clerk Maxwell Telescope"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/James_Clerk_Maxwell_Telescope"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/James_Clerk_Maxwell_Telescope"
+        ],
+        "resolvedTitle": "James Clerk Maxwell Telescope",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:35:46.026Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "summit:sma": {
+      "title": "Submillimeter Array",
+      "summary": "The Submillimeter Array (SMA) consists of eight 6-meter (20 ft) diameter radio telescopes arranged as an interferometer for submillimeter wavelength observations.",
+      "history": [
+        {
+          "year": 1983,
+          "text": "The SMA project was begun in 1983 as part of a broad initiative by Irwin Shapiro, the then new director of the SAO, to produce high resolution astronomical instruments across the electromagnetic spectrum.",
+          "source": "https://en.wikipedia.org/wiki/Submillimeter_Array"
+        },
+        {
+          "year": 1987,
+          "text": "A receiver laboratory was established at the SAO's Cambridge location in 1987.",
+          "source": "https://en.wikipedia.org/wiki/Submillimeter_Array"
+        },
+        {
+          "year": 1996,
+          "text": "Initially the design called for an array consisting of six antennas, but in 1996 ASIAA joined the project and funded the construction of two additional antennas and the expansion of the correlator to accommodate the near doubling of the…",
+          "source": "https://en.wikipedia.org/wiki/Submillimeter_Array"
+        },
+        {
+          "year": 2003,
+          "text": "The SMA was dedicated and began official operations on November 22, 2003. .",
+          "source": "https://en.wikipedia.org/wiki/Submillimeter_Array"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Smithsonian_Submillimeter_Array.jpg/330px-Smithsonian_Submillimeter_Array.jpg",
+          "credit": "Wikipedia — Submillimeter Array (CC/PD)",
+          "caption": "Submillimeter Array"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Submillimeter_Array"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Submillimeter_Array"
+        ],
+        "resolvedTitle": "Submillimeter Array",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:35:47.234Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "summit:vlba": {
+      "title": "VLBA Station Maunakea",
+      "summary": "The Maunakea Observatories (MKO, also known as Mauna Kea Observatories) are a group of independent astronomical research facilities and large telescope observatories that are located at the summit of Mauna Kea on Hawaiʻi, United States.",
+      "history": [
+        {
+          "year": 1901,
+          "text": "Significantly predating the current observatories, there is evidence of active astronomy on Mauna Kea in the 1901 Land Office Map of the Island of Hawaii showing the \"Hawaii Astronomy Station\" near the Mauna Kea summit.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        },
+        {
+          "year": 1967,
+          "text": "The Astronomy Precinct was established in 1967 and is located on land protected by the Historical Preservation Act for its significance to Hawaiian culture.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        },
+        {
+          "year": 1970,
+          "text": "By 1970, two 24 in (0.6 m) telescopes had been constructed by the United States Air Force and Lowell Observatory.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        },
+        {
+          "year": 1973,
+          "text": "In 1973, Canada and France agreed to build the 3.6 m CFHT on Mauna Kea.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        },
+        {
+          "year": 1977,
+          "text": "This led the Department of Land and Natural Resources to prepare an initial management plan, drafted in 1977 and supplemented in 1980.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        },
+        {
+          "year": 1982,
+          "text": "In January 1982, the University of Hawaiʻi Board of Regents approved a plan to support the continued development of scientific facilities at the site.",
+          "source": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Mauna_Kea_Summit_2021-06-16_33_%28cropped%29.jpg/330px-Mauna_Kea_Summit_2021-06-16_33_%28cropped%29.jpg",
+          "credit": "Wikipedia — Maunakea Observatories (CC/PD)",
+          "caption": "Maunakea Observatories"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        ],
+        "resolvedTitle": "Maunakea Observatories",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:35:49.163Z",
+        "reviewed": false
+      },
+      "status": "ok"
     }
   }
 }
