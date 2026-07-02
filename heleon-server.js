@@ -4333,6 +4333,7 @@ let infraCache = {
   powerPlants: [...CURATED_POWER_PLANTS],
   substations: [],
   powerLines: { type: 'FeatureCollection', features: [] },
+  railways: { type: 'FeatureCollection', features: [] },
   cellTowers: [],
   netFacilities: [],
   internetExchanges: [],
@@ -4450,6 +4451,32 @@ function osmPowerLinesGeojson(elements) {
   return { type: 'FeatureCollection', features };
 }
 
+// Railways (heritage/tourist track + stations) → line features + station points.
+function osmRailwaysGeojson(elements) {
+  const features = [];
+  for (const el of elements) {
+    const tags = el.tags || {};
+    if (el.type === 'way' && el.geometry) {
+      const coords = el.geometry.map(p => [p.lon, p.lat]);
+      if (coords.length < 2) continue;
+      features.push({
+        type: 'Feature', geometry: { type: 'LineString', coordinates: coords },
+        properties: {
+          kind: 'track', railway: tags.railway || 'rail',
+          name: tags.name || '', gauge: tags.gauge || '',
+          heritage: (tags.railway === 'preserved' || tags.usage === 'tourism' || !!tags.tourism) ? 1 : 0,
+        },
+      });
+    } else if (el.type === 'node' && el.lat != null && el.lon != null && tags.railway === 'station') {
+      features.push({
+        type: 'Feature', geometry: { type: 'Point', coordinates: [el.lon, el.lat] },
+        properties: { kind: 'station', name: tags.name || 'Station' },
+      });
+    }
+  }
+  return { type: 'FeatureCollection', features };
+}
+
 function loadInfraCacheFromDisk() {
   try {
     const j = JSON.parse(fs.readFileSync(INFRA_CACHE_PATH, 'utf8'));
@@ -4524,6 +4551,18 @@ out body 200;`);
 way["power"="line"]["voltage"](${bbox});
 out geom 80;`);
     } catch (e) { console.warn('[infra] lines OSM:', e.message); }
+    await overpassPause();
+    let railJ = { elements: [] };
+    try {
+      // Big Island rail is heritage/tourist (Laupāhoehoe, Pana'ewa Zoo train,
+      // old sugar lines) + any preserved track. Grab the lines + stations.
+      railJ = await fetchOverpass(`[out:json][timeout:40];
+(
+  way["railway"~"^(rail|narrow_gauge|light_rail|preserved|miniature|tram)$"](${bbox});
+  node["railway"="station"](${bbox});
+);
+out geom 120;`);
+    } catch (e) { console.warn('[infra] rail OSM:', e.message); }
     let peering = { netFacilities: [], internetExchanges: [] };
     try { peering = await pollPeeringDbInfra(); } catch (e) { console.warn('[infra] PeeringDB:', e.message); }
 
@@ -4560,6 +4599,7 @@ out geom 80;`);
       powerPlants: [...CURATED_POWER_PLANTS, ...extraPlants],
       substations,
       powerLines: osmPowerLinesGeojson(lineJ.elements || []),
+      railways: osmRailwaysGeojson(railJ.elements || []),
       cellTowers,
       netFacilities: peering.netFacilities,
       internetExchanges: peering.internetExchanges,

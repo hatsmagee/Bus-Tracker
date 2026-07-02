@@ -769,6 +769,7 @@
         <label><input type="checkbox" id="showInfraPower" onchange="toggleInfraPower()" checked> Power plants & lines</label>
         <label><input type="checkbox" id="showInfraCell" onchange="toggleInfraCell()"> Cell / comm towers</label>
         <label><input type="checkbox" id="showInfraNet" onchange="toggleInfraNet()"> Internet facilities (statewide)</label>
+        <label><input type="checkbox" id="showInfraRail" onchange="toggleInfraRail()"> 🚂 Railways (heritage)</label>
       </div>
       <div style="padding:4px 12px;color:var(--muted);font-size:10px;">
         Static reference data — Hawaiian Electric has no public real-time Big Island
@@ -1883,6 +1884,34 @@ function initMapLayers() {
   map.addSource('infra-power', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addSource('infra-subs', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
   map.addSource('infra-lines', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  // Railways — heritage/tourist track + stations (Laupāhoehoe, Pana'ewa Zoo
+  // train, old sugar lines). Dashed brown "railroad tie" line + 🚂 stations.
+  map.addSource('infra-rail', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addLayer({
+    id: 'infra-rail-line', type: 'line', source: 'infra-rail',
+    filter: ['==', ['get', 'kind'], 'track'],
+    layout: { 'line-join': 'round', 'line-cap': 'butt', visibility: 'none' },
+    paint: {
+      'line-color': '#6b4420',
+      'line-width': ['interpolate', ['linear'], ['zoom'], 9, 2, 14, 4],
+      'line-dasharray': [2, 1.5],   // railroad-tie feel
+      'line-opacity': 0.85,
+    },
+  });
+  map.addLayer({
+    id: 'infra-rail-station', type: 'symbol', source: 'infra-rail',
+    filter: ['==', ['get', 'kind'], 'station'],
+    layout: {
+      visibility: 'none',
+      'text-field': ['concat', '🚂 ', ['coalesce', ['get', 'name'], '']],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 9, 11, 14, 14],
+      'text-font': EMOJI_FONT, 'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+    },
+    paint: { 'text-color': '#6b4420', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
+  });
+  wireLayerHover('infra-rail-station', p => `<div style="font-weight:600;">🚂 ${escapeHtml(p.name || 'Station')}</div>`);
+  wireLayerHover('infra-rail-line', p => `<div style="font-weight:600;">🚂 ${escapeHtml(p.name || 'Railway')}</div>
+    <div style="color:var(--muted);font-size:10px;">${escapeHtml(p.railway || 'rail')}${p.gauge ? ' · ' + escapeHtml(p.gauge) + 'mm gauge' : ''}</div>`);
   map.addLayer({
     id: 'infra-lines-line', type: 'line', source: 'infra-lines',
     minzoom: 9,
@@ -3708,7 +3737,16 @@ const INFRA_FUEL_ICON = { geothermal: '♨️', oil: '🛢️', gas: '🔥', win
 let infraPowerVisible = true;
 let infraCellVisible = false;
 let infraNetVisible = false;
+let infraRailVisible = false;
 let infraGridMix = null;
+function toggleInfraRail() {
+  infraRailVisible = document.getElementById('showInfraRail').checked;
+  if (mapReady) {
+    for (const id of ['infra-rail-line', 'infra-rail-station']) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', infraRailVisible ? 'visible' : 'none');
+    }
+  }
+}
 
 function infraPlantProps(p) {
   const icon = INFRA_FUEL_ICON[p.fuel] || '⚡';
@@ -3749,6 +3787,12 @@ async function fetchInfrastructure() {
     if (map.getSource('infra-lines')) {
       map.getSource('infra-lines').setData(infraPowerVisible && data.powerLines ? data.powerLines : { type: 'FeatureCollection', features: [] });
     }
+    if (map.getSource('infra-rail')) {
+      map.getSource('infra-rail').setData(data.railways || { type: 'FeatureCollection', features: [] });
+    }
+    hawaiiList.railways = (data.railways && data.railways.features ? data.railways.features : [])
+      .filter(f => f.properties && f.properties.kind === 'station')
+      .map((f, i) => ({ id: String(i), name: f.properties.name, lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] }));
     if (map.getSource('infra-cell')) {
       const cellFeats = infraCellVisible ? (data.cellTowers || []).map(t => ({
         type: 'Feature', geometry: { type: 'Point', coordinates: [t.lon, t.lat] },
@@ -3946,7 +3990,7 @@ async function toggleFacility(kind) {
 const hawaiiList = {
   repeaters: [], meshtastic: [], aprs: [], mobility: [], weather: [], streamflow: [],
   marineWebcams: [], marineReefSensors: [], marineFishing: { top: [] },
-  infraPower: [], infraSubs: [], infraCell: [], infraNet: [], infraGridMix: null,
+  infraPower: [], infraSubs: [], infraCell: [], infraNet: [], infraGridMix: null, railways: [],
   localFuelPrices: {}, localFuelStations: [], localTrafficSensors: [], localLco: [], localInat: [],
   localNotes: {},
   summits: [], ocean: [], airquality: [], volcanoAlerts: [], volcanoCams: [], satellites: [], rainfall: [],
