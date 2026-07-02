@@ -1251,6 +1251,8 @@ function buildSummitCard(p) {
   }
   let extra = '';
   if (p.note) extra += `<div style="margin-top:8px;font-size:10px;color:#d29922;line-height:1.45;">${escapeHtml(p.note)}</div>`;
+  const media = assetMedia(null, p.name);
+  if (media) extra += `<div style="margin-top:8px;">${assetMediaHtml(media)}</div>`;
   if (p.webcamUrl) extra += `<div style="margin-top:8px;"><img src="${escapeHtml(p.webcamUrl)}" alt="Observatory webcam" style="width:100%;border-radius:8px;border:1px solid #30363d;"></div>`;
   const links = [];
   if (p.pageUrl) links.push(`<a href="${escapeHtml(p.pageUrl)}" target="_blank" rel="noopener" style="color:#58a6ff;">Observatory page ↗</a>`);
