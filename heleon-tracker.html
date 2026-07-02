@@ -237,6 +237,20 @@
     background:rgba(255,255,255,.92); border:1px solid #bfdbfe; border-radius:9px; padding:1px 5px; }
   .radio-tower.compact .rt-label, .radio-tower.compact .rt-ring { display:none; }
 
+  /* ─── RESEARCH SCOUT marker: a survey lens that roams to whatever the agent is
+     investigating right now. Sonar pulses = an active scan of that spot. Root is
+     a zero-size point pinned by MapLibre (anchor:'center'); children are offset
+     so the lens sits ON the coordinate and the sonar radiates from it. */
+  @keyframes scoutPulse { 0% { transform: scale(.35); opacity:.8; } 100% { transform: scale(2.8); opacity:0; } }
+  @keyframes scoutBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+  .agent-scout { position:relative; width:0; height:0; cursor:pointer; }
+  .agent-scout .as-pulse { position:absolute; left:-8px; top:-8px; width:16px; height:16px;
+    border-radius:50%; border:1.5px solid rgba(56,189,248,.85); animation: scoutPulse 2.2s ease-out infinite; }
+  .agent-scout .as-pulse.d2 { animation-delay:1.1s; }
+  .agent-scout .as-lens { position:absolute; left:-9.5px; top:-9.5px;
+    animation: scoutBob 2.6s ease-in-out infinite;
+    filter: drop-shadow(0 0 5px rgba(56,189,248,.85)) drop-shadow(0 1px 2px rgba(0,0,0,.55)); }
+
   /* ─── STREAMFLOW markers: water wheel = discharge (ft³/s); staff gauge = stage (ft) ── */
   @keyframes waterWheelSpin { to { transform: rotate(360deg); } }
   @keyframes streamFlow { to { background-position: -48px 0; } }
@@ -749,7 +763,7 @@
       <div class="tab" data-tab="aircraft" id="aircraftTab">✈️ Aircraft</div>
       <div class="tab" data-tab="hawaii" id="hawaiiTab">🌋 Hawaiʻi</div>
       <div class="tab" data-tab="system">📊 System</div>
-      <div class="tab" data-tab="agent">🤖 Agent</div>
+      <div class="tab" data-tab="agent">🔎 Agent</div>
       <div class="tab" data-tab="docs">📚 Docs</div>
     </div>
 
@@ -822,13 +836,13 @@
       <div class="section-header" style="margin-top:4px;">📡 Upstream API Polling</div>
       <div class="api-section" id="apiLog"></div>
 
-      <div class="section-header" style="margin-top:4px;">🤖 Self-Development Agent</div>
-      <div style="padding:8px 12px;font-size:11px;color:var(--muted);">The research robot lives in the <strong>🤖 Agent</strong> tab — watch it roam the map and log its work there.</div>
+      <div class="section-header" style="margin-top:4px;">🔎 Self-Development Agent</div>
+      <div style="padding:8px 12px;font-size:11px;color:var(--muted);">The research scout lives in the <strong>🔎 Agent</strong> tab — watch it roam the map and log its work there.</div>
     </div>
 
     <div class="tab-content" id="tab-agent">
       <div style="padding:8px 12px;font-size:11px;color:var(--muted);line-height:1.5;">
-        A keyless research agent enriches map landmarks with history &amp; photos, smoke-tests its work, and ships it via GitHub. Watch the 🤖 robot on the map — hover it for what it's doing right now.
+        A keyless research agent enriches map landmarks with history &amp; photos, smoke-tests its work, and ships it via GitHub. Watch the 🔎 scout on the map — hover it for what it's doing right now.
       </div>
       <div id="agentPanel" style="padding:0 12px 8px;font-size:11px;line-height:1.5;color:var(--muted);">
         Loading agent status…
@@ -837,7 +851,7 @@
         <button type="button" id="agentRunResearch" style="font-size:11px;padding:4px 10px;cursor:pointer;">Run research</button>
         <button type="button" id="agentRunPublish" style="font-size:11px;padding:4px 10px;cursor:pointer;">Publish staged</button>
         <button type="button" id="agentResetBreaker" style="font-size:11px;padding:4px 10px;cursor:pointer;">Reset breaker</button>
-        <button type="button" id="agentFindRobot" style="font-size:11px;padding:4px 10px;cursor:pointer;">📍 Find robot</button>
+        <button type="button" id="agentFindRobot" style="font-size:11px;padding:4px 10px;cursor:pointer;">📍 Find scout</button>
       </div>
       <div class="section-header">📦 Captured Work</div>
       <div id="agentWork" style="padding:8px 12px;font-size:11px;color:var(--muted);">No work captured yet.</div>
@@ -1027,7 +1041,7 @@
       </div>
 
       <div class="docs-section">
-        <div class="docs-h">🤖 Self-development agent</div>
+        <div class="docs-h">🔎 Self-development agent</div>
         <div class="docs-p">
           When enabled, a keyless research agent keeps the map's item cards
           (history, photos, summaries) growing on their own. It
@@ -1042,7 +1056,7 @@
           auto-deploys — and every open tab then
           <strong style="color:#e6edf3">self-refreshes</strong> to the new
           version. Watch it live on the <strong style="color:#e6edf3">Agent</strong>
-          tab, or follow the little robot as it hops around the map to whatever
+          tab, or follow the little scout as it hops around the map to whatever
           it's working on.
         </div>
       </div>
@@ -3539,11 +3553,22 @@ function resolveLoreKeyCoord(key) {
 function ensureAgentRobot() {
   if (agentRobotMarker || !mapReady || typeof maplibregl === 'undefined') return;
   const el = document.createElement('div');
-  el.textContent = '🤖';
-  // Small head; a subtle glow + slow pulse so it reads as "working" without
-  // dominating the map. Hidden by default until it has a real place to be.
-  el.style.cssText = 'font-size:15px;cursor:pointer;line-height:1;display:none;filter:drop-shadow(0 0 3px rgba(88,166,255,.9));transition:opacity .4s ease;';
-  el.title = '🤖 Research robot';
+  el.className = 'agent-scout';
+  // A roaming survey lens with radiating sonar pulses — reads as "actively
+  // investigating this spot" without the tired robot cliché. Hidden by default
+  // until the agent has a real on-island place to be.
+  el.style.display = 'none';
+  el.style.transition = 'opacity .4s ease';
+  el.innerHTML =
+    '<div class="as-pulse"></div>' +
+    '<div class="as-pulse d2"></div>' +
+    '<svg class="as-lens" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">' +
+      '<circle cx="9.5" cy="9.5" r="7" fill="rgba(8,20,35,.82)" stroke="#38bdf8" stroke-width="2"/>' +
+      '<circle cx="9.5" cy="9.5" r="3.4" fill="none" stroke="rgba(125,211,252,.55)" stroke-width="1"/>' +
+      '<path d="M6.6 8 A4 4 0 0 1 9.5 6" fill="none" stroke="rgba(224,242,254,.92)" stroke-width="1.2" stroke-linecap="round"/>' +
+      '<line x1="14.7" y1="14.7" x2="21" y2="21" stroke="#38bdf8" stroke-width="2.6" stroke-linecap="round"/>' +
+    '</svg>';
+  el.title = 'Research scout';
   el.onclick = () => { switchTab('agent'); if (agentRobotMarker) map.flyTo({ center: agentRobotMarker.getLngLat(), zoom: Math.max(map.getZoom(), 9) }); };
   agentRobotMarker = new maplibregl.Marker({ element: el, anchor: 'center' })
     .setLngLat([agentRobotState.lon, agentRobotState.lat]).addTo(map);
@@ -3566,7 +3591,7 @@ async function refreshAgentRobot() {
     agentRobotMarker.setLngLat(coord);
     el.style.display = 'block';
     el.style.opacity = '1';
-    el.title = '🤖 ' + (cur.text || 'Researching…');
+    el.title = 'Scout · ' + (cur.text || 'Researching…');
   } else {
     el.style.opacity = '0';
     setTimeout(() => { if (el.style.opacity === '0') el.style.display = 'none'; }, 400);
