@@ -20,6 +20,26 @@ const WebSocket = require('ws');
 const { parseFeedMessage } = require('./gtfs-rt');
 const { nearestPointOnGraph } = require('./road-graph.js');
 
+// ─── SELF-HEALING: never let one bad request or feed kill the whole server ────
+// A single uncaught exception or unhandled promise rejection would otherwise
+// take the process down (and with it every layer). Log loudly and keep serving —
+// the pollers and the watchdog below recover the affected feed on their own.
+process.on('uncaughtException', (e) => {
+  console.error('[fatal] uncaughtException — staying alive:', (e && e.stack) || e);
+});
+process.on('unhandledRejection', (e) => {
+  console.error('[fatal] unhandledRejection — staying alive:', (e && (e.stack || e.message)) || e);
+});
+
+// Build id for client auto-update: changes only when the served HTML changes,
+// so a redeploy makes every open tab reload itself, but a plain restart doesn't.
+const BOOT_TS = Date.now();
+let BUILD_ID = 'dev';
+try {
+  const st = fs.statSync(path.join(__dirname, 'heleon-tracker.html'));
+  BUILD_ID = `${Math.round(st.mtimeMs)}-${st.size}`;
+} catch { /* fall back to 'dev' */ }
+
 // Big Island bounding box — fleet feed includes parked/relocated buses
 // (e.g. on Oʻahu for maintenance); ignore anything outside Hawaiʻi County.
 const BBOX = { minLat: 18.8, maxLat: 20.4, minLon: -156.2, maxLon: -154.7 };
@@ -2316,6 +2336,12 @@ async function handleApi(url, res) {
        FROM poll_log WHERE ts > ? GROUP BY route_id`, [Date.now() - 3600000]);
     const pingCount = dbGet(`SELECT COUNT(*) as n FROM pings WHERE ts > ?`, [Date.now() - 86400000]);
     return json(res, { uptime_since: startTime, poll_stats: poll, ping_count_today: pingCount?.n || 0 });
+  }
+
+  // Client auto-update probe — the UI polls this and reloads itself when `build`
+  // changes (i.e. a new version was deployed).
+  if (p === '/api/version') {
+    return json(res, { build: BUILD_ID, bootTs: BOOT_TS, ts: Date.now() });
   }
 
   if (p === '/api/debug/feeds') {
@@ -6344,6 +6370,46 @@ const server = http.createServer((req, res) => {
     await loadGtfs(true);
   }, 24 * 60 * 60 * 1000);
   discoverNewRoutes(); // also run at startup
+
+  // ─── SELF-HEALING POLLER WATCHDOG ──────────────────────────────────────────
+  // The slow/daily feeds only retry on their long interval, so a single boot-time
+  // hiccup (e.g. NREL or Overpass briefly unreachable) would leave a layer empty
+  // for up to a day. This watchdog notices any feed that errored or went stale
+  // and re-runs its poller early, with exponential backoff so a persistently
+  // down source isn't hammered. Everything self-corrects within minutes.
+  const HEAL_TARGETS = [
+    { name: 'evCharging', run: pollEv,             maxAgeMs: 26 * 3600e3, ts: () => evLastPollTs,        err: () => evLastError },
+    { name: 'infrastructure', run: pollInfrastructure, maxAgeMs: 26 * 3600e3, ts: () => infraLastPollTs, err: () => infraLastError },
+    { name: 'timelines', run: pollTimelines,       maxAgeMs: 26 * 3600e3, ts: () => timelinesLastPollTs, err: () => timelinesLastError },
+    { name: 'heritage', run: pollHeritage,         maxAgeMs: 26 * 3600e3, ts: () => heritageLastPollTs,  err: () => heritageLastError },
+    { name: 'assetMedia', run: pollAssetMedia,     maxAgeMs: 26 * 3600e3, ts: () => assetMediaLastPollTs, err: () => assetMediaLastError },
+    { name: 'places', run: pollPlaces,             maxAgeMs: 26 * 3600e3, ts: () => placesLastPollTs,    err: () => placesLastError },
+    { name: 'repeaters', run: pollRepeaters,       maxAgeMs: 26 * 3600e3, ts: () => repeaterLastPollTs,  err: () => repeaterLastError },
+    { name: 'summits', run: pollSummits,           maxAgeMs: 30 * 60e3,   ts: () => summitLastPollTs,    err: () => summitLastError },
+    { name: 'ocean', run: pollOcean,               maxAgeMs: 40 * 60e3,   ts: () => oceanLastPollTs,     err: () => oceanLastError },
+    { name: 'airquality', run: pollAirQuality,     maxAgeMs: 45 * 60e3,   ts: () => airQualityLastPollTs, err: () => airQualityLastError },
+    { name: 'waterQuality', run: pollWaterQuality, maxAgeMs: 45 * 60e3,   ts: () => waterQualityLastPollTs, err: () => waterQualityLastError },
+    { name: 'solar', run: pollSolar,               maxAgeMs: 45 * 60e3,   ts: () => solarLastPollTs,     err: () => solarLastError },
+  ];
+  const healState = {}; // name -> { lastAttempt, fails }
+  const WATCHDOG_MS = 5 * 60 * 1000;
+  setInterval(() => {
+    const now = Date.now();
+    for (const t of HEAL_TARGETS) {
+      let ts, err;
+      try { ts = t.ts(); err = t.err(); } catch { continue; }
+      const stale = !ts || (now - ts) > t.maxAgeMs;
+      if (!err && !stale) { healState[t.name] = { lastAttempt: 0, fails: 0 }; continue; }
+      const st = healState[t.name] || { lastAttempt: 0, fails: 0 };
+      // Backoff: 5 min, then 10, 20, 40… capped at 6 h between attempts.
+      const backoff = Math.min(6 * 3600e3, WATCHDOG_MS * Math.pow(2, st.fails));
+      if (now - st.lastAttempt < backoff) continue;
+      console.warn(`[watchdog] ${t.name} ${err ? 'errored (' + err + ')' : 'stale'} — re-running poller (attempt ${st.fails + 1})`);
+      st.lastAttempt = now; st.fails++;
+      healState[t.name] = st;
+      Promise.resolve().then(t.run).catch(e => console.warn(`[watchdog] ${t.name} retry failed:`, e && e.message));
+    }
+  }, WATCHDOG_MS);
 
   const localIP = Object.values(os.networkInterfaces()).flat()
     .find(i => i.family === 'IPv4' && !i.internal)?.address || 'localhost';

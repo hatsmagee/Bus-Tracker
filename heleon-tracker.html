@@ -9664,6 +9664,69 @@ setInterval(() => {
   els.forEach(el => { el.textContent = t; });
 }, 1000);
 // (fetchTrails already runs in the startup Promise.all above — no duplicate here.)
+
+// ─── SELF-HEALING CLIENT ─────────────────────────────────────────────────────
+// Keep the whole page alive and current on its own: catch stray errors, actively
+// re-fetch any feed that goes stale/errored, resync the moment the network or the
+// tab comes back, and auto-reload when a new build is deployed.
+
+// 1) Global guards — one thrown error or rejected promise must never break the
+//    refresh loops or freeze the UI.
+window.addEventListener('error', (e) => { console.warn('[self-heal] error caught:', (e && e.message) || e); });
+window.addEventListener('unhandledrejection', (e) => { console.warn('[self-heal] promise rejection caught:', (e && e.reason && (e.reason.message || e.reason)) || e); });
+
+// 2) Map each health-tracked source to the fetch that repairs it.
+const SELF_HEAL_FETCH = {
+  aircraft: fetchAircraft, vessels: fetchVessels, streamflow: fetchStreamflow, solar: fetchSolar,
+  summits: fetchSummits, airquality: fetchAirQuality, waterquality: fetchWaterQuality,
+  satellites: fetchSatellites, rainfall: fetchRainfall, spaceweather: fetchSpaceWeather,
+  places: fetchPlaces, tsunami: fetchTsunami, skyclock: fetchSkyClock, volcano: fetchVolcano,
+  metars: fetchMetars, meshtastic: fetchMeshtastic, ocean: fetchOcean, marine: fetchMarine,
+  ev: fetchEv, aprs: fetchAprs, weather: fetchWeatherStations, mobility: fetchHibike,
+};
+const _healLast = {}; // id -> last repair attempt ts (per-source throttle)
+function healStaleSources(force) {
+  if (document.hidden && !force) return;
+  const now = Date.now();
+  for (const id of Object.keys(sourceHealth)) {
+    const h = sourceHealth[id];
+    const fn = SELF_HEAL_FETCH[id];
+    if (!h || !fn) continue;
+    const broken = h.state === 'stale' || h.state === 'error';
+    if (!broken && !force) continue;
+    if (!force && (now - (_healLast[id] || 0)) < 60000) continue; // at most once/min per source
+    _healLast[id] = now;
+    try { Promise.resolve(fn()).catch(() => {}); } catch (e) { /* ignore */ }
+  }
+}
+// Active repair sweep — quicker than each feed's own long interval.
+setInterval(() => healStaleSources(false), 45000);
+
+// 3) Resync immediately when connectivity or the tab returns.
+window.addEventListener('online', () => { try { fetchAll(); } catch (e) {} healStaleSources(true); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) healStaleSources(false); });
+
+// 4) Auto-update: reload when a newer build is deployed. We compare the server's
+//    build id to the one present at load; a mere restart keeps the same id so we
+//    don't reload needlessly, but a redeploy (changed HTML) reloads every tab.
+let _buildId = null, _reloading = false;
+async function checkForUpdate() {
+  try {
+    const v = await (await fetch('/api/version', { cache: 'no-store' })).json();
+    if (!v || !v.build) return;
+    if (_buildId == null) { _buildId = v.build; return; }
+    if (v.build !== _buildId && !_reloading) {
+      _reloading = true;
+      const b = document.createElement('div');
+      b.textContent = 'New version available — updating…';
+      b.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;background:#1f6feb;color:#fff;padding:8px 16px;border-radius:20px;font:600 13px system-ui;box-shadow:0 4px 16px rgba(0,0,0,.4);';
+      document.body.appendChild(b);
+      setTimeout(() => location.reload(true), 1800);
+    }
+  } catch (e) { /* offline — try again next tick */ }
+}
+checkForUpdate();
+setInterval(checkForUpdate, 2 * 60 * 1000);
 </script>
 </body>
 </html>
