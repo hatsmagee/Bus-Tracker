@@ -1,6 +1,60 @@
 {
   "_comment": "Curated history, photos, and summaries for fixed/named map items. Keys are category:id (e.g. summit:keck). Populated and maintained by scripts/agent/research-agent.js. GitHub main is source of truth; staged candidates live in map-items.staged.json until smoke-tested PR merge.",
-  "source": "agent + manual bootstrap",
+  "source": "agent",
   "updatedAt": "2026-07-02T00:00:00.000Z",
-  "items": {}
+  "items": {
+    "summit:cfht": {
+      "title": "Canada–France–Hawaii Telescope",
+      "summary": "The Canada–France–Hawaii Telescope (CFHT French: Télescope Canada–France–Hawaï) is a 3.58 metres (11.7 ft) optical/infrared telescope located near the summit of Mauna Kea on the Big Island of Hawaiʻi at an altitude of 4,204 m (13,793 ft), within the Maunakea Observatories.",
+      "history": [
+        {
+          "year": 1967,
+          "text": "The Astronomy Precinct was established in 1967 and is located on land protected by the Historical Preservation Act for its significance to Hawaiian culture.",
+          "source": "https://en.wikipedia.org/wiki/Canada%E2%80%93France%E2%80%93Hawaii_Telescope"
+        },
+        {
+          "year": 1979,
+          "text": "The telescope has a Prime Focus/Cassegrain configuration, and has been in operation since 1979.",
+          "source": "https://en.wikipedia.org/wiki/Canada%E2%80%93France%E2%80%93Hawaii_Telescope"
+        },
+        {
+          "year": 2026,
+          "text": "As of 2026, however, the project remains on hold pending review of governance and leasing of observatories at this site.",
+          "source": "https://en.wikipedia.org/wiki/Canada%E2%80%93France%E2%80%93Hawaii_Telescope"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/CFW_Telescope.JPG/330px-CFW_Telescope.JPG",
+          "credit": "Wikipedia — Canada–France–Hawaii Telescope (CC/PD)",
+          "caption": "Canada–France–Hawaii Telescope"
+        },
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Mauna_Kea_Summit_2021-06-16_33_%28cropped%29.jpg/330px-Mauna_Kea_Summit_2021-06-16_33_%28cropped%29.jpg",
+          "credit": "Wikipedia — Maunakea Observatories (CC/PD)",
+          "caption": "Maunakea Observatories"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Canada%E2%80%93France%E2%80%93Hawaii_Telescope"
+        },
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Canada%E2%80%93France%E2%80%93Hawaii_Telescope",
+          "https://en.wikipedia.org/wiki/Maunakea_Observatories"
+        ],
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T22:03:58.784Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    }
+  }
 }
