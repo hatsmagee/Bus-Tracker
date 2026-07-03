@@ -3690,7 +3690,7 @@
         "resolvedTitle": "Four Seasons Resort Lanai",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T14:35:01.558Z",
+        "generatedAt": "2026-07-03T15:46:58.341Z",
         "reviewed": false
       },
       "status": "ok"
@@ -4470,6 +4470,254 @@
           }
         ],
         "generatedAt": "2026-07-03T14:45:11.336Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "sensor:bly-hilo-2": {
+      "title": "Kanoelehua / Puainako",
+      "summary": "Prince Kūhiō Plaza is a single-level regional shopping mall in Hilo, Hawaii. It is the largest enclosed mall on the Island of Hawaii.",
+      "history": [
+        {
+          "year": 1903,
+          "text": "The mall is named for Prince Jonah Kuhio Kalanianaole, who served as Congressional Delegate from 1903 to 1922. .",
+          "source": "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        },
+        {
+          "year": 1977,
+          "text": "In September 1977, the Department of Hawaiian Home Lands offered to lease 39 acres (160,000 m2) of land at the intersection of Pū'āinakō Street and Kanoelehua Avenue (part of the Hawaii Belt Road) for development into retail space, which…",
+          "source": "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        },
+        {
+          "year": 2001,
+          "text": "In 2001, Macy's acquired the Liberty House store at the mall, followed by acquiring the vacant JCPenney space two years later for its men's, children's, and home store.",
+          "source": "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        },
+        {
+          "year": 2002,
+          "text": "On August 5, 2002, General Growth acquired the 50% interest in the mall that was owned by Homart Development Company, bringing its ownership in the mall to 100%.",
+          "source": "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        },
+        {
+          "year": 2004,
+          "text": "In 2004, the owner of the shopping center was sued by Longs Drugs for allowing a Safeway to be constructed at the mall.",
+          "source": "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        },
+        {
+          "year": 2021,
+          "text": "Sears was an anchor of the plaza until closing in 2021.",
+          "source": "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Prince_Kuhio_Plaza%2C_Hilo_-_Outside_View%2C_Sears_and_T.J._Maxx.jpg/330px-Prince_Kuhio_Plaza%2C_Hilo_-_Outside_View%2C_Sears_and_T.J._Maxx.jpg",
+          "credit": "Wikipedia — Prince Kuhio Plaza (CC/PD)",
+          "caption": "Prince Kuhio Plaza",
+          "alt": "cars parked in a lot with a few trees in the background and the sign for a store"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        ],
+        "resolvedTitle": "Prince Kuhio Plaza",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Prince_Kuhio_Plaza%2C_Hilo_-_Outside_View%2C_Sears_and_T.J._Maxx.jpg/330px-Prince_Kuhio_Plaza%2C_Hilo_-_Outside_View%2C_Sears_and_T.J._Maxx.jpg",
+            "caption": "cars parked in a lot with a few trees in the background and the sign for a store",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T15:57:16.339Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "sensor:bly-hilo-3": {
+      "title": "Kanoelehua / Makaala",
+      "summary": "The Merrie Monarch Festival is a week-long cultural festival that takes place annually in Hilo, Hawaii during the week after Easter.",
+      "history": [
+        {
+          "year": 1874,
+          "text": "The festival is dedicated to the memory of King David Kalākaua, the last king of the Kingdom of Hawaii, who reigned from 1874 until his death in 1891.",
+          "source": "https://en.wikipedia.org/wiki/Merrie_Monarch_Festival"
+        },
+        {
+          "year": 1886,
+          "text": "This was a two-week celebration of Hawaiian culture on his 50th birthday (1886) at ʻIolani Palace on the island of Oʻahu.",
+          "source": "https://en.wikipedia.org/wiki/Merrie_Monarch_Festival"
+        },
+        {
+          "year": 1963,
+          "text": "The Merrie Monarch Festival began in 1963 when Helene Hale, then Executive Officer of Hawaii County, decided to create an event to increase tourism to the Island of Hawaii.",
+          "source": "https://en.wikipedia.org/wiki/Merrie_Monarch_Festival"
+        },
+        {
+          "year": 2020,
+          "text": "The 2020 Merrie Monarch festival was cancelled due to coronavirus pandemic concerns.",
+          "source": "https://en.wikipedia.org/wiki/Merrie_Monarch_Festival"
+        },
+        {
+          "year": 2021,
+          "text": "The 2021 competition was held June 24–26, without a live audience, and was broadcast July 1–3 on KFVE.",
+          "source": "https://en.wikipedia.org/wiki/Merrie_Monarch_Festival"
+        },
+        {
+          "year": 2025,
+          "text": "The 2025 Merrie Monarch hula competition began on Thursday night April 24 at 6:00pm HST, and was livestreamed free all three nights on the website of Hawaii News Now. .",
+          "source": "https://en.wikipedia.org/wiki/Merrie_Monarch_Festival"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/01/Hula0081110.jpg/330px-Hula0081110.jpg",
+          "credit": "Wikipedia — Merrie Monarch Festival (CC/PD)",
+          "caption": "Merrie Monarch Festival",
+          "alt": "a man and woman in hawaiian costumes are standing together in the dark night of the hawaiian wedding ceremony"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Merrie_Monarch_Festival"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Merrie_Monarch_Festival"
+        ],
+        "resolvedTitle": "Merrie Monarch Festival",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/01/Hula0081110.jpg/330px-Hula0081110.jpg",
+            "caption": "a man and woman in hawaiian costumes are standing together in the dark night of the hawaiian wedding ceremony",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T15:57:26.254Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "sensor:bly-hilo-5": {
+      "title": "Hwy 11 / Railroad Ave",
+      "summary": "Park Avenue is a boulevard in New York City that carries north and southbound traffic in the boroughs of Manhattan and the Bronx.",
+      "history": [
+        {
+          "year": 1860,
+          "text": "A section of this \"park\" was later renamed Park Avenue in 1860.",
+          "source": "https://en.wikipedia.org/wiki/Park_Avenue"
+        },
+        {
+          "year": 1871,
+          "text": "The Harlem Railroad was later incorporated into the New York Central Railroad, and a terminal for the New York Central at 42nd Street, the Grand Central Depot, opened in 1871.",
+          "source": "https://en.wikipedia.org/wiki/Park_Avenue"
+        },
+        {
+          "year": 1872,
+          "text": "In 1872, shortly after the opening of Grand Central Depot, New York Central owner Cornelius Vanderbilt proposed the Fourth Avenue Improvement Project.",
+          "source": "https://en.wikipedia.org/wiki/Park_Avenue"
+        },
+        {
+          "year": 1874,
+          "text": "After the improvements were completed in 1874, the railroads, approaching Grand Central Depot from the north, descended into the Park Avenue Tunnel at 96th Street and continued underground into the new depot.",
+          "source": "https://en.wikipedia.org/wiki/Park_Avenue"
+        },
+        {
+          "year": 1888,
+          "text": "The boulevard north of Grand Central was renamed Park Avenue in 1888. .",
+          "source": "https://en.wikipedia.org/wiki/Park_Avenue"
+        },
+        {
+          "year": 1902,
+          "text": "A fatal collision between two trains occurred under Park Avenue in 1902, in part because the smoke coming from the steam trains obscured the signals.",
+          "source": "https://en.wikipedia.org/wiki/Park_Avenue"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bb/Park_Avenue_01.jpg/330px-Park_Avenue_01.jpg",
+          "credit": "Wikipedia — Park Avenue (CC/PD)",
+          "caption": "Park Avenue",
+          "alt": "tall buildings in a city with cars parked along the side walk and street lamps on the corner"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Park_Avenue"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Park_Avenue"
+        ],
+        "resolvedTitle": "Park Avenue",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bb/Park_Avenue_01.jpg/330px-Park_Avenue_01.jpg",
+            "caption": "tall buildings in a city with cars parked along the side walk and street lamps on the corner",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T16:07:06.399Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "sensor:bly-hilo-6": {
+      "title": "Keaau / Hwy 11",
+      "summary": "The Hawaii Department of Transportation maintains the smallest state-maintained system of state highways in the country.",
+      "history": [
+        {
+          "year": 1941,
+          "text": "They were used to assist military personnel not accustomed to the Hawaiian street names during the time of Martial law in the Territory of Hawaiʻi from 1941 to 1945.",
+          "source": "https://en.wikipedia.org/wiki/List_of_state_highways_in_Hawaii"
+        },
+        {
+          "year": 1955,
+          "text": "The current state (then territorial) highway numbering system was established in 1955.",
+          "source": "https://en.wikipedia.org/wiki/List_of_state_highways_in_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/I-H1.svg/330px-I-H1.svg.png",
+          "credit": "Wikipedia — List of state highways in Hawaii (CC/PD)",
+          "caption": "List of state highways in Hawaii",
+          "alt": "interstate highway sign with the number 11 on it ' s side and the word interstate on the side"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/List_of_state_highways_in_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/List_of_state_highways_in_Hawaii"
+        ],
+        "resolvedTitle": "List of state highways in Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/I-H1.svg/330px-I-H1.svg.png",
+            "caption": "interstate highway sign with the number 11 on it ' s side and the word interstate on the side",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T16:07:16.246Z",
         "reviewed": false
       },
       "status": "ok"
