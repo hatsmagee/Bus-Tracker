@@ -2034,6 +2034,341 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "power:aes-west-oahu": {
+      "title": "AES West Oʻahu Solar",
+      "summary": "The energy sector in Hawaii has rapidly adopted solar power due to the high costs of electricity, and good solar resources, and has one of the highest per capita rates of solar power in the United States.",
+      "history": [
+        {
+          "year": 2012,
+          "text": "Hawaii had almost 200 MW of grid-connected photovoltaics in 2012.",
+          "source": "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        },
+        {
+          "year": 2014,
+          "text": "In 2014, there were over 40,000 rooftop systems, over 10 percent of customers.",
+          "source": "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        },
+        {
+          "year": 2015,
+          "text": "Such overbuilding led the Hawaiian Electrical Company (HECO) to stop its net metering program, which reimbursed solar consumers generously for the excess electricity they exported back to the grid, in 2015.",
+          "source": "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        },
+        {
+          "year": 2022,
+          "text": "By 2022, nearly a third of single family homes have solar panels.",
+          "source": "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        },
+        {
+          "year": 2023,
+          "text": "In 2023, distributed solar produced 1,408 GWh while utility-scale solar produced 643 GWh.",
+          "source": "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        },
+        {
+          "year": 2024,
+          "text": "The largest utility-scale solar farm in Hawaii is the 60 MW Kuihelani Solar on Maui, which opened in 2024, and includes 240 MWhr of battery storage As of 2024, solar power produced 19.5% of Hawaii's electricity. .",
+          "source": "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Holaniku.png/330px-Holaniku.png",
+          "credit": "Wikipedia — Solar power in Hawaii (CC/PD)",
+          "caption": "Solar power in Hawaii",
+          "alt": "a large array of solar panels in a field with the sun shining through the top of it and a blue sky in the background"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        ],
+        "resolvedTitle": "Solar power in Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Holaniku.png/330px-Holaniku.png",
+            "caption": "a large array of solar panels in a field with the sun shining through the top of it and a blue sky in the background",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T04:37:47.803Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "power:kahului": {
+      "title": "Kahului Power Plant (Maui)",
+      "summary": "Kaheawa Wind Power is one of the largest wind farms in Hawaii. It is located on the island of Maui above the town of Maalaea in the West Maui Mountains.",
+      "history": [
+        {
+          "year": 1800,
+          "text": "Phase two of the project is located on the Kaheawa Ridge at the 1800–2700 foot elevation, just southeast of KWP I. .",
+          "source": "https://en.wikipedia.org/wiki/Kaheawa_Wind_Power"
+        },
+        {
+          "year": 1996,
+          "text": "The first wind project was proposed in 1996.",
+          "source": "https://en.wikipedia.org/wiki/Kaheawa_Wind_Power"
+        },
+        {
+          "year": 1999,
+          "text": "An environmental impact statement (EIS) was approved in 1999, followed by a Conservation District Use Application in 2003. .",
+          "source": "https://en.wikipedia.org/wiki/Kaheawa_Wind_Power"
+        },
+        {
+          "year": 2006,
+          "text": "Phase one (KWP I) of the project was completed in 2006 by developer and operator First Wind and produces 30 MW from 20 GE Energy 1.5 MW wind turbines.",
+          "source": "https://en.wikipedia.org/wiki/Kaheawa_Wind_Power"
+        },
+        {
+          "year": 2011,
+          "text": "In February 2011, MECO finalized a power purchasing agreement to buy power from an additional 14 turbines under construction for phase two of the wind farm, which planned to add a new 10 MW battery energy storage system (BESS).",
+          "source": "https://en.wikipedia.org/wiki/Kaheawa_Wind_Power"
+        },
+        {
+          "year": 2012,
+          "text": "Phase two (KWP II), completed in July 2012, built 14 turbines below phase one with an additional 21 MW for a total capacity of 51 MW serving 18,700 homes.",
+          "source": "https://en.wikipedia.org/wiki/Kaheawa_Wind_Power"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Starr_080615-9026_Heteropogon_contortus.jpg/330px-Starr_080615-9026_Heteropogon_contortus.jpg",
+          "credit": "Wikipedia — Kaheawa Wind Power (CC/PD)",
+          "caption": "Kaheawa Wind Power",
+          "alt": "wind farm on a dry mountain side near a river and mountains in the background with clouds in the sky"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kaheawa_Wind_Power"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kaheawa_Wind_Power"
+        ],
+        "resolvedTitle": "Kaheawa Wind Power",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Starr_080615-9026_Heteropogon_contortus.jpg/330px-Starr_080615-9026_Heteropogon_contortus.jpg",
+            "caption": "wind farm on a dry mountain side near a river and mountains in the background with clouds in the sky",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T04:45:03.673Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "power:auwahi-wind": {
+      "title": "Auwahi Wind Farm (Maui)",
+      "summary": "Wind power in Hawaii is produced by the state's 132 commercial wind turbines, totaling 236 MW in capacity.",
+      "history": [
+        {
+          "year": 1987,
+          "text": "The MOD-5B, a 3.2MW wind turbine on Oahu, was the largest in the world in 1987.",
+          "source": "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        },
+        {
+          "year": 2010,
+          "text": "These early examples were all out of service by 2010. . . .",
+          "source": "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        },
+        {
+          "year": 2012,
+          "text": "In 2012, Hawaii generated 367 million kWh from wind power.",
+          "source": "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        },
+        {
+          "year": 2015,
+          "text": "In 2015, wind turbines produced 6.4% of Hawaii's electricity.",
+          "source": "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        },
+        {
+          "year": 2017,
+          "text": "Repowered by a new farm at the site in 2017. .",
+          "source": "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        },
+        {
+          "year": 2019,
+          "text": "In 2019, Kahuku residents protested the placement of wind towers, leading to hundreds of arrests for obstructing entry of equipment to the turbine sites.",
+          "source": "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Kaheawa_Wind_Farm.jpg/330px-Kaheawa_Wind_Farm.jpg",
+          "credit": "Wikipedia — Wind power in Hawaii (CC/PD)",
+          "caption": "Wind power in Hawaii",
+          "alt": "there are a lot of windmills that are in the middle of the field with dirt on the ground"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Wind_power_in_Hawaii"
+        ],
+        "resolvedTitle": "Wind power in Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Kaheawa_Wind_Farm.jpg/330px-Kaheawa_Wind_Farm.jpg",
+            "caption": "there are a lot of windmills that are in the middle of the field with dirt on the ground",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T04:47:55.945Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "power:port-allen": {
+      "title": "Port Allen Power Plant (Kauaʻi)",
+      "summary": "Kauaʻi, sometimes written Kauai, is one of the main Hawaiian Islands. It has an area of 562.3 square miles (1,456.4 km2), making it the fourth-largest of the islands and the 21st-largest island in the United States.",
+      "history": [
+        {
+          "year": 1778,
+          "text": "In January 1778, British navigator James Cook made the first recorded contact between any European and the indigenous people of the Hawaiian Islands when he arrived at Kauaʻi by accident while crossing the Pacific during his third voyage…",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1795,
+          "text": "By 1795, the king of Hawaii Island, Kamehameha I, had established the Kingdom of Hawaii, uniting most of the islands, but Kauaʻi remained independent.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1796,
+          "text": "Kamehameha tried to conquer Kauaʻi in 1796, but stormy seas caused the attack from Oahu to be canceled and he was afterward distracted by events elsewhere.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1803,
+          "text": "By 1803, Kauaʻi was ruled by Kaumualiʻi, who maintained his independence from the Kingdom of Hawaii.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1810,
+          "text": "In 1810, a diplomatic agreement was reached whereby Kaumualiʻi agreed to be Kamehameha's vassal, and to cede Kauaʻi to the Kingdom of Hawaiʻi upon his death by making Kamehameha's son his heir. .",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1815,
+          "text": "The Schäffer affair was a diplomatic episode instigated in 1815 by Georg Anton Schäffer, a German working with the Russian American Company.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Kauai_from_space_2.jpg/330px-Kauai_from_space_2.jpg",
+          "credit": "Wikipedia — Kauaʻi (CC/PD)",
+          "caption": "Kauaʻi",
+          "alt": "an aerial photograph of the island's crater in the middle of nowhere, taken in may 2013"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        ],
+        "resolvedTitle": "Kauaʻi",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Kauai_from_space_2.jpg/330px-Kauai_from_space_2.jpg",
+            "caption": "an aerial photograph of the island's crater in the middle of nowhere, taken in may 2013",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T04:55:07.811Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "power:koloa-solar": {
+      "title": "Kōloa Solar (Kauaʻi)",
+      "summary": "Kauaʻi, sometimes written Kauai, is one of the main Hawaiian Islands. It has an area of 562.3 square miles (1,456.4 km2), making it the fourth-largest of the islands and the 21st-largest island in the United States.",
+      "history": [
+        {
+          "year": 1778,
+          "text": "In January 1778, British navigator James Cook made the first recorded contact between any European and the indigenous people of the Hawaiian Islands when he arrived at Kauaʻi by accident while crossing the Pacific during his third voyage…",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1795,
+          "text": "By 1795, the king of Hawaii Island, Kamehameha I, had established the Kingdom of Hawaii, uniting most of the islands, but Kauaʻi remained independent.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1796,
+          "text": "Kamehameha tried to conquer Kauaʻi in 1796, but stormy seas caused the attack from Oahu to be canceled and he was afterward distracted by events elsewhere.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1803,
+          "text": "By 1803, Kauaʻi was ruled by Kaumualiʻi, who maintained his independence from the Kingdom of Hawaii.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1810,
+          "text": "In 1810, a diplomatic agreement was reached whereby Kaumualiʻi agreed to be Kamehameha's vassal, and to cede Kauaʻi to the Kingdom of Hawaiʻi upon his death by making Kamehameha's son his heir. .",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1815,
+          "text": "The Schäffer affair was a diplomatic episode instigated in 1815 by Georg Anton Schäffer, a German working with the Russian American Company.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Kauai_from_space_2.jpg/330px-Kauai_from_space_2.jpg",
+          "credit": "Wikipedia — Kauaʻi (CC/PD)",
+          "caption": "Kauaʻi",
+          "alt": "a large island in the middle of a blue ocean and water with mountains on each side"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        ],
+        "resolvedTitle": "Kauaʻi",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Kauai_from_space_2.jpg/330px-Kauai_from_space_2.jpg",
+            "caption": "a large island in the middle of a blue ocean and water with mountains on each side",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T04:58:41.375Z",
+        "reviewed": false
+      },
+      "status": "ok"
     }
   }
 }
