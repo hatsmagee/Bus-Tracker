@@ -3690,7 +3690,7 @@
         "resolvedTitle": "Four Seasons Resort Lanai",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T15:46:58.341Z",
+        "generatedAt": "2026-07-03T17:13:56.137Z",
         "reviewed": false
       },
       "status": "ok"
@@ -4718,6 +4718,279 @@
           }
         ],
         "generatedAt": "2026-07-03T16:07:16.246Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "hub:Waimea": {
+      "title": "Waimea",
+      "summary": "Waimea is a common place name in Hawaii and New Zealand. In Hawaiian, it means reddish water; in Māori it means forgotten or hidden stream.",
+      "history": [
+        {
+          "year": 1793,
+          "text": "California longhorn cattle were given as a gift to Hawaiian King Kamehameha I by British Captain George Vancouver in 1793.",
+          "source": "https://en.wikipedia.org/wiki/Waimea"
+        },
+        {
+          "year": 1809,
+          "text": "In 1809, John Palmer Parker arrived to the area after jumping ship and over time became employed by the king to hunt and tame the population of cattle, which at this point had grown out of control.",
+          "source": "https://en.wikipedia.org/wiki/Waimea"
+        },
+        {
+          "year": 1815,
+          "text": "In 1815 Parker married Kipikane, the daughter of a high-ranking chief, and as a family developed what is now Parker Ranch, the largest ranch in the area. .",
+          "source": "https://en.wikipedia.org/wiki/Waimea"
+        },
+        {
+          "year": 1836,
+          "text": "The king hired these vaqueros to teach Hawaiians herding and ranching skills, and by 1836 the island had working cowboys.",
+          "source": "https://en.wikipedia.org/wiki/Waimea"
+        },
+        {
+          "year": 1853,
+          "text": "Waimea's post office name \"Kamuela\" is the Hawaiian name for \"Samuel\", after Samuel Parker (1853–1920), the grandson of John Parker.",
+          "source": "https://en.wikipedia.org/wiki/Waimea"
+        },
+        {
+          "year": 1939,
+          "text": "Farm and ranchland acreage increased from 75 in 1939 to 518 in 1946.",
+          "source": "https://en.wikipedia.org/wiki/Waimea"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Waimea_pastures.JPG/330px-Waimea_pastures.JPG",
+          "credit": "Wikipedia — Waimea, Hawaiʻi County, Hawaii (CC/PD)",
+          "caption": "Waimea, Hawaiʻi County, Hawaii",
+          "alt": "a herd of animals grazing on grass next to power poles on a hill side with a blue sky with white clouds in the background"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Waimea"
+        },
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Waimea%2C_Hawai%CA%BBi_County%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Waimea",
+          "https://en.wikipedia.org/wiki/Waimea%2C_Hawai%CA%BBi_County%2C_Hawaii"
+        ],
+        "resolvedTitle": "Waimea",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Waimea_pastures.JPG/330px-Waimea_pastures.JPG",
+            "caption": "a herd of animals grazing on grass next to power poles on a hill side with a blue sky with white clouds in the background",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T17:24:15.936Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "hub:Kailua-Kona": {
+      "title": "Kailua-Kona",
+      "summary": "Kailua-Kona is an unincorporated community and, under the name Kailua, a census-designated place (CDP) in Hawaii County, Hawaii, United States.",
+      "history": [
+        {
+          "year": 1795,
+          "text": "The community was established by King Kamehameha I to be his seat of government when he was chief of Kona before he consolidated rule of the archipelago in 1795.",
+          "source": "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        },
+        {
+          "year": 1820,
+          "text": "In 1820, the first Christian missionaries arrived and established churches and schools.",
+          "source": "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        },
+        {
+          "year": 2000,
+          "text": "As of the census of 2000, there were 9,870 people, 3,537 households, and 2,429 families residing in Kailua-Kona.",
+          "source": "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        },
+        {
+          "year": 2006,
+          "text": "Kailua-Kona was the closest major settlement to the epicenter of the 2006 Kiholo Bay earthquake.",
+          "source": "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        },
+        {
+          "year": 2014,
+          "text": "In 2014, the Pālamanui Community Forest preserve was created in Kailua-Kona with a goal of preserving and protecting the native trees of Hawai’i. .",
+          "source": "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        },
+        {
+          "year": 2020,
+          "text": "Census Bureau significantly altered Kailua CDP's boundaries for the 2020 census.",
+          "source": "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/Kona_Mauka.jpg/330px-Kona_Mauka.jpg",
+          "credit": "Wikipedia — Kailua-Kona, Hawaii (CC/PD)",
+          "caption": "Kailua-Kona, Hawaii",
+          "alt": "there is a view of the ocean from a hill top in this photo you can see palm trees in the foreground"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        ],
+        "resolvedTitle": "Kailua-Kona, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/Kona_Mauka.jpg/330px-Kona_Mauka.jpg",
+            "caption": "there is a view of the ocean from a hill top in this photo you can see palm trees in the foreground",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T17:28:53.167Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "hub:Honoka'a": {
+      "title": "Honoka'a",
+      "summary": "Honokaʻa is a census-designated place (CDP) in the Hamakua District of Hawaiʻi County, Hawaiʻi, United States.",
+      "history": [
+        {
+          "year": 1873,
+          "text": "Honokaʻa's economy was based primarily on the sugar production of the Hāmākua Sugar Company from 1873 to 1994.",
+          "source": "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        },
+        {
+          "year": 1930,
+          "text": "In 1930, the Honokʻaa People's Theatre was built on Māmane Street by the Tanimoto family.",
+          "source": "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        },
+        {
+          "year": 1993,
+          "text": "The theater hosted the Hāmākua Music Festival every fall from 1993 to 2006, and again in 2009.",
+          "source": "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        },
+        {
+          "year": 2000,
+          "text": "As of the census of 2000, there were 2,233 people, 761 households, and 563 families residing in the CDP.",
+          "source": "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        },
+        {
+          "year": 2006,
+          "text": "This tradition has been celebrated annually on Western Weekend beginning in 2006, and included children's activities, country western bands, a block party with paniolo barbecue, a rodeo, and the ribald Saloon Girl Contest.",
+          "source": "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        },
+        {
+          "year": 2009,
+          "text": "Honokaʻa is the namesake and setting in the 2009 Japanese film Honokaʻa Boy (Japanese: ホノカアボーイ).",
+          "source": "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Honoka%27a_Hawaii_post_office.jpg/330px-Honoka%27a_Hawaii_post_office.jpg",
+          "credit": "Wikipedia — Honokaʻa, Hawaii (CC/PD)",
+          "caption": "Honokaʻa, Hawaii",
+          "alt": "a parking lot with cars parked in front of it and a building with a sign that says the entrance to the parking lot"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        ],
+        "resolvedTitle": "Honokaʻa, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Honoka%27a_Hawaii_post_office.jpg/330px-Honoka%27a_Hawaii_post_office.jpg",
+            "caption": "a parking lot with cars parked in front of it and a building with a sign that says the entrance to the parking lot",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T17:29:08.506Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "hub:Hilo (Mo'oheau)": {
+      "title": "Hilo (Mo'oheau)",
+      "summary": "Hilo (, HEE-low; Hawaiian pronunciation: [ˈhilo]) is the largest settlement in and the county seat of Hawaiʻi County, Hawaii, United States, which encompasses the Island of Hawaiʻi, and is a census-designated place (CDP).",
+      "history": [
+        {
+          "year": 1823,
+          "text": "When William Ellis visited in 1823, the main settlement there was Waiākea on the south shore of Hilo Bay.",
+          "source": "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        },
+        {
+          "year": 1887,
+          "text": "For example, by 1887, 26,000 Chinese workers worked in Hawai'i's sugar cane plantations, one of which was the Hilo Sugar Mill.",
+          "source": "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        },
+        {
+          "year": 1929,
+          "text": "A breakwater across Hilo Bay was begun in the first decade of the 20th century and completed in 1929.",
+          "source": "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        },
+        {
+          "year": 1946,
+          "text": "On April 1, 1946, an 8.6-magnitude earthquake near the Aleutian Islands created a 46-foot-high (14 m) tsunami that hit Hilo 4.9 hours later, killing 159 total in the islands, with 96 deaths in Hilo alone.",
+          "source": "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        },
+        {
+          "year": 1949,
+          "text": "In response, an early warning system, the Pacific Tsunami Warning Center, was established in 1949 to track these killer waves and provide warning.",
+          "source": "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        },
+        {
+          "year": 2020,
+          "text": "The population was 44,186 according to the 2020 census.",
+          "source": "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Hilo_Highlighted.svg/330px-Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Hilo_Highlighted.svg.png",
+          "credit": "Wikipedia — Hilo, Hawaii (CC/PD)",
+          "caption": "Hilo, Hawaii",
+          "alt": "the map showing the location of the islands of hawaii and new zealand in red as seen on a black screen"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        ],
+        "resolvedTitle": "Hilo, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Hilo_Highlighted.svg/330px-Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Hilo_Highlighted.svg.png",
+            "caption": "the map showing the location of the islands of hawaii and new zealand in red as seen on a black screen",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T17:29:16.671Z",
         "reviewed": false
       },
       "status": "ok"
