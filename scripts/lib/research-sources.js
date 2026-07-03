@@ -119,6 +119,61 @@ async function jinaRead(url) {
   return text.slice(0, 12000);
 }
 
+// A browser-like UA — DuckDuckGo's HTML endpoint serves a rate-limit challenge
+// (empty 202) to unknown agents, so we look like a normal browser here.
+const BROWSER_UA =
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+
+// Real, keyless web search via DuckDuckGo's HTML endpoint (the instant-answer
+// JSON API only covers a tiny set of topics). Returns organic result links so
+// items without a Wikipedia article can still be researched from the open web.
+// Retries the 202 anti-bot challenge, which clears on a second request.
+async function webSearch(query) {
+  const endpoints = [
+    'https://html.duckduckgo.com/html/?q=',
+    'https://lite.duckduckgo.com/lite/?q=',
+  ];
+  let body = '';
+  for (const base of endpoints) {
+    for (let attempt = 0; attempt < 3 && !/result__a|result-link/.test(body); attempt++) {
+      try {
+        body = await fetchText(base + encodeURIComponent(query), {
+          headers: { 'User-Agent': BROWSER_UA, Accept: 'text/html' },
+          timeoutMs: 20000,
+        });
+      } catch { body = ''; }
+    }
+    if (/result__a|result-link/.test(body)) break;
+  }
+  const out = [];
+  const seen = new Set();
+  const push = (href, title) => {
+    let u = href;
+    const um = u.match(/[?&]uddg=([^&]+)/);
+    if (um) { try { u = decodeURIComponent(um[1]); } catch {} }
+    if (u.startsWith('//')) u = 'https:' + u;
+    if (!/^https?:\/\//.test(u)) return;
+    try {
+      const host = new URL(u).hostname;
+      if (/duckduckgo\.com$/.test(host)) return;
+    } catch { return; }
+    if (seen.has(u)) return;
+    seen.add(u);
+    out.push({ url: u, title: decodeEntities(String(title || '').replace(/<[^>]+>/g, '').trim()) });
+  };
+  const re = /<a[^>]*class="[^"]*result(?:__a|-link)[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+  let m;
+  while ((m = re.exec(body)) && out.length < 6) push(m[1], m[2]);
+  return out;
+}
+
+function decodeEntities(s) {
+  return String(s || '')
+    .replace(/&#x27;|&#39;/g, "'").replace(/&quot;|&#34;/g, '"')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ');
+}
+
 // Full-text Wikipedia search — resolves a loose query (e.g. "CFHT Maunakea") to
 // the best-matching real article title. The plain REST summary endpoint needs an
 // exact title, so this is what makes research actually find pages.
@@ -293,6 +348,26 @@ async function researchItem(item) {
     if (second) years += await addArticle(second, acc);
   }
 
+  // Open-web fallback: only when Wikipedia yielded no article at all. Search the
+  // web, read the top results, and add their text as sources. Purely additive —
+  // it can't affect items that already resolved to a Wikipedia article, and the
+  // synthesis stage still requires ≥2 real dated events, so a page with no
+  // datable history just skips instead of producing filler.
+  if (!acc.sourceText) {
+    try {
+      const hits = await webSearch(item.researchQuery || query);
+      for (const h of hits.slice(0, 3)) {
+        if (acc.sourceText.length > 4000) break;
+        let body = '';
+        try { body = await jinaRead(h.url); } catch { continue; }
+        if (!body || body.length < 200) continue;
+        if (!acc.resolvedTitle) acc.resolvedTitle = h.title || null;
+        acc.sourceText += `\n\n--- Web: ${h.title || h.url} (${h.url}) ---\n${body.slice(0, 3000)}`;
+        acc.sources.push(h.url);
+      }
+    } catch { /* web fallback is best-effort */ }
+  }
+
   const photo = await commonsImage(acc.resolvedTitle || query).catch(() => null);
   if (photo) acc.photos.push(photo);
 
@@ -312,6 +387,7 @@ module.exports = {
   fetchText,
   headUrl,
   ddgSearch,
+  webSearch,
   jinaRead,
   wikiSearch,
   wikiSummary,

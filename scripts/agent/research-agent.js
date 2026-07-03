@@ -23,9 +23,24 @@ function agentEnabled() {
   return process.env.AGENT_ENABLED === '1' || process.env.AGENT_ENABLED === 'true';
 }
 
+// Web-page boilerplate that must never become "history": nav, legal, cookie and
+// subscription chrome. The open-web fallback reads arbitrary pages, so we drop
+// these outright. Wikipedia text effectively never trips these.
+const BOILERPLATE_RE = /\b(cookie|privacy policy|terms of (?:use|service)|all rights reserved|copyright|©|sign in|log in|subscribe|newsletter|advertisement|your (?:browser|email)|enable javascript|404|home\s*›)\b/i;
+
+// A sentence is usable prose if it's mostly letters/spaces (not a table row,
+// URL, phone list, or nav breadcrumb) and reads like a sentence.
+function looksLikeProse(s) {
+  if (BOILERPLATE_RE.test(s)) return false;
+  const letters = (s.match(/[a-z]/gi) || []).length;
+  if (letters / s.length < 0.6) return false;
+  const words = s.split(/\s+/).filter(w => /[a-z]/i.test(w));
+  return words.length >= 5;
+}
+
 // Split source text into clean sentences, dropping our "--- marker ---" lines
 // and Wikipedia "== Section ==" headers (turned into sentence breaks so a
-// heading never merges into the sentence that follows it).
+// heading never merges into the sentence that follows it), plus web boilerplate.
 function sentencesOf(text) {
   return String(text || '')
     .replace(/---[^\n]*---/g, ' ')
@@ -33,7 +48,7 @@ function sentencesOf(text) {
     .replace(/\s+/g, ' ')
     .split(/(?<=[.!?])\s+(?=[A-Z0-9"'(])/)
     .map(s => s.trim().replace(/^[.\s]+/, ''))
-    .filter(s => s.length > 25);
+    .filter(s => s.length > 25 && looksLikeProse(s));
 }
 
 // Trim to a max length at a word boundary so we never cut mid-word.
