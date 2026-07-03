@@ -70,6 +70,60 @@ async function fetchText(url, opts = {}) {
   throw lastErr;
 }
 
+function fetchBufferOnce(url, { timeoutMs = 30000, headers = {}, maxBytes = 8 * 1024 * 1024 } = {}) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const mod = u.protocol === 'https:' ? https : require('http');
+    const r = mod.request({
+      hostname: u.hostname,
+      port: u.port || (u.protocol === 'https:' ? 443 : 80),
+      path: u.pathname + u.search,
+      method: 'GET',
+      headers: { 'User-Agent': USER_AGENT, ...headers },
+    }, res => {
+      if (res.statusCode >= 400) {
+        res.resume();
+        const err = new Error(`GET ${url} ${res.statusCode}`);
+        err.status = res.statusCode;
+        reject(err);
+        return;
+      }
+      const chunks = [];
+      let n = 0;
+      res.on('data', d => {
+        n += d.length;
+        if (n > maxBytes) { r.destroy(); reject(new Error(`image too large (>${maxBytes} bytes)`)); return; }
+        chunks.push(d);
+      });
+      res.on('end', () => resolve({ buffer: Buffer.concat(chunks), contentType: res.headers['content-type'] || '' }));
+    });
+    r.on('error', reject);
+    r.setTimeout(timeoutMs, () => { r.destroy(); reject(new Error(`timeout ${url}`)); });
+    r.end();
+  });
+}
+
+// Download an image (with our compliant UA — Wikimedia and most hosts serve us,
+// unlike the Horde's own fetcher) and return it base64-encoded for submission to
+// the interrogation API. Paced + retried like our other fetches.
+async function fetchImageBase64(url, opts = {}) {
+  const retries = 2;
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    await pace();
+    try {
+      const { buffer, contentType } = await fetchBufferOnce(url, opts);
+      if (!buffer || !buffer.length) throw new Error('empty image');
+      return { base64: buffer.toString('base64'), contentType, bytes: buffer.length };
+    } catch (e) {
+      lastErr = e;
+      if (attempt === retries) throw e;
+      await new Promise(r => setTimeout(r, 700 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 async function headUrl(url, { timeoutMs = 15000 } = {}) {
   await pace();
   return new Promise((resolve, reject) => {
@@ -442,6 +496,7 @@ async function researchItem(item) {
 
 module.exports = {
   fetchText,
+  fetchImageBase64,
   headUrl,
   ddgSearch,
   webSearch,

@@ -127,6 +127,75 @@ async function generateText(prompt, { model, maxLength = 512, temperature = 0.4,
   throw new Error(`horde: job ${jobId} timed out after ${TIMEOUT_MS}ms`);
 }
 
+// ─── IMAGE INTERROGATION (Alchemy / caption) ───────────────────────────────
+// Ask a vision worker what an image actually depicts, so we can confirm a photo
+// shows the subject (a telescope on a mountain) and not something wrong (a
+// toaster, or a different bridge). Keyless + async: submit → poll → caption.
+//
+// The public endpoint can't fetch hotlink-protected hosts (e.g. Wikimedia), so
+// callers pass the image as base64 (we download it ourselves with a good UA).
+// Time isn't a constraint here — the agent runs all day — so this is patient:
+// long timeout, steady polling, and retries around transient hiccups.
+const INTERROGATE_TIMEOUT_MS = 8 * 60 * 1000;
+const INTERROGATE_POLL_MS = 5000;
+
+async function reqRetry(method, apiPath, body, { tries = 4, base = 1500 } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    try {
+      return await req(method, apiPath, body);
+    } catch (e) {
+      lastErr = e;
+      const msg = String(e && e.message || '');
+      // Retry only transient conditions: rate limit, kudos backpressure, 5xx,
+      // and network/timeout blips. Anything else (e.g. 400 bad input) is fatal.
+      const transient = /\b(429|50\d|timeout|ECONN|ETIMEDOUT|socket|EAI_AGAIN)\b/i.test(msg)
+        || /KudosUpfront|maintenance|too many/i.test(msg);
+      if (!transient || attempt === tries - 1) throw e;
+      await sleep(Math.min(30000, base * Math.pow(2, attempt)));
+    }
+  }
+  throw lastErr;
+}
+
+// Return a plain caption string for a base64-encoded image, or throw. Robust to
+// transient submit/poll failures; gives up cleanly after INTERROGATE_TIMEOUT_MS.
+async function interrogateCaption(imageBase64, { timeoutMs = INTERROGATE_TIMEOUT_MS, pollMs = INTERROGATE_POLL_MS } = {}) {
+  if (!imageBase64 || typeof imageBase64 !== 'string') throw new Error('interrogate: no image');
+  const submit = await reqRetry('POST', '/interrogate/async', {
+    forms: [{ name: 'caption' }],
+    source_image: imageBase64,
+    slow_workers: true,
+  });
+  const jobId = submit && submit.id;
+  if (!jobId) throw new Error(`interrogate: no job id: ${JSON.stringify(submit).slice(0, 160)}`);
+
+  const started = Date.now();
+  let softErrors = 0;
+  while (Date.now() - started < timeoutMs) {
+    await sleep(pollMs);
+    let st;
+    try {
+      st = await req('GET', `/interrogate/status/${jobId}`);
+    } catch (e) {
+      // Tolerate a burst of status blips without aborting the whole job.
+      if (++softErrors > 10) throw e;
+      continue;
+    }
+    softErrors = 0;
+    const form = (st.forms || []).find(f => f.form === 'caption') || (st.forms || [])[0];
+    if (st.state === 'done' || (form && form.state === 'done')) {
+      const cap = form && form.result && (form.result.caption || form.result.text);
+      if (cap) return String(cap).trim();
+      throw new Error('interrogate: done but no caption in result');
+    }
+    if (st.state === 'faulted' || (form && form.state === 'faulted')) {
+      throw new Error(`interrogate: job faulted: ${JSON.stringify(st).slice(0, 160)}`);
+    }
+  }
+  throw new Error(`interrogate: job ${jobId} timed out after ${timeoutMs}ms`);
+}
+
 // Best-effort trailing-comma cleanup + truncation repair so we can recover a
 // usable object from a weak/truncated model response (common on the free tier).
 function repairJson(s) {
@@ -199,6 +268,7 @@ module.exports = {
   pickModel,
   heartbeat,
   generateText,
+  interrogateCaption,
   extractJson,
   isBlockedModel,
   POLL_MS,

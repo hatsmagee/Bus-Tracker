@@ -1,8 +1,8 @@
 'use strict';
 
 const { audit } = require('../audit-map-items');
-const { researchItem } = require('../lib/research-sources');
-const { generateText, heartbeat } = require('../lib/aihorde');
+const { researchItem, fetchImageBase64 } = require('../lib/research-sources');
+const { generateText, heartbeat, interrogateCaption } = require('../lib/aihorde');
 const { validateEntry } = require('../lib/map-items-schema');
 const { readJsonFile, writeJsonFile, emptyDoc } = require('../lib/map-items-schema');
 const { checkNoKeysGuard } = require('../lib/no-keys-guard');
@@ -96,6 +96,80 @@ function deriveSummary(research) {
   return clip(summary, 320);
 }
 
+// ─── IMAGE VERIFICATION (vision) ────────────────────────────────────────────
+// Metadata gets us the right *instance* (a file whose title/description names
+// this exact subject); vision confirms the right *kind of thing* — that the
+// picture is actually a telescope/wind turbine/airport and not a logo, a map, or
+// something unrelated. We caption each candidate with AI Horde and check the
+// caption against words we'd expect for the item's category. Best-effort: if the
+// Horde is unreachable we keep the metadata-selected photos rather than stall.
+const VERIFY_IMAGES = process.env.AGENT_VERIFY_IMAGES !== '0' && process.env.AGENT_VERIFY_IMAGES !== 'false';
+
+const CATEGORY_TERMS = {
+  summit: ['telescope', 'observatory', 'dome', 'domes', 'antenna', 'dish', 'mountain', 'building', 'structure', 'astronomical', 'array', 'radio'],
+  lco: ['telescope', 'observatory', 'dome', 'building', 'mountain', 'structure'],
+  power: ['wind', 'turbine', 'windmill', 'blade', 'blades', 'solar', 'panel', 'panels', 'array', 'dam', 'hydro', 'power', 'plant', 'station', 'farm', 'energy', 'field', 'tower', 'pipe', 'steam'],
+  volcano: ['volcano', 'crater', 'lava', 'mountain', 'smoke', 'eruption', 'summit', 'caldera', 'steam', 'rock', 'landscape', 'ash'],
+  ocean: ['buoy', 'ocean', 'sea', 'water', 'wave', 'waves', 'boat', 'ship', 'coast', 'beach', 'harbor'],
+  airport: ['airport', 'runway', 'plane', 'airplane', 'aircraft', 'terminal', 'airfield', 'tarmac', 'jet', 'hangar'],
+  hub: ['bus', 'station', 'building', 'street', 'terminal', 'parking', 'road', 'sign', 'plaza', 'shop', 'store', 'building'],
+  pnr: ['parking', 'lot', 'car', 'cars', 'road', 'sign', 'building', 'street'],
+  sat: ['satellite', 'space', 'telescope', 'spacecraft', 'orbit', 'station', 'solar'],
+  airquality: ['city', 'town', 'street', 'building', 'landscape', 'sky', 'mountain', 'aerial'],
+};
+
+function catOf(key) { return String(key || '').split(':')[0]; }
+
+// Words the caption should plausibly contain for this item to be "the right kind
+// of thing": the category vocabulary plus the item's own distinctive terms.
+function expectedTerms(item) {
+  const set = new Set(CATEGORY_TERMS[catOf(item.key)] || []);
+  for (const t of String(`${item.title || ''} ${item.researchQuery || ''}`).toLowerCase().split(/[^a-z0-9]+/)) {
+    if (t.length > 3) set.add(t);
+  }
+  return set;
+}
+
+function captionScore(caption, expected) {
+  const words = new Set(String(caption || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  let matched = [];
+  for (const t of expected) if (words.has(t)) matched.push(t);
+  return { ok: matched.length > 0, matched };
+}
+
+// Caption each candidate photo and keep the ones vision confirms. A trusted
+// Wikipedia lead image (pri 2) survives a generic/no-match caption (it's the
+// article's own curated image); un-trusted Commons/logo images must pass or be
+// dropped — a card with no photo beats a wrong photo. If the Horde never
+// answered for any photo, we keep the metadata selection untouched.
+async function verifyPhotos(item, photos) {
+  if (!VERIFY_IMAGES || !photos || !photos.length) return photos || [];
+  const expected = expectedTerms(item);
+  const checked = [];
+  let hordeAnswered = false;
+  for (const p of photos.slice(0, 3)) {
+    try {
+      const img = await fetchImageBase64(p.url, { maxBytes: 6 * 1024 * 1024 });
+      const caption = await interrogateCaption(img.base64);
+      hordeAnswered = true;
+      const { ok, matched } = captionScore(caption, expected);
+      console.log(`[agent] vision ${item.key}: "${caption}" -> ${ok ? 'match(' + matched.join(',') + ')' : 'NO MATCH'}`);
+      checked.push({ ...p, verifiedCaption: caption, visionOk: ok });
+    } catch (e) {
+      console.log(`[agent] vision ${item.key}: check failed (${e.message}) — keeping on metadata`);
+      checked.push({ ...p, visionOk: null });
+    }
+  }
+  if (!hordeAnswered) return photos; // vision unavailable → trust metadata
+
+  const approved = checked.filter(p => p.visionOk === true);
+  if (approved.length) return approved;
+  // Nothing matched: keep a trusted article lead image (authoritative despite a
+  // generic caption); otherwise drop rather than show a possibly-wrong photo.
+  const trustedLead = checked.find(p => (p.pri || 0) >= 2);
+  return trustedLead ? [trustedLead] : [];
+}
+
 // Optional LLM polish for the summary only (a short, easy task). Best-effort:
 // any failure falls back to the deterministic summary. Kept tiny to fit the
 // keyless AI Horde budget.
@@ -125,18 +199,26 @@ async function synthesizeEntry(item, research) {
   }
   if (!summary) summary = `${item.title} — see sources for details.`;
 
+  // Confirm the photos actually depict the subject before publishing them.
+  const verified = await verifyPhotos(item, research.candidatePhotos || []);
+  const photos = verified.slice(0, 3).map(p => ({
+    url: p.url,
+    credit: p.credit,
+    caption: p.caption || item.title,
+    ...(p.verifiedCaption ? { alt: p.verifiedCaption } : {}),
+  }));
+
   const entry = {
     title: item.title,
     summary,
     history,
-    photos: (research.candidatePhotos || []).slice(0, 3).map(p => ({
-      url: p.url, credit: p.credit, caption: p.caption || item.title,
-    })),
+    photos,
     links: research.sources.slice(0, 4).map(u => ({ label: 'Source', url: u })),
     provenance: {
       sources: research.sources,
       resolvedTitle: research.resolvedTitle || null,
       model,
+      imageChecks: verified.map(p => ({ url: p.url, caption: p.verifiedCaption || null, visionOk: p.visionOk === undefined ? null : p.visionOk })),
       generatedAt: new Date().toISOString(),
       reviewed: false,
     },
