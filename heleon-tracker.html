@@ -250,6 +250,13 @@
   .agent-scout .as-lens { position:absolute; left:-9.5px; top:-9.5px;
     animation: scoutBob 2.6s ease-in-out infinite;
     filter: drop-shadow(0 0 5px rgba(56,189,248,.85)) drop-shadow(0 1px 2px rgba(0,0,0,.55)); }
+  /* Actively scanning a spot: quicker, brighter pulses. */
+  .agent-scout.scanning .as-pulse { animation-duration: 1.5s; border-color: rgba(125,211,252,.95); }
+  /* Resting between sweeps (or working an off-island target): stays visible but
+     calm and dimmed so the little guy is always findable without shouting. */
+  .agent-scout.resting .as-pulse { animation-duration: 3.8s; opacity:.45; }
+  .agent-scout.resting .as-lens { animation-duration: 4.2s;
+    filter: drop-shadow(0 0 3px rgba(56,189,248,.5)) drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
 
   /* ─── STREAMFLOW markers: water wheel = discharge (ft³/s); staff gauge = stage (ft) ── */
   @keyframes waterWheelSpin { to { transform: rotate(360deg); } }
@@ -3558,7 +3565,8 @@ function ensureAgentRobot() {
   // investigating this spot" without the tired robot cliché. Hidden by default
   // until the agent has a real on-island place to be.
   el.style.display = 'none';
-  el.style.transition = 'opacity .4s ease';
+  el.style.transition = 'opacity .5s ease';
+  el.classList.add('resting');
   el.innerHTML =
     '<div class="as-pulse"></div>' +
     '<div class="as-pulse d2"></div>' +
@@ -3573,28 +3581,60 @@ function ensureAgentRobot() {
   agentRobotMarker = new maplibregl.Marker({ element: el, anchor: 'center' })
     .setLngLat([agentRobotState.lon, agentRobotState.lat]).addTo(map);
 }
+// Smoothly fly the scout from where it is to a new coordinate so it reads as
+// "roaming" rather than teleporting. Short hops snap; longer ones ease over ~1–2s.
+let agentRobotAnim = null;
+function glideRobotTo(lon, lat) {
+  if (!agentRobotMarker) return;
+  const start = agentRobotMarker.getLngLat();
+  const from = [start.lng, start.lat];
+  const dist = Math.hypot(lon - from[0], lat - from[1]);
+  if (dist < 1e-4) { agentRobotMarker.setLngLat([lon, lat]); return; }
+  if (agentRobotAnim) cancelAnimationFrame(agentRobotAnim);
+  const dur = Math.min(2000, 450 + dist * 3500);
+  const t0 = performance.now();
+  const step = (now) => {
+    const p = Math.min(1, (now - t0) / dur);
+    const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; // easeInOutQuad
+    agentRobotMarker.setLngLat([from[0] + (lon - from[0]) * e, from[1] + (lat - from[1]) * e]);
+    if (p < 1) agentRobotAnim = requestAnimationFrame(step);
+  };
+  agentRobotAnim = requestAnimationFrame(step);
+}
 async function refreshAgentRobot() {
   if (!mapReady) return;
   let s;
   try { s = await (await fetch('/api/agent/status')).json(); } catch { return; }
+  // Agent switched off entirely → retire the little guy.
+  if (s && s.enabled === false) {
+    if (agentRobotMarker) { const el = agentRobotMarker.getElement(); el.style.opacity = '0'; setTimeout(() => { if (el.style.opacity === '0') el.style.display = 'none'; }, 500); }
+    return;
+  }
   ensureAgentRobot();
   if (!agentRobotMarker) return;
   const cur = s.current || { activity: 'idle', text: '', coord: null };
   const el = agentRobotMarker.getElement();
-  // Trust the server's on-island coord for the item it's actually researching.
-  // No coord (idle, off-island buoy, satellite, category) → hide the robot so it
-  // never darts to random or off-map spots.
   const coord = Array.isArray(cur.coord) ? cur.coord : null;
   const working = s.runInFlight && cur.activity === 'researching';
-  if (coord && working) {
-    agentRobotState.lon = coord[0]; agentRobotState.lat = coord[1];
-    agentRobotMarker.setLngLat(coord);
-    el.style.display = 'block';
+  // The scout is a persistent presence: always on the map (so it's findable),
+  // gliding to whatever on-island item it's researching. For off-island targets
+  // (buoys, satellites, webcams with no coord) or between the ~10-min sweeps it
+  // rests at its last spot instead of vanishing.
+  el.style.display = 'block';
+  if (coord) { agentRobotState.lon = coord[0]; agentRobotState.lat = coord[1]; glideRobotTo(coord[0], coord[1]); }
+  if (working && coord) {
+    el.classList.add('scanning'); el.classList.remove('resting');
     el.style.opacity = '1';
     el.title = 'Scout · ' + (cur.text || 'Researching…');
+  } else if (working) {
+    // Working an off-island / non-geographic item — hold position, stay awake.
+    el.classList.remove('scanning'); el.classList.remove('resting');
+    el.style.opacity = '.9';
+    el.title = 'Scout · ' + (cur.text || 'Researching offshore…');
   } else {
-    el.style.opacity = '0';
-    setTimeout(() => { if (el.style.opacity === '0') el.style.display = 'none'; }, 400);
+    el.classList.add('resting'); el.classList.remove('scanning');
+    el.style.opacity = '.72';
+    el.title = 'Scout · resting — next sweep soon';
   }
 }
 
@@ -10004,9 +10044,10 @@ Promise.all([
 setInterval(() => { if (activeTab === 'system' && !document.hidden) { pollLearn(); fetchApiStats(); } }, 5000);
 // Agent tab: refresh panel/log/work while open.
 setInterval(() => { if (activeTab === 'agent' && !document.hidden) { refreshAgentPanel(); refreshAgentLog(); refreshAgentWork(); } }, 5000);
-// The robot roams regardless of active tab (so you can watch it on the map),
-// but only while the page is visible.
-setInterval(() => { if (!document.hidden) refreshAgentRobot(); }, 6000);
+// The scout roams regardless of active tab (so you can watch it on the map),
+// but only while the page is visible. Polled fairly often so its hops between
+// items during a research sweep look like smooth flying, not teleporting.
+setInterval(() => { if (!document.hidden) refreshAgentRobot(); }, 3500);
 // Refresh the Fleet table while it's open (it's a heavier multi-request scrape,
 // so only when actually visible).
 setInterval(() => { if (activeTab === 'fleet' && !document.hidden) fetchFleet(); }, 15000);
