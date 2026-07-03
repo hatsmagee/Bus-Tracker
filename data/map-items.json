@@ -3640,6 +3640,261 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "lanai:hulopoe": {
+      "title": "Hulopoʻe Bay (Lānaʻi)",
+      "summary": "Four Seasons Resort Lanai is a Four Seasons resort hotel in Lanai City on the island of Lānaʻi, the smallest and least inhabited of Hawaii's six major islands that once was recognized for its pineapple plantation.",
+      "history": [
+        {
+          "year": 1985,
+          "text": "But a few years after it bought the Dole Corporation, Castle & Cooke announced its intention to transform the island into a luxury resort destination, and in 1985, after being acquired by David H.",
+          "source": "https://en.wikipedia.org/wiki/Four_Seasons_Resort_Lanai"
+        },
+        {
+          "year": 1990,
+          "text": "Construction began a few years later and the Lodge at Koele was built and opened in 1990, followed by The Mānele Bay in the next year. .",
+          "source": "https://en.wikipedia.org/wiki/Four_Seasons_Resort_Lanai"
+        },
+        {
+          "year": 1991,
+          "text": "Originally opened as The Manele Bay Hotel in 1991, the hotel started operating under the Four Seasons brand in 2005.",
+          "source": "https://en.wikipedia.org/wiki/Four_Seasons_Resort_Lanai"
+        },
+        {
+          "year": 2005,
+          "text": "The hotel came under the management of Four Seasons in 2005.",
+          "source": "https://en.wikipedia.org/wiki/Four_Seasons_Resort_Lanai"
+        },
+        {
+          "year": 2012,
+          "text": "After it underwent a major renovation from 2012 to 2016, the Four Seasons Resort Lanai reopened in 2016.",
+          "source": "https://en.wikipedia.org/wiki/Four_Seasons_Resort_Lanai"
+        },
+        {
+          "year": 2016,
+          "text": "It took years of work and a seven-month closure before it was completed in February 2016, with the hotel's lobby redesigned three times.",
+          "source": "https://en.wikipedia.org/wiki/Four_Seasons_Resort_Lanai"
+        }
+      ],
+      "photos": [],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Four_Seasons_Resort_Lanai"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Four_Seasons_Resort_Lanai"
+        ],
+        "resolvedTitle": "Four Seasons Resort Lanai",
+        "model": "deterministic",
+        "imageChecks": [],
+        "generatedAt": "2026-07-03T10:58:40.231Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Pāhala": {
+      "title": "Pāhala air quality",
+      "summary": "Pāhala is a census-designated place (CDP) in Hawaiʻi County, Hawaiʻi, United States.",
+      "history": [
+        {
+          "year": 1881,
+          "text": "In 1881, the first public school in the district of Kaʻu was established in Kapapala.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        },
+        {
+          "year": 1959,
+          "text": "In 1959, as Hawaiʻi Territory became the state of Hawaiʻi, the last class of the Pāhala High School held commencement ceremonies.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        },
+        {
+          "year": 1972,
+          "text": "Honuʻapo's mill had closed in 1972 and its workers transferred to Pāhala.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        },
+        {
+          "year": 1985,
+          "text": "Shleser also proposed that Hawaiʻi County pass a bill that would require 25% of all vehicles on the island to be retrofitted to use ethanol by 1985.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        },
+        {
+          "year": 1994,
+          "text": "In 1994, Buyers made a last-ditch effort to keep the mill running.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        },
+        {
+          "year": 1996,
+          "text": "The sugarcane plantation and mill shut down in April 1996.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Pahala_hawaii_post_office.jpg/330px-Pahala_hawaii_post_office.jpg",
+          "credit": "Wikipedia — Pāhala, Hawaii (CC/PD)",
+          "caption": "Pāhala, Hawaii",
+          "alt": "a white united states post office building with cars parked in front of it and on the sidewalk of a city street"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        ],
+        "resolvedTitle": "Pāhala, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Pahala_hawaii_post_office.jpg/330px-Pahala_hawaii_post_office.jpg",
+            "caption": "a white united states post office building with cars parked in front of it and on the sidewalk of a city street",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T11:08:25.832Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Ocean View": {
+      "title": "Ocean View air quality",
+      "summary": "Ocean View is a town in Sussex County, Delaware, United States. As of the 2020 census, Ocean View had a population of 2,636.",
+      "history": [
+        {
+          "year": 1800,
+          "text": "Hall opened a general store on his farm there shortly after 1800.",
+          "source": "https://en.wikipedia.org/wiki/Ocean_View%2C_Delaware"
+        },
+        {
+          "year": 1822,
+          "text": "In 1822 a post office was established in Hall's Store.",
+          "source": "https://en.wikipedia.org/wiki/Ocean_View%2C_Delaware"
+        },
+        {
+          "year": 1861,
+          "text": "After the American Civil War (1861–1865) people began to take an interest in visiting the Atlantic beaches to the east of Hall's Store and it was discovered that the Atlantic Ocean was visible from the second story of some buildings in the…",
+          "source": "https://en.wikipedia.org/wiki/Ocean_View%2C_Delaware"
+        },
+        {
+          "year": 1874,
+          "text": "The town was an isolated community for much of the 19th century; the nearest railroad, constructed in 1874, came no closer than Dagsboro, and although the opening of the Assawoman Canal – which ran past what had once been Scarborough's…",
+          "source": "https://en.wikipedia.org/wiki/Ocean_View%2C_Delaware"
+        },
+        {
+          "year": 1889,
+          "text": "Ocean View was incorporated on April 13, 1889, and held its first town council meeting on April 20, 1889.",
+          "source": "https://en.wikipedia.org/wiki/Ocean_View%2C_Delaware"
+        },
+        {
+          "year": 2020,
+          "text": "As of the 2020 census, Ocean View had a population of 2,636.",
+          "source": "https://en.wikipedia.org/wiki/Ocean_View%2C_Delaware"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Tunnel_West_Ocean_View_Sussex_Co_DE.JPG/330px-Tunnel_West_Ocean_View_Sussex_Co_DE.JPG",
+          "credit": "Wikipedia — Ocean View, Delaware (CC/PD)",
+          "caption": "Ocean View, Delaware",
+          "alt": "a house with a car parked in the front yard of it and power lines above"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Ocean_View%2C_Delaware"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Ocean_View%2C_Delaware"
+        ],
+        "resolvedTitle": "Ocean View, Delaware",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Tunnel_West_Ocean_View_Sussex_Co_DE.JPG/330px-Tunnel_West_Ocean_View_Sussex_Co_DE.JPG",
+            "caption": "a house with a car parked in the front yard of it and power lines above",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T11:08:34.217Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Waimea": {
+      "title": "Waimea air quality",
+      "summary": "Waimea is a landlocked community in Hawaiʻi County, Hawaii, United States. Waimea is the center for ranching activities and paniolo culture.",
+      "history": [
+        {
+          "year": 1793,
+          "text": "California longhorn cattle were given as a gift to Hawaiian King Kamehameha I by British Captain George Vancouver in 1793.",
+          "source": "https://en.wikipedia.org/wiki/Waimea%2C_Hawai%CA%BBi_County%2C_Hawaii"
+        },
+        {
+          "year": 1809,
+          "text": "In 1809, John Palmer Parker arrived to the area after jumping ship and over time became employed by the king to hunt and tame the population of cattle, which at this point had grown out of control.",
+          "source": "https://en.wikipedia.org/wiki/Waimea%2C_Hawai%CA%BBi_County%2C_Hawaii"
+        },
+        {
+          "year": 1815,
+          "text": "In 1815 Parker married Kipikane, the daughter of a high-ranking chief, and as a family developed what is now Parker Ranch, the largest ranch in the area. .",
+          "source": "https://en.wikipedia.org/wiki/Waimea%2C_Hawai%CA%BBi_County%2C_Hawaii"
+        },
+        {
+          "year": 1836,
+          "text": "The king hired these vaqueros to teach Hawaiians herding and ranching skills, and by 1836 the island had working cowboys.",
+          "source": "https://en.wikipedia.org/wiki/Waimea%2C_Hawai%CA%BBi_County%2C_Hawaii"
+        },
+        {
+          "year": 1853,
+          "text": "Waimea's post office name \"Kamuela\" is the Hawaiian name for \"Samuel\", after Samuel Parker (1853–1920), the grandson of John Parker.",
+          "source": "https://en.wikipedia.org/wiki/Waimea%2C_Hawai%CA%BBi_County%2C_Hawaii"
+        },
+        {
+          "year": 1939,
+          "text": "Farm and ranchland acreage increased from 75 in 1939 to 518 in 1946.",
+          "source": "https://en.wikipedia.org/wiki/Waimea%2C_Hawai%CA%BBi_County%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Waimea_pastures.JPG/330px-Waimea_pastures.JPG",
+          "credit": "Wikipedia — Waimea, Hawaiʻi County, Hawaii (CC/PD)",
+          "caption": "Waimea, Hawaiʻi County, Hawaii",
+          "alt": "a field of green grass with cows grazing on it and a blue sky with white clouds in the sky is partly"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Waimea%2C_Hawai%CA%BBi_County%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Waimea%2C_Hawai%CA%BBi_County%2C_Hawaii"
+        ],
+        "resolvedTitle": "Waimea, Hawaiʻi County, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Waimea_pastures.JPG/330px-Waimea_pastures.JPG",
+            "caption": "a field of green grass with cows grazing on it and a blue sky with white clouds in the sky is partly",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T11:08:48.405Z",
+        "reviewed": false
+      },
+      "status": "ok"
     }
   }
 }
