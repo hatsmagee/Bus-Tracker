@@ -3690,7 +3690,7 @@
         "resolvedTitle": "Four Seasons Resort Lanai",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T19:54:14.829Z",
+        "generatedAt": "2026-07-03T21:56:06.684Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5683,6 +5683,194 @@
         "model": "deterministic",
         "imageChecks": [],
         "generatedAt": "2026-07-03T20:38:44.910Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airport:Ellison Onizuka Kona (KOA)": {
+      "title": "Ellison Onizuka Kona (KOA)",
+      "summary": "Ellison Onizuka Kona International Airport at Keāhole (IATA: KOA, ICAO: PHKO, FAA LID: KOA) is the primary airport on the Island of Hawaiʻi, located in the Kailua-Kona area, Hawaii, United States.",
+      "history": [
+        {
+          "year": 1801,
+          "text": "Much of the runway is built on a relatively recent lava flow: the 1801 Huʻehuʻe flow from Hualālai.",
+          "source": "https://en.wikipedia.org/wiki/Kona_International_Airport"
+        },
+        {
+          "year": 1970,
+          "text": "The airport opened on July 1, 1970, with a single 6,500-foot (2.0 km) runway; the previous smaller airstrip was converted into the Old Kona Airport State Recreation Area.",
+          "source": "https://en.wikipedia.org/wiki/Kona_International_Airport"
+        },
+        {
+          "year": 1993,
+          "text": "In 1993, the airport was renamed Keāhole-Kona International Airport, after the nearby resort town of Kona.",
+          "source": "https://en.wikipedia.org/wiki/Kona_International_Airport"
+        },
+        {
+          "year": 1997,
+          "text": "In 1997, the Kona name was further emphasized when the airport was renamed the Kona International Airport at Keāhole.",
+          "source": "https://en.wikipedia.org/wiki/Kona_International_Airport"
+        },
+        {
+          "year": 2017,
+          "text": "On January 8, 2017, the airport was renamed Ellison Onizuka Kona International Airport at Keāhole to honor astronaut Ellison Onizuka who was born and raised in Kona and died in the Space Shuttle Challenger disaster. .",
+          "source": "https://en.wikipedia.org/wiki/Kona_International_Airport"
+        },
+        {
+          "year": 2021,
+          "text": "It is included in the Federal Aviation Administration's National Plan of Integrated Airport Systems for 2021–2025, in which it is categorized as a small-hub primary commercial service facility. . .",
+          "source": "https://en.wikipedia.org/wiki/Kona_International_Airport"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/08/Ellison_Onizuka_Kona_International_Airport_at_Keahole_%2846277006881%29.jpg/330px-Ellison_Onizuka_Kona_International_Airport_at_Keahole_%2846277006881%29.jpg",
+          "credit": "Wikipedia — Kona International Airport (CC/PD)",
+          "caption": "Kona International Airport",
+          "alt": "a sign that says el sonzika in front of a building with palm trees in the background"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kona_International_Airport"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kona_International_Airport"
+        ],
+        "resolvedTitle": "Kona International Airport",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/08/Ellison_Onizuka_Kona_International_Airport_at_Keahole_%2846277006881%29.jpg/330px-Ellison_Onizuka_Kona_International_Airport_at_Keahole_%2846277006881%29.jpg",
+            "caption": "a sign that says el sonzika in front of a building with palm trees in the background",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T22:06:19.254Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airport:Waimea-Kohala (MUE)": {
+      "title": "Waimea-Kohala (MUE)",
+      "summary": "Waimea-Kohala Airport (IATA: MUE, ICAO: PHMU, FAA LID: MUE) is a state-owned public-use airport located one nautical mile (1.2 mi; 1.9 km) southwest of Waimea, an unincorporated town in Hawaii County, Hawaii, United States.",
+      "history": [
+        {
+          "year": 1950,
+          "text": "However, its short runway and inadequate runway surface could not accommodate Douglas DC-3, and was deemed incapable for commercial use by 1950.",
+          "source": "https://en.wikipedia.org/wiki/Waimea%E2%80%93Kohala_Airport"
+        },
+        {
+          "year": 1952,
+          "text": "Following extensive surveys, construction of the new Kamuela Airport began on January 28, 1952.",
+          "source": "https://en.wikipedia.org/wiki/Waimea%E2%80%93Kohala_Airport"
+        },
+        {
+          "year": 1953,
+          "text": "Hawaiian Airlines began scheduled passenger service from the airport in November 1953.",
+          "source": "https://en.wikipedia.org/wiki/Waimea%E2%80%93Kohala_Airport"
+        },
+        {
+          "year": 1969,
+          "text": "In 1969, a legislation resolution renamed the new airport to Waimea-Kohala Airport to prevent confusion with Waimea, Kauaʻi. .",
+          "source": "https://en.wikipedia.org/wiki/Waimea%E2%80%93Kohala_Airport"
+        },
+        {
+          "year": 2016,
+          "text": "As of 2016, the only scheduled air service is by Mokulele Airlines, which offers twice daily service to Kahului, Maui.",
+          "source": "https://en.wikipedia.org/wiki/Waimea%E2%80%93Kohala_Airport"
+        },
+        {
+          "year": 2021,
+          "text": "It is included in the Federal Aviation Administration National Plan of Integrated Airport Systems for 2021–2025, in which it is categorized as a non-primary commercial service facility. .",
+          "source": "https://en.wikipedia.org/wiki/Waimea%E2%80%93Kohala_Airport"
+        }
+      ],
+      "photos": [],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Waimea%E2%80%93Kohala_Airport"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Waimea%E2%80%93Kohala_Airport"
+        ],
+        "resolvedTitle": "Waimea–Kohala Airport",
+        "model": "deterministic",
+        "imageChecks": [],
+        "generatedAt": "2026-07-03T22:10:55.977Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "category:repeaters": {
+      "title": "Ham radio repeaters statewide",
+      "summary": "Amateur radio, also known as Ham radio, is the use of specific bands and frequencies within the radio spectrum for non-commercial communication, technical experimentation, self-training, recreation, radiosport, contesting, and emergency communications.",
+      "history": [
+        {
+          "year": 1909,
+          "text": "The First Annual Official Wireless Blue Book of the Wireless Association of America, produced in 1909, contains a list of amateur radio stations.",
+          "source": "https://en.wikipedia.org/wiki/Amateur_radio"
+        },
+        {
+          "year": 1924,
+          "text": "Research by amateur operators has founded new industries, like experimentation with quartz piezoelectric resonators from 1924 until about 1934, built economies, empowered nations, and saved lives in times of emergency.",
+          "source": "https://en.wikipedia.org/wiki/Amateur_radio"
+        },
+        {
+          "year": 1927,
+          "text": "In 1927 a radio amateur was defined as \"a duly authorized person interested in radioelectric practice with a purely personal aim and without pecuniary interest\", meaning without monetary or similar reward.",
+          "source": "https://en.wikipedia.org/wiki/Amateur_radio"
+        },
+        {
+          "year": 2003,
+          "text": "Until 2003, Morse code proficiency was required under international regulations for access to frequencies below 30 MHz.",
+          "source": "https://en.wikipedia.org/wiki/Amateur_radio"
+        },
+        {
+          "year": 2007,
+          "text": "The requirement was withdrawn in the United States in 2007. .",
+          "source": "https://en.wikipedia.org/wiki/Amateur_radio"
+        },
+        {
+          "year": 2011,
+          "text": "In 2011 the American Radio Relay League (the U.S. national society) estimated that about 2 million people worldwide were active in amateur radio.",
+          "source": "https://en.wikipedia.org/wiki/Amateur_radio"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Amateurfunkstation.jpg/330px-Amateurfunkstation.jpg",
+          "credit": "Wikipedia — Amateur radio (CC/PD)",
+          "caption": "Amateur radio",
+          "alt": "a room with a desk, computer and other equipment on it ' s walls and ceilinging,"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Amateur_radio"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Amateur_radio"
+        ],
+        "resolvedTitle": "Amateur radio",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Amateurfunkstation.jpg/330px-Amateurfunkstation.jpg",
+            "caption": "a room with a desk, computer and other equipment on it ' s walls and ceilinging,",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T22:11:04.330Z",
         "reviewed": false
       },
       "status": "ok"
