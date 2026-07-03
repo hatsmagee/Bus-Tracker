@@ -1430,6 +1430,342 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "sat:25544": {
+      "title": "International Space Station",
+      "summary": "The International Space Station (ISS) is a space station in low Earth orbit (LEO).",
+      "history": [
+        {
+          "year": 1998,
+          "text": "The first ISS module was launched in 1998, with major components delivered by Proton, Soyuz and Space Shuttle launch vehicles.",
+          "source": "https://en.wikipedia.org/wiki/International_Space_Station"
+        },
+        {
+          "year": 2000,
+          "text": "Since 2 November 2000, it has hosted the longest continuous presence of humans in space.",
+          "source": "https://en.wikipedia.org/wiki/International_Space_Station"
+        },
+        {
+          "year": 2010,
+          "text": "In the 2010 United States National Space Policy, the ISS was given additional roles of serving commercial, diplomatic, and educational purposes. .",
+          "source": "https://en.wikipedia.org/wiki/International_Space_Station"
+        },
+        {
+          "year": 2013,
+          "text": "On 3 April 2013, scientists reported that hints of dark matter may have been detected by the AMS.",
+          "source": "https://en.wikipedia.org/wiki/International_Space_Station"
+        },
+        {
+          "year": 2025,
+          "text": "As of August 2025, 290 individuals from 26 countries had visited the station.",
+          "source": "https://en.wikipedia.org/wiki/International_Space_Station"
+        },
+        {
+          "year": 2026,
+          "text": "After this the ISS is planned to be de-orbited using the US Deorbit Vehicle, but critique of this plan and the proposal of parking the station at a more stable higher orbit has gathered congressional support as of 2026. . .",
+          "source": "https://en.wikipedia.org/wiki/International_Space_Station"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/The_station_pictured_from_the_SpaceX_Crew_Dragon_5.jpg/330px-The_station_pictured_from_the_SpaceX_Crew_Dragon_5.jpg",
+          "credit": "Wikipedia — International Space Station (CC/PD)",
+          "caption": "International Space Station",
+          "alt": "a large space station with three space shuttles above it and some smaller spacecraft on the left side of the image"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/International_Space_Station"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/International_Space_Station"
+        ],
+        "resolvedTitle": "International Space Station",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/The_station_pictured_from_the_SpaceX_Crew_Dragon_5.jpg/330px-The_station_pictured_from_the_SpaceX_Crew_Dragon_5.jpg",
+            "caption": "a large space station with three space shuttles above it and some smaller spacecraft on the left side of the image",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T01:40:24.284Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "sat:20580": {
+      "title": "Hubble Space Telescope",
+      "summary": "The Hubble Space Telescope (HST or Hubble) is a space telescope that was launched into low Earth orbit in 1990 and remains in operation.",
+      "history": [
+        {
+          "year": 1983,
+          "text": "Its intended launch was in 1983, but the project was beset by technical delays, budget problems, and the 1986 Challenger disaster.",
+          "source": "https://en.wikipedia.org/wiki/Hubble_Space_Telescope"
+        },
+        {
+          "year": 1990,
+          "text": "The Hubble Space Telescope (HST or Hubble) is a space telescope that was launched into low Earth orbit in 1990 and remains in operation.",
+          "source": "https://en.wikipedia.org/wiki/Hubble_Space_Telescope"
+        },
+        {
+          "year": 1993,
+          "text": "The optics were corrected to their intended quality by a servicing mission, STS-61, in 1993.",
+          "source": "https://en.wikipedia.org/wiki/Hubble_Space_Telescope"
+        },
+        {
+          "year": 2003,
+          "text": "The fifth mission was initially canceled on safety grounds following the Columbia disaster (2003), but after NASA administrator Michael D.",
+          "source": "https://en.wikipedia.org/wiki/Hubble_Space_Telescope"
+        },
+        {
+          "year": 2009,
+          "text": "Griffin approved it, the servicing mission was completed in 2009.",
+          "source": "https://en.wikipedia.org/wiki/Hubble_Space_Telescope"
+        },
+        {
+          "year": 2020,
+          "text": "Hubble completed 30 years of operation in April 2020 and is predicted to last until 2030 to 2040.",
+          "source": "https://en.wikipedia.org/wiki/Hubble_Space_Telescope"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/STS-109-HST-s109e5700.jpg/330px-STS-109-HST-s109e5700.jpg",
+          "credit": "Wikipedia — Hubble Space Telescope (CC/PD)",
+          "caption": "Hubble Space Telescope",
+          "alt": "a space telescope in flight with a sunburst nearby at night time by a street light"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Hubble_Space_Telescope"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Hubble_Space_Telescope"
+        ],
+        "resolvedTitle": "Hubble Space Telescope",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/STS-109-HST-s109e5700.jpg/330px-STS-109-HST-s109e5700.jpg",
+            "caption": "a space telescope in flight with a sunburst nearby at night time by a street light",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T01:41:12.193Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Hilo": {
+      "title": "Hilo air quality",
+      "summary": "Hilo (, HEE-low; Hawaiian pronunciation: [ˈhilo]) is the largest settlement in and the county seat of Hawaiʻi County, Hawaii, United States, which encompasses the Island of Hawaiʻi, and is a census-designated place (CDP).",
+      "history": [
+        {
+          "year": 1823,
+          "text": "When William Ellis visited in 1823, the main settlement there was Waiākea on the south shore of Hilo Bay.",
+          "source": "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        },
+        {
+          "year": 1887,
+          "text": "For example, by 1887, 26,000 Chinese workers worked in Hawai'i's sugar cane plantations, one of which was the Hilo Sugar Mill.",
+          "source": "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        },
+        {
+          "year": 1929,
+          "text": "A breakwater across Hilo Bay was begun in the first decade of the 20th century and completed in 1929.",
+          "source": "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        },
+        {
+          "year": 1946,
+          "text": "On April 1, 1946, an 8.6-magnitude earthquake near the Aleutian Islands created a 46-foot-high (14 m) tsunami that hit Hilo 4.9 hours later, killing 159 total in the islands, with 96 deaths in Hilo alone.",
+          "source": "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        },
+        {
+          "year": 1949,
+          "text": "In response, an early warning system, the Pacific Tsunami Warning Center, was established in 1949 to track these killer waves and provide warning.",
+          "source": "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        },
+        {
+          "year": 2020,
+          "text": "The population was 44,186 according to the 2020 census.",
+          "source": "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Hilo_Highlighted.svg/330px-Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Hilo_Highlighted.svg.png",
+          "credit": "Wikipedia — Hilo, Hawaii (CC/PD)",
+          "caption": "Hilo, Hawaii",
+          "alt": "an animated 3d map of hawaii with a red dot highlighted on the island of kaua"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Hilo%2C_Hawaii"
+        ],
+        "resolvedTitle": "Hilo, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Hilo_Highlighted.svg/330px-Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Hilo_Highlighted.svg.png",
+            "caption": "an animated 3d map of hawaii with a red dot highlighted on the island of kaua",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T01:49:51.449Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Kailua-Kona": {
+      "title": "Kailua-Kona air quality",
+      "summary": "Kailua-Kona is an unincorporated community and, under the name Kailua, a census-designated place (CDP) in Hawaii County, Hawaii, United States.",
+      "history": [
+        {
+          "year": 1795,
+          "text": "The community was established by King Kamehameha I to be his seat of government when he was chief of Kona before he consolidated rule of the archipelago in 1795.",
+          "source": "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        },
+        {
+          "year": 1820,
+          "text": "In 1820, the first Christian missionaries arrived and established churches and schools.",
+          "source": "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        },
+        {
+          "year": 2000,
+          "text": "As of the census of 2000, there were 9,870 people, 3,537 households, and 2,429 families residing in Kailua-Kona.",
+          "source": "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        },
+        {
+          "year": 2006,
+          "text": "Kailua-Kona was the closest major settlement to the epicenter of the 2006 Kiholo Bay earthquake.",
+          "source": "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        },
+        {
+          "year": 2014,
+          "text": "In 2014, the Pālamanui Community Forest preserve was created in Kailua-Kona with a goal of preserving and protecting the native trees of Hawai’i. .",
+          "source": "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        },
+        {
+          "year": 2020,
+          "text": "Census Bureau significantly altered Kailua CDP's boundaries for the 2020 census.",
+          "source": "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/Kona_Mauka.jpg/330px-Kona_Mauka.jpg",
+          "credit": "Wikipedia — Kailua-Kona, Hawaii (CC/PD)",
+          "caption": "Kailua-Kona, Hawaii",
+          "alt": "this is an image of a view of the ocean from the top of a hill with palm trees in the foreground and a flag pole in the foreground"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kailua-Kona%2C_Hawaii"
+        ],
+        "resolvedTitle": "Kailua-Kona, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/Kona_Mauka.jpg/330px-Kona_Mauka.jpg",
+            "caption": "this is an image of a view of the ocean from the top of a hill with palm trees in the foreground and a flag pole in the foreground",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T01:50:13.451Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Volcano": {
+      "title": "Volcano air quality",
+      "summary": "A volcano is a vent or fissure in the crust of a planetary-mass object that allows hot lava, volcanic ash, and gases to escape from a magma chamber below the surface.",
+      "history": [
+        {
+          "year": 1956,
+          "text": "National air quality laws have often been effective, notably the 1956 Clean Air Act in Britain and the 1963 US Clean Air Act.",
+          "source": "https://en.wikipedia.org/wiki/Volcano"
+        },
+        {
+          "year": 2009,
+          "text": "In 2009, a paper was published suggesting a new definition for the word 'volcano' that includes processes such as cryovolcanism.",
+          "source": "https://en.wikipedia.org/wiki/Volcano"
+        },
+        {
+          "year": 2023,
+          "text": "As of 2023, more than 2.3 billion people in developing countries rely on burning polluting fuels such as firewood, agricultural waste, dry dung, coal, or charcoal for cooking, which causes harmful household air pollution.",
+          "source": "https://en.wikipedia.org/wiki/Volcano"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Augustine_volcano_Jan_24_2006_-_Cyrus_Read.jpg/330px-Augustine_volcano_Jan_24_2006_-_Cyrus_Read.jpg",
+          "credit": "Wikipedia — Volcano (CC/PD)",
+          "caption": "Volcano",
+          "alt": "the view of the snow - capped volcano from above the ocean looking down on the small island with water and a cloud"
+        },
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0d/Air_pollution3.jpg/330px-Air_pollution3.jpg",
+          "credit": "Wikipedia — Air pollution (CC/PD)",
+          "caption": "Air pollution",
+          "alt": "the sun is setting behind a smoke stack in the sky next to buildings and mountains"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Volcano"
+        },
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Air_pollution"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Volcano",
+          "https://en.wikipedia.org/wiki/Air_pollution"
+        ],
+        "resolvedTitle": "Volcano",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Augustine_volcano_Jan_24_2006_-_Cyrus_Read.jpg/330px-Augustine_volcano_Jan_24_2006_-_Cyrus_Read.jpg",
+            "caption": "the view of the snow - capped volcano from above the ocean looking down on the small island with water and a cloud",
+            "visionOk": true
+          },
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0d/Air_pollution3.jpg/330px-Air_pollution3.jpg",
+            "caption": "the sun is setting behind a smoke stack in the sky next to buildings and mountains",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T01:50:45.322Z",
+        "reviewed": false
+      },
+      "status": "ok"
     }
   }
 }
