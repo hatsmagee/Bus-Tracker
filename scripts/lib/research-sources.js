@@ -219,36 +219,69 @@ async function wikiExtract(title, { chars = 8000 } = {}) {
 }
 
 
-async function commonsImage(searchTerm) {
+// File titles/descriptions that are almost never a real photo of the subject —
+// logos, maps, diagrams, seals, charts, signatures, etc. We skip these so a card
+// gets a photograph of the thing, not its logo or a location map.
+const IMAGE_JUNK_RE = /\b(logo|icon|map|locator|diagram|schematic|chart|graph|plot|seal|coat[\s_-]?of[\s_-]?arms|flag|banner|signature|qr[\s_-]?code|barcode|screenshot|spectrum|light[\s_-]?curve|orbit|trajectory)\b/i;
+
+// A license-safe Commons photo of the subject. Keyword search returns whatever
+// matches the term, so — since we have no vision — we gate on metadata: the
+// file's title/description/categories must mention the subject's distinctive
+// terms, and obvious non-photos (logos, maps, diagrams) are rejected. If nothing
+// clears the bar we return null: a card with no image beats a wrong image.
+async function commonsImage(searchTerm, { mustMatch } = {}) {
   const params = new URLSearchParams({
     action: 'query',
     generator: 'search',
     gsrsearch: `filetype:bitmap ${searchTerm}`,
-    gsrlimit: '5',
-    prop: 'imageinfo',
-    iiprop: 'url|extmetadata',
+    gsrlimit: '12',
+    prop: 'imageinfo|categories',
+    cllimit: 'max',
+    iiprop: 'url|extmetadata|size',
     iiurlwidth: '800',
     format: 'json',
   });
   const text = await fetchText(`https://commons.wikimedia.org/w/api.php?${params}`);
   const j = JSON.parse(text);
   const pages = j.query && j.query.pages ? Object.values(j.query.pages) : [];
+  const need = mustMatch instanceof Set ? mustMatch : new Set();
+  const clean = v => String(v || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const candidates = [];
   for (const p of pages) {
     const info = p.imageinfo && p.imageinfo[0];
     if (!info || !info.url) continue;
     const meta = info.extmetadata || {};
     const license = (meta.LicenseShortName && meta.LicenseShortName.value) || '';
-    const author = (meta.Artist && meta.Artist.value.replace(/<[^>]+>/g, '').trim()) || 'Wikimedia Commons';
     if (!/cc|public domain|pd/i.test(license)) continue;
-    return {
-      url: info.thumburl || info.url,
-      credit: `${author} — ${license} (Wikimedia Commons)`,
-      caption: p.title ? p.title.replace('File:', '') : searchTerm,
-      license,
-      pageUrl: `https://commons.wikimedia.org/wiki/${encodeURIComponent(p.title)}`,
-    };
+    const fileTitle = (p.title || '').replace(/^File:/, '');
+    const desc = clean(meta.ImageDescription && meta.ImageDescription.value);
+    const objName = clean(meta.ObjectName && meta.ObjectName.value);
+    const cats = (p.categories || []).map(c => (c.title || '').replace(/^Category:/, '')).join(' ');
+    const haystack = `${fileTitle} ${desc} ${objName} ${cats}`.toLowerCase();
+    if (IMAGE_JUNK_RE.test(fileTitle) || IMAGE_JUNK_RE.test(cats)) continue;
+    // Relevance: at least one distinctive subject term must appear in the file's
+    // own metadata. Skip the gate only when we have no distinctive terms at all.
+    if (need.size) {
+      let hits = 0;
+      for (const t of need) if (haystack.includes(t)) hits++;
+      if (!hits) continue;
+      candidates.push({ p, info, meta, license, fileTitle, hits, w: info.width || 0 });
+    } else {
+      candidates.push({ p, info, meta, license, fileTitle, hits: 0, w: info.width || 0 });
+    }
   }
-  return null;
+  // Best = most subject-term matches, then widest image.
+  candidates.sort((a, b) => b.hits - a.hits || b.w - a.w);
+  const best = candidates[0];
+  if (!best) return null;
+  const author = clean(best.meta.Artist && best.meta.Artist.value) || 'Wikimedia Commons';
+  return {
+    url: best.info.thumburl || best.info.url,
+    credit: `${author} — ${best.license} (Wikimedia Commons)`,
+    caption: best.fileTitle || searchTerm,
+    license: best.license,
+    pageUrl: `https://commons.wikimedia.org/wiki/${encodeURIComponent(best.p.title)}`,
+  };
 }
 
 function countYears(s) {
@@ -299,7 +332,10 @@ async function addArticle(title, acc) {
   try {
     const sum = await wikiSummary(ex.title);
     if (sum.url) acc.sources.push(sum.url);
-    if (sum.thumbnail) acc.photos.push({ url: sum.thumbnail, credit: `Wikipedia — ${ex.title} (CC/PD)`, caption: ex.title });
+    // The article's own lead image is curated to depict that exact subject — the
+    // most trustworthy photo we can get without vision. Mark it as trusted so it
+    // ranks ahead of any keyword-matched Commons image.
+    if (sum.thumbnail) acc.photos.push({ url: sum.thumbnail, credit: `Wikipedia — ${ex.title} (CC/PD)`, caption: ex.title, trusted: true });
   } catch {
     acc.sources.push(`https://en.wikipedia.org/wiki/${encodeURIComponent(ex.title.replace(/ /g, '_'))}`);
   }
@@ -368,11 +404,21 @@ async function researchItem(item) {
     } catch { /* web fallback is best-effort */ }
   }
 
-  const photo = await commonsImage(acc.resolvedTitle || query).catch(() => null);
+  // Supplement with a Commons photo, but only one that its own metadata ties to
+  // this subject. Build the match set from the item's distinctive terms plus the
+  // resolved article title (the confirmed subject), dropping generic filler.
+  const mustMatch = new Set([
+    ...distinctiveTokens({ title: item.title, researchQuery: item.researchQuery }),
+    ...tokenize(acc.resolvedTitle || '').filter(t => t.length > 2 && !GENERIC_TOKENS.has(t)),
+  ]);
+  const photo = await commonsImage(acc.resolvedTitle || item.title || query, { mustMatch }).catch(() => null);
   if (photo) acc.photos.push(photo);
 
+  // Trusted article lead images first, then relevance-matched Commons photos.
   const seen = new Set();
-  const candidatePhotos = acc.photos.filter(p => p && p.url && !seen.has(p.url) && seen.add(p.url));
+  const candidatePhotos = acc.photos
+    .filter(p => p && p.url && !seen.has(p.url) && seen.add(p.url))
+    .sort((a, b) => (b.trusted ? 1 : 0) - (a.trusted ? 1 : 0));
 
   return {
     query,
