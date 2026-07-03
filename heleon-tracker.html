@@ -186,30 +186,22 @@
     background:rgba(255,255,255,.9); border:1px solid #fde68a; border-radius:9px; padding:1px 5px; }
   .solar-sun.compact .ss-label { display:none; }
 
-  /* ─── OBSERVATORY markers (summit telescopes — sweeping beam when live) ────
-     Animated dome + beam when readings are fresh; shrinks and dims when stale.
-     Badge shows temp/wind/CO₂ beside the scope, never under the animation. */
-  @keyframes scopeSweep { 0%,100% { transform: rotate(-35deg); opacity:.85; } 50% { transform: rotate(35deg); opacity:1; } }
-  @keyframes domeGlow { 0%,100% { box-shadow: 0 0 0 0 rgba(124,58,237,.35); } 50% { box-shadow: 0 0 8px 2px rgba(124,58,237,.55); } }
+  /* ─── WEATHER-STATION markers (summit anemometer — spinning cups when live) ─
+     Summit sites report live weather; the marker is a cup anemometer whose cups
+     spin while readings are fresh and slow to a grey stop when stale. Badge
+     shows temp/wind/CO₂ beside the mast, never under the animation. */
+  @keyframes anemoSpin { to { transform: rotate(360deg); } }
   .observatory { cursor:pointer; position:relative; width:0; height:0; }
   .observatory .obs-scale { position:absolute; left:0; top:0;
     transform: translate(-16px, -16px) scale(var(--obsc, 1)); transform-origin:16px 16px;
     filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); display:flex; align-items:center; gap:4px; }
-  .observatory .obs-rig { position:relative; width:32px; height:32px; flex-shrink:0; }
-  .observatory .obs-dome { position:absolute; inset:2px 4px 8px 4px; border-radius:50% 50% 40% 40%;
-    background:linear-gradient(180deg,#ddd6fe,#7c3aed); border:1.5px solid #5b21b6;
-    animation: domeGlow 3s ease-in-out infinite; }
-  .observatory .obs-beam { position:absolute; left:15px; top:14px; width:14px; height:2px;
-    background:linear-gradient(90deg,#c4b5fd,#fef08a); border-radius:1px; transform-origin:0 50%;
-    animation: scopeSweep 4s ease-in-out infinite; }
-  .observatory .obs-tripod { position:absolute; left:10px; right:10px; bottom:0; height:8px;
-    border-left:2px solid #64748b; border-right:2px solid #64748b;
-    border-bottom:2px solid #64748b; border-radius:0 0 4px 4px; }
-  .observatory .obs-badge { font-size:10px; font-weight:700; color:#5b21b6;
-    background:rgba(255,255,255,.93); border:1px solid #ddd6fe; border-radius:9px;
+  .observatory .obs-rig { position:relative; width:32px; height:32px; flex-shrink:0; overflow:visible; }
+  .observatory .obs-cups { transform-origin:16px 10px; animation: anemoSpin 1.15s linear infinite; }
+  .observatory .obs-badge { font-size:10px; font-weight:700; color:#0369a1;
+    background:rgba(255,255,255,.93); border:1px solid #bae6fd; border-radius:9px;
     padding:1px 5px; white-space:nowrap; line-height:1.3; }
-  .observatory.stale .obs-dome { animation:none; background:linear-gradient(180deg,#e2e8f0,#94a3b8); border-color:#64748b; }
-  .observatory.stale .obs-beam { animation:none; opacity:.35; background:#94a3b8; }
+  .observatory.stale .obs-cups { animation-duration:6s; }
+  .observatory.stale .obs-rig { filter:grayscale(1); opacity:.6; }
   .observatory.stale .obs-badge { color:#64748b; border-color:#cbd5e1; }
   .observatory.compact .obs-badge { position:absolute; left:50%; top:34px; transform:translateX(-50%); font-size:9px; }
 
@@ -357,6 +349,36 @@
   .stream-ctrl .stream-play-btn:hover:not(:disabled) { background:#2ea043; }
   .stream-ctrl .stream-stop-btn { background:#da3633; border-color:#f85149; color:#fff; }
   .stream-ctrl .stream-status { font-size:10px; color:#8b949e; flex:1; min-width:0; }
+
+  /* ─── Persistent audio player bar (docked top-center) ─────────────────────
+     Playback lives here, independent of any card, so closing a card keeps the
+     stream going. Shows a scrolling "now playing" label and play/pause + stop. */
+  #audioBar { position:fixed; top:8px; left:50%; transform:translateX(-50%);
+    z-index:10001; display:none; align-items:center; gap:8px;
+    max-width:min(560px,92vw); width:max-content; padding:6px 8px 6px 6px;
+    background:rgba(13,17,23,.96); border:1px solid #30363d; border-radius:999px;
+    box-shadow:0 8px 28px rgba(0,0,0,.6); backdrop-filter:blur(6px);
+    font-family:'Segoe UI',system-ui,sans-serif; color:#e6edf3; }
+  #audioBar.on { display:flex; }
+  #audioBar button { flex:0 0 auto; width:30px; height:30px; border-radius:50%;
+    border:1px solid #30363d; background:#21262d; color:#e6edf3; cursor:pointer;
+    font-size:13px; line-height:1; display:flex; align-items:center; justify-content:center; padding:0; }
+  #audioBar button:hover { background:#30363d; border-color:#484f58; }
+  #audioBar .ab-toggle { background:#238636; border-color:#2ea043; }
+  #audioBar .ab-toggle:hover { background:#2ea043; }
+  #audioBar .ab-close { background:#da3633; border-color:#f85149; }
+  #audioBar .ab-live { flex:0 0 auto; width:7px; height:7px; border-radius:50%;
+    background:#3fb950; box-shadow:0 0 6px #3fb950; margin:0 1px 0 3px; }
+  #audioBar.paused .ab-live { background:#8b949e; box-shadow:none; animation:none; }
+  #audioBar .ab-live { animation:pulse 1.8s ease-in-out infinite; }
+  #audioBar .ab-marquee { flex:1 1 auto; min-width:120px; max-width:360px; overflow:hidden;
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 12px,#000 calc(100% - 12px),transparent);
+            mask-image:linear-gradient(90deg,transparent,#000 12px,#000 calc(100% - 12px),transparent); }
+  #audioBar .ab-track { display:inline-flex; white-space:nowrap; will-change:transform;
+    animation:abScroll linear infinite; }
+  #audioBar.paused .ab-track { animation-play-state:paused; }
+  #audioBar .ab-track span { padding-right:44px; font-size:12px; font-weight:600; }
+  @keyframes abScroll { from { transform:translateX(0); } to { transform:translateX(-50%); } }
 
   /* ─── Hawaiʻi tab: collapsible layer browser ─────────────────────────── */
   .hawaii-browser { flex:1; min-height:0; }
@@ -866,7 +888,7 @@
         <span style="font-size:10px;color:var(--muted);font-weight:600;">ACTIVITY LOG</span>
         <label style="font-size:10px;color:var(--muted);"><input type="checkbox" id="agentLogFollow" checked> auto-scroll</label>
       </div>
-      <pre id="agentLog" style="margin:0 12px 12px;padding:8px;background:#0d1117;border:1px solid #30363d;border-radius:6px;font-size:10px;line-height:1.4;color:#c9d1d9;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;">Waiting for agent activity…</pre>
+      <pre id="agentLog" style="margin:0 12px 12px;padding:8px;background:#0d1117;border:1px solid #30363d;border-radius:6px;font-size:10px;line-height:1.4;color:#c9d1d9;height:340px;min-height:160px;max-height:75vh;flex:0 0 auto;overflow:auto;resize:vertical;white-space:pre-wrap;word-break:break-word;">Waiting for agent activity…</pre>
     </div>
 
     <div class="tab-content" id="tab-boats">
@@ -1359,7 +1381,7 @@ function buildScannerCard(f) {
     listen = `<div class="repeater-stream" style="margin-top:10px;padding:10px;background:#0d1117;border:1px solid #30363d;border-radius:8px;">
       <div style="font-size:10px;color:#8b949e;margin-bottom:6px;">🔊 ${listenLabel} (Broadcastify feed ${f.feedId})</div>
       <div class="stream-ctrl">
-        <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(f.streamUrl)}">▶️ Play</button>
+        <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(f.streamUrl)}" data-stream-name="${escapeHtml(f.name + ' · ' + listenLabel)}">▶️ Play</button>
         <button type="button" class="stream-stop-btn" disabled>⏹️ Stop</button>
         <span class="stream-status">Ready — tap Play</span>
       </div></div>`;
@@ -2360,7 +2382,7 @@ function initMapLayers() {
       listen = `<div class="repeater-stream" style="margin-top:10px;padding:10px;background:#0d1117;border:1px solid #30363d;border-radius:8px;">
         <div style="font-size:10px;color:#8b949e;margin-bottom:6px;">🔊 ${escapeHtml(p.listenLabel || 'Live stream')}</div>
         <div class="stream-ctrl">
-          <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(p.listenStream)}">▶️ Play</button>
+          <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(p.listenStream)}" data-stream-name="${escapeHtml((p.callsign ? p.callsign + ' repeater' : (p.listenLabel || 'Live stream')))}">▶️ Play</button>
           <button type="button" class="stream-stop-btn" disabled>⏹️ Stop</button>
           <span class="stream-status">Ready — tap Play</span>
         </div></div>`;
@@ -4931,7 +4953,7 @@ function renderSummitMarkers() {
     if (!m) {
       const el = document.createElement('div');
       el.className = 'observatory';
-      el.innerHTML = `<div class="obs-scale"><div class="obs-rig"><div class="obs-dome"></div><div class="obs-beam"></div><div class="obs-tripod"></div></div><span class="obs-badge"></span></div>`;
+      el.innerHTML = `<div class="obs-scale"><svg class="obs-rig" width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><line x1="16" y1="10" x2="16" y2="28" stroke="#64748b" stroke-width="2" stroke-linecap="round"/><path d="M11 31 L16 28 L21 31" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><g class="obs-cups"><line x1="16" y1="10" x2="16" y2="3.5" stroke="#0284c7" stroke-width="1.6" stroke-linecap="round"/><line x1="16" y1="10" x2="21.6" y2="13.2" stroke="#0284c7" stroke-width="1.6" stroke-linecap="round"/><line x1="16" y1="10" x2="10.4" y2="13.2" stroke="#0284c7" stroke-width="1.6" stroke-linecap="round"/><circle cx="16" cy="3.5" r="2.6" fill="#38bdf8"/><circle cx="21.6" cy="13.2" r="2.6" fill="#0ea5e9"/><circle cx="10.4" cy="13.2" r="2.6" fill="#7dd3fc"/><circle cx="16" cy="10" r="1.7" fill="#075985"/></g></svg><span class="obs-badge"></span></div>`;
       m = new maplibregl.Marker({ element: el, anchor: 'center' })
         .setLngLat([s.lon, s.lat]).addTo(map);
       el.onclick = (e) => {
@@ -6254,7 +6276,7 @@ function hawaiiRadioDetail(item) {
   return hawaiiDetailRow('📍', 'Coverage', item.kind) +
     hawaiiDetailRow('📝', 'About', escapeHtml(item.desc)) +
     `<div class="stream-ctrl" style="margin-top:8px;">
-      <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(item.url)}">▶️ Play</button>
+      <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(item.url)}" data-stream-name="${escapeHtml(item.name || 'Live stream')}">▶️ Play</button>
       <button type="button" class="stream-stop-btn" disabled>⏹️ Stop</button>
     </div>`;
 }
@@ -6275,7 +6297,7 @@ function hawaiiRepeaterDetail(r) {
   if (r.description) html += `<div style="margin-top:6px;padding:6px 8px;background:#0d1117;border-radius:6px;white-space:pre-wrap;">📝 ${escapeHtml(r.description)}</div>`;
   if (r.listenStream) {
     html += `<div class="stream-ctrl" style="margin-top:8px;">
-      <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(r.listenStream)}">▶️ Play nets</button>
+      <button type="button" class="stream-play-btn" data-stream-url="${escapeHtml(r.listenStream)}" data-stream-name="${escapeHtml((r.callsign ? r.callsign + ' repeater' : (r.listenLabel || 'Live stream')))}">▶️ Play nets</button>
       <button type="button" class="stream-stop-btn" disabled>⏹️ Stop</button>
       <span class="stream-status" style="font-size:9px;">${escapeHtml(r.listenLabel || '')}</span>
     </div>`;
@@ -6746,77 +6768,131 @@ const RADIO_STATIONS = [
     url: 'https://broadcastify.cdnstream1.com/27598',
   },
 ];
-let audioEl = null;
+// ─── PERSISTENT AUDIO PLAYER ────────────────────────────────────────────────
+// A single global stream that lives independently of any card. Starting a new
+// stream replaces the current one; closing a card no longer stops playback.
+// A docked top-center bar shows a scrolling "now playing" label + play/stop.
 let mapStreamAudio = null;
+let nowPlaying = null; // { url, name, status }
+let audioBarEl = null;
 
-function stopMapStream() {
-  if (mapStreamAudio) {
-    mapStreamAudio.pause();
-    mapStreamAudio.src = '';
-    mapStreamAudio = null;
-  }
+function ensureAudioBar() {
+  if (audioBarEl) return audioBarEl;
+  const bar = document.createElement('div');
+  bar.id = 'audioBar';
+  bar.innerHTML =
+    '<button class="ab-toggle" title="Play/Pause">⏸</button>' +
+    '<span class="ab-live"></span>' +
+    '<div class="ab-marquee"><div class="ab-track"><span></span><span></span></div></div>' +
+    '<button class="ab-close" title="Stop">✕</button>';
+  document.body.appendChild(bar);
+  bar.querySelector('.ab-toggle').onclick = toggleStreamPlayback;
+  bar.querySelector('.ab-close').onclick = () => stopStream();
+  audioBarEl = bar;
+  return bar;
+}
+
+function updateAudioBar() {
+  const bar = ensureAudioBar();
+  if (!nowPlaying) { bar.classList.remove('on'); return; }
+  bar.classList.add('on');
+  const paused = !mapStreamAudio || mapStreamAudio.paused;
+  bar.classList.toggle('paused', paused);
+  bar.querySelector('.ab-toggle').textContent = paused ? '▶' : '⏸';
+  const label = nowPlaying.name + (nowPlaying.status ? ' — ' + nowPlaying.status : '');
+  const spans = bar.querySelectorAll('.ab-track span');
+  spans.forEach(s => { s.textContent = label; });
+  // Scroll speed scales with label length so long names read at a steady pace.
+  const track = bar.querySelector('.ab-track');
+  track.style.animationDuration = Math.max(8, label.length * 0.35) + 's';
+  syncStreamButtons();
+}
+
+// Reflect the global playing state on any card's Play/Stop buttons in the DOM.
+function syncStreamButtons() {
   document.querySelectorAll('.stream-ctrl').forEach(wrap => {
     const play = wrap.querySelector('.stream-play-btn');
     const stop = wrap.querySelector('.stream-stop-btn');
     const status = wrap.querySelector('.stream-status');
-    if (play) play.disabled = false;
-    if (stop) stop.disabled = true;
-    if (status && status.textContent !== 'Ready — tap Play') status.textContent = 'Stopped';
+    if (!play) return;
+    const isThis = nowPlaying && play.dataset.streamUrl === nowPlaying.url;
+    play.disabled = !!isThis;
+    if (stop) stop.disabled = !isThis;
+    if (status && isThis) status.textContent = nowPlaying.status || 'Playing';
+    else if (status && status.textContent && status.textContent !== 'Ready — tap Play'
+             && !/^(Live|Ready)/.test(status.textContent)) status.textContent = 'Ready — tap Play';
   });
 }
+
+function setNowPlayingStatus(s) {
+  if (!nowPlaying) return;
+  nowPlaying.status = s;
+  updateAudioBar();
+}
+
+// Start (or switch to) a stream. Replaces whatever is currently playing.
+function playStream(url, name) {
+  if (!url) return;
+  if (mapStreamAudio) { try { mapStreamAudio.pause(); mapStreamAudio.src = ''; } catch {} mapStreamAudio = null; }
+  nowPlaying = { url, name: name || 'Live stream', status: 'Connecting…' };
+  mapStreamAudio = new Audio(url);
+  mapStreamAudio.crossOrigin = 'anonymous';
+  mapStreamAudio.onplaying = () => setNowPlayingStatus('Playing live');
+  mapStreamAudio.onplay = () => updateAudioBar();
+  mapStreamAudio.onpause = () => updateAudioBar();
+  mapStreamAudio.onwaiting = () => setNowPlayingStatus('Buffering…');
+  mapStreamAudio.onerror = () => { setNowPlayingStatus('Stream unavailable'); };
+  mapStreamAudio.onended = () => stopStream();
+  updateAudioBar();
+  mapStreamAudio.play().catch(() => setNowPlayingStatus('Tap ▶ to start (autoplay blocked)'));
+}
+
+// Fully stop and retire the player.
+function stopStream() {
+  if (mapStreamAudio) { try { mapStreamAudio.pause(); mapStreamAudio.src = ''; } catch {} mapStreamAudio = null; }
+  nowPlaying = null;
+  if (audioBarEl) audioBarEl.classList.remove('on');
+  syncStreamButtons();
+}
+
+function toggleStreamPlayback() {
+  if (!mapStreamAudio || !nowPlaying) return;
+  if (mapStreamAudio.paused) {
+    // Reconnect to live rather than resume stale buffer for live streams.
+    mapStreamAudio.src = nowPlaying.url;
+    mapStreamAudio.play().catch(() => setNowPlayingStatus('Tap ▶ to start (autoplay blocked)'));
+  } else {
+    mapStreamAudio.pause();
+  }
+  updateAudioBar();
+}
+
+// Back-compat: some callers still reference stopMapStream(); keep it as an alias
+// but it no longer stops on card close (see hideMapCard).
+function stopMapStream() { stopStream(); }
 
 function wireRepeaterStreamControls(root) {
   if (!root) return;
   root.querySelectorAll('.stream-ctrl').forEach(wrap => {
     const playBtn = wrap.querySelector('.stream-play-btn');
     const stopBtn = wrap.querySelector('.stream-stop-btn');
-    const status = wrap.querySelector('.stream-status');
-    if (!playBtn || !stopBtn || playBtn._wired) return;
-    playBtn._wired = true;
-    playBtn.onclick = () => {
-      const url = playBtn.dataset.streamUrl;
-      if (!url) return;
-      stopMapStream();
-      if (audioEl) { audioEl.pause(); audioEl = null; }
-      mapStreamAudio = new Audio(url);
-      mapStreamAudio.crossOrigin = 'anonymous';
-      if (status) status.textContent = 'Connecting…';
-      playBtn.disabled = true;
-      stopBtn.disabled = false;
-      mapStreamAudio.onplaying = () => { if (status) status.textContent = 'Playing live'; };
-      mapStreamAudio.onwaiting = () => { if (status) status.textContent = 'Buffering…'; };
-      mapStreamAudio.onerror = () => {
-        if (status) status.textContent = 'Stream unavailable';
-        playBtn.disabled = false;
-        stopBtn.disabled = true;
-        mapStreamAudio = null;
+    if (!playBtn) return;
+    if (!playBtn._wired) {
+      playBtn._wired = true;
+      playBtn.onclick = () => {
+        playStream(playBtn.dataset.streamUrl, playBtn.dataset.streamName || 'Live stream');
       };
-      mapStreamAudio.onended = () => {
-        if (status) status.textContent = 'Ended';
-        playBtn.disabled = false;
-        stopBtn.disabled = true;
-        mapStreamAudio = null;
-      };
-      mapStreamAudio.play().catch(() => {
-        if (status) status.textContent = 'Tap Play again if blocked';
-        playBtn.disabled = false;
-        stopBtn.disabled = true;
-      });
-    };
-    stopBtn.onclick = () => {
-      stopMapStream();
-      if (status) status.textContent = 'Stopped';
-    };
+    }
+    if (stopBtn && !stopBtn._wired) {
+      stopBtn._wired = true;
+      stopBtn.onclick = () => stopStream();
+    }
   });
+  // Reflect current playback on freshly-rendered controls.
+  syncStreamButtons();
 }
 
-function pickStream(url) {
-  stopMapStream();
-  if (audioEl) { audioEl.pause(); audioEl = null; }
-  audioEl = new Audio(url);
-  audioEl.crossOrigin = 'anonymous';
-  audioEl.play().catch(e => console.warn('audio play blocked:', e));
-}
+function pickStream(url, name) { playStream(url, name || 'Live stream'); }
 function renderRadioList() { renderHawaiiBrowser(); }
 
 // Learned/observed stops (places buses repeatedly dwell that aren't official).
@@ -8846,7 +8922,8 @@ function showMapCard(bodyHtml, lngLat, title) {
 function hideMapCard() {
   if (meshCardRefreshTimer) { clearInterval(meshCardRefreshTimer); meshCardRefreshTimer = null; }
   stopWebcamCardRefresh();
-  stopMapStream();
+  // NOTE: intentionally does NOT stop audio — playback migrates to the docked
+  // player bar so the user can browse other things while a stream keeps going.
   if (mapCard) { mapCard.style.display = 'none'; mapCardAnchor = null; }
 }
 function positionMapCard() {
