@@ -1766,6 +1766,274 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "ocean:1611400": {
+      "title": "Nāwiliwili Harbor tide (Kauaʻi)",
+      "summary": "Kauaʻi, sometimes written Kauai, is one of the main Hawaiian Islands. It has an area of 562.3 square miles (1,456.4 km2), making it the fourth-largest of the islands and the 21st-largest island in the United States.",
+      "history": [
+        {
+          "year": 1778,
+          "text": "In January 1778, British navigator James Cook made the first recorded contact between any European and the indigenous people of the Hawaiian Islands when he arrived at Kauaʻi by accident while crossing the Pacific during his third voyage…",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1795,
+          "text": "By 1795, the king of Hawaii Island, Kamehameha I, had established the Kingdom of Hawaii, uniting most of the islands, but Kauaʻi remained independent.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1796,
+          "text": "Kamehameha tried to conquer Kauaʻi in 1796, but stormy seas caused the attack from Oahu to be canceled and he was afterward distracted by events elsewhere.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1803,
+          "text": "By 1803, Kauaʻi was ruled by Kaumualiʻi, who maintained his independence from the Kingdom of Hawaii.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1810,
+          "text": "In 1810, a diplomatic agreement was reached whereby Kaumualiʻi agreed to be Kamehameha's vassal, and to cede Kauaʻi to the Kingdom of Hawaiʻi upon his death by making Kamehameha's son his heir. .",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1815,
+          "text": "The Schäffer affair was a diplomatic episode instigated in 1815 by Georg Anton Schäffer, a German working with the Russian American Company.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Kauai_from_space_2.jpg/330px-Kauai_from_space_2.jpg",
+          "credit": "Wikipedia — Kauaʻi (CC/PD)",
+          "caption": "Kauaʻi",
+          "alt": "the big island from space on its own side in the ocean of blue water and with white spots"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        ],
+        "resolvedTitle": "Kauaʻi",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Kauai_from_space_2.jpg/330px-Kauai_from_space_2.jpg",
+            "caption": "the big island from space on its own side in the ocean of blue water and with white spots",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T03:40:53.844Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "ocean:1612340": {
+      "title": "Honolulu Harbor tide (Oʻahu)",
+      "summary": "Pearl Harbor is a lagoon harbor on the island of Oʻahu, Hawaii, United States, west of Honolulu.",
+      "history": [
+        {
+          "year": 1820,
+          "text": "As early as 1820, an \"Agent of the United States for Commerce and Seamen\" was appointed to look after American business in the Port of Honolulu.",
+          "source": "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        },
+        {
+          "year": 1840,
+          "text": "The British Hawaiian Minister of Foreign Affairs Robert Crichton Wyllie, remarked in 1840 that, \"... my opinion is that the tide of events rushes on to annexation to the United States.\" After the conclusion of the Civil War and the…",
+          "source": "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        },
+        {
+          "year": 1841,
+          "text": "In 1841, the newspaper Polynesian, printed in Honolulu, advocated that the U.S. establish a naval base in Hawaii for the protection of American citizens engaged in the whaling industry.",
+          "source": "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        },
+        {
+          "year": 1875,
+          "text": "It was often visited by the naval fleet of the United States before it was acquired from the Hawaiian Kingdom by the U.S. with the signing of the Reciprocity Treaty of 1875.",
+          "source": "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        },
+        {
+          "year": 1887,
+          "text": "The U.S. government first obtained exclusive use of the inlet and the right to maintain a repair and coaling station for ships here in 1887.",
+          "source": "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        },
+        {
+          "year": 1941,
+          "text": "The surprise attack on the harbor by the Imperial Japanese Navy on December 7, 1941, led the United States to declare war on the Empire of Japan, marking the United States' entry into World War II. .",
+          "source": "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/00/Ford_Island_aerial_photo_RIMPAC_1986.JPEG/330px-Ford_Island_aerial_photo_RIMPAC_1986.JPEG",
+          "credit": "Wikipedia — Pearl Harbor (CC/PD)",
+          "caption": "Pearl Harbor",
+          "alt": "there is an aerial view of a large body of water with land in the foreground and a small island in the background"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        ],
+        "resolvedTitle": "Pearl Harbor",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/00/Ford_Island_aerial_photo_RIMPAC_1986.JPEG/330px-Ford_Island_aerial_photo_RIMPAC_1986.JPEG",
+            "caption": "there is an aerial view of a large body of water with land in the foreground and a small island in the background",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T03:41:09.512Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "power:kahe": {
+      "title": "Kahe Generating Station (Oʻahu)",
+      "summary": "This is a list of electricity-generating power stations in the U.S. state of Hawaii, sorted by type and name.",
+      "history": [
+        {
+          "year": 2019,
+          "text": "Hawaii's one geothermal plant, which previously supplied about 2% of the state's and 10% of the Big Island's electricity, was offline during 2019 to repair damage from the 2018 lower Puna eruption.",
+          "source": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        },
+        {
+          "year": 2020,
+          "text": "The plant came back online in late 2020, slowly ramping up to its full operational level.",
+          "source": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        },
+        {
+          "year": 2021,
+          "text": "In 2021, solar energy accounted for three-fifths of Hawaii's electricity generation by renewables.",
+          "source": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        },
+        {
+          "year": 2023,
+          "text": "Considering large and small installations together, solar produced almost one-fifth of Hawaii's electricity in 2023.",
+          "source": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        },
+        {
+          "year": 2024,
+          "text": "In 2024, Hawaii had a total summer capacity of 3.4 GW through all of its power plants, and a net generation of 9,161 GWh.",
+          "source": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        },
+        {
+          "year": 2025,
+          "text": "The utility-scale electrical energy generation mix in 2025 was 74.5% petroleum-derived fuels, 10.3% solar, 6.1% wind, 2.7% geothermal, 2% biomass, 0.9% hydroelectric, and 3.4% other.",
+          "source": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Hawaii_power_grid.webp/330px-Hawaii_power_grid.webp.png",
+          "credit": "Wikipedia — List of power stations in Hawaii (CC/PD)",
+          "caption": "List of power stations in Hawaii",
+          "alt": "this is an image of a hawaii power grid map on the map of it's states"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        ],
+        "resolvedTitle": "List of power stations in Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Hawaii_power_grid.webp/330px-Hawaii_power_grid.webp.png",
+            "caption": "this is an image of a hawaii power grid map on the map of it's states",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T03:53:15.831Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "power:waiau": {
+      "title": "Waiau Power Plant (Oʻahu)",
+      "summary": "This is a list of electricity-generating power stations in the U.S. state of Hawaii, sorted by type and name.",
+      "history": [
+        {
+          "year": 2019,
+          "text": "Hawaii's one geothermal plant, which previously supplied about 2% of the state's and 10% of the Big Island's electricity, was offline during 2019 to repair damage from the 2018 lower Puna eruption.",
+          "source": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        },
+        {
+          "year": 2020,
+          "text": "The plant came back online in late 2020, slowly ramping up to its full operational level.",
+          "source": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        },
+        {
+          "year": 2021,
+          "text": "In 2021, solar energy accounted for three-fifths of Hawaii's electricity generation by renewables.",
+          "source": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        },
+        {
+          "year": 2023,
+          "text": "Considering large and small installations together, solar produced almost one-fifth of Hawaii's electricity in 2023.",
+          "source": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        },
+        {
+          "year": 2024,
+          "text": "In 2024, Hawaii had a total summer capacity of 3.4 GW through all of its power plants, and a net generation of 9,161 GWh.",
+          "source": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        },
+        {
+          "year": 2025,
+          "text": "The utility-scale electrical energy generation mix in 2025 was 74.5% petroleum-derived fuels, 10.3% solar, 6.1% wind, 2.7% geothermal, 2% biomass, 0.9% hydroelectric, and 3.4% other.",
+          "source": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Hawaii_power_grid.webp/330px-Hawaii_power_grid.webp.png",
+          "credit": "Wikipedia — List of power stations in Hawaii (CC/PD)",
+          "caption": "List of power stations in Hawaii",
+          "alt": "a map of the states of hawaii, including the island of hawaii and its major rivers"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        ],
+        "resolvedTitle": "List of power stations in Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Hawaii_power_grid.webp/330px-Hawaii_power_grid.webp.png",
+            "caption": "a map of the states of hawaii, including the island of hawaii and its major rivers",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T03:53:34.058Z",
+        "reviewed": false
+      },
+      "status": "ok"
     }
   }
 }
