@@ -3690,7 +3690,7 @@
         "resolvedTitle": "Four Seasons Resort Lanai",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T17:13:56.137Z",
+        "generatedAt": "2026-07-03T18:31:16.948Z",
         "reviewed": false
       },
       "status": "ok"
@@ -4991,6 +4991,274 @@
           }
         ],
         "generatedAt": "2026-07-03T17:29:16.671Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "hub:Prince Kūhiō Plaza": {
+      "title": "Prince Kūhiō Plaza",
+      "summary": "Prince Kūhiō Plaza is a single-level regional shopping mall in Hilo, Hawaii. It is the largest enclosed mall on the Island of Hawaii.",
+      "history": [
+        {
+          "year": 1903,
+          "text": "The mall is named for Prince Jonah Kuhio Kalanianaole, who served as Congressional Delegate from 1903 to 1922. .",
+          "source": "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        },
+        {
+          "year": 1977,
+          "text": "In September 1977, the Department of Hawaiian Home Lands offered to lease 39 acres (160,000 m2) of land at the intersection of Pū'āinakō Street and Kanoelehua Avenue (part of the Hawaii Belt Road) for development into retail space, which…",
+          "source": "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        },
+        {
+          "year": 2001,
+          "text": "In 2001, Macy's acquired the Liberty House store at the mall, followed by acquiring the vacant JCPenney space two years later for its men's, children's, and home store.",
+          "source": "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        },
+        {
+          "year": 2002,
+          "text": "On August 5, 2002, General Growth acquired the 50% interest in the mall that was owned by Homart Development Company, bringing its ownership in the mall to 100%.",
+          "source": "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        },
+        {
+          "year": 2004,
+          "text": "In 2004, the owner of the shopping center was sued by Longs Drugs for allowing a Safeway to be constructed at the mall.",
+          "source": "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        },
+        {
+          "year": 2021,
+          "text": "Sears was an anchor of the plaza until closing in 2021.",
+          "source": "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Prince_Kuhio_Plaza%2C_Hilo_-_Outside_View%2C_Sears_and_T.J._Maxx.jpg/330px-Prince_Kuhio_Plaza%2C_Hilo_-_Outside_View%2C_Sears_and_T.J._Maxx.jpg",
+          "credit": "Wikipedia — Prince Kuhio Plaza (CC/PD)",
+          "caption": "Prince Kuhio Plaza",
+          "alt": "a photo taken from the camera of a parking lot in front of a walmart"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Prince_Kuhio_Plaza"
+        ],
+        "resolvedTitle": "Prince Kuhio Plaza",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Prince_Kuhio_Plaza%2C_Hilo_-_Outside_View%2C_Sears_and_T.J._Maxx.jpg/330px-Prince_Kuhio_Plaza%2C_Hilo_-_Outside_View%2C_Sears_and_T.J._Maxx.jpg",
+            "caption": "a photo taken from the camera of a parking lot in front of a walmart",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T18:41:23.903Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "hub:Kea'au": {
+      "title": "Kea'au",
+      "summary": "Keaʻau is a census-designated place (CDP) in Hawaiʻi County, Hawaii. located in the District of Puna.",
+      "history": [
+        {
+          "year": 1899,
+          "text": "Keaau was called ʻŌlaʻa and in 1899, the Olaa Sugar Company leased about 4,000 acres of land, for growing sugarcane. .",
+          "source": "https://en.wikipedia.org/wiki/Kea%CA%BBau%2C_Hawaii"
+        },
+        {
+          "year": 1999,
+          "text": "Area schools include: Keaʻau High School - Opened in 1999 Keaʻau Middle School Keaʻau Elementary School The Hawaii State Public Library System operates the Keaau Public and School Library. .",
+          "source": "https://en.wikipedia.org/wiki/Kea%CA%BBau%2C_Hawaii"
+        },
+        {
+          "year": 2000,
+          "text": "The median household income was $39,722 and the median family income in 2000 was $43,347.",
+          "source": "https://en.wikipedia.org/wiki/Kea%CA%BBau%2C_Hawaii"
+        },
+        {
+          "year": 2003,
+          "text": "The Board on Geographic Names officially designated the populated place as Keaʻau in 2003. . .",
+          "source": "https://en.wikipedia.org/wiki/Kea%CA%BBau%2C_Hawaii"
+        },
+        {
+          "year": 2010,
+          "text": "The population decreased by roughly 50% from 2,253 at the time of the 2010 census. .",
+          "source": "https://en.wikipedia.org/wiki/Kea%CA%BBau%2C_Hawaii"
+        },
+        {
+          "year": 2020,
+          "text": "The population was 1,195 at the time of the 2020 census.",
+          "source": "https://en.wikipedia.org/wiki/Kea%CA%BBau%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Keaau_Highlighted.svg/330px-Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Keaau_Highlighted.svg.png",
+          "credit": "Wikipedia — Keaʻau, Hawaii (CC/PD)",
+          "caption": "Keaʻau, Hawaii",
+          "alt": "the island is red and there are white spots for the island to indicate on the map"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kea%CA%BBau%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kea%CA%BBau%2C_Hawaii"
+        ],
+        "resolvedTitle": "Keaʻau, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Keaau_Highlighted.svg/330px-Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Keaau_Highlighted.svg.png",
+            "caption": "the island is red and there are white spots for the island to indicate on the map",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T18:51:31.657Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "hub:Pāhoa": {
+      "title": "Pāhoa",
+      "summary": "Pāhoa is a census-designated place (CDP) in the District of Puna in Hawai‘i County, Hawai‘i, United States.",
+      "history": [
+        {
+          "year": 1840,
+          "text": "For example, the eruption of 1840 is known to have deposited a lava flow within 1.5 miles (2.4 km) of Pāhoa.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        },
+        {
+          "year": 1986,
+          "text": "Soils underlying the Pāhoa area are volcanic in origin, deriving from the currently active Kīlauea Volcano (Earth Metrics Inc., 1986).",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        },
+        {
+          "year": 2006,
+          "text": "Kīlauea is one of the Earth's most active volcanoes, with the January 2006 eruption being the longest rift zone eruption in Kīlauea's 200-year recorded history (Volcanology, 2007).",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        },
+        {
+          "year": 2014,
+          "text": "In June 2014, a lava flow dubbed the June 27th flow started running from a vent in the Puʻu ʻŌʻō cone in a northeast direction towards the villages of Ka'ohe Homesteads and Pāhoa.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        },
+        {
+          "year": 2018,
+          "text": "The 2018 lower Puna eruption which featured destructive lava flows resulting in the loss of approximately 700 homes, originated in nearby Leilani Estates. .",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        },
+        {
+          "year": 2020,
+          "text": "The population was 924 at the 2020 census.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Pahoa_Highlighted.svg/330px-Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Pahoa_Highlighted.svg.png",
+          "credit": "Wikipedia — Pāhoa, Hawaii (CC/PD)",
+          "caption": "Pāhoa, Hawaii",
+          "alt": "there is a map of the island of hawaii with a small red dot in the middle of the island"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        ],
+        "resolvedTitle": "Pāhoa, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Pahoa_Highlighted.svg/330px-Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Pahoa_Highlighted.svg.png",
+            "caption": "there is a map of the island of hawaii with a small red dot in the middle of the island",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T18:51:49.907Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "pnr:Mo'oheau Bus Terminal (Hilo)": {
+      "title": "Mo'oheau Bus Terminal (Hilo)",
+      "summary": "Hele-On Bus is the public transport bus service provided by the County of Hawaiʻi on the Big Island of Hawaiʻi, within the state of Hawaiʻi, United States.",
+      "history": [
+        {
+          "year": 1922,
+          "text": "The first \"sampan\" was credited to Hilo taxi driver Fukumatsu Kusumoto, who converted a Ford in 1922 by expanding the passenger compartment and installing wooden benches.",
+          "source": "https://en.wikipedia.org/wiki/Hele-On_Bus"
+        },
+        {
+          "year": 1948,
+          "text": "The Board of Supervisors of the County of Hawaiʻi created the Bus Control Committee in 1948 to regulate the sampan bus industry, and required all licensed operators to use the terminal in Moʻoheau Park starting in 1949.",
+          "source": "https://en.wikipedia.org/wiki/Hele-On_Bus"
+        },
+        {
+          "year": 1962,
+          "text": "A law was passed in 1962 to exempt sampan buses from the vehicle safety laws introduced by the 1961 Motor Carriers Act; the sampan bus exemption remained until 2014, limited to a radius of 20 miles (32 km) centered on Hilo, when it was…",
+          "source": "https://en.wikipedia.org/wiki/Hele-On_Bus"
+        },
+        {
+          "year": 1971,
+          "text": "A 1971 article promoting tourism to the island called them \"as anachronistic and beloved as San Francisco's cable cars.\" In the late 1930s, sampan bus fares dropped from 15 cents to 5 cents as competition increased.",
+          "source": "https://en.wikipedia.org/wiki/Hele-On_Bus"
+        },
+        {
+          "year": 1972,
+          "text": "At one point, there were more than 80 sampan buses in Hilo, but only 9 were left by 1972.",
+          "source": "https://en.wikipedia.org/wiki/Hele-On_Bus"
+        },
+        {
+          "year": 1976,
+          "text": "Prior to 1976, public transport in the Hilo area was provided by \"sampan\" buses converted locally from conventional passenger automobiles and operated as taxi or jitney services.",
+          "source": "https://en.wikipedia.org/wiki/Hele-On_Bus"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Hele-On_Bus_logo.svg/330px-Hele-On_Bus_logo.svg.png",
+          "credit": "Wikipedia — Hele-On Bus (CC/PD)",
+          "caption": "Hele-On Bus",
+          "alt": "helfon logo in black background with blue wave at bottom of image and on top right corner logo of the company"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Hele-On_Bus"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Hele-On_Bus"
+        ],
+        "resolvedTitle": "Hele-On Bus",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Hele-On_Bus_logo.svg/330px-Hele-On_Bus_logo.svg.png",
+            "caption": "helfon logo in black background with blue wave at bottom of image and on top right corner logo of the company",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T18:52:07.015Z",
         "reviewed": false
       },
       "status": "ok"
