@@ -1135,6 +1135,301 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "power:aes-waikoloa": {
+      "title": "AES Waikoloa Solar",
+      "summary": "The energy sector in Hawaii has rapidly adopted solar power due to the high costs of electricity, and good solar resources, and has one of the highest per capita rates of solar power in the United States.",
+      "history": [
+        {
+          "year": 2010,
+          "text": "16 MW of PV were installed in 2010, 40 MW in 2011, and 109 MW in 2012.",
+          "source": "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        },
+        {
+          "year": 2012,
+          "text": "Hawaii had almost 200 MW of grid-connected photovoltaics in 2012.",
+          "source": "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        },
+        {
+          "year": 2014,
+          "text": "In 2014, there were over 40,000 rooftop systems, over 10 percent of customers.",
+          "source": "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        },
+        {
+          "year": 2015,
+          "text": "Such overbuilding led the Hawaiian Electrical Company (HECO) to stop its net metering program, which reimbursed solar consumers generously for the excess electricity they exported back to the grid, in 2015.",
+          "source": "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        },
+        {
+          "year": 2023,
+          "text": "In 2023, distributed solar produced 1,408 GWh while utility-scale solar produced 643 GWh.",
+          "source": "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        },
+        {
+          "year": 2024,
+          "text": "The largest utility-scale solar farm in Hawaii is the 60 MW Kuihelani Solar on Maui, which opened in 2024, and includes 240 MWhr of battery storage As of 2024, solar power produced 19.5% of Hawaii's electricity. .",
+          "source": "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Holaniku.png/330px-Holaniku.png",
+          "credit": "Wikipedia — Solar power in Hawaii (CC/PD)",
+          "caption": "Solar power in Hawaii"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Solar_power_in_Hawaii"
+        ],
+        "resolvedTitle": "Solar power in Hawaii",
+        "model": "deterministic",
+        "generatedAt": "2026-07-02T23:50:23.220Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "volcano:KWcam": {
+      "title": "Halemaʻumaʻu crater west rim webcam",
+      "summary": "Kīlauea (US: KIL-ə-WAY-ə, Hawaiian: [kiːlɐwˈwɛjə]) is an active shield volcano in the Hawaiian Islands.",
+      "history": [
+        {
+          "year": 1778,
+          "text": "Western contact and written history began in 1778.",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 1983,
+          "text": "Kīlauea erupted nearly continuously from vents on its eastern rift zone between January 1983 and April 2018, causing major property damage, including the destruction in 1990 of the towns of Kalapana and Kaimū along with the community's…",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 2008,
+          "text": "Between 2008 and 2018, Halemaʻumaʻu, a pit crater located within Kīlauea's summit caldera, hosted an active lava lake.",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 2018,
+          "text": "Beginning in May 2018, activity shifted further downrift from the summit to the lower Puna district, during which lava erupted from two dozen vents with eruptive fountains that sent rivers of lava into the ocean in three places.",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 2020,
+          "text": "Since 2020, several eruptions have occurred within the enlarged Halemaʻumaʻu crater from the 2018 collapse events as well as along the volcano's southwest and east rift zones. .",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 2024,
+          "text": "The most recent eruption began in December 2024, with episodic lava fountains and flows continuing into 2026.",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Episode_4_of_Kilauea%27s_December_2024_eruption_2025-01-16.jpg/330px-Episode_4_of_Kilauea%27s_December_2024_eruption_2025-01-16.jpg",
+          "credit": "Wikipedia — Kīlauea (CC/PD)",
+          "caption": "Kīlauea"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        ],
+        "resolvedTitle": "Kīlauea",
+        "model": "deterministic",
+        "generatedAt": "2026-07-03T00:00:22.571Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "volcano:KOcam": {
+      "title": "Kīlauea upper East Rift Zone webcam",
+      "summary": "Kīlauea (US: KIL-ə-WAY-ə, Hawaiian: [kiːlɐwˈwɛjə]) is an active shield volcano in the Hawaiian Islands.",
+      "history": [
+        {
+          "year": 1778,
+          "text": "Western contact and written history began in 1778.",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 1983,
+          "text": "Kīlauea erupted nearly continuously from vents on its eastern rift zone between January 1983 and April 2018, causing major property damage, including the destruction in 1990 of the towns of Kalapana and Kaimū along with the community's…",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 2008,
+          "text": "Between 2008 and 2018, Halemaʻumaʻu, a pit crater located within Kīlauea's summit caldera, hosted an active lava lake.",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 2018,
+          "text": "Beginning in May 2018, activity shifted further downrift from the summit to the lower Puna district, during which lava erupted from two dozen vents with eruptive fountains that sent rivers of lava into the ocean in three places.",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 2020,
+          "text": "Since 2020, several eruptions have occurred within the enlarged Halemaʻumaʻu crater from the 2018 collapse events as well as along the volcano's southwest and east rift zones. .",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 2024,
+          "text": "The most recent eruption began in December 2024, with episodic lava fountains and flows continuing into 2026.",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Episode_4_of_Kilauea%27s_December_2024_eruption_2025-01-16.jpg/330px-Episode_4_of_Kilauea%27s_December_2024_eruption_2025-01-16.jpg",
+          "credit": "Wikipedia — Kīlauea (CC/PD)",
+          "caption": "Kīlauea"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        ],
+        "resolvedTitle": "Kīlauea",
+        "model": "deterministic",
+        "generatedAt": "2026-07-03T00:10:23.112Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "volcano:MKcam": {
+      "title": "Mauna Loa summit webcam from Mauna Kea",
+      "summary": "Mauna Loa (, Hawaiian: [ˈmɐwnə ˈlowə]; lit. 'Long Mountain') is one of five volcanoes that form the Island of Hawaii in the U.S. state of Hawaii in the Pacific Ocean.",
+      "history": [
+        {
+          "year": 1843,
+          "text": "Since then, the volcano has remained active, with a history of effusive and explosive eruptions, including 34 eruptions since the first well-documented eruption in 1843. .",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa"
+        },
+        {
+          "year": 1912,
+          "text": "Mauna Loa has been monitored intensively by the Hawaiian Volcano Observatory since 1912.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa"
+        },
+        {
+          "year": 1915,
+          "text": "With the assistance of the Buffalo Soldiers in 1915, a path to the top of Mauna Loa was created.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa"
+        },
+        {
+          "year": 1926,
+          "text": "No recent eruptions of the volcano have caused fatalities, but eruptions in 1926 and 1950 destroyed villages, and the city of Hilo is partly built on lava flows from the late 19th century.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa"
+        },
+        {
+          "year": 1984,
+          "text": "It was the first eruption since 1984.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa"
+        },
+        {
+          "year": 2022,
+          "text": "Mauna Loa's most recent eruption began on November 27, 2022, and ended on December 13, 2022.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Mauna_Loa_Volcano.jpg/330px-Mauna_Loa_Volcano.jpg",
+          "credit": "Wikipedia — Mauna Loa (CC/PD)",
+          "caption": "Mauna Loa"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Mauna_Loa"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Mauna_Loa"
+        ],
+        "resolvedTitle": "Mauna Loa",
+        "model": "deterministic",
+        "generatedAt": "2026-07-03T00:20:21.504Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "volcano:MSPcam": {
+      "title": "Mauna Loa SW Rift webcam",
+      "summary": "Mauna Loa (, Hawaiian: [ˈmɐwnə ˈlowə]; lit. 'Long Mountain') is one of five volcanoes that form the Island of Hawaii in the U.S. state of Hawaii in the Pacific Ocean.",
+      "history": [
+        {
+          "year": 1843,
+          "text": "Since then, the volcano has remained active, with a history of effusive and explosive eruptions, including 34 eruptions since the first well-documented eruption in 1843. .",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa"
+        },
+        {
+          "year": 1912,
+          "text": "Mauna Loa has been monitored intensively by the Hawaiian Volcano Observatory since 1912.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa"
+        },
+        {
+          "year": 1915,
+          "text": "With the assistance of the Buffalo Soldiers in 1915, a path to the top of Mauna Loa was created.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa"
+        },
+        {
+          "year": 1926,
+          "text": "No recent eruptions of the volcano have caused fatalities, but eruptions in 1926 and 1950 destroyed villages, and the city of Hilo is partly built on lava flows from the late 19th century.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa"
+        },
+        {
+          "year": 1984,
+          "text": "It was the first eruption since 1984.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa"
+        },
+        {
+          "year": 2022,
+          "text": "Mauna Loa's most recent eruption began on November 27, 2022, and ended on December 13, 2022.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Mauna_Loa_Volcano.jpg/330px-Mauna_Loa_Volcano.jpg",
+          "credit": "Wikipedia — Mauna Loa (CC/PD)",
+          "caption": "Mauna Loa"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Mauna_Loa"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Mauna_Loa"
+        ],
+        "resolvedTitle": "Mauna Loa",
+        "model": "deterministic",
+        "generatedAt": "2026-07-03T00:20:23.237Z",
+        "reviewed": false
+      },
+      "status": "ok"
     }
   }
 }
