@@ -4,7 +4,7 @@ const { staticCatalog } = require('../lib/item-catalog');
 
 module.exports = {
   'catalog is non-empty'() {
-    assert.ok(staticCatalog().length >= 40, 'expected a large item universe');
+    assert.ok(staticCatalog().length >= 100, 'expected a large statewide item universe');
   },
   'every item has category:id key and title'() {
     for (const it of staticCatalog()) {

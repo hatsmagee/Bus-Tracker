@@ -4142,13 +4142,20 @@ async function usgsDailyValues(site, param, startDT, endDT) {
   return series;
 }
 
-// Big Island bbox, generous margin (same footprint as the vehicle/aircraft boxes).
-const BIGISLAND_BBOX = { minLat: 18.5, maxLat: 20.5, minLon: -156.3, maxLon: -154.5 };
+// Statewide data box covering every main Hawaiian island (Kauaʻi → Big Island),
+// generous margin. National/statewide APIs (USGS, NWS, NREL, Esri, Aqualink)
+// are filtered to this box so real-time layers populate for the whole chain,
+// not just Hawaiʻi County. (Was Big-Island-only; widened to go statewide.)
+const HI_DATA_BBOX = { minLat: 18.5, maxLat: 22.5, minLon: -160.5, maxLon: -154.5 };
+function inHiDataBbox(lat, lon) {
+  const b = HI_DATA_BBOX;
+  return lat >= b.minLat && lat <= b.maxLat && lon >= b.minLon && lon <= b.maxLon;
+}
 
 let earthquakeCache = [];
 let earthquakeLastPollTs = null, earthquakeLastError = null;
 async function pollEarthquakes() {
-  const b = BIGISLAND_BBOX;
+  const b = HI_DATA_BBOX;
   const starttime = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const qs = `format=geojson&starttime=${starttime}&minlatitude=${b.minLat}&maxlatitude=${b.maxLat}&minlongitude=${b.minLon}&maxlongitude=${b.maxLon}&minmagnitude=1.5&orderby=time`;
   try {
@@ -4201,7 +4208,7 @@ async function pollAlerts() {
 let lavaZonesCache = null, tsunamiZonesCache = null;
 let hazardZonesLastFetchTs = null, hazardZonesLastError = null;
 async function fetchHazardLayer(layerId, outFields) {
-  const b = BIGISLAND_BBOX;
+  const b = HI_DATA_BBOX;
   const geom = `${b.minLon},${b.minLat},${b.maxLon},${b.maxLat}`;
   const qs = `where=1=1&geometry=${geom}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=${outFields}&f=geojson&geometryPrecision=5`;
   const data = await fetchJson('geodata.hawaii.gov', `/arcgis/rest/services/Hazards/MapServer/${layerId}/query?${qs}`, { 'User-Agent': 'heleon-tracker' });
@@ -4225,7 +4232,7 @@ async function pollHazardZones() {
 let wildfireCache = null;
 let wildfireLastPollTs = null, wildfireLastError = null;
 async function pollWildfireHotspots() {
-  const b = BIGISLAND_BBOX;
+  const b = HI_DATA_BBOX;
   const geom = `${b.minLon},${b.minLat},${b.maxLon},${b.maxLat}`;
   const qs = `where=1=1&geometry=${geom}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=latitude,longitude,confidence,frp,acq_date,acq_time,hours_old,daynight&f=geojson`;
   try {
@@ -4243,7 +4250,7 @@ async function pollWildfireHotspots() {
 // published by Hawaii County Police or Fire; this is location context only.
 let policeStationsCache = null, fireStationsCache = null, emsStationsCache = null, traumaCentersCache = null;
 async function fetchPubSafetyLayer(layerId, outFields, extraWhere) {
-  const b = BIGISLAND_BBOX;
+  const b = HI_DATA_BBOX;
   const geom = `${b.minLon},${b.minLat},${b.maxLon},${b.maxLat}`;
   const where = extraWhere || '1=1';
   const qs = `where=${encodeURIComponent(where)}&geometry=${geom}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=${outFields}&f=geojson`;
@@ -4252,19 +4259,19 @@ async function fetchPubSafetyLayer(layerId, outFields, extraWhere) {
 async function pollPubSafetyFacilities() {
   try {
     policeStationsCache = await fetchPubSafetyLayer(12, 'district,type,name,address,zipcode');
-    fireStationsCache = await fetchPubSafetyLayer(7, 'name,alt_name,island,status', "island='Hawaii'");
+    fireStationsCache = await fetchPubSafetyLayer(7, 'name,alt_name,island,status');
     emsStationsCache = await fetchPubSafetyLayer(8, 'unit,unit_name,county,address');
-    traumaCentersCache = await fetchPubSafetyLayer(9, 'facility_name,trauma_level,island,address,city', "island='Hawaii'");
+    traumaCentersCache = await fetchPubSafetyLayer(9, 'facility_name,trauma_level,island,address,city');
     hazardZonesLastError = null; // reuse the same daily-refresh error slot
   } catch (e) {
     hazardZonesLastError = (e && e.message) || 'unknown error';
   }
 }
 
-// USGS real-time streamflow — Big Island river/streams gauges, keyless JSON
-// from the National Water Information System. Filtered down to the Big Island
-// bbox client-side because the NWIS endpoint only takes one major filter
-// (state, bbox, OR sites), and state=HI also pulls in Kauai/Maui sites.
+// USGS real-time streamflow — statewide river/stream gauges, keyless JSON
+// from the National Water Information System. Queried by state=HI (Kauaʻi →
+// Big Island) and filtered to the statewide data box; the NWIS endpoint only
+// takes one major filter (state, bbox, OR sites).
 let streamflowCache = null;
 let streamflowLastPollTs = null, streamflowLastError = null;
 // Which USGS parameters we ask for, and how to present each. A gauge often
@@ -4290,8 +4297,7 @@ async function pollStreamflow() {
     for (const s of ts) {
       const g = s.sourceInfo.geoLocation.geogLocation;
       const lat = g.latitude, lon = g.longitude;
-      if (lat < BIGISLAND_BBOX.minLat || lat > BIGISLAND_BBOX.maxLat ||
-          lon < BIGISLAND_BBOX.minLon || lon > BIGISLAND_BBOX.maxLon) continue;
+      if (!inHiDataBbox(lat, lon)) continue;
       const siteNo = s.sourceInfo.siteCode[0].value;
       const paramCd = s.variable && s.variable.variableCode && s.variable.variableCode[0] && s.variable.variableCode[0].value;
       const meta = NWIS_PARAMS[paramCd];
@@ -4350,8 +4356,7 @@ async function pollRainfall() {
     for (const s of ts) {
       const g = s.sourceInfo.geoLocation.geogLocation;
       const lat = g.latitude, lon = g.longitude;
-      if (lat < BIGISLAND_BBOX.minLat || lat > BIGISLAND_BBOX.maxLat ||
-          lon < BIGISLAND_BBOX.minLon || lon > BIGISLAND_BBOX.maxLon) continue;
+      if (!inHiDataBbox(lat, lon)) continue;
       const siteNo = s.sourceInfo.siteCode[0].value;
       const vals = (s.values && s.values[0] && s.values[0].value) || [];
       // Sum the incremental precip readings over the window (each is inches
@@ -4403,9 +4408,9 @@ async function pollSpaceWeather() {
   } catch (e) { spaceWxLastError = (e && e.message) || 'unknown error'; }
 }
 
-// NWS weather stations — Big Island fixed weather stations (HELCO *HE* and
-// Hawaii Island *HI* suffixes in NWS naming) with real-time observations:
-// temperature, dewpoint, humidity, wind, barometer. Refreshed every 10 min.
+// NWS weather stations — statewide fixed ASOS/AWOS/mesonet sites with real-time
+// observations: temperature, dewpoint, humidity, wind, barometer. Refreshed
+// every 10 min. Filtered to the Hawaiian chain via HI_DATA_BBOX.
 // Map an NWS text description to a sky-condition emoji so the weather markers
 // read as little weather glyphs (☀️/⛅/🌧️…) instead of a bare thermometer number.
 function wxConditionEmoji(desc) {
@@ -4432,9 +4437,9 @@ async function fetchWeatherStationsState() {
     // Pre-compute the Big Island subset, with coordinates normalized to lon/lat,
     // so we can fan out per-station /observations/latest calls without
     // re-filtering the whole list each cycle.
-    const big = all.filter(f => {
+    const hi = all.filter(f => {
       const c = f.geometry && f.geometry.coordinates;
-      return c && c[1] > 18.8 && c[1] < 20.5 && c[0] > -156.4 && c[0] < -154.5;
+      return c && inHiDataBbox(c[1], c[0]);
     });
     // Concurrently fetch each station's latest observation, with a short per-call
     // timeout so a single slow station doesn't stall the whole batch.
@@ -4468,7 +4473,7 @@ async function fetchWeatherStationsState() {
         };
       } catch (e) { return null; }
     };
-    const results = await Promise.all(big.map(fetchOne));
+    const results = await Promise.all(hi.map(fetchOne));
     weatherStationsCache = {
       type: 'FeatureCollection',
       features: results.filter(Boolean),
@@ -4626,20 +4631,27 @@ async function pollSummits() {
 }
 
 // ─── OCEAN: NDBC wave/weather buoys + NOAA tide stations (keyless) ────────────
-// Real marine conditions around the Big Island. NDBC buoys emit a fixed-width
-// realtime2 text file (latest row = now); NOAA CO-OPS gives live water level.
+// Real marine conditions statewide. NDBC buoys emit a fixed-width realtime2 text
+// file (latest row = now); NOAA CO-OPS gives live water level at harbor gauges.
 const NDBC_BUOYS = [
   { id: '51000', name: 'NDBC 51000 — N of Hawaii', lat: 23.53, lon: -153.79 },
   { id: '51001', name: 'NDBC 51001 — NW Hawaii', lat: 23.44, lon: -162.06 },
   { id: '51002', name: 'NDBC 51002 — S of Hawaii', lat: 17.09, lon: -157.81 },
   { id: '51004', name: 'NDBC 51004 — SE of Hawaii', lat: 17.52, lon: -152.24 },
+  { id: '51201', name: 'NDBC 51201 — Waimea Bay (Oʻahu)', lat: 21.671, lon: -158.117 },
+  { id: '51205', name: 'NDBC 51205 — Pauwela (Maui)', lat: 21.019, lon: -156.425 },
   { id: '51206', name: 'NDBC 51206 — Hilo (Waverider)', lat: 19.78, lon: -154.97 },
-  { id: '51207', name: 'NDBC 51207 — Kaneohe', lat: 21.48, lon: -157.75 },
+  { id: '51207', name: 'NDBC 51207 — Kaneohe (Oʻahu)', lat: 21.48, lon: -157.75 },
+  { id: '51208', name: 'NDBC 51208 — Hanalei (Kauaʻi)', lat: 22.285, lon: -159.574 },
+  { id: '51210', name: 'NDBC 51210 — Kaneʻohe Bay (Oʻahu)', lat: 21.477, lon: -157.756 },
 ];
 const TIDE_STATIONS = [
   { id: '1617760', name: 'Hilo Bay tide', lat: 19.7303, lon: -155.0556 },
   { id: '1617433', name: 'Kawaihae tide', lat: 20.0366, lon: -155.8294 },
   { id: '1612480', name: 'Kailua-Kona tide', lat: 19.6392, lon: -155.9969 },
+  { id: '1611400', name: 'Nāwiliwili Harbor tide (Kauaʻi)', lat: 21.9544, lon: -159.3558 },
+  { id: '1612340', name: 'Honolulu Harbor tide (Oʻahu)', lat: 21.3067, lon: -157.8670 },
+  { id: '1615680', name: 'Kahului Harbor tide (Maui)', lat: 20.8950, lon: -156.4767 },
 ];
 let oceanCache = [];
 let oceanLastPollTs = null, oceanLastError = null;
@@ -4705,7 +4717,7 @@ async function pollOcean() {
 // Aqualink publishes all site metadata (incl. YouTube/Luma reef cams) at
 // /api/sites — no key. FOSS landings API is keyless but needs paging to filter
 // Hawaiʻi rows; many species are "WITHHELD" at fine granularity.
-const MARINE_BI = { minLat: 18.5, maxLat: 20.6, minLon: -156.5, maxLon: -154.4 };
+const MARINE_BI = { minLat: 18.5, maxLat: 22.5, minLon: -160.5, maxLon: -154.4 };
 let marineCache = { webcams: [], reefSensors: [] };
 let marineFishingCache = { top: [], source: '', links: [], note: '' };
 let marineLastPollTs = null, marineLastError = null;
@@ -4838,9 +4850,10 @@ async function pollFishingSummary() {
 // fuel-mix API (islandpulse.org is defunct). We surface curated plant locations,
 // OpenStreetMap transmission assets, PeeringDB colo/IX metadata, and OSM-mapped
 // cell towers — all static/reference, refreshed daily from public sources.
-const INFRA_BI = { minLat: 18.5, maxLat: 20.6, minLon: -156.5, maxLon: -154.4 };
+const INFRA_BI = { minLat: 18.5, maxLat: 22.5, minLon: -160.5, maxLon: -154.4 };
 const INFRA_CACHE_PATH = path.join(__dirname, 'data', 'infrastructure-cache.json');
 const CURATED_POWER_PLANTS = [
+  // Hawaiʻi Island
   { id: 'pgv', name: 'Puna Geothermal Venture', fuel: 'geothermal', capacityMw: 38, lat: 19.470, lon: -155.117, operator: 'PGV / HECO', island: 'Hawaiʻi', note: 'Largest geothermal plant in the state' },
   { id: 'hamakua', name: 'Hamakua Energy', fuel: 'oil', capacityMw: 60, lat: 20.054, lon: -155.552, operator: 'Hamakua Energy Partners', island: 'Hawaiʻi', note: 'Oil-fired peaker near Honokaʻa' },
   { id: 'keahole', name: 'Keahole Power Plant', fuel: 'oil', capacityMw: 77, lat: 19.728, lon: -156.058, operator: 'HECO', island: 'Hawaiʻi', note: 'North Kona combustion turbines' },
@@ -4850,6 +4863,17 @@ const CURATED_POWER_PLANTS = [
   { id: 'hawiwind', name: 'Hawi Wind Farm', fuel: 'wind', capacityMw: 10.6, lat: 20.228, lon: -155.832, operator: 'Tawhiri Power', island: 'Hawaiʻi', note: 'North Kohala' },
   { id: 'aes-waikoloa', name: 'AES Waikoloa Solar', fuel: 'solar', capacityMw: 30, lat: 19.945, lon: -155.865, operator: 'AES', island: 'Hawaiʻi', note: 'Utility-scale solar + storage' },
   { id: 'hakalau-hydro', name: 'Hakalau Hydro', fuel: 'hydro', capacityMw: 2.4, lat: 19.865, lon: -155.125, operator: 'HECO', island: 'Hawaiʻi', note: 'Run-of-river hydro' },
+  // Oʻahu
+  { id: 'kahe', name: 'Kahe Generating Station', fuel: 'oil', capacityMw: 650, lat: 21.355, lon: -158.124, operator: 'HECO', island: 'Oʻahu', note: 'Largest power plant in Hawaiʻi — West Oʻahu' },
+  { id: 'waiau', name: 'Waiau Power Plant', fuel: 'oil', capacityMw: 500, lat: 21.388, lon: -157.975, operator: 'HECO', island: 'Oʻahu', note: 'Pearl City / ʻAiea combustion turbines' },
+  { id: 'aes-west-oahu', name: 'AES West Oʻahu Solar', fuel: 'solar', capacityMw: 49, lat: 21.365, lon: -158.110, operator: 'AES', island: 'Oʻahu', note: 'Utility-scale solar near Kahe' },
+  // Maui
+  { id: 'kahului', name: 'Kahului Power Plant', fuel: 'oil', capacityMw: 38, lat: 20.884, lon: -156.458, operator: 'MECO', island: 'Maui', note: 'Central Maui baseload' },
+  { id: 'maalaea', name: 'Māʻalaea Generating Station', fuel: 'oil', capacityMw: 212, lat: 20.792, lon: -156.508, operator: 'MECO', island: 'Maui', note: 'Largest Maui plant — south shore' },
+  { id: 'auwahi-wind', name: 'Auwahi Wind Farm', fuel: 'wind', capacityMw: 21, lat: 20.605, lon: -156.365, operator: 'Sempra', island: 'Maui', note: 'Ulupalakua area' },
+  // Kauaʻi
+  { id: 'port-allen', name: 'Port Allen Power Plant', fuel: 'oil', capacityMw: 28, lat: 21.897, lon: -159.593, operator: 'KIUC', island: 'Kauaʻi', note: 'West Kauaʻi combustion turbines' },
+  { id: 'koloa-solar', name: 'Kōloa Solar', fuel: 'solar', capacityMw: 12, lat: 21.883, lon: -159.465, operator: 'KIUC', island: 'Kauaʻi', note: 'Utility-scale solar on former plantation land' },
 ];
 const HAWAII_ISLAND_GRID_MIX = {
   year: 2024,
@@ -5188,7 +5212,7 @@ out geom 120;`);
 // HDOT AADT road segments from state GIS; East Hawaiʻi Bluetooth travel-time
 // sensors link to Blyncsy Pulse (no public API). LCO global telescope schedule is
 // fully open. iNaturalist provides community species sightings.
-const LOCAL_BI = { minLat: 18.5, maxLat: 20.6, minLon: -156.5, maxLon: -154.4 };
+const LOCAL_BI = { minLat: 18.5, maxLat: 22.5, minLon: -160.5, maxLon: -154.4 };
 const LOCAL_CACHE_PATH = path.join(__dirname, 'data', 'local-cache.json');
 const BLYNCSY_SENSORS = [
   { id: 'bly-hilo-1', name: 'Kamehameha Ave / Pauahi (Hilo)', lat: 19.725, lon: -155.087 },
@@ -5483,8 +5507,9 @@ function connectAprs() {
 // Vog (volcanic SO₂ + sulfate haze from Kīlauea) is a defining Big Island air
 // hazard. Open-Meteo's air-quality API is fully open (no key) and returns PM2.5,
 // PM10, SO₂ and US AQI per point, so we sample representative towns across the
-// island to build a live AQ layer. Downwind (Kona/Ka'ū) usually reads worst.
+// Hawaiian chain to build a live AQ layer. Downwind (Kona/Kaʻū) usually reads worst.
 const AQ_POINTS = [
+  // Hawaiʻi Island
   { name: 'Hilo', lat: 19.707, lon: -155.09 },
   { name: 'Kailua-Kona', lat: 19.64, lon: -155.996 },
   { name: 'Volcano', lat: 19.44, lon: -155.23 },
@@ -5494,6 +5519,13 @@ const AQ_POINTS = [
   { name: 'Waikoloa', lat: 19.94, lon: -155.79 },
   { name: 'Pāhoa', lat: 19.49, lon: -154.95 },
   { name: 'Captain Cook', lat: 19.5, lon: -155.92 },
+  // Neighbor islands
+  { name: 'Honolulu', lat: 21.306, lon: -157.858 },
+  { name: 'Kaneohe', lat: 21.418, lon: -157.803 },
+  { name: 'Wailuku', lat: 20.891, lon: -156.504 },
+  { name: 'Lihue', lat: 21.976, lon: -159.371 },
+  { name: 'Princeville', lat: 22.217, lon: -159.478 },
+  { name: 'Lanai City', lat: 20.827, lon: -156.921 },
 ];
 let airQualityCache = [];
 let airQualityLastPollTs = null, airQualityLastError = null;
@@ -6301,7 +6333,9 @@ const HAWAII_HAM_STREAM = 'https://broadcastify.cdnstream1.com/27598';
 const KIWISDR_MAP = 'https://rx.kiwisdr.com/';
 // Big Island (Hawaiʻi County) Broadcastify scanner feeds — curated from
 // https://www.broadcastify.com/listen/ctid/542 and search ?q=hawaii.
-// Excludes Oʻahu-only feeds (e.g. 27598 ham repeaters — attached to repeater cards).
+// Neighbor-island MP3 feeds are sparse (Maui/Kauaʻi use Broadcastify Calls
+// only); Oʻahu has a linked local-ham feed (27598). The statewide linked-ham
+// stream (27598) is also attached to repeater cards everywhere.
 function bcfyFeed(id, extra) {
   return {
     feedId: id,
@@ -6390,6 +6424,15 @@ const SCANNER_FEEDS = [
     ],
     note: 'Hawaiʻi County Fire / air coordination sectors — Northeast and Hamakua airband (not Honolulu ARTCC).',
   }),
+  bcfyFeed(27598, {
+    id: 'oahu-ham',
+    name: 'Honolulu County Amateur Repeaters',
+    shortName: 'Oʻahu ham',
+    lat: 21.307, lon: -157.858, elevM: 30,
+    site: 'Honolulu (linked local nets)',
+    genre: 'Amateur Radio',
+    note: 'Local Oʻahu VHF/UHF repeaters on the statewide linked ham net (Broadcastify 27598). Maui/Kauaʻi public-safety dispatch is on Broadcastify Calls only — no keyless MP3 feed.',
+  }),
 ];
 function cleanRepeaterDescription(s) {
   if (!s) return '';
@@ -6437,7 +6480,7 @@ async function pollRepeaters() {
     const j = await fetchJson('hearham.com', '/api/repeaters/v1', { 'User-Agent': 'heleon-tracker' });
     if (!Array.isArray(j)) { repeaterLastError = 'unexpected response'; return; }
     repeaterCache = j
-      .filter(r => r.latitude > 18.5 && r.latitude < 20.6 && r.longitude > -156.5 && r.longitude < -154.4)
+      .filter(r => inHiDataBbox(r.latitude, r.longitude))
       .map(r => {
         const listen = repeaterListenMeta(r);
         const desc = cleanRepeaterDescription(r.description);
@@ -6504,7 +6547,7 @@ async function pollEv() {
     const j = await fetchJson('developer.nrel.gov',
       `/api/alt-fuels-stations/v1.json?fuel_type=ELEC&state=HI&status=E&access=public&limit=all&api_key=${encodeURIComponent(NREL_API_KEY)}`,
       { 'User-Agent': 'heleon-tracker', 'Accept': 'application/json' });
-    const b = BIGISLAND_BBOX;
+    const b = HI_DATA_BBOX;
     const stations = (j.fuel_stations || [])
       .filter(s => s.latitude != null && s.longitude != null &&
         s.latitude >= b.minLat && s.latitude <= b.maxLat && s.longitude >= b.minLon && s.longitude <= b.maxLon)
