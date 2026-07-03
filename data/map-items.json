@@ -3382,6 +3382,264 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "kauai:hanalei": {
+      "title": "Hanalei Bay (Kauaʻi)",
+      "summary": "Hanalei Bay is the largest bay on the north shore of Kauaʻi island in Hawaii. The town of Hanalei is at the midpoint of the bay. .",
+      "history": [
+        {
+          "year": 1824,
+          "text": "On April 5, 1824, King Kamehameha II's royal yacht, Pride of Hawaii, sank near the mouth of the Waiʻoli River, 22°12′14″N 159°30′37″W, on the southwest corner of the bay after its crew struck a 5-foot-deep (1.5 m) reef a hundred yards…",
+          "source": "https://en.wikipedia.org/wiki/Hanalei_Bay"
+        },
+        {
+          "year": 1844,
+          "text": "A large section of the ship's hull washed ashore in 1844 in a winter storm surge, but most of this historic wreck remains buried in silt in the bay.",
+          "source": "https://en.wikipedia.org/wiki/Hanalei_Bay"
+        },
+        {
+          "year": 1958,
+          "text": "Hanalei Bay also served as a filming location for the 1958 film South Pacific and for the 2011 film The Descendants. . .",
+          "source": "https://en.wikipedia.org/wiki/Hanalei_Bay"
+        },
+        {
+          "year": 1995,
+          "text": "In 1995–2000, archaeologists from the Smithsonian Institution's National Museum of American History excavated the wreck and recovered more than 1,200 artifacts.",
+          "source": "https://en.wikipedia.org/wiki/Hanalei_Bay"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Hanalei_Pier%2C_Hanalei_Bay%2C_Kauai%2C_Hawaii.jpg/330px-Hanalei_Pier%2C_Hanalei_Bay%2C_Kauai%2C_Hawaii.jpg",
+          "credit": "Wikipedia — Hanalei Bay (CC/PD)",
+          "caption": "Hanalei Bay",
+          "alt": "a pier with waves coming up onto the sand by some mountains and a beach in the distance"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Hanalei_Bay"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Hanalei_Bay"
+        ],
+        "resolvedTitle": "Hanalei Bay",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Hanalei_Pier%2C_Hanalei_Bay%2C_Kauai%2C_Hawaii.jpg/330px-Hanalei_Pier%2C_Hanalei_Bay%2C_Kauai%2C_Hawaii.jpg",
+            "caption": "a pier with waves coming up onto the sand by some mountains and a beach in the distance",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T09:46:24.823Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "kauai:wailuafalls": {
+      "title": "Wailua Falls (Kauaʻi)",
+      "summary": "Kauaʻi, sometimes written Kauai, is one of the main Hawaiian Islands. It has an area of 562.3 square miles (1,456.4 km2), making it the fourth-largest of the islands and the 21st-largest island in the United States.",
+      "history": [
+        {
+          "year": 1778,
+          "text": "In January 1778, British navigator James Cook made the first recorded contact between any European and the indigenous people of the Hawaiian Islands when he arrived at Kauaʻi by accident while crossing the Pacific during his third voyage…",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1795,
+          "text": "By 1795, the king of Hawaii Island, Kamehameha I, had established the Kingdom of Hawaii, uniting most of the islands, but Kauaʻi remained independent.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1796,
+          "text": "Kamehameha tried to conquer Kauaʻi in 1796, but stormy seas caused the attack from Oahu to be canceled and he was afterward distracted by events elsewhere.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1803,
+          "text": "By 1803, Kauaʻi was ruled by Kaumualiʻi, who maintained his independence from the Kingdom of Hawaii.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1810,
+          "text": "In 1810, a diplomatic agreement was reached whereby Kaumualiʻi agreed to be Kamehameha's vassal, and to cede Kauaʻi to the Kingdom of Hawaiʻi upon his death by making Kamehameha's son his heir. .",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1815,
+          "text": "The Schäffer affair was a diplomatic episode instigated in 1815 by Georg Anton Schäffer, a German working with the Russian American Company.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Kauai_from_space_2.jpg/330px-Kauai_from_space_2.jpg",
+          "credit": "Wikipedia — Kauaʻi (CC/PD)",
+          "caption": "Kauaʻi",
+          "alt": "an aerial view of a large island in the middle of a body of water with lots of water around it"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        ],
+        "resolvedTitle": "Kauaʻi",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Kauai_from_space_2.jpg/330px-Kauai_from_space_2.jpg",
+            "caption": "an aerial view of a large island in the middle of a body of water with lots of water around it",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T09:46:40.997Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "kauai:lih": {
+      "title": "Līhuʻe Airport (Kauaʻi)",
+      "summary": "Kauaʻi, sometimes written Kauai, is one of the main Hawaiian Islands. It has an area of 562.3 square miles (1,456.4 km2), making it the fourth-largest of the islands and the 21st-largest island in the United States.",
+      "history": [
+        {
+          "year": 1778,
+          "text": "In January 1778, British navigator James Cook made the first recorded contact between any European and the indigenous people of the Hawaiian Islands when he arrived at Kauaʻi by accident while crossing the Pacific during his third voyage…",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1795,
+          "text": "By 1795, the king of Hawaii Island, Kamehameha I, had established the Kingdom of Hawaii, uniting most of the islands, but Kauaʻi remained independent.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1796,
+          "text": "Kamehameha tried to conquer Kauaʻi in 1796, but stormy seas caused the attack from Oahu to be canceled and he was afterward distracted by events elsewhere.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1803,
+          "text": "By 1803, Kauaʻi was ruled by Kaumualiʻi, who maintained his independence from the Kingdom of Hawaii.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1810,
+          "text": "In 1810, a diplomatic agreement was reached whereby Kaumualiʻi agreed to be Kamehameha's vassal, and to cede Kauaʻi to the Kingdom of Hawaiʻi upon his death by making Kamehameha's son his heir. .",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        },
+        {
+          "year": 1815,
+          "text": "The Schäffer affair was a diplomatic episode instigated in 1815 by Georg Anton Schäffer, a German working with the Russian American Company.",
+          "source": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Kauai_from_space_2.jpg/330px-Kauai_from_space_2.jpg",
+          "credit": "Wikipedia — Kauaʻi (CC/PD)",
+          "caption": "Kauaʻi",
+          "alt": "this is a satellite image of oahule and its surrounding islands, including the big island in the foreground"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kaua%CA%BBi"
+        ],
+        "resolvedTitle": "Kauaʻi",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Kauai_from_space_2.jpg/330px-Kauai_from_space_2.jpg",
+            "caption": "this is a satellite image of oahule and its surrounding islands, including the big island in the foreground",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T09:53:55.377Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "molokai:kalaupapa": {
+      "title": "Kalaupapa National Historical Park (Molokaʻi)",
+      "summary": "Kalaupapa National Historical Park is a United States National Historical Park located in Kalaupapa, Hawaiʻi, on the island of Molokaʻi.",
+      "history": [
+        {
+          "year": 1830,
+          "text": "The disease had been introduced to the islands about 1830 by foreign workers.",
+          "source": "https://en.wikipedia.org/wiki/Kalaupapa_National_Historical_Park"
+        },
+        {
+          "year": 1853,
+          "text": "\"Historical accounts from the early to mid-1800s speak of populations of 1,000 to 2,700 people living on the peninsula, in the valleys, and in the villages\" but by 1853, there were only about 140 people remaining after epidemics of…",
+          "source": "https://en.wikipedia.org/wiki/Kalaupapa_National_Historical_Park"
+        },
+        {
+          "year": 1865,
+          "text": "In 1865 the Kingdom legislature passed a law to try to prevent transmission of leprosy, now known as Hansen's disease after the scientist who discovered the bacterium.",
+          "source": "https://en.wikipedia.org/wiki/Kalaupapa_National_Historical_Park"
+        },
+        {
+          "year": 1866,
+          "text": "Its goal is to preserve the cultural and physical settings of the two leper colonies on the island of Molokaʻi, which operated from 1866 to 1969 and had a total of 8500 residents over the decades.",
+          "source": "https://en.wikipedia.org/wiki/Kalaupapa_National_Historical_Park"
+        },
+        {
+          "year": 1980,
+          "text": "Nearly coterminous with the boundaries of Kalawao County, and primarily on Kalaupapa peninsula, it was established by Congress in 1980 to expand upon the earlier National Historic Landmark site of the Kalaupapa Leper Settlement.",
+          "source": "https://en.wikipedia.org/wiki/Kalaupapa_National_Historical_Park"
+        },
+        {
+          "year": 2020,
+          "text": "Tours were suspended in March 2020 due to the COVID-19 pandemic, but resumed in September 2025 after the selection of a new tour operator.",
+          "source": "https://en.wikipedia.org/wiki/Kalaupapa_National_Historical_Park"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/KALA_Vanishing_Treasures_%2817196312488%29.jpg/330px-KALA_Vanishing_Treasures_%2817196312488%29.jpg",
+          "credit": "Wikipedia — Kalaupapa National Historical Park (CC/PD)",
+          "caption": "Kalaupapa National Historical Park",
+          "alt": "a grassy park area with a stone wall and two large palm trees on a cloudy day"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kalaupapa_National_Historical_Park"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kalaupapa_National_Historical_Park"
+        ],
+        "resolvedTitle": "Kalaupapa National Historical Park",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/16/KALA_Vanishing_Treasures_%2817196312488%29.jpg/330px-KALA_Vanishing_Treasures_%2817196312488%29.jpg",
+            "caption": "a grassy park area with a stone wall and two large palm trees on a cloudy day",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T09:54:09.565Z",
+        "reviewed": false
+      },
+      "status": "ok"
     }
   }
 }
