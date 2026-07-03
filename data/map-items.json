@@ -3690,7 +3690,7 @@
         "resolvedTitle": "Four Seasons Resort Lanai",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T13:22:50.297Z",
+        "generatedAt": "2026-07-03T14:35:01.558Z",
         "reviewed": false
       },
       "status": "ok"
@@ -4279,6 +4279,197 @@
           }
         ],
         "generatedAt": "2026-07-03T13:33:09.718Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Lihue": {
+      "title": "Lihue air quality",
+      "summary": "Lihue Airport (IATA: LIH, ICAO: PHLI, FAA LID: LIH) is a state-owned public-use airport located in the Līhuʻe CDP on the southeast coast of the island of Kauaʻi in Kauaʻi County, Hawaii, United States, two nautical miles east of the center of the CDP.",
+      "history": [
+        {
+          "year": 2008,
+          "text": "On January 14, 2008, an Alpine Air Express Beechcraft 1900C-1 carrying 4,200 lbs. of mail crashed 11 km S of Lihue Airport due to spatial disorientation and loss of situational awareness in darkness, along with monitoring cockpit…",
+          "source": "https://en.wikipedia.org/wiki/Lihue_Airport"
+        },
+        {
+          "year": 2017,
+          "text": "It is included in the Federal Aviation Administration (FAA) National Plan of Integrated Airport Systems for 2017–2021, in which it is categorized as a small-hub primary commercial service facility. .",
+          "source": "https://en.wikipedia.org/wiki/Lihue_Airport"
+        },
+        {
+          "year": 2022,
+          "text": "On December 15, 2022, a Beechcraft Model 77 Skipper belonging to the Civil Air Patrol crashed into a chain link fence shortly after takeoff.",
+          "source": "https://en.wikipedia.org/wiki/Lihue_Airport"
+        },
+        {
+          "year": 2024,
+          "text": "In July 2024, major construction related to the relocation of Runway 03/21 to comply with federal safety standards began.",
+          "source": "https://en.wikipedia.org/wiki/Lihue_Airport"
+        },
+        {
+          "year": 2026,
+          "text": "Lihue Airport at Hawaii Department of Transportation [1] FAA Airport Diagram (PDF), effective June 11, 2026 FAA Terminal Procedures for LIH, effective June 11, 2026 Resources for this airport: FAA airport information for LIH AirNav airport…",
+          "source": "https://en.wikipedia.org/wiki/Lihue_Airport"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Lihue-Airport-aerial.jpg/330px-Lihue-Airport-aerial.jpg",
+          "credit": "Wikipedia — Lihue Airport (CC/PD)",
+          "caption": "Lihue Airport",
+          "alt": "an aerial view of an airport in the country of minnesota as seen from above with grass"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Lihue_Airport"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Lihue_Airport"
+        ],
+        "resolvedTitle": "Lihue Airport",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Lihue-Airport-aerial.jpg/330px-Lihue-Airport-aerial.jpg",
+            "caption": "an aerial view of an airport in the country of minnesota as seen from above with grass",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T14:44:49.157Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Princeville": {
+      "title": "Princeville air quality",
+      "summary": "Princeville is a 9,000-acre (3,600 ha) unincorporated area mostly consisting of master-planned homes and condos on the north shore of the island of Kauaʻi in Kauaʻi County, Hawaii, United States.",
+      "history": [
+        {
+          "year": 1842,
+          "text": "There was no private property prior to the Māhele, but in 1842 the land had been leased by the governor of Kauai to Godfrey Rhodes and John Bernard for a coffee plantation and this lease of Crown Lands was sold to Robert Crichton Wyllie in…",
+          "source": "https://en.wikipedia.org/wiki/Princeville%2C_Hawaii"
+        },
+        {
+          "year": 1860,
+          "text": "The area was named in honor of an 1860 visit by Prince Albert Kamehameha, son of King Kamehameha IV and Queen Emma.",
+          "source": "https://en.wikipedia.org/wiki/Princeville%2C_Hawaii"
+        },
+        {
+          "year": 1866,
+          "text": "Wyllie's nephew Robert Crichton Cochran inherited the land on the condition he would adopt the Wyllie surname, but he died by suicide on February 7, 1866.",
+          "source": "https://en.wikipedia.org/wiki/Princeville%2C_Hawaii"
+        },
+        {
+          "year": 1867,
+          "text": "In 1867, it was purchased by Elisha Hunt Allen and later became a cattle ranch.",
+          "source": "https://en.wikipedia.org/wiki/Princeville%2C_Hawaii"
+        },
+        {
+          "year": 1968,
+          "text": "It was sold for development in 1968 and became a golf course and resort called \"Princeville at Hanalei\". . .",
+          "source": "https://en.wikipedia.org/wiki/Princeville%2C_Hawaii"
+        },
+        {
+          "year": 2020,
+          "text": "As of the 2020 census, Princeville had a population of 2,157. .",
+          "source": "https://en.wikipedia.org/wiki/Princeville%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/Princeville_Kauai.jpg/330px-Princeville_Kauai.jpg",
+          "credit": "Wikipedia — Princeville, Hawaii (CC/PD)",
+          "caption": "Princeville, Hawaii",
+          "alt": "a beach with blue water and a hill in the distance with clouds overhead the beach"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Princeville%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Princeville%2C_Hawaii"
+        ],
+        "resolvedTitle": "Princeville, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/Princeville_Kauai.jpg/330px-Princeville_Kauai.jpg",
+            "caption": "a beach with blue water and a hill in the distance with clouds overhead the beach",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T14:44:58.553Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Lanai City": {
+      "title": "Lanai City air quality",
+      "summary": "Lanai Airport (IATA: LNY, ICAO: PHNY, FAA LID: LNY), also written as Lānaʻi Airport, is a state-owned public-use airport located three nautical miles or about 3.4 miles (6 km) southwest of the central business district of Lanai City (Lānaʻi City), in Maui County, Hawaii.",
+      "history": [
+        {
+          "year": 1930,
+          "text": "The airport began regular operations in 1930.",
+          "source": "https://en.wikipedia.org/wiki/Lanai_Airport"
+        },
+        {
+          "year": 2016,
+          "text": "For the 12-month period ending July 31, 2016, the airport had 6,326 aircraft operations, an average of 17 per day: 65% air taxi, 25% scheduled commercial, 9% general aviation and 1% military.",
+          "source": "https://en.wikipedia.org/wiki/Lanai_Airport"
+        },
+        {
+          "year": 2021,
+          "text": "It is included in the Federal Aviation Administration (FAA) National Plan of Integrated Airport Systems for 2021–2025, in which it is categorized as a non-hub primary commercial service facility. .",
+          "source": "https://en.wikipedia.org/wiki/Lanai_Airport"
+        },
+        {
+          "year": 2022,
+          "text": "In April 2022, there were no aircraft based at this airport.",
+          "source": "https://en.wikipedia.org/wiki/Lanai_Airport"
+        },
+        {
+          "year": 2026,
+          "text": "Lanai Airport Hawaii State Department of Transportation Topographic map from USGS The National Map FAA Terminal Procedures for LNY, effective June 11, 2026 Resources for this airport: FAA airport information for LNY AirNav airport…",
+          "source": "https://en.wikipedia.org/wiki/Lanai_Airport"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Lanai_airport_tarmac.jpg/330px-Lanai_airport_tarmac.jpg",
+          "credit": "Wikipedia — Lanai Airport (CC/PD)",
+          "caption": "Lanai Airport",
+          "alt": "several people walking by a solar paneled building on a sunny day, with many trees behind them"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Lanai_Airport"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Lanai_Airport"
+        ],
+        "resolvedTitle": "Lanai Airport",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Lanai_airport_tarmac.jpg/330px-Lanai_airport_tarmac.jpg",
+            "caption": "several people walking by a solar paneled building on a sunny day, with many trees behind them",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T14:45:11.336Z",
         "reviewed": false
       },
       "status": "ok"
