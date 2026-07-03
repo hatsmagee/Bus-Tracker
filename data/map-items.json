@@ -2369,6 +2369,350 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "volcano:V1cam": {
+      "title": "Kīlauea west Halemaʻumaʻu PTZ webcam",
+      "summary": "Title: Webcams URL Source: https://www.usgs.gov/volcanoes/kilauea/webcams Markdown Content: [Skip to main content](https://www.usgs.gov/volcanoes/kilauea/webcams#main-content) ![Image 1: U.S. flag](https://www.usgs.gov/themes/custom/usgs_tantalum/assets/img/us_flag_small.png) An official website of the United States…",
+      "history": [
+        {
+          "year": 1980,
+          "text": "Helens in eruption, May 18, 1980 USGS 69K views • 5 years ago Live Playlist ()Mix (50+)](https://www.youtube.com/watch?v=JCZevn-XCtw)[2:01 Lava fountain engulfs USGS HVO V3cam - December 6, 2025 USGS 136K views • 6 months ago Live Playlist…",
+          "source": "https://www.usgs.gov/volcanoes/kilauea/webcams"
+        },
+        {
+          "year": 2004,
+          "text": "Helens dome growth 2004-2008 USGS 3.2M views • 13 years ago Live Playli",
+          "source": "https://www.usgs.gov/volcanoes/kilauea/webcams"
+        },
+        {
+          "year": 2026,
+          "text": "Please try again later. ![Image 6](https://www.youtube.com/usgs/live) 0:00 [](https://www.youtube.com/usgs/live)[](https://www.youtube.com/watch?v=sC9JnuDuBsU) 0:00 / 0:00 Live •Watch full video • • [5:46 Another hydrothermal explosion at…",
+          "source": "https://www.usgs.gov/volcanoes/kilauea/webcams"
+        }
+      ],
+      "photos": [],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://www.usgs.gov/volcanoes/kilauea/webcams"
+        },
+        {
+          "label": "Source",
+          "url": "https://www.youtube.com/usgs/live"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://www.usgs.gov/volcanoes/kilauea/webcams",
+          "https://www.youtube.com/usgs/live"
+        ],
+        "resolvedTitle": "Webcams | U.S. Geological Survey - USGS.gov",
+        "model": "deterministic",
+        "imageChecks": [],
+        "generatedAt": "2026-07-03T05:52:45.452Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "maui:haleakala": {
+      "title": "Haleakalā (Maui)",
+      "summary": "Haleakalā (; Hawaiian: Hawaiian pronunciation: [ˈhɐlɛˈjɐkəˈlaː]), or the East Maui Volcano, is a massive, active shield volcano that forms more than 75% of the Hawaiian Island of Maui.",
+      "history": [
+        {
+          "year": 1790,
+          "text": "Haleakalā, also known as East Maui Volcano, was previously thought to have last erupted around 1790, based largely on comparisons of maps made during the voyages of La Perouse and George Vancouver.",
+          "source": "https://en.wikipedia.org/wiki/Haleakal%C4%81"
+        },
+        {
+          "year": 1983,
+          "text": "Using this same scale, preliminary estimates of lava-flow hazard zones on Maui made in 1983 by the U.S.",
+          "source": "https://en.wikipedia.org/wiki/Haleakal%C4%81"
+        },
+        {
+          "year": 2021,
+          "text": "According to the United States Geological Survey Volcano Warning Scheme for the United States, the Volcano Alert Level for Haleakalā as of 3 June 2021 was \"normal\".",
+          "source": "https://en.wikipedia.org/wiki/Haleakal%C4%81"
+        },
+        {
+          "year": 2024,
+          "text": "As of 2024, each week some 250,000 male southern house mosquitos carrying Wolbachia bacteria were released on the mountain, totaling 10 million by June of that year.",
+          "source": "https://en.wikipedia.org/wiki/Haleakal%C4%81"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/Haleakala_crater_%281%29.jpg/330px-Haleakala_crater_%281%29.jpg",
+          "credit": "Wikipedia — Haleakalā (CC/PD)",
+          "caption": "Haleakalā",
+          "alt": "a rocky area with a few mountains and clouds in the background at hale's station on mount teide"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Haleakal%C4%81"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Haleakal%C4%81"
+        ],
+        "resolvedTitle": "Haleakalā",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/Haleakala_crater_%281%29.jpg/330px-Haleakala_crater_%281%29.jpg",
+            "caption": "a rocky area with a few mountains and clouds in the background at hale's station on mount teide",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T06:03:19.848Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "maui:iao": {
+      "title": "ʻĪao Valley & ʻĪao Needle (Maui)",
+      "summary": "Iao Valley, (; Hawaiian ʻĪao Valley, for \"cloud supreme\") is a lush, stream-cut valley in West Maui, Hawaii, located 3.1 miles (5 km) west of Wailuku.",
+      "history": [
+        {
+          "year": 1790,
+          "text": "In 1790, the Battle of Kepaniwai took place there, in which Kamehameha the Great defeated Kalanikūpule and the Maui army during his campaign to unify the islands.",
+          "source": "https://en.wikipedia.org/wiki/Iao_Valley"
+        },
+        {
+          "year": 1952,
+          "text": "Established in 1952, the Heritage Gardens in Kepaniwai Park recognize the multicultural history of Maui.",
+          "source": "https://en.wikipedia.org/wiki/Iao_Valley"
+        },
+        {
+          "year": 1972,
+          "text": "It was designated a National Natural Landmark in 1972. .",
+          "source": "https://en.wikipedia.org/wiki/Iao_Valley"
+        },
+        {
+          "year": 1994,
+          "text": "The gardens had become overgrown and were restored in 1994.",
+          "source": "https://en.wikipedia.org/wiki/Iao_Valley"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Iao_Valley_panorama_cropped.jpg/330px-Iao_Valley_panorama_cropped.jpg",
+          "credit": "Wikipedia — Iao Valley (CC/PD)",
+          "caption": "Iao Valley",
+          "alt": "a big mountain is visible from the side of it, but no one is on top of it"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Iao_Valley"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Iao_Valley"
+        ],
+        "resolvedTitle": "Iao Valley",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Iao_Valley_panorama_cropped.jpg/330px-Iao_Valley_panorama_cropped.jpg",
+            "caption": "a big mountain is visible from the side of it, but no one is on top of it",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T06:03:37.086Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "maui:lahaina": {
+      "title": "Lahaina Historic District (Maui)",
+      "summary": "Lahaina (; Hawaiian: [ləˈhɐjnə]) or Lāhainā is a census-designated place (CDP) in Maui County, Hawaii, United States.",
+      "history": [
+        {
+          "year": 1820,
+          "text": "Protestant missionaries sent by the American Board of Commissioners for Foreign Missions (ABCFM) began organizing a way to write the Hawaiian language with English letters between 1820–1826 after they reached Hawaii.",
+          "source": "https://en.wikipedia.org/wiki/Lahaina%2C_Hawaii"
+        },
+        {
+          "year": 1899,
+          "text": "Inez MacPhee Ashdown (1899–1992), historian and founder of Maui Historical Society, believed the name was Lahaʻaina, meaning \"land (of) prophecy\", because of the number of kahuna nui (high priest) prophecies made there. .",
+          "source": "https://en.wikipedia.org/wiki/Lahaina%2C_Hawaii"
+        },
+        {
+          "year": 1920,
+          "text": "On July 13, 1920, the Star Bulletin published several theories on the name's origins that included the bald-headed chief legend, as well as theories that included the belief that the name goes back to 11th century as Laha aina (Proclaiming…",
+          "source": "https://en.wikipedia.org/wiki/Lahaina%2C_Hawaii"
+        },
+        {
+          "year": 1921,
+          "text": "According to Thrums Hawaiian Annual of 1921 the proper pronunciation of Lahaina is La-hai-ná.",
+          "source": "https://en.wikipedia.org/wiki/Lahaina%2C_Hawaii"
+        },
+        {
+          "year": 2020,
+          "text": "At the 2020 census (before the 2023 wildfire), Lahaina had a resident population of 12,702.",
+          "source": "https://en.wikipedia.org/wiki/Lahaina%2C_Hawaii"
+        },
+        {
+          "year": 2023,
+          "text": "A series of wildfires destroyed approximately 80% of Lahaina in 2023, resulting in the deaths of 102 people. . .",
+          "source": "https://en.wikipedia.org/wiki/Lahaina%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/L%C4%81hain%C4%81_oceanfront.JPG/330px-L%C4%81hain%C4%81_oceanfront.JPG",
+          "credit": "Wikipedia — Lahaina, Hawaii (CC/PD)",
+          "caption": "Lahaina, Hawaii",
+          "alt": "the view from the water of some buildings and a boat in the ocean and on top"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Lahaina%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Lahaina%2C_Hawaii"
+        ],
+        "resolvedTitle": "Lahaina, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/L%C4%81hain%C4%81_oceanfront.JPG/330px-L%C4%81hain%C4%81_oceanfront.JPG",
+            "caption": "the view from the water of some buildings and a boat in the ocean and on top",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T06:15:27.829Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "maui:hana": {
+      "title": "Hāna & the Hāna Highway (Maui)",
+      "summary": "The Hāna Highway (colloquially referred to as The Road to Hāna) is a 64.4-mile-long (103.6 km) stretch of Hawaii Routes 36 and 360 which connects Kahului to the town of Hana in east Maui.",
+      "history": [
+        {
+          "year": 1910,
+          "text": "Many of the concrete and steel bridges date back to 1910 and all but one are still in use.",
+          "source": "https://en.wikipedia.org/wiki/H%C4%81na_Highway"
+        },
+        {
+          "year": 1926,
+          "text": "Road construction continued in the early 1900s and was extended piecemeal until the full road to Hana was officially opened on December 18, 1926.",
+          "source": "https://en.wikipedia.org/wiki/H%C4%81na_Highway"
+        },
+        {
+          "year": 2000,
+          "text": "In August 2000, the highway was designated as the Hāna Millennium Legacy Trail by President Bill Clinton, with the trail start designated in Pāʻia.",
+          "source": "https://en.wikipedia.org/wiki/H%C4%81na_Highway"
+        },
+        {
+          "year": 2001,
+          "text": "The Hana Highway was listed on the National Register of Historic Places on June 15, 2001. .",
+          "source": "https://en.wikipedia.org/wiki/H%C4%81na_Highway"
+        },
+        {
+          "year": 2009,
+          "text": "That one bridge, badly damaged by erosion, was temporarily replaced by a portable steel ACROW or Bailey bridge erected by the United States Army Corps of Engineers until a permanent replacement was built in 2009.",
+          "source": "https://en.wikipedia.org/wiki/H%C4%81na_Highway"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Hana_Highway_Millennium_Trail_Monument_and_Hana_Highway_Zero-Mile_Marker.jpg/330px-Hana_Highway_Millennium_Trail_Monument_and_Hana_Highway_Zero-Mile_Marker.jpg",
+          "credit": "Wikipedia — Hāna Highway (CC/PD)",
+          "caption": "Hāna Highway",
+          "alt": "a stone pillar on a grassy field in the woods near a road and pine trees"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/H%C4%81na_Highway"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/H%C4%81na_Highway"
+        ],
+        "resolvedTitle": "Hāna Highway",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Hana_Highway_Millennium_Trail_Monument_and_Hana_Highway_Zero-Mile_Marker.jpg/330px-Hana_Highway_Millennium_Trail_Monument_and_Hana_Highway_Zero-Mile_Marker.jpg",
+            "caption": "a stone pillar on a grassy field in the woods near a road and pine trees",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T06:15:48.376Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "maui:molokini": {
+      "title": "Molokini Crater (Maui)",
+      "summary": "Molokini is a crescent-shaped, partially submerged volcanic crater which forms a small, uninhabited islet located in ʻAlalākeiki Channel between the islands of Maui and Kahoʻolawe, within Maui County in Hawaii.",
+      "history": [
+        {
+          "year": 1975,
+          "text": "In 1975 and 1984, the Navy detonated in-place unexploded munitions found within the crater, resulting in the destruction of large areas of coral.",
+          "source": "https://en.wikipedia.org/wiki/Molokini"
+        },
+        {
+          "year": 1977,
+          "text": "In 1977 Molokini islet, the crater, and the surrounding 77 acres (31 ha) of underwater terrain were declared a Marine Life Conservation District (MLCD). .",
+          "source": "https://en.wikipedia.org/wiki/Molokini"
+        },
+        {
+          "year": 2006,
+          "text": "A 2006 survey found no evidence of unexploded munitions on the islet.",
+          "source": "https://en.wikipedia.org/wiki/Molokini"
+        },
+        {
+          "year": 2019,
+          "text": "A proposed bill in 2019, if put into effect, will decrease the number of moorings in the crater from over 20 to 12 total moorings.",
+          "source": "https://en.wikipedia.org/wiki/Molokini"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/Molokini_Aerial.jpg/330px-Molokini_Aerial.jpg",
+          "credit": "Wikipedia — Molokini (CC/PD)",
+          "caption": "Molokini",
+          "alt": "an aerial view of a small island in the middle of the ocean with a boat out on the water"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Molokini"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Molokini"
+        ],
+        "resolvedTitle": "Molokini",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/Molokini_Aerial.jpg/330px-Molokini_Aerial.jpg",
+            "caption": "an aerial view of a small island in the middle of the ocean with a boat out on the water",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T06:16:00.193Z",
+        "reviewed": false
+      },
+      "status": "ok"
     }
   }
 }
