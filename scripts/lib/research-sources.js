@@ -333,9 +333,18 @@ async function addArticle(title, acc) {
     const sum = await wikiSummary(ex.title);
     if (sum.url) acc.sources.push(sum.url);
     // The article's own lead image is curated to depict that exact subject — the
-    // most trustworthy photo we can get without vision. Mark it as trusted so it
-    // ranks ahead of any keyword-matched Commons image.
-    if (sum.thumbnail) acc.photos.push({ url: sum.thumbnail, credit: `Wikipedia — ${ex.title} (CC/PD)`, caption: ex.title, trusted: true });
+    // most trustworthy photo we can get without vision. But if that lead image is
+    // itself a logo/icon/diagram (filename gives it away), it's the right subject
+    // yet a poor card photo, so we down-rank it and let a real Commons photo win.
+    if (sum.thumbnail) {
+      const looksLikeLogo = IMAGE_JUNK_RE.test(decodeURIComponent(sum.thumbnail));
+      acc.photos.push({
+        url: sum.thumbnail,
+        credit: `Wikipedia — ${ex.title} (CC/PD)`,
+        caption: ex.title,
+        pri: looksLikeLogo ? 0 : 2,
+      });
+    }
   } catch {
     acc.sources.push(`https://en.wikipedia.org/wiki/${encodeURIComponent(ex.title.replace(/ /g, '_'))}`);
   }
@@ -412,13 +421,15 @@ async function researchItem(item) {
     ...tokenize(acc.resolvedTitle || '').filter(t => t.length > 2 && !GENERIC_TOKENS.has(t)),
   ]);
   const photo = await commonsImage(acc.resolvedTitle || item.title || query, { mustMatch }).catch(() => null);
-  if (photo) acc.photos.push(photo);
+  if (photo) acc.photos.push({ ...photo, pri: 1 });
 
-  // Trusted article lead images first, then relevance-matched Commons photos.
+  // Rank by trust: a real article lead photo (2) > relevance-matched Commons
+  // photo (1) > a logo/icon lead image (0). So the right subject always wins,
+  // and a real photo beats a mere logo of the right subject.
   const seen = new Set();
   const candidatePhotos = acc.photos
     .filter(p => p && p.url && !seen.has(p.url) && seen.add(p.url))
-    .sort((a, b) => (b.trusted ? 1 : 0) - (a.trusted ? 1 : 0));
+    .sort((a, b) => (b.pri || 0) - (a.pri || 0));
 
   return {
     query,
