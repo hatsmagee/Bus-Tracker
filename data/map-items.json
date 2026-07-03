@@ -3690,7 +3690,7 @@
         "resolvedTitle": "Four Seasons Resort Lanai",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T10:58:40.231Z",
+        "generatedAt": "2026-07-03T12:10:40.452Z",
         "reviewed": false
       },
       "status": "ok"
@@ -3892,6 +3892,197 @@
           }
         ],
         "generatedAt": "2026-07-03T11:08:48.405Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Waikoloa": {
+      "title": "Waikoloa air quality",
+      "summary": "Waikoloa Beach is an area located on the South Kohala coast on the island of Hawaii and is located in the census-designated place of Puako.",
+      "history": [
+        {
+          "year": 1985,
+          "text": "The anchialine ponds of Waikoloa are part of Hawaiian culture and were preserved in 1985 as the Waikoloa Anchialine Pond Preservation Area maintained by the University of Hawaii.",
+          "source": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        },
+        {
+          "year": 1988,
+          "text": "It was originally developed in 1988 as the Hyatt Regency Waikoloa with Japanese investment, however was sold to Hilton Hotels & Resorts in 1994.",
+          "source": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        },
+        {
+          "year": 1996,
+          "text": "The popular game show Wheel of Fortune has taped at the resort in 1996, 2008, and 2014.",
+          "source": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        },
+        {
+          "year": 2007,
+          "text": "It also serves as the setting for the Nickelodeon game show Paradise Run, and hosted the Pokémon World Championships in 2007, 2010, and 2012. .",
+          "source": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Anaehoomalu_Bay_Aerial.jpg/330px-Anaehoomalu_Bay_Aerial.jpg",
+          "credit": "Wikipedia — Waikoloa Beach (CC/PD)",
+          "caption": "Waikoloa Beach",
+          "alt": "aerial view of a resort surrounded by the ocean with a sandy shore and blue water"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        ],
+        "resolvedTitle": "Waikoloa Beach",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Anaehoomalu_Bay_Aerial.jpg/330px-Anaehoomalu_Bay_Aerial.jpg",
+            "caption": "aerial view of a resort surrounded by the ocean with a sandy shore and blue water",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T12:20:26.502Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Pāhoa": {
+      "title": "Pāhoa air quality",
+      "summary": "Pāhoa is a census-designated place (CDP) in the District of Puna in Hawai‘i County, Hawai‘i, United States.",
+      "history": [
+        {
+          "year": 1840,
+          "text": "For example, the eruption of 1840 is known to have deposited a lava flow within 1.5 miles (2.4 km) of Pāhoa.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        },
+        {
+          "year": 1986,
+          "text": "Soils underlying the Pāhoa area are volcanic in origin, deriving from the currently active Kīlauea Volcano (Earth Metrics Inc., 1986).",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        },
+        {
+          "year": 2006,
+          "text": "Kīlauea is one of the Earth's most active volcanoes, with the January 2006 eruption being the longest rift zone eruption in Kīlauea's 200-year recorded history (Volcanology, 2007).",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        },
+        {
+          "year": 2014,
+          "text": "In June 2014, a lava flow dubbed the June 27th flow started running from a vent in the Puʻu ʻŌʻō cone in a northeast direction towards the villages of Ka'ohe Homesteads and Pāhoa.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        },
+        {
+          "year": 2018,
+          "text": "The 2018 lower Puna eruption which featured destructive lava flows resulting in the loss of approximately 700 homes, originated in nearby Leilani Estates. .",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        },
+        {
+          "year": 2020,
+          "text": "The population was 924 at the 2020 census.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Pahoa_Highlighted.svg/330px-Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Pahoa_Highlighted.svg.png",
+          "credit": "Wikipedia — Pāhoa, Hawaii (CC/PD)",
+          "caption": "Pāhoa, Hawaii",
+          "alt": "a map showing where the state of hawaii is highlighted by red in the states highlighted in the state colors, highlighted in blue"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/P%C4%81hoa%2C_Hawaii"
+        ],
+        "resolvedTitle": "Pāhoa, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Pahoa_Highlighted.svg/330px-Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Pahoa_Highlighted.svg.png",
+            "caption": "a map showing where the state of hawaii is highlighted by red in the states highlighted in the state colors, highlighted in blue",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T12:20:38.514Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Captain Cook": {
+      "title": "Captain Cook air quality",
+      "summary": "Captain James Cook (7 November 1728 – 14 February 1779) was a British Royal Navy officer, explorer, and cartographer who led three voyages of exploration to the Pacific and Southern Oceans between 1768 and 1779.",
+      "history": [
+        {
+          "year": 1728,
+          "text": "Captain James Cook (7 November 1728 – 14 February 1779) was a British Royal Navy officer, explorer, and cartographer who led three voyages of exploration to the Pacific and Southern Oceans between 1768 and 1779.",
+          "source": "https://en.wikipedia.org/wiki/James_Cook"
+        },
+        {
+          "year": 1736,
+          "text": "In 1736, his family moved to Airey Holme farm at Great Ayton, where his father's employer, Thomas Skottowe, paid for Cook to attend a school run by a charitable foundation.",
+          "source": "https://en.wikipedia.org/wiki/James_Cook"
+        },
+        {
+          "year": 1741,
+          "text": "In 1741, after five years of schooling, he began working for his father who had been promoted to farm manager.",
+          "source": "https://en.wikipedia.org/wiki/James_Cook"
+        },
+        {
+          "year": 1755,
+          "text": "Cook joined the British merchant navy as a teenager before enlisting in the Royal Navy in 1755.",
+          "source": "https://en.wikipedia.org/wiki/James_Cook"
+        },
+        {
+          "year": 1768,
+          "text": "This acclaim came at a pivotal moment in British overseas exploration, and it led to his commission in 1768 as commander of HMS Endeavour for the first of his three voyages.",
+          "source": "https://en.wikipedia.org/wiki/James_Cook"
+        },
+        {
+          "year": 1779,
+          "text": "In 1779, during his second visit to Hawaii, Cook was killed when a dispute with Native Hawaiians turned violent.",
+          "source": "https://en.wikipedia.org/wiki/James_Cook"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Captainjamescookportrait.jpg/330px-Captainjamescookportrait.jpg",
+          "credit": "Wikipedia — James Cook (CC/PD)",
+          "caption": "James Cook",
+          "alt": "a painting of a man sitting down on a bench with a map and a book"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/James_Cook"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/James_Cook"
+        ],
+        "resolvedTitle": "James Cook",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Captainjamescookportrait.jpg/330px-Captainjamescookportrait.jpg",
+            "caption": "a painting of a man sitting down on a bench with a map and a book",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T12:20:55.161Z",
         "reviewed": false
       },
       "status": "ok"
