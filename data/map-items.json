@@ -3690,7 +3690,7 @@
         "resolvedTitle": "Four Seasons Resort Lanai",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T12:10:40.452Z",
+        "generatedAt": "2026-07-03T13:22:50.297Z",
         "reviewed": false
       },
       "status": "ok"
@@ -4083,6 +4083,202 @@
           }
         ],
         "generatedAt": "2026-07-03T12:20:55.161Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Honolulu": {
+      "title": "Honolulu air quality",
+      "summary": "The Honolulu Marathon (branded JAL Honolulu Marathon for sponsorship reasons) is a marathon (26.2 miles or 42.2 km) in Honolulu, Hawaii.",
+      "history": [
+        {
+          "year": 1973,
+          "text": "It was first held on December 16, 1973, and it typically takes places on the second Sunday in December.",
+          "source": "https://en.wikipedia.org/wiki/Honolulu_Marathon"
+        },
+        {
+          "year": 1977,
+          "text": "In 1977, Sports Illustrated's senior writer and Olympic marathoner Kenny Moore wrote a feature story about the race.",
+          "source": "https://en.wikipedia.org/wiki/Honolulu_Marathon"
+        },
+        {
+          "year": 1985,
+          "text": "Japan Air Lines has been the title sponsor of the race since 1985.",
+          "source": "https://en.wikipedia.org/wiki/Honolulu_Marathon"
+        },
+        {
+          "year": 1995,
+          "text": "In 1995, the Honolulu Marathon enjoyed the distinction of being the world's largest marathon when it drew 34,434 entrants and had 27,022 finishers.",
+          "source": "https://en.wikipedia.org/wiki/Honolulu_Marathon"
+        },
+        {
+          "year": 2007,
+          "text": "In 2007, race organizers switched from the ChampionChip timing system they had used since 2000 to a new system from SAI which utilized a smaller, lighter, chip implanted in a strip of paper.",
+          "source": "https://en.wikipedia.org/wiki/Honolulu_Marathon"
+        },
+        {
+          "year": 2008,
+          "text": "In recent years, the majority of entrants have been visitors from Japan; notably in 2008, 14,406 of the total 23,231 entries were from Japan, making up nearly 62.0 percent of the field.",
+          "source": "https://en.wikipedia.org/wiki/Honolulu_Marathon"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/2015_Honolulu_Marathon_%2823658768301%29.jpg/330px-2015_Honolulu_Marathon_%2823658768301%29.jpg",
+          "credit": "Wikipedia — Honolulu Marathon (CC/PD)",
+          "caption": "Honolulu Marathon",
+          "alt": "there is a crowd of people watching a firework display in the sky over a city street at night"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Honolulu_Marathon"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Honolulu_Marathon"
+        ],
+        "resolvedTitle": "Honolulu Marathon",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/2015_Honolulu_Marathon_%2823658768301%29.jpg/330px-2015_Honolulu_Marathon_%2823658768301%29.jpg",
+            "caption": "there is a crowd of people watching a firework display in the sky over a city street at night",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T13:32:36.869Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Kaneohe": {
+      "title": "Kaneohe air quality",
+      "summary": "Marine Corps Air Station Kaneohe Bay or MCAS Kaneohe Bay (IATA: NGF, ICAO: PHNG, FAA LID: NGF) is a United States Marine Corps (USMC) airfield located within the Marine Corps Base Hawaii complex, formerly known as Marine Corps Air Facility (MCAF) Kaneohe Bay or Naval Air Station (NAS) Kaneohe Bay.",
+      "history": [
+        {
+          "year": 1939,
+          "text": "In 1939, Kuwaaohe was reactivated, subjected to many name changes to include Camp Ulupa’u, and eventually named Fort Hase.",
+          "source": "https://en.wikipedia.org/wiki/Marine_Corps_Air_Station_Kaneohe_Bay"
+        },
+        {
+          "year": 1941,
+          "text": "7 December 1941, the Imperial Japanese Navy attacked the air station minutes prior to the attack on Pearl Harbor.",
+          "source": "https://en.wikipedia.org/wiki/Marine_Corps_Air_Station_Kaneohe_Bay"
+        },
+        {
+          "year": 1943,
+          "text": "Most of the original contract work at Kaneohe had been completed when the Navy transferred what was undone to the Seabees of the 56th Naval Construction Battalion on 1 April 1943.",
+          "source": "https://en.wikipedia.org/wiki/Marine_Corps_Air_Station_Kaneohe_Bay"
+        },
+        {
+          "year": 1949,
+          "text": "In 1949, the Navy decommissioned the air station.",
+          "source": "https://en.wikipedia.org/wiki/Marine_Corps_Air_Station_Kaneohe_Bay"
+        },
+        {
+          "year": 1958,
+          "text": "In November 1958 the first of the Pacific Missile Impact Location System for the Navy's Pacific Missile Range (PMR) was operational at the station to monitor Intermediate Range Ballistic Missile (IRBM) test impacts northeast of Hawaii. .",
+          "source": "https://en.wikipedia.org/wiki/Marine_Corps_Air_Station_Kaneohe_Bay"
+        },
+        {
+          "year": 1972,
+          "text": "Station Operations and Headquarters Squadron supported flight operations until 30 June 1972, when Station Operations and Maintenance Squadron (SOMS) was commissioned in its place.",
+          "source": "https://en.wikipedia.org/wiki/Marine_Corps_Air_Station_Kaneohe_Bay"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/US_Navy_100924-M-9232S-003_An_aerial_view_of_Marine_Corps_Base_Hawaii_at_Kaneohe_Bay.jpg/330px-US_Navy_100924-M-9232S-003_An_aerial_view_of_Marine_Corps_Base_Hawaii_at_Kaneohe_Bay.jpg",
+          "credit": "Wikipedia — Marine Corps Air Station Kaneohe Bay (CC/PD)",
+          "caption": "Marine Corps Air Station Kaneohe Bay",
+          "alt": "the airport is located below the mountains with clouds overhead and the blue water below it"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Marine_Corps_Air_Station_Kaneohe_Bay"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Marine_Corps_Air_Station_Kaneohe_Bay"
+        ],
+        "resolvedTitle": "Marine Corps Air Station Kaneohe Bay",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/US_Navy_100924-M-9232S-003_An_aerial_view_of_Marine_Corps_Base_Hawaii_at_Kaneohe_Bay.jpg/330px-US_Navy_100924-M-9232S-003_An_aerial_view_of_Marine_Corps_Base_Hawaii_at_Kaneohe_Bay.jpg",
+            "caption": "the airport is located below the mountains with clouds overhead and the blue water below it",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T13:32:54.102Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "airquality:Wailuku": {
+      "title": "Wailuku air quality",
+      "summary": "Wailuku is a census-designated place (CDP) in and county seat of Maui Island, Maui County, Hawaii, United States.",
+      "history": [
+        {
+          "year": 1790,
+          "text": "Home to Maui's most famous Hawaiian rulers, site of Kamehameha's decisive 1790 victory at the Battle of Kepaniwai in the ʻĪao Valley, location of the 19th century Mission Station and birthplace of the mighty sugar industry, Wailuku…",
+          "source": "https://en.wikipedia.org/wiki/Wailuku%2C_Hawaii"
+        },
+        {
+          "year": 1876,
+          "text": "Historic sites in the town include Kaʻahumanu Church (named after Queen Kaʻahumanu, wife of Kamehameha I), which dates to 1876; the Wailuku Civic Center Historic District; the site of the Chee Kung Tong Society Building; and the Bailey…",
+          "source": "https://en.wikipedia.org/wiki/Wailuku%2C_Hawaii"
+        },
+        {
+          "year": 1905,
+          "text": "In 1905, Wailuku was designated Maui's County Seat, and it soon became a hub of government, business and entertainment, boasting vaudeville and movie theatres, bowling alley, hotels, poi factory, ice and soda works, and many markets and…",
+          "source": "https://en.wikipedia.org/wiki/Wailuku%2C_Hawaii"
+        },
+        {
+          "year": 2000,
+          "text": "As of the census of 2000, there were 12,296 people, 4,535 households, and 3,015 families residing in the CDP.",
+          "source": "https://en.wikipedia.org/wiki/Wailuku%2C_Hawaii"
+        },
+        {
+          "year": 2020,
+          "text": "The population was 17,697 at the 2020 census.",
+          "source": "https://en.wikipedia.org/wiki/Wailuku%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/WailukuTownShot.JPG/330px-WailukuTownShot.JPG",
+          "credit": "Wikipedia — Wailuku, Hawaii (CC/PD)",
+          "caption": "Wailuku, Hawaii",
+          "alt": "an empty street in a small town near mountains with red flowers on the sidewalk and a white building"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Wailuku%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Wailuku%2C_Hawaii"
+        ],
+        "resolvedTitle": "Wailuku, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/WailukuTownShot.JPG/330px-WailukuTownShot.JPG",
+            "caption": "an empty street in a small town near mountains with red flowers on the sidewalk and a white building",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T13:33:09.718Z",
         "reviewed": false
       },
       "status": "ok"
