@@ -3051,39 +3051,39 @@
     },
     "volcano:V3cam": {
       "title": "Kīlauea south Halemaʻumaʻu PTZ webcam",
-      "summary": "Title: [V3cam] Kīlauea volcano, Hawaii (south Halemaʻumaʻu crater) URL Source: https://www.usgs.gov/observatories/hvo/v3cam-kilauea-volcano-hawaii-south-halemaumau-crater Published Time: Fri, 03 Jul 2026 08:21:44 GMT Markdown Content: [Skip to main…",
+      "summary": "Title: Volcano Watch — Shallow earthquakes and ground deformation at Kīlauea’s summit highlight hazards near Halemaʻumaʻu URL Source: https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit Published Time: Fri, 03 Jul 2026 23:03:02 GMT Markdown Content: Over…",
       "history": [
         {
           "year": 2025,
           "text": "During the lead‑up to episode 30 on August 6, 2025, earthquakes and deformation in this same region were associated with the opening of a short‑lived fissure on the south side of Halemaʻumaʻu crater.",
-          "source": "https://www.usgs.gov/observatories/hvo/v3cam-kilauea-volcano-hawaii-south-halemaumau-crater"
+          "source": "https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit"
         },
         {
           "year": 2026,
-          "text": "Title: [V3cam] Kīlauea volcano, Hawaii (south Halemaʻumaʻu crater) URL Source: https://www.usgs.gov/observatories/hvo/v3cam-kilauea-volcano-hawaii-south-halemaumau-crater Published Time: Fri, 03 Jul 2026 08:21:44 GMT Markdown Content:…",
-          "source": "https://www.usgs.gov/observatories/hvo/v3cam-kilauea-volcano-hawaii-south-halemaumau-crater"
+          "text": "Title: Volcano Watch — Shallow earthquakes and ground deformation at Kīlauea’s summit highlight hazards near Halemaʻumaʻu URL Source: https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilau…",
+          "source": "https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit"
         }
       ],
       "photos": [],
       "links": [
         {
           "label": "Source",
-          "url": "https://www.usgs.gov/observatories/hvo/v3cam-kilauea-volcano-hawaii-south-halemaumau-crater"
+          "url": "https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit"
         },
         {
           "label": "Source",
-          "url": "https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit"
+          "url": "https://www.usgs.gov/observatories/hvo/v3cam-kilauea-volcano-hawaii-south-halemaumau-crater"
         }
       ],
       "provenance": {
         "sources": [
-          "https://www.usgs.gov/observatories/hvo/v3cam-kilauea-volcano-hawaii-south-halemaumau-crater",
-          "https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit"
+          "https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit",
+          "https://www.usgs.gov/observatories/hvo/v3cam-kilauea-volcano-hawaii-south-halemaumau-crater"
         ],
-        "resolvedTitle": "[V3cam] Kīlauea volcano, Hawaii (south Halemaʻumaʻu crater)",
+        "resolvedTitle": "Volcano Watch — Shallow earthquakes and ground deformation at Kīlauea's ...",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T08:21:47.850Z",
+        "generatedAt": "2026-07-03T23:03:11.036Z",
         "reviewed": false
       },
       "status": "ok"
@@ -3690,7 +3690,7 @@
         "resolvedTitle": "Four Seasons Resort Lanai",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T21:56:06.684Z",
+        "generatedAt": "2026-07-03T23:13:16.562Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5803,7 +5803,7 @@
         "resolvedTitle": "Waimea–Kohala Airport",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T22:10:55.977Z",
+        "generatedAt": "2026-07-03T23:22:54.785Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5871,6 +5871,78 @@
           }
         ],
         "generatedAt": "2026-07-03T22:11:04.330Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "category:gasstations": {
+      "title": "Gas stations (OSM)",
+      "summary": "This timeline of the Russo-Ukrainian war covers the period from 1 June 2026 to the present day. . .",
+      "history": [
+        {
+          "year": 2019,
+          "text": "Hawaii's one geothermal plant, which previously supplied about 2% of the state's and 10% of the Big Island's electricity, was offline during 2019 to repair damage from the 2018 lower Puna eruption.",
+          "source": "https://en.wikipedia.org/wiki/Timeline_of_the_Russo-Ukrainian_war_(1_June_2026_%E2%80%93_present)"
+        },
+        {
+          "year": 2020,
+          "text": "The plant came back online in late 2020, slowly ramping up to its full operational level.",
+          "source": "https://en.wikipedia.org/wiki/Timeline_of_the_Russo-Ukrainian_war_(1_June_2026_%E2%80%93_present)"
+        },
+        {
+          "year": 2023,
+          "text": "Considering large and small installations together, solar produced almost one-fifth of Hawaii's electricity in 2023.",
+          "source": "https://en.wikipedia.org/wiki/Timeline_of_the_Russo-Ukrainian_war_(1_June_2026_%E2%80%93_present)"
+        },
+        {
+          "year": 2024,
+          "text": "In 2024, Hawaii had a total summer capacity of 3.4 GW through all of its power plants, and a net generation of 9,161 GWh.",
+          "source": "https://en.wikipedia.org/wiki/Timeline_of_the_Russo-Ukrainian_war_(1_June_2026_%E2%80%93_present)"
+        },
+        {
+          "year": 2025,
+          "text": "The utility-scale electrical energy generation mix in 2025 was 74.5% petroleum-derived fuels, 10.3% solar, 6.1% wind, 2.7% geothermal, 2% biomass, 0.9% hydroelectric, and 3.4% other.",
+          "source": "https://en.wikipedia.org/wiki/Timeline_of_the_Russo-Ukrainian_war_(1_June_2026_%E2%80%93_present)"
+        },
+        {
+          "year": 2026,
+          "text": "This timeline of the Russo-Ukrainian war covers the period from 1 June 2026 to the present day. . .",
+          "source": "https://en.wikipedia.org/wiki/Timeline_of_the_Russo-Ukrainian_war_(1_June_2026_%E2%80%93_present)"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Hawaii_power_grid.webp/330px-Hawaii_power_grid.webp.png",
+          "credit": "Wikipedia — List of power stations in Hawaii (CC/PD)",
+          "caption": "List of power stations in Hawaii",
+          "alt": "a map of the hawaiian island showing the states of hawaii, hawaii and their major cities"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Timeline_of_the_Russo-Ukrainian_war_(1_June_2026_%E2%80%93_present)"
+        },
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Timeline_of_the_Russo-Ukrainian_war_(1_June_2026_%E2%80%93_present)",
+          "https://en.wikipedia.org/wiki/List_of_power_stations_in_Hawaii"
+        ],
+        "resolvedTitle": "Timeline of the Russo-Ukrainian war (1 June 2026 – present)",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Hawaii_power_grid.webp/330px-Hawaii_power_grid.webp.png",
+            "caption": "a map of the hawaiian island showing the states of hawaii, hawaii and their major cities",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T23:33:03.153Z",
         "reviewed": false
       },
       "status": "ok"
