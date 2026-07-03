@@ -2713,6 +2713,341 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "maui:ogg": {
+      "title": "Kahului Airport (Maui)",
+      "summary": "Kahului Airport (IATA: OGG, ICAO: PHOG, FAA LID: OGG) is the main airport of Maui in the state of Hawaii, United States, located east of Kahului.",
+      "history": [
+        {
+          "year": 1942,
+          "text": "The demands of war required a proper air station on Maui, so the Navy acquired approximately 1,341 acres (543 ha) of sugar cane fields near Kahului and beginning construction in 1942.",
+          "source": "https://en.wikipedia.org/wiki/Kahului_Airport"
+        },
+        {
+          "year": 1945,
+          "text": "Following the end of the war in 1945, the Territory of Hawaii began negotiations to convert Naval Air Station Kahului into a civil airport to replace the inadequate airport near Puunene.",
+          "source": "https://en.wikipedia.org/wiki/Kahului_Airport"
+        },
+        {
+          "year": 1947,
+          "text": "By December 1947, jurisdiction was transferred to the Territory, and the Hawaii Aeronautics Commission assumed custodial oversight.",
+          "source": "https://en.wikipedia.org/wiki/Kahului_Airport"
+        },
+        {
+          "year": 1952,
+          "text": "It has offered full airport operations since 1952.",
+          "source": "https://en.wikipedia.org/wiki/Kahului_Airport"
+        },
+        {
+          "year": 2004,
+          "text": "Inouye International Airport in Honolulu; the Honolulu–Kahului corridor is one of the heaviest-trafficked air routes in the US, ranking 13th in 2004 with 1,632,000 passengers.",
+          "source": "https://en.wikipedia.org/wiki/Kahului_Airport"
+        },
+        {
+          "year": 2021,
+          "text": "It is included in the Federal Aviation Administration (FAA) National Plan of Integrated Airport Systems for 2021–2025, in which it is categorized as a medium-hub primary commercial service facility. .",
+          "source": "https://en.wikipedia.org/wiki/Kahului_Airport"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Starr-090226-4047-Delonix_regia-habitat-Kahului_Airport-Maui_%2824315727774%29.jpg/330px-Starr-090226-4047-Delonix_regia-habitat-Kahului_Airport-Maui_%2824315727774%29.jpg",
+          "credit": "Wikipedia — Kahului Airport (CC/PD)",
+          "caption": "Kahului Airport",
+          "alt": "an aerial view of a terminal with cars parked and an airport runway in the background"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kahului_Airport"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kahului_Airport"
+        ],
+        "resolvedTitle": "Kahului Airport",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Starr-090226-4047-Delonix_regia-habitat-Kahului_Airport-Maui_%2824315727774%29.jpg/330px-Starr-090226-4047-Delonix_regia-habitat-Kahului_Airport-Maui_%2824315727774%29.jpg",
+            "caption": "an aerial view of a terminal with cars parked and an airport runway in the background",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-03T07:18:09.341Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "oahu:diamondhead": {
+      "title": "Diamond Head / Lēʻahi (Oʻahu)",
+      "summary": "Diamond Head is a volcanic tuff cone on the Hawaiian island of Oʻahu. It is known to Hawaiians as Lēʻahi (pronounced [leːˈʔɐhi]), which is most likely derived from lae (browridge, promontory) plus ʻahi (tuna) because the shape of the ridgeline resembles the shape of a tuna's dorsal fin.",
+      "history": [
+        {
+          "year": 1825,
+          "text": "Known as Lēʻahi in Hawaiian, the mountain was given the name Diamond Hill in 1825 by British sailors who discovered sparkling volcanic calcite crystals in the sand and mistook them for diamonds.",
+          "source": "https://en.wikipedia.org/wiki/Diamond_Head%2C_Hawaii"
+        },
+        {
+          "year": 1908,
+          "text": "The trail was originally built in 1908 as part of the U.S.",
+          "source": "https://en.wikipedia.org/wiki/Diamond_Head%2C_Hawaii"
+        },
+        {
+          "year": 1917,
+          "text": "The Diamond Head Lighthouse, a navigational lighthouse built in 1917 is directly adjacent to the crater's slopes.",
+          "source": "https://en.wikipedia.org/wiki/Diamond_Head%2C_Hawaii"
+        },
+        {
+          "year": 1952,
+          "text": "Diamond Head appears on an 80-cent air mail stamp issued in 1952 to pay for shipping orchids to the U.S. mainland.",
+          "source": "https://en.wikipedia.org/wiki/Diamond_Head%2C_Hawaii"
+        },
+        {
+          "year": 1963,
+          "text": "An FAA air traffic control center was in operation from 1963 to 2002. .",
+          "source": "https://en.wikipedia.org/wiki/Diamond_Head%2C_Hawaii"
+        },
+        {
+          "year": 1968,
+          "text": "It is both a State Monument and, since 1968, a U.S.",
+          "source": "https://en.wikipedia.org/wiki/Diamond_Head%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/93/Diamond_Head_Hawaii_From_Round_Top_Rd.JPG/330px-Diamond_Head_Hawaii_From_Round_Top_Rd.JPG",
+          "credit": "Wikipedia — Diamond Head, Hawaii (CC/PD)",
+          "caption": "Diamond Head, Hawaii",
+          "alt": "a city with mountains in the distance and blue sky with clouds above it that is"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Diamond_Head%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Diamond_Head%2C_Hawaii"
+        ],
+        "resolvedTitle": "Diamond Head, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/93/Diamond_Head_Hawaii_From_Round_Top_Rd.JPG/330px-Diamond_Head_Hawaii_From_Round_Top_Rd.JPG",
+            "caption": "a city with mountains in the distance and blue sky with clouds above it that is",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T07:18:22.622Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "oahu:pearlharbor": {
+      "title": "Pearl Harbor & USS Arizona Memorial (Oʻahu)",
+      "summary": "Pearl Harbor is a lagoon harbor on the island of Oʻahu, Hawaii, United States, west of Honolulu.",
+      "history": [
+        {
+          "year": 1820,
+          "text": "As early as 1820, an \"Agent of the United States for Commerce and Seamen\" was appointed to look after American business in the Port of Honolulu.",
+          "source": "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        },
+        {
+          "year": 1840,
+          "text": "The British Hawaiian Minister of Foreign Affairs Robert Crichton Wyllie, remarked in 1840 that, \"... my opinion is that the tide of events rushes on to annexation to the United States.\" After the conclusion of the Civil War and the…",
+          "source": "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        },
+        {
+          "year": 1841,
+          "text": "In 1841, the newspaper Polynesian, printed in Honolulu, advocated that the U.S. establish a naval base in Hawaii for the protection of American citizens engaged in the whaling industry.",
+          "source": "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        },
+        {
+          "year": 1875,
+          "text": "It was often visited by the naval fleet of the United States before it was acquired from the Hawaiian Kingdom by the U.S. with the signing of the Reciprocity Treaty of 1875.",
+          "source": "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        },
+        {
+          "year": 1887,
+          "text": "The U.S. government first obtained exclusive use of the inlet and the right to maintain a repair and coaling station for ships here in 1887.",
+          "source": "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        },
+        {
+          "year": 1941,
+          "text": "The surprise attack on the harbor by the Imperial Japanese Navy on December 7, 1941, led the United States to declare war on the Empire of Japan, marking the United States' entry into World War II. .",
+          "source": "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/00/Ford_Island_aerial_photo_RIMPAC_1986.JPEG/330px-Ford_Island_aerial_photo_RIMPAC_1986.JPEG",
+          "credit": "Wikipedia — Pearl Harbor (CC/PD)",
+          "caption": "Pearl Harbor",
+          "alt": "there is a large body of water that is in the middle of the ocean with a lot of land around it"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Pearl_Harbor"
+        ],
+        "resolvedTitle": "Pearl Harbor",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/00/Ford_Island_aerial_photo_RIMPAC_1986.JPEG/330px-Ford_Island_aerial_photo_RIMPAC_1986.JPEG",
+            "caption": "there is a large body of water that is in the middle of the ocean with a lot of land around it",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T07:27:48.172Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "oahu:waikiki": {
+      "title": "Waikīkī Beach (Oʻahu)",
+      "summary": "Waikīkī (; Hawaiian: [wɐjˈkiːkiː, vɐjˈtiːtiː]) is a Honolulu neighborhood and the eponymous Waikīkī beach on its south shore, on the island of Oʻahu in the U.S. state of Hawaii.",
+      "history": [
+        {
+          "year": 1795,
+          "text": "Waikīkī was the first capital of the Kingdom of Hawaii from 1795 to 1796. .",
+          "source": "https://en.wikipedia.org/wiki/Waik%C4%ABk%C4%AB"
+        },
+        {
+          "year": 1893,
+          "text": "In 1893, Greek-American George Lycurgus leased the guest house of Allen Herbert and renamed it the \"Sans Souci\" (French for \"without worries\" or “carefree”) creating one of the first beach resorts.",
+          "source": "https://en.wikipedia.org/wiki/Waik%C4%ABk%C4%AB"
+        },
+        {
+          "year": 1921,
+          "text": "The project took about seven years, 1921–1928.",
+          "source": "https://en.wikipedia.org/wiki/Waik%C4%ABk%C4%AB"
+        },
+        {
+          "year": 1950,
+          "text": "Before 1950, Waikīkī beaches were continuous.",
+          "source": "https://en.wikipedia.org/wiki/Waik%C4%ABk%C4%AB"
+        },
+        {
+          "year": 1955,
+          "text": "The first high-rise hotels on Waikīkī were built in 1955, including the Waikiki Biltmore and Sheraton Princess Kaiulani Hotel.",
+          "source": "https://en.wikipedia.org/wiki/Waik%C4%ABk%C4%AB"
+        },
+        {
+          "year": 1971,
+          "text": "In March 1971, the Corps of Engineers Pacific Ocean Division, created a Draft Environmental Statement for the Kuhio Beach Sector of Waikīkī, which aimed to improve the overall quality and size of the fading and narrowing shoreline. .",
+          "source": "https://en.wikipedia.org/wiki/Waik%C4%ABk%C4%AB"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fd/City_of_Waikiki_view.jpg/330px-City_of_Waikiki_view.jpg",
+          "credit": "Wikipedia — Waikīkī (CC/PD)",
+          "caption": "Waikīkī",
+          "alt": "tall buildings are on the coast and by the water are a yacht, as it floats through the ocean"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Waik%C4%ABk%C4%AB"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Waik%C4%ABk%C4%AB"
+        ],
+        "resolvedTitle": "Waikīkī",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fd/City_of_Waikiki_view.jpg/330px-City_of_Waikiki_view.jpg",
+            "caption": "tall buildings are on the coast and by the water are a yacht, as it floats through the ocean",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T07:28:02.564Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "oahu:iolani": {
+      "title": "ʻIolani Palace (Oʻahu)",
+      "summary": "Oʻahu, sometimes written Oahu, is the third-largest and most populated island of the Hawaiian Islands and of the U.S. state of Hawaii.",
+      "history": [
+        {
+          "year": 1773,
+          "text": "In 1773, the throne fell upon Kahahana, the son of Elani of Ewa.",
+          "source": "https://en.wikipedia.org/wiki/O%CA%BBahu"
+        },
+        {
+          "year": 1778,
+          "text": "On January 19, 1778, Oʻahu was the first of the Hawaiian Islands to be sighted by Captain James Cook during his third voyage of discovery.",
+          "source": "https://en.wikipedia.org/wiki/O%CA%BBahu"
+        },
+        {
+          "year": 1779,
+          "text": "The next year, on February 27, 1779, Cook's second in command, Captain Charles Clerke, became the first recorded non-Polynesian to visit Oʻahu when he landed at Waimea Bay.",
+          "source": "https://en.wikipedia.org/wiki/O%CA%BBahu"
+        },
+        {
+          "year": 1783,
+          "text": "In 1783, Kahekili II, king of the island of Maui, conquered Oʻahu.",
+          "source": "https://en.wikipedia.org/wiki/O%CA%BBahu"
+        },
+        {
+          "year": 1922,
+          "text": "The translation of \"gathering place\" was suggested as recently as 1922 by Hawaiian Almanac author Thomas Thrum.",
+          "source": "https://en.wikipedia.org/wiki/O%CA%BBahu"
+        },
+        {
+          "year": 2024,
+          "text": "In 2024, Oʻahu had a population of 998,747, down from 1,016,494 in 2020 (approximately 70% of the total 1,455,271 population of the Hawaiian Islands, with approximately 81% of those living in or near the Honolulu urban area).",
+          "source": "https://en.wikipedia.org/wiki/O%CA%BBahu"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bb/Oahu.jpg/330px-Oahu.jpg",
+          "credit": "Wikipedia — Oʻahu (CC/PD)",
+          "caption": "Oʻahu",
+          "alt": "a very large and pretty ocean with some small waves in it and there is no image"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/O%CA%BBahu"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/O%CA%BBahu"
+        ],
+        "resolvedTitle": "Oʻahu",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/bb/Oahu.jpg/330px-Oahu.jpg",
+            "caption": "a very large and pretty ocean with some small waves in it and there is no image",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-03T07:28:20.410Z",
+        "reviewed": false
+      },
+      "status": "ok"
     }
   }
 }
