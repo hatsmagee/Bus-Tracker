@@ -3690,7 +3690,7 @@
         "resolvedTitle": "Four Seasons Resort Lanai",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-04T08:51:25.417Z",
+        "generatedAt": "2026-07-04T10:08:00.513Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5803,7 +5803,7 @@
         "resolvedTitle": "Waimea–Kohala Airport",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-04T09:01:24.162Z",
+        "generatedAt": "2026-07-04T10:18:00.300Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5943,6 +5943,45 @@
           }
         ],
         "generatedAt": "2026-07-03T23:33:03.153Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "volcano:V2cam": {
+      "title": "Kīlauea east Halemaʻumaʻu PTZ webcam",
+      "summary": "Title: Webcams URL Source: https://www.usgs.gov/volcanoes/kilauea/webcams Published Time: Sat, 04 Jul 2026 09:59:26 GMT Markdown Content: [Skip to main content](https://www.usgs.gov/volcanoes/kilauea/webcams#main-content) ![Image 1: U.S.…",
+      "history": [
+        {
+          "year": 2024,
+          "text": "Kīlauea has been erupting episodically since December 23, 2024, from two vents (north and south) in",
+          "source": "https://www.usgs.gov/volcanoes/kilauea/webcams"
+        },
+        {
+          "year": 2026,
+          "text": "Title: Webcams URL Source: https://www.usgs.gov/volcanoes/kilauea/webcams Published Time: Sat, 04 Jul 2026 09:59:26 GMT Markdown Content: [Skip to main content](https://www.usgs.gov/volcanoes/kilauea/webcams#main-content) ![Image 1: U.S.…",
+          "source": "https://www.usgs.gov/volcanoes/kilauea/webcams"
+        }
+      ],
+      "photos": [],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://www.usgs.gov/volcanoes/kilauea/webcams"
+        },
+        {
+          "label": "Source",
+          "url": "https://www.usgs.gov/volcanoes/kilauea/volcano-updates"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://www.usgs.gov/volcanoes/kilauea/webcams",
+          "https://www.usgs.gov/volcanoes/kilauea/volcano-updates"
+        ],
+        "resolvedTitle": "Webcams | U.S. Geological Survey - USGS.gov",
+        "model": "deterministic",
+        "imageChecks": [],
+        "generatedAt": "2026-07-04T09:59:32.181Z",
         "reviewed": false
       },
       "status": "ok"
