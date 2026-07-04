@@ -5536,8 +5536,8 @@
       "summary": "Title: NDBC Station Page URL Source: https://www.ndbc.noaa.gov/station_page.php?station=51000 Markdown Content: ## Station 51000 [(LLNR 28005.9)](https://www.navcen.uscg.gov/?pageName=lightLists) - NORTHERN HAWAII ONE - 245NM NE of Honolulu HI [![Image 1: Image indicating link to RSS feed access…",
       "history": [
         {
-          "year": 1950,
-          "text": "Click photo to enlarge. [![Image 3: Photos from Buoy Camera at station 51000](https://www.ndbc.noaa.gov/images/buoycam/W26A_2026_07_03_1910.jpg)](https://www.ndbc.noaa.gov/images/buoycam/W26A_2026_07_03_1910.jpg) Refresh page every 10…",
+          "year": 2010,
+          "text": "Click photo to enlarge. [![Image 3: Photos from Buoy Camera at station 51000](https://www.ndbc.noaa.gov/images/buoycam/W26A_2026_07_04_2010.jpg)](https://www.ndbc.noaa.gov/images/buoycam/W26A_2026_07_04_2010.jpg) Refresh page every 10…",
           "source": "https://www.ndbc.noaa.gov/station_page.php?station=51000"
         },
         {
@@ -5565,7 +5565,7 @@
         "resolvedTitle": "NDBC - Station 51000 Recent Data",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T20:29:45.378Z",
+        "generatedAt": "2026-07-04T20:44:59.067Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5575,8 +5575,8 @@
       "summary": "Title: NDBC Station Page URL Source: https://www.ndbc.noaa.gov/station_page.php?station=51001 Markdown Content: ## Station 51001 [(LLNR 28006)](https://www.navcen.uscg.gov/?pageName=lightLists) - NORTHWESTERN HAWAII ONE - 188 NM NW of Kauai Island, HI [![Image 1: Image indicating link to RSS feed access…",
       "history": [
         {
-          "year": 1950,
-          "text": "Click photo to enlarge. [![Image 3: Photos from Buoy Camera at station 51001](https://www.ndbc.noaa.gov/images/buoycam/W71A_2026_07_03_1910.jpg)](https://www.ndbc.noaa.gov/images/buoycam/W71A_2026_07_03_1910.jpg) Refresh page every 10…",
+          "year": 2010,
+          "text": "Click photo to enlarge. [![Image 3: Photos from Buoy Camera at station 51001](https://www.ndbc.noaa.gov/images/buoycam/W71A_2026_07_04_2010.jpg)](https://www.ndbc.noaa.gov/images/buoycam/W71A_2026_07_04_2010.jpg) Refresh page every 10…",
           "source": "https://www.ndbc.noaa.gov/station_page.php?station=51001"
         },
         {
@@ -5604,7 +5604,7 @@
         "resolvedTitle": "NDBC - Station 51001 Recent Data",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T20:29:47.504Z",
+        "generatedAt": "2026-07-04T20:45:07.734Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5614,8 +5614,8 @@
       "summary": "Title: NDBC Station Page URL Source: https://www.ndbc.noaa.gov/station_page.php?station=51002 Markdown Content: ## Station 51002 [(LLNR 28005.1)](https://www.navcen.uscg.gov/?pageName=lightLists) - SOUTHWEST HAWAII - 215NM SSW of Hilo, HI [![Image 1: Image indicating link to RSS feed access…",
       "history": [
         {
-          "year": 1710,
-          "text": "Click photo to enlarge. [![Image 3: Photos from Buoy Camera at station 51002](https://www.ndbc.noaa.gov/images/buoycam/Z38A_2026_07_04_1710.jpg)](https://www.ndbc.noaa.gov/images/buoycam/Z38A_2026_07_04_1710.jpg) Refresh page every 10…",
+          "year": 2010,
+          "text": "Click photo to enlarge. [![Image 3: Photos from Buoy Camera at station 51002](https://www.ndbc.noaa.gov/images/buoycam/Z38A_2026_07_04_2010.jpg)](https://www.ndbc.noaa.gov/images/buoycam/Z38A_2026_07_04_2010.jpg) Refresh page every 10…",
           "source": "https://www.ndbc.noaa.gov/station_page.php?station=51002"
         },
         {
@@ -5632,18 +5632,18 @@
         },
         {
           "label": "Source",
-          "url": "https://www.ndbc.noaa.gov/sar.php?station=51002&list=all"
+          "url": "https://www.ndbc.noaa.gov/station_realtime.php?station=51002"
         }
       ],
       "provenance": {
         "sources": [
           "https://www.ndbc.noaa.gov/station_page.php?station=51002",
-          "https://www.ndbc.noaa.gov/sar.php?station=51002&list=all"
+          "https://www.ndbc.noaa.gov/station_realtime.php?station=51002"
         ],
         "resolvedTitle": "NDBC - Station 51002 Recent Data",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-04T17:45:51.230Z",
+        "generatedAt": "2026-07-04T20:45:11.139Z",
         "reviewed": false
       },
       "status": "ok"
