@@ -5614,8 +5614,8 @@
       "summary": "Title: NDBC Station Page URL Source: https://www.ndbc.noaa.gov/station_page.php?station=51002 Markdown Content: ## Station 51002 [(LLNR 28005.1)](https://www.navcen.uscg.gov/?pageName=lightLists) - SOUTHWEST HAWAII - 215NM SSW of Hilo, HI [![Image 1: Image indicating link to RSS feed access…",
       "history": [
         {
-          "year": 1950,
-          "text": "Click photo to enlarge. [![Image 3: Photos from Buoy Camera at station 51002](https://www.ndbc.noaa.gov/images/buoycam/Z38A_2026_07_03_1910.jpg)](https://www.ndbc.noaa.gov/images/buoycam/Z38A_2026_07_03_1910.jpg) Refresh page every 10…",
+          "year": 1710,
+          "text": "Click photo to enlarge. [![Image 3: Photos from Buoy Camera at station 51002](https://www.ndbc.noaa.gov/images/buoycam/Z38A_2026_07_04_1710.jpg)](https://www.ndbc.noaa.gov/images/buoycam/Z38A_2026_07_04_1710.jpg) Refresh page every 10…",
           "source": "https://www.ndbc.noaa.gov/station_page.php?station=51002"
         },
         {
@@ -5632,18 +5632,18 @@
         },
         {
           "label": "Source",
-          "url": "https://www.ndbc.noaa.gov/station_realtime.php?station=51002"
+          "url": "https://www.ndbc.noaa.gov/sar.php?station=51002&list=all"
         }
       ],
       "provenance": {
         "sources": [
           "https://www.ndbc.noaa.gov/station_page.php?station=51002",
-          "https://www.ndbc.noaa.gov/station_realtime.php?station=51002"
+          "https://www.ndbc.noaa.gov/sar.php?station=51002&list=all"
         ],
         "resolvedTitle": "NDBC - Station 51002 Recent Data",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T20:17:37.638Z",
+        "generatedAt": "2026-07-04T17:45:51.230Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5653,8 +5653,8 @@
       "summary": "Title: NDBC Station Page URL Source: https://www.ndbc.noaa.gov/station_page.php?station=51004 Markdown Content: ## Station 51004 [(LLNR 28005)](https://www.navcen.uscg.gov/?pageName=lightLists) - SOUTHEAST HAWAII - 205 NM Southeast of Hilo, HI [![Image 1: Image indicating link to RSS feed access…",
       "history": [
         {
-          "year": 2000,
-          "text": "Click photo to enlarge. [![Image 3: Photos from Buoy Camera at station 51004](https://www.ndbc.noaa.gov/images/buoycam/Z32A_2026_07_03_1910.jpg)](https://www.ndbc.noaa.gov/images/buoycam/Z32A_2026_07_03_1910.jpg) Refresh page every 10…",
+          "year": 1720,
+          "text": "Click photo to enlarge. [![Image 3: Photos from Buoy Camera at station 51004](https://www.ndbc.noaa.gov/images/buoycam/Z32A_2026_07_04_1710.jpg)](https://www.ndbc.noaa.gov/images/buoycam/Z32A_2026_07_04_1710.jpg) Refresh page every 10…",
           "source": "https://www.ndbc.noaa.gov/station_page.php?station=51004"
         },
         {
@@ -5682,7 +5682,7 @@
         "resolvedTitle": "NDBC - Station 51004 Recent Data",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T20:38:44.910Z",
+        "generatedAt": "2026-07-04T17:48:46.093Z",
         "reviewed": false
       },
       "status": "ok"
