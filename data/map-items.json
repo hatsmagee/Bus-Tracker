@@ -3051,16 +3051,16 @@
     },
     "volcano:V3cam": {
       "title": "Kīlauea south Halemaʻumaʻu PTZ webcam",
-      "summary": "Title: Volcano Watch — Shallow earthquakes and ground deformation at Kīlauea’s summit highlight hazards near Halemaʻumaʻu URL Source: https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit Published Time: Fri, 03 Jul 2026 23:03:02 GMT Markdown Content: Over…",
+      "summary": "Title: Volcano Watch — Shallow earthquakes and ground deformation at Kīlauea’s summit highlight hazards near Halemaʻumaʻu URL Source: https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit Markdown Content: Over the past several months, HVO instruments have…",
       "history": [
         {
           "year": 2025,
-          "text": "During the lead‑up to episode 30 on August 6, 2025, earthquakes and deformation in this same region were associated with the opening of a short‑lived fissure on the south side of Halemaʻumaʻu crater.",
+          "text": "During the lead‑up to episode 30 on August 6, 2025, earthquakes and deformation in this same region were associated with the opening of a short‑lived [fissure](https://www.usgs.gov/glossary/volcano-hazards-program-glossary) on the south…",
           "source": "https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit"
         },
         {
           "year": 2026,
-          "text": "Title: Volcano Watch — Shallow earthquakes and ground deformation at Kīlauea’s summit highlight hazards near Halemaʻumaʻu URL Source: https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilau…",
+          "text": "The redirected fountain destroyed the original V3 livestream c Title: [V3cam] Kīlauea volcano, Hawaii (south Halemaʻumaʻu crater) URL Source: https://www.usgs.gov/observatories/hvo/v3cam-kilauea-volcano-hawaii-south-halemaumau-crater…",
           "source": "https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit"
         }
       ],
@@ -3083,7 +3083,7 @@
         "resolvedTitle": "Volcano Watch — Shallow earthquakes and ground deformation at Kīlauea's ...",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-03T23:03:11.036Z",
+        "generatedAt": "2026-07-04T01:46:51.476Z",
         "reviewed": false
       },
       "status": "ok"
@@ -3690,7 +3690,7 @@
         "resolvedTitle": "Four Seasons Resort Lanai",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-04T00:39:54.271Z",
+        "generatedAt": "2026-07-04T01:56:50.047Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5803,7 +5803,7 @@
         "resolvedTitle": "Waimea–Kohala Airport",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-04T00:49:54.286Z",
+        "generatedAt": "2026-07-04T02:06:43.569Z",
         "reviewed": false
       },
       "status": "ok"
