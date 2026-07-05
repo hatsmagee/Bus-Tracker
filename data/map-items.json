@@ -5985,6 +5985,50 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "ocean:51201": {
+      "title": "NDBC 51201 — Waimea Bay (Oʻahu)",
+      "summary": "Title: NDBC Station Page URL Source: https://www.ndbc.noaa.gov/station_page.php?station=51201 Markdown Content: ## Station 51201 - Waimea Bay, HI (106) [![Image 1: Image indicating link to RSS feed access page](https://www.ndbc.noaa.gov/images/feed-icon-14x14.png)](https://www.ndbc.noaa.gov/data/latest_obs/51201.rss…",
+      "history": [
+        {
+          "year": 1726,
+          "text": "Title: NDBC Station Page URL Source: https://www.ndbc.noaa.gov/station_page.php?station=51201 Markdown Content: ## Station 51201 - Waimea Bay, HI (106) [![Image 1: Image indicating link to RSS feed access…",
+          "source": "https://www.ndbc.noaa.gov/station_page.php?station=51201"
+        },
+        {
+          "year": 2026,
+          "text": "Markdown Content: Waimea Bay, HI (106) 21.671N 158.118W ## Weather Conditions 7:26 am HST 05-Jul-2026 **Seas:** 5.2 ft (1.6 m) **Peak Period:** 8 sec **Water Temp:** 79 °F (26 °C) ## Wave Summary 7:26 am HST 05-Jul-2026 **Swell:** 1.3 ft…",
+          "source": "https://www.ndbc.noaa.gov/station_page.php?station=51201"
+        }
+      ],
+      "photos": [],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://www.ndbc.noaa.gov/station_page.php?station=51201"
+        },
+        {
+          "label": "Source",
+          "url": "https://www.ndbc.noaa.gov/mobile/station.php?station=51201"
+        },
+        {
+          "label": "Source",
+          "url": "https://www.pacioos.hawaii.edu/waves/buoy-waimea/"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://www.ndbc.noaa.gov/station_page.php?station=51201",
+          "https://www.ndbc.noaa.gov/mobile/station.php?station=51201",
+          "https://www.pacioos.hawaii.edu/waves/buoy-waimea/"
+        ],
+        "resolvedTitle": "NDBC - Station 51201 Recent Data",
+        "model": "deterministic",
+        "imageChecks": [],
+        "generatedAt": "2026-07-05T18:06:24.792Z",
+        "reviewed": false
+      },
+      "status": "ok"
     }
   }
 }
