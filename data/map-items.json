@@ -3690,7 +3690,7 @@
         "resolvedTitle": "Four Seasons Resort Lanai",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-05T22:06:59.777Z",
+        "generatedAt": "2026-07-05T23:23:34.472Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5803,7 +5803,7 @@
         "resolvedTitle": "Waimea–Kohala Airport",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-05T22:16:59.327Z",
+        "generatedAt": "2026-07-05T23:33:33.962Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5949,39 +5949,39 @@
     },
     "volcano:V2cam": {
       "title": "Kīlauea east Halemaʻumaʻu PTZ webcam",
-      "summary": "Title: Summit Webcams URL Source: https://www.usgs.gov/volcanoes/kilauea/summit-webcams Published Time: Sun, 05 Jul 2026 03:17:44 GMT Markdown Content: [Skip to main content](https://www.usgs.gov/volcanoes/kilauea/summit-webcams#main-content) ![Image 1: U.S.…",
+      "summary": "Title: Kīlauea - Volcano Updates URL Source: https://www.usgs.gov/volcanoes/kilauea/volcano-updates Published Time: Sun, 05 Jul 2026 22:36:55 GMT Markdown Content: **HAWAIIAN VOLCANO OBSERVATORY DAILY UPDATE** **U.S.",
       "history": [
         {
           "year": 2024,
-          "text": "Geological Survey Hawaiian Volcano Observatory scientists and affiliates._ This before-and-after image comparison shows the filling of Halemaʻumaʻu in Kaluapele (Kīlauea's summit…",
-          "source": "https://www.usgs.gov/volcanoes/kilauea/summit-webcams"
+          "text": "Kīlauea has been erupting episodically since December 23, 2024, from two vents (north and south) in Halema‘uma‘u.",
+          "source": "https://www.usgs.gov/volcanoes/kilauea/volcano-updates"
         },
         {
           "year": 2026,
-          "text": "Title: Summit Webcams URL Source: https://www.usgs.gov/volcanoes/kilauea/summit-webcams Published Time: Sun, 05 Jul 2026 03:17:44 GMT Markdown Content: [Skip to main…",
-          "source": "https://www.usgs.gov/volcanoes/kilauea/summit-webcams"
+          "text": "Title: Kīlauea - Volcano Updates URL Source: https://www.usgs.gov/volcanoes/kilauea/volcano-updates Published Time: Sun, 05 Jul 2026 22:36:55 GMT Markdown Content: **HAWAIIAN VOLCANO OBSERVATORY DAILY UPDATE** **U.S.",
+          "source": "https://www.usgs.gov/volcanoes/kilauea/volcano-updates"
         }
       ],
       "photos": [],
       "links": [
         {
           "label": "Source",
-          "url": "https://www.usgs.gov/volcanoes/kilauea/summit-webcams"
+          "url": "https://www.usgs.gov/volcanoes/kilauea/volcano-updates"
         },
         {
           "label": "Source",
-          "url": "https://www.usgs.gov/observatories/hvo/news/volcano-watch-hawaii-five-o-fifty-fountaining-episodes-kilauea-summit"
+          "url": "https://www.usgs.gov/volcanoes/kilauea/summit-webcams"
         }
       ],
       "provenance": {
         "sources": [
-          "https://www.usgs.gov/volcanoes/kilauea/summit-webcams",
-          "https://www.usgs.gov/observatories/hvo/news/volcano-watch-hawaii-five-o-fifty-fountaining-episodes-kilauea-summit"
+          "https://www.usgs.gov/volcanoes/kilauea/volcano-updates",
+          "https://www.usgs.gov/volcanoes/kilauea/summit-webcams"
         ],
-        "resolvedTitle": "Summit Webcams | U.S. Geological Survey - USGS.gov",
+        "resolvedTitle": "Kīlauea - Volcano Updates | U.S. Geological Survey - USGS.gov",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-05T03:24:52.099Z",
+        "generatedAt": "2026-07-05T23:13:35.757Z",
         "reviewed": false
       },
       "status": "ok"
