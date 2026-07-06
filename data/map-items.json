@@ -3051,16 +3051,16 @@
     },
     "volcano:V3cam": {
       "title": "Kīlauea south Halemaʻumaʻu PTZ webcam",
-      "summary": "Title: Volcano Watch — Shallow earthquakes and ground deformation at Kīlauea’s summit highlight hazards near Halemaʻumaʻu URL Source: https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit Markdown Content: Over the past several months, HVO instruments have…",
+      "summary": "Title: Volcano Watch — Shallow earthquakes and ground deformation at Kīlauea’s summit highlight hazards near Halemaʻumaʻu URL Source: https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit Published Time: Mon, 06 Jul 2026 04:40:13 GMT Markdown Content: Over…",
       "history": [
         {
           "year": 2025,
-          "text": "During the lead‑up to episode 30 on August 6, 2025, earthquakes and deformation in this same region were associated with the opening of a short‑lived [fissure](https://www.usgs.gov/glossary/volcano-hazards-program-glossary) on the south…",
+          "text": "During the lead‑up to episode 30 on August 6, 2025, earthquakes and deformation in this same region were associated with the opening of a short‑lived fissure on the south side of Halemaʻumaʻu crater.",
           "source": "https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit"
         },
         {
           "year": 2026,
-          "text": "The redirected fountain destroyed the original V3 livestream c Title: [V3cam] Kīlauea volcano, Hawaii (south Halemaʻumaʻu crater) URL Source: https://www.usgs.gov/observatories/hvo/v3cam-kilauea-volcano-hawaii-south-halemaumau-crater…",
+          "text": "Title: Volcano Watch — Shallow earthquakes and ground deformation at Kīlauea’s summit highlight hazards near Halemaʻumaʻu URL Source: https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilau…",
           "source": "https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit"
         }
       ],
@@ -3072,18 +3072,18 @@
         },
         {
           "label": "Source",
-          "url": "https://www.usgs.gov/observatories/hvo/v3cam-kilauea-volcano-hawaii-south-halemaumau-crater"
+          "url": "https://www.usgs.gov/volcanoes/kilauea"
         }
       ],
       "provenance": {
         "sources": [
           "https://www.usgs.gov/observatories/hvo/news/volcano-watch-shallow-earthquakes-and-ground-deformation-kilaueas-summit",
-          "https://www.usgs.gov/observatories/hvo/v3cam-kilauea-volcano-hawaii-south-halemaumau-crater"
+          "https://www.usgs.gov/volcanoes/kilauea"
         ],
         "resolvedTitle": "Volcano Watch — Shallow earthquakes and ground deformation at Kīlauea's ...",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-04T01:46:51.476Z",
+        "generatedAt": "2026-07-06T04:40:15.485Z",
         "reviewed": false
       },
       "status": "ok"
@@ -3690,7 +3690,7 @@
         "resolvedTitle": "Four Seasons Resort Lanai",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-06T03:33:34.934Z",
+        "generatedAt": "2026-07-06T04:50:40.968Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5803,7 +5803,7 @@
         "resolvedTitle": "Waimea–Kohala Airport",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-06T03:43:35.343Z",
+        "generatedAt": "2026-07-06T05:00:07.462Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5949,7 +5949,7 @@
     },
     "volcano:V2cam": {
       "title": "Kīlauea east Halemaʻumaʻu PTZ webcam",
-      "summary": "Title: Kīlauea - Volcano Updates URL Source: https://www.usgs.gov/volcanoes/kilauea/volcano-updates Markdown Content: **HAWAIIAN VOLCANO OBSERVATORY DAILY UPDATE** **U.S.",
+      "summary": "Title: Kīlauea - Volcano Updates URL Source: https://www.usgs.gov/volcanoes/kilauea/volcano-updates Published Time: Mon, 06 Jul 2026 04:38:36 GMT Markdown Content: **HAWAIIAN VOLCANO OBSERVATORY DAILY UPDATE** **U.S.",
       "history": [
         {
           "year": 2024,
@@ -5958,7 +5958,7 @@
         },
         {
           "year": 2026,
-          "text": "Lava fountaining episodes, which generally last for less than 12 hours, are separated by pauses that ca Title: Hawaiian Volcano Observatory URL Source: https://www.usgs.gov/observatories/hvo Published Time: Sun, 05 Jul 2026 23:53:35 GMT…",
+          "text": "Title: Kīlauea - Volcano Updates URL Source: https://www.usgs.gov/volcanoes/kilauea/volcano-updates Published Time: Mon, 06 Jul 2026 04:38:36 GMT Markdown Content: **HAWAIIAN VOLCANO OBSERVATORY DAILY UPDATE** **U.S.",
           "source": "https://www.usgs.gov/volcanoes/kilauea/volcano-updates"
         }
       ],
@@ -5970,18 +5970,18 @@
         },
         {
           "label": "Source",
-          "url": "https://www.usgs.gov/observatories/hvo"
+          "url": "https://www.usgs.gov/volcanoes/kilauea/summit-webcams"
         }
       ],
       "provenance": {
         "sources": [
           "https://www.usgs.gov/volcanoes/kilauea/volcano-updates",
-          "https://www.usgs.gov/observatories/hvo"
+          "https://www.usgs.gov/volcanoes/kilauea/summit-webcams"
         ],
         "resolvedTitle": "Kīlauea - Volcano Updates | U.S. Geological Survey - USGS.gov",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-06T00:35:29.553Z",
+        "generatedAt": "2026-07-06T04:40:11.738Z",
         "reviewed": false
       },
       "status": "ok"
