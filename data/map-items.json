@@ -3690,7 +3690,7 @@
         "resolvedTitle": "Four Seasons Resort Lanai",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-05T23:23:34.472Z",
+        "generatedAt": "2026-07-06T00:45:59.987Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5803,7 +5803,7 @@
         "resolvedTitle": "Waimea–Kohala Airport",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-05T23:33:33.962Z",
+        "generatedAt": "2026-07-06T00:55:35.430Z",
         "reviewed": false
       },
       "status": "ok"
@@ -5949,7 +5949,7 @@
     },
     "volcano:V2cam": {
       "title": "Kīlauea east Halemaʻumaʻu PTZ webcam",
-      "summary": "Title: Kīlauea - Volcano Updates URL Source: https://www.usgs.gov/volcanoes/kilauea/volcano-updates Published Time: Sun, 05 Jul 2026 22:36:55 GMT Markdown Content: **HAWAIIAN VOLCANO OBSERVATORY DAILY UPDATE** **U.S.",
+      "summary": "Title: Kīlauea - Volcano Updates URL Source: https://www.usgs.gov/volcanoes/kilauea/volcano-updates Markdown Content: **HAWAIIAN VOLCANO OBSERVATORY DAILY UPDATE** **U.S.",
       "history": [
         {
           "year": 2024,
@@ -5958,7 +5958,7 @@
         },
         {
           "year": 2026,
-          "text": "Title: Kīlauea - Volcano Updates URL Source: https://www.usgs.gov/volcanoes/kilauea/volcano-updates Published Time: Sun, 05 Jul 2026 22:36:55 GMT Markdown Content: **HAWAIIAN VOLCANO OBSERVATORY DAILY UPDATE** **U.S.",
+          "text": "Lava fountaining episodes, which generally last for less than 12 hours, are separated by pauses that ca Title: Hawaiian Volcano Observatory URL Source: https://www.usgs.gov/observatories/hvo Published Time: Sun, 05 Jul 2026 23:53:35 GMT…",
           "source": "https://www.usgs.gov/volcanoes/kilauea/volcano-updates"
         }
       ],
@@ -5970,18 +5970,18 @@
         },
         {
           "label": "Source",
-          "url": "https://www.usgs.gov/volcanoes/kilauea/summit-webcams"
+          "url": "https://www.usgs.gov/observatories/hvo"
         }
       ],
       "provenance": {
         "sources": [
           "https://www.usgs.gov/volcanoes/kilauea/volcano-updates",
-          "https://www.usgs.gov/volcanoes/kilauea/summit-webcams"
+          "https://www.usgs.gov/observatories/hvo"
         ],
         "resolvedTitle": "Kīlauea - Volcano Updates | U.S. Geological Survey - USGS.gov",
         "model": "deterministic",
         "imageChecks": [],
-        "generatedAt": "2026-07-05T23:13:35.757Z",
+        "generatedAt": "2026-07-06T00:35:29.553Z",
         "reviewed": false
       },
       "status": "ok"
@@ -6026,6 +6026,45 @@
         "model": "deterministic",
         "imageChecks": [],
         "generatedAt": "2026-07-05T18:06:24.792Z",
+        "reviewed": false
+      },
+      "status": "ok"
+    },
+    "sensor:bly-hilo-1": {
+      "title": "Kamehameha Ave / Pauahi (Hilo)",
+      "summary": "Title: Connected vehicle sensors installed in East Hawaii URL Source: https://hidot.hawaii.gov/highways/connected-vehicle-sensors-installed-in-east-hawaii/ Markdown Content: Posted on Oct 28, 2020 in [Highways Posts](https://hidot.hawaii.gov/highways/category/news/highwayscategorynews/),…",
+      "history": [
+        {
+          "year": 2020,
+          "text": "Title: Connected vehicle sensors installed in East Hawaii URL Source: https://hidot.hawaii.gov/highways/connected-vehicle-sensors-installed-in-east-hawaii/ Markdown Content: Posted on Oct 28, 2020 in [Highways…",
+          "source": "https://hidot.hawaii.gov/highways/connected-vehicle-sensors-installed-in-east-hawaii/"
+        },
+        {
+          "year": 2026,
+          "text": "The locations of the installed and planned sensors can be viewed at the following links: Installed East Hawaii units [https://hidot.hawai Title: Hawaii Department of Transportation - Blyncsy - Real-time AI Road Condition Management and…",
+          "source": "https://hidot.hawaii.gov/highways/connected-vehicle-sensors-installed-in-east-hawaii/"
+        }
+      ],
+      "photos": [],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://hidot.hawaii.gov/highways/connected-vehicle-sensors-installed-in-east-hawaii/"
+        },
+        {
+          "label": "Source",
+          "url": "https://blyncsy.com/active-projects/hawaii-department-of-transportation/"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://hidot.hawaii.gov/highways/connected-vehicle-sensors-installed-in-east-hawaii/",
+          "https://blyncsy.com/active-projects/hawaii-department-of-transportation/"
+        ],
+        "resolvedTitle": "Connected vehicle sensors installed in East Hawaii",
+        "model": "deterministic",
+        "imageChecks": [],
+        "generatedAt": "2026-07-06T00:55:31.600Z",
         "reviewed": false
       },
       "status": "ok"
