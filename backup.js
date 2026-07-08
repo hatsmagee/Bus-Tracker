@@ -32,7 +32,10 @@ const zlib = require('zlib');
 // gzipped (SQLite compresses ~5-8×), skipped when the DB bytes haven't changed,
 // and throttled to hourly. Shutdown still force-uploads, so a crash loses at
 // most an hour of learned history.
-const MIN_UPLOAD_MS = Math.max(5, parseInt(process.env.BACKUP_MIN_INTERVAL_MIN, 10) || 60) * 60 * 1000;
+// Default every 3h: SIGTERM (deploy/spin-down) force-uploads a final snapshot,
+// so scheduled uploads only insure against a hard crash — ≤3h of learned
+// history at risk, for a third of the upload bandwidth of hourly.
+const MIN_UPLOAD_MS = Math.max(5, parseInt(process.env.BACKUP_MIN_INTERVAL_MIN, 10) || 180) * 60 * 1000;
 const GZIP_MAGIC = Buffer.from([0x1f, 0x8b]);
 
 // ── GitHub Contents API backend ────────────────────────────────────────────────
