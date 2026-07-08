@@ -159,6 +159,16 @@
      zero-size point (MapLibre pins it); the turbine is absolutely positioned so
      the tower base sits on the coordinate. Only the blades spin. */
   @keyframes windSpin { to { transform: rotate(360deg); } }
+  /* Stale feeds: animation crawls or stops, art grays out and shrinks a touch. */
+  .stream-gauge.stale .wheel-spin { animation-duration: 14s !important; }
+  .stream-gauge.stale .gauge-scale { filter: grayscale(.8); opacity: .6;
+    transform: translate(-17px, -15px) scale(calc(var(--wsc, 1) * .78)); }
+  .wind-turbine.stale .wt-rotor { animation-duration: 16s !important; }
+  .wind-turbine.stale .wt-scale { filter: grayscale(.8); opacity: .6;
+    transform: translate(-13px, -30px) scale(calc(var(--wtc, 1) * .78)); }
+  .solar-sun.stale .ss-rays, .solar-sun.stale .ss-core { animation-play-state: paused; }
+  .solar-sun.stale .ss-scale { filter: grayscale(.8); opacity: .6;
+    transform: translate(-14px, -14px) scale(calc(var(--ssc, 1) * .78)); }
   .wind-turbine { cursor:pointer; position:relative; width:0; height:0; }
   .wind-turbine .wt-scale { position:absolute; left:0; top:0;
     transform: translate(-13px, -30px) scale(var(--wtc, 1)); transform-origin: 13px 30px;
@@ -6163,6 +6173,7 @@ function recordHealth(id, data, count) {
 
 // Fade a source's map layers when its feed goes stale/quiet, so the map itself
 // reflects freshness — bright when live, dimmed when the data stopped updating.
+const _healthIconOrig = {};   // layer id → original icon-size (pre-shrink)
 function applyLayerHealthDim(id, state) {
   if (!mapReady) return;
   const cfg = SOURCE_HEALTH_CFG[id];
@@ -6178,6 +6189,19 @@ function applyLayerHealthDim(id, state) {
       for (const [k, v] of props) {
         try { map.setPaintProperty(lyr, k, v); } catch { /* prop N/A for this layer */ }
       }
+      // "Stale = smaller icon": shrink sprites ~30% when the feed goes quiet,
+      // restore full size when it comes back. Original size expression is
+      // cached on first touch so repeated toggles don't compound.
+      if (isSymbol) {
+        if (!_healthIconOrig[lyr]) {
+          const orig = map.getLayoutProperty(lyr, 'icon-size');
+          if (orig !== undefined && orig !== null) _healthIconOrig[lyr] = orig;
+        }
+        const orig = _healthIconOrig[lyr];
+        if (orig !== undefined && orig !== null) {
+          try { map.setLayoutProperty(lyr, 'icon-size', dim ? ['*', 0.7, orig] : orig); } catch {}
+        }
+      }
     } catch { /* layer not paintable yet */ }
   }
   if (id === 'summits' && summitData.length) {
@@ -6186,6 +6210,14 @@ function applyLayerHealthDim(id, state) {
       if (m) m.getElement().classList.toggle('stale', dim);
     }
     try { updateSummitScale(); } catch { /* map not ready */ }
+  }
+  // DOM-animated markers: when their feed goes quiet the animation slows or
+  // pauses, the art grays out and shrinks — "working = animated, stale = smaller".
+  const domMarkers = { streamflow: streamWheelMarkers, solar: solarMarkers, infrastructure: windTurbineMarkers }[id];
+  if (domMarkers) {
+    for (const k of Object.keys(domMarkers)) {
+      try { domMarkers[k].getElement().classList.toggle('stale', dim); } catch {}
+    }
   }
 }
 
