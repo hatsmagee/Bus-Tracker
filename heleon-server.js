@@ -6883,7 +6883,13 @@ const server = http.createServer((req, res) => {
   setInterval(pollAlerts, 5 * 60 * 1000);
   setInterval(pollWildfireHotspots, 5 * 60 * 1000);
   setInterval(pollStreamflow, 15 * 60 * 1000);
-  setInterval(fetchWeatherStations, 10 * 60 * 1000);
+  // Full NWS station sweep is ~40 upstream calls; every 10 min for viewers,
+  // every 30 min unattended.
+  let weatherIdleSkip = 0;
+  setInterval(() => {
+    if (!clientsActive() && (++weatherIdleSkip % 3) !== 0) return;
+    fetchWeatherStations();
+  }, 10 * 60 * 1000);
   setInterval(pollSummits, 5 * 60 * 1000);
   setInterval(pollOcean, 10 * 60 * 1000);
   setInterval(pollMarine, 30 * 60 * 1000);
