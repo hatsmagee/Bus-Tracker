@@ -2282,7 +2282,11 @@ function endMaybeGzip(res, status, headers, buf) {
   // a full body. Endpoints whose body embeds a fresh timestamp simply never
   // match — correct, just not cheaper.
   if (status === 200 && buf.length >= GZIP_MIN) {
-    const etag = `W/"${crypto.createHash('sha1').update(buf).digest('base64').slice(0, 20)}"`;
+    // Hash with the volatile "ts": Date.now() fields masked, otherwise every
+    // response looks new and no poll ever 304s. Real freshness lives in
+    // lastPollTs/lastRxTs and the data itself, which stay in the hash.
+    const masked = buf.toString('latin1').replace(/"ts":\d{10,}/g, '"ts":0');
+    const etag = `W/"${crypto.createHash('sha1').update(masked).digest('base64').slice(0, 20)}"`;
     // no-cache = store but always revalidate → browser sends If-None-Match on
     // the next poll and we answer 304 when nothing changed.
     headers = { ...headers, 'ETag': etag, 'Cache-Control': 'no-cache' };
