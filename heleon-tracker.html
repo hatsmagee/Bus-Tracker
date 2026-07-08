@@ -1967,12 +1967,9 @@ function initMapLayers() {
   map.addLayer({
     id: 'marine-dot', type: 'symbol', source: 'marine',
     layout: {
-      'text-field': ['match', ['get', 'mkind'], 'reef-cam', '🐠', 'reef-sensor', '🌡️', '🌊'],
-      'text-size': ['interpolate', ['linear'], ['zoom'], 7, 12, 12, 15],
-      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+      'icon-image': ['match', ['get', 'mkind'], 'reef-cam', 'marker-reefcam', 'reef-sensor', 'marker-weather', 'marker-ocean'],
+      'icon-allow-overlap': false, 'icon-size': ICON_SIZE.sm,
     },
-    paint: { 'text-color': '#0e7490', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
   wireLayerHover('marine-dot', p => {
     const icon = p.mkind === 'reef-cam' ? '🐠' : '🌡️';
@@ -2425,9 +2422,13 @@ function initMapLayers() {
     filter: ['==', ['get', 'kind'], 'station'],
     layout: {
       visibility: 'none',
-      'text-field': ['concat', '🚂 ', ['coalesce', ['get', 'name'], '']],
+      'icon-image': 'marker-train', 'icon-anchor': 'left', 'icon-allow-overlap': false,
+      'icon-size': ICON_SIZE.sm,
+      'text-field': ['coalesce', ['get', 'name'], ''],
       'text-size': ['interpolate', ['linear'], ['zoom'], 9, 11, 14, 14],
-      'text-font': EMOJI_FONT, 'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
+      'text-anchor': 'left', 'text-offset': [1.4, 0],
+      'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 4,
     },
     paint: { 'text-color': '#6b4420', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
@@ -2623,35 +2624,27 @@ function initMapLayers() {
   map.addLayer({
     id: 'local-fuel-icon', type: 'symbol', source: 'local-fuel',
     layout: {
-      'text-field': '⛽', 'text-size': ['interpolate', ['linear'], ['zoom'], 9, 11, 13, 14],
-      'text-font': EMOJI_FONT, 'text-allow-overlap': false, 'text-optional': true, 'text-padding': 3,
+      'icon-image': 'marker-fuel', 'icon-allow-overlap': false, 'icon-size': ICON_SIZE.sm,
     },
-    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
   map.addLayer({
     id: 'local-sensors-icon', type: 'symbol', source: 'local-sensors',
     layout: {
-      'text-field': '🚦', 'text-size': 12, 'text-font': EMOJI_FONT,
-      'text-allow-overlap': false, 'text-optional': true,
+      'icon-image': 'marker-signal', 'icon-allow-overlap': false, 'icon-size': ICON_SIZE.sm,
     },
-    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
   });
   map.addLayer({
     id: 'local-lco-icon', type: 'symbol', source: 'local-lco',
     layout: {
-      'text-field': '🔭', 'text-size': 13, 'text-font': EMOJI_FONT,
-      'text-allow-overlap': false, 'text-optional': true,
+      'icon-image': 'marker-summit', 'icon-allow-overlap': false, 'icon-size': ICON_SIZE.sm,
     },
-    paint: { 'text-color': '#4c1d95', 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
   });
   map.addLayer({
     id: 'local-inat-icon', type: 'symbol', source: 'local-inat',
     minzoom: 9,
     layout: {
-      'text-field': '🦋', 'text-size': 11, 'text-font': EMOJI_FONT,
-      'text-allow-overlap': false, 'text-optional': true, 'text-padding': 2,
+      'icon-image': 'marker-butterfly', 'icon-allow-overlap': false, 'icon-size': ICON_SIZE.sm,
     },
-    paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
   });
   wireLayerHover('local-fuel-icon', p => `<div style="font-weight:600;">⛽ ${escapeHtml(p.name)}</div>
     <div style="color:var(--muted);font-size:10px;">${p.brand ? escapeHtml(p.brand) + ' · ' : ''}OSM location — see regional AAA prices in browser</div>`);
@@ -2714,19 +2707,14 @@ function initMapLayers() {
 
   // Public-safety facility markers — static reference locations, off by
   // default so they don't clutter the map; toggled from the Hawaiʻi tab.
-  const FACILITY_EMOJI = { police: '🚓', fire: '🚒', ems: '🚑', trauma: '🏥' };
   ['police', 'fire', 'ems', 'trauma'].forEach(kind => {
     map.addSource(`facility-${kind}`, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
       id: `facility-${kind}-icon`, type: 'symbol', source: `facility-${kind}`,
       layout: {
         visibility: 'none',
-        'text-field': FACILITY_EMOJI[kind],
-        'text-size': 14,
-        'text-font': EMOJI_FONT,
-        'text-allow-overlap': false, 'text-optional': true,
+        'icon-image': `marker-${kind}`, 'icon-allow-overlap': false, 'icon-size': ICON_SIZE.sm,
       },
-      paint: { 'text-halo-color': '#ffffff', 'text-halo-width': 2 },
     });
   });
   wireLayerHover('facility-police-icon', p => `<div style="font-weight:600;">🚓 ${escapeHtml(p.name || 'Police station')}</div><div style="color:var(--muted);font-size:11px;">${escapeHtml(p.address || '')}</div>`);
@@ -2859,6 +2847,16 @@ const TWEMOJI = {
   summit:    '1f52d',   // 🔭
   wildfire:  '1f525',   // 🔥
   aprs:      '1f4fb',   // 📻
+  reefcam:   '1f420',   // 🐠
+  train:     '1f682',   // 🚂
+  fuel:      '26fd',    // ⛽
+  signal:    '1f6a6',   // 🚦
+  butterfly: '1f98b',   // 🦋
+  bus:       '1f68c',   // 🚌
+  police:    '1f693',   // 🚓
+  fire:      '1f692',   // 🚒
+  ems:       '1f691',   // 🚑
+  trauma:    '1f3e5',   // 🏥
   ocean:     '1f30a',   // 🌊
   buoy:      '1f6de',   // 🛟
   power:     '26a1',    // ⚡
@@ -3718,7 +3716,8 @@ function renderHubMarkers() {
     });
     map.addLayer({
       id: 'hubs-label', type: 'symbol', source: 'hubs', minzoom: 10,
-      layout: { 'text-field': ['concat', '🚌 ', ['get', 'name']], 'text-size': 11, 'text-offset': [0, 1.2],
+      layout: { 'icon-image': 'marker-bus', 'icon-size': ICON_SIZE.sm, 'icon-allow-overlap': false,
+                'text-field': ['get', 'name'], 'text-size': 11, 'text-offset': [0, 1.2],
                 'text-anchor': 'top', 'text-font': ['Noto Sans Bold'],
                 'text-allow-overlap': false, 'text-optional': true, 'text-padding': 6 },
       paint: { 'text-color': '#0d1117', 'text-halo-color': '#fff', 'text-halo-width': 1.5 }
