@@ -103,6 +103,16 @@ loadMapItems();
 // Connected Server-Sent-Events clients (browser dashboards). Used to push a
 // deploy signal so open pages self-refresh, and to keep-alive through proxies.
 const sseClients = new Set();
+
+// Bandwidth guard: the keepalive ping keeps this instance awake 24/7, but most
+// of the day nobody has the dashboard open. Track real client activity (any
+// request other than /healthz) so high-frequency eye-candy pollers (aircraft,
+// satellites) can drop to a slow cadence while idle. GTFS polling is NOT idled
+// — arrival-history learning needs it running around the clock.
+const IDLE_AFTER_MS = 10 * 60 * 1000;
+let lastClientActivityTs = 0;
+const clientsActive = () => sseClients.size > 0 || (Date.now() - lastClientActivityTs) < IDLE_AFTER_MS;
+
 function sseBroadcast(event, dataObj) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(dataObj)}\n\n`;
   for (const res of sseClients) {
@@ -6639,6 +6649,7 @@ async function pollSurf() {
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin':'*' }); res.end(); return; }
   const url = new URL(req.url, `http://localhost:${PORT}`);
+  if (url.pathname !== '/healthz') lastClientActivityTs = Date.now();
   // Render health check — 200 OK with current status
   if (url.pathname === '/healthz') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -6774,7 +6785,14 @@ const server = http.createServer((req, res) => {
   const aircraftPollMs = 15000;
   console.log(`[aircraft] primary: community ADS-B (adsb.lol → airplanes.live → adsb.one), no key; OpenSky fallback ${openskyAuthed() ? '(authenticated)' : '(anonymous)'}; polling every ${aircraftPollMs/1000}s`);
   pollAircraft();
-  setInterval(pollAircraft, aircraftPollMs);
+  // While nobody is watching (no client traffic for 10 min), poll every 2 min
+  // instead of 15s — aircraft are eye-candy, and this feed alone is ~100 MB/day
+  // at full rate. First page load after idle gets fresh data within a tick.
+  let aircraftIdleSkip = 0;
+  setInterval(() => {
+    if (!clientsActive() && (++aircraftIdleSkip % 8) !== 0) return;
+    pollAircraft();
+  }, aircraftPollMs);
   // Hawaii civic layers — all free/keyless. Earthquakes and NWS alerts poll
   // every few minutes (nothing on this island changes faster than that);
   // hazard-zone polygons are static reference data, refreshed once a day.
@@ -6823,7 +6841,12 @@ const server = http.createServer((req, res) => {
   pollSurf();                                       // refresh wave/swell/wind for every break
   setInterval(pollSurf, 60 * 60 * 1000);            // wave model updates hourly
   pollSatellites();
-  setInterval(pollSatellites, 20 * 1000); // ISS moves ~7.6 km/s — keep it fresh
+  // ISS moves ~7.6 km/s so 20s keeps it fresh, but only while someone's watching.
+  let satIdleSkip = 0;
+  setInterval(() => {
+    if (!clientsActive() && (++satIdleSkip % 6) !== 0) return;
+    pollSatellites();
+  }, 20 * 1000);
   pollRepeaters();
   pollMobility();
   setInterval(pollMobility, 60 * 1000);

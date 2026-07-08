@@ -25,6 +25,15 @@
  */
 const https = require('https');
 const crypto = require('crypto');
+const zlib = require('zlib');
+
+// Bandwidth guard: a full base64 DB pushed every 5 min was the #1 consumer of
+// Render's outbound bandwidth (a 40 MB DB ≈ 15 GB/day). Snapshots are now
+// gzipped (SQLite compresses ~5-8×), skipped when the DB bytes haven't changed,
+// and throttled to hourly. Shutdown still force-uploads, so a crash loses at
+// most an hour of learned history.
+const MIN_UPLOAD_MS = Math.max(5, parseInt(process.env.BACKUP_MIN_INTERVAL_MIN, 10) || 60) * 60 * 1000;
+const GZIP_MAGIC = Buffer.from([0x1f, 0x8b]);
 
 // ── GitHub Contents API backend ────────────────────────────────────────────────
 const GH_TOKEN  = process.env.BACKUP_GITHUB_TOKEN;
@@ -150,24 +159,30 @@ async function restore() {
   const b = backend();
   if (!b) return null;
   try {
-    const buf = b === 's3' ? await s3Restore() : await ghRestore();
+    let buf = b === 's3' ? await s3Restore() : await ghRestore();
+    // Older snapshots were raw SQLite; new ones are gzipped. Auto-detect.
+    if (buf && buf.length > 2 && buf[0] === GZIP_MAGIC[0] && buf[1] === GZIP_MAGIC[1]) buf = zlib.gunzipSync(buf);
     if (buf && buf.length > 0) { console.log(`[backup] restored ${Math.round(buf.length / 1024)} KB from ${b}`); return buf; }
     console.log(`[backup] no snapshot found in ${b} (fresh start)`);
     return null;
   } catch (e) { console.error(`[backup] restore failed (${b}):`, e.message); return null; }
 }
-let lastUpload = 0, uploading = false;
+let lastUpload = 0, uploading = false, lastUploadHash = null;
 async function snapshot(buf, { force = false } = {}) {
   const b = backend();
   if (!b || uploading) return;
-  // Throttle uploads (GitHub/S3 write quotas) — at most one every ~5 min unless forced.
   const now = Date.now();
-  if (!force && now - lastUpload < 5 * 60 * 1000) return;
+  if (!force && now - lastUpload < MIN_UPLOAD_MS) return;
+  // Skip entirely when the DB hasn't changed since the last successful upload.
+  const hash = crypto.createHash('sha256').update(buf).digest('hex');
+  if (hash === lastUploadHash) { lastUpload = now; return; }
   uploading = true;
   try {
-    if (b === 's3') await s3Upload(buf); else await ghUpload(buf);
+    const gz = zlib.gzipSync(buf, { level: 6 });
+    if (b === 's3') await s3Upload(gz); else await ghUpload(gz);
     lastUpload = now;
-    console.log(`[backup] snapshot uploaded to ${b} (${Math.round(buf.length / 1024)} KB)`);
+    lastUploadHash = hash;
+    console.log(`[backup] snapshot uploaded to ${b} (${Math.round(buf.length / 1024)} KB → ${Math.round(gz.length / 1024)} KB gz)`);
   } catch (e) { console.error(`[backup] snapshot failed (${b}):`, e.message); }
   finally { uploading = false; }
 }
