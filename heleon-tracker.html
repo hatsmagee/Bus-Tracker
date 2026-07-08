@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hele-On Bus Live Tracker</title>
+<title>Hawaiʻi Bus Live Tracker</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%231f6feb'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='white' font-family='system-ui'%3E%F0%9F%9A%8C%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
@@ -687,6 +687,69 @@
   .route-toggle::after { content:''; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:#fff; transition:left .2s; }
   .route-toggle.on::after { left:14px; }
 
+  /* ── Island sub-tabs (Buses / Fleet / Routes) ── */
+  .island-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(22,27,34,.95) 0%, rgba(13,17,23,.6) 100%);
+    flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .island-tabs::-webkit-scrollbar { display: none; }
+  .island-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all .2s ease;
+    user-select: none;
+  }
+  .island-tab:hover {
+    color: var(--fg);
+    background: var(--panel2);
+    border-color: var(--border);
+  }
+  .island-tab.active {
+    color: #fff;
+    background: linear-gradient(135deg, rgba(31,111,235,.35) 0%, rgba(56,139,253,.15) 100%);
+    border-color: rgba(56,139,253,.45);
+    box-shadow: 0 0 12px rgba(31,111,235,.15);
+  }
+  .island-tab .island-emoji { font-size: 14px; line-height: 1; }
+  .island-tab .island-count {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 8px;
+    background: rgba(255,255,255,.08);
+    color: var(--muted);
+  }
+  .island-tab.active .island-count {
+    background: rgba(56,139,253,.25);
+    color: #79c0ff;
+  }
+  .island-tab-note {
+    padding: 5px 12px 8px;
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.45;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .island-tab-note a { color: #58a6ff; text-decoration: none; }
+  .island-tab-note a:hover { text-decoration: underline; }
+
   .api-section { padding:12px; display:flex; flex-direction:column; gap:8px; }
   .api-row { background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
 
@@ -764,7 +827,7 @@
 
 <header>
   <img src="https://s3.us-west-2.amazonaws.com/static.syncromatics.com/portal/158/logo.png" alt="Hele-On" onerror="this.style.display='none'">
-  <h1>Hele-On Bus — Live Tracker</h1>
+  <h1>Hawaiʻi Bus — Live Tracker</h1>
   <div class="header-badges">
     <button class="mobile-menu-btn" id="mobileMenuBtn"
             aria-label="Toggle sidebar" title="Toggle sidebar">☰</button>
@@ -807,16 +870,11 @@
     </div>
 
     <div class="tab-content active" id="tab-vehicles">
+      <div class="island-tabs" id="islandTabsVehicles"></div>
+      <div class="island-tab-note" id="islandNoteVehicles"></div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--border);">
         <label><input type="checkbox" id="showHibike" onchange="toggleHibike()" checked> Bikeshare docks (HIBIKE + Biki)</label>
         <span class="vessel-status" id="hibikeStatus"></span>
-      </div>
-      <div style="padding:6px 12px;color:var(--muted);font-size:10px;border-bottom:1px solid var(--border);">
-        Hele-On buses are the only live GPS transit fleet on Hawaiʻi Island.
-        <a href="https://www.hawaiiislandbike.com/" target="_blank" style="color:#58a6ff">HIBIKE</a> (Big Island) and
-        <a href="https://gobiki.org/" target="_blank" style="color:#58a6ff">Biki</a> (Honolulu) dock counts are keyless GBFS.
-        APRS shows ham-radio trackers statewide. TheBus/Uber/Lyft need API keys.
-        County taxis, Uber/Lyft, and paratransit have no public tracking API.
       </div>
       <div id="vehicleList"><div class="empty"><div class="empty-icon">🚌</div>Loading…</div></div>
       <div id="etaSection" style="border-top:2px solid var(--border);flex-shrink:0;display:none;">
@@ -829,6 +887,8 @@
     </div>
 
     <div class="tab-content" id="tab-fleet">
+      <div class="island-tabs" id="islandTabsFleet"></div>
+      <div class="island-tab-note" id="islandNoteFleet"></div>
       <div id="fleetSummary" class="fleet-summary"></div>
       <div id="fleetTableWrap" style="overflow:auto;flex:1;">
         <div class="empty"><div class="empty-icon">🚍</div>Loading fleet…</div>
@@ -836,6 +896,8 @@
     </div>
 
     <div class="tab-content" id="tab-routes">
+      <div class="island-tabs" id="islandTabsRoutes"></div>
+      <div class="island-tab-note" id="islandNoteRoutes"></div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label>Trail history:</label>
         <select id="trailMinutes" onchange="onTrailMinutesChange()">
@@ -1001,11 +1063,15 @@
       <div class="docs-section">
         <div class="docs-h">🚌 About this dashboard</div>
         <div class="docs-p">
-          A live map of every Hele-On Bus in service right now, built on the
-          County's <a href="https://www.myheleonbus.org/" target="_blank" style="color:#58a6ff">official GTFS-realtime feed</a>.
-          It reads the whole fleet from one VehiclePositions feed, shows the
-          agency's own predicted arrival times (TripUpdates), and layers a small
-          transformer on top that learns each stop's typical timing from history.
+          A live map of county buses across Hawaiʻi Island, Kauaʻi, and Maui — all
+          keyless Syncromatics GTFS-RT + RTPI feeds. Use the island sub-tabs in
+          <strong style="color:#e6edf3">Buses</strong>, <strong style="color:#e6edf3">Fleet</strong>, and
+          <strong style="color:#e6edf3">Routes</strong> to switch islands. Hawaiʻi Island (Hele-On) adds
+          road-snapped route ribbons, a transformer ETA learner, and full SQLite history.
+          Kauaʻi (<a href="https://www.thekauaibus.com/" target="_blank" style="color:#58a6ff">thekauaibus.com</a>) and
+          Maui (<a href="https://www.mauibus.org/" target="_blank" style="color:#58a6ff">mauibus.org</a>) use the same
+          platform with live GPS, fleet roster, route shapes, and GTFS-RT trip updates.
+          TheBus (Oʻahu) requires a registered AppID — not included.
         </div>
       </div>
 
@@ -1174,6 +1240,99 @@
 const MAPTILER_KEY = 'JqxcM1cwbEEMaXnAxf88';
 const REFRESH_INTERVAL = 10;
 const TRAIL_UPDATE_INTERVAL = 15000;
+
+// ─── MULTI-ISLAND TRANSIT ────────────────────────────────────────────────────
+let activeIsland = 'big-island';
+let ISLAND_CATALOG = [];
+let islandStatus = {};
+const islandVehicleCache = {};
+const islandShapeCache = {};
+const islandRouteVisible = {};
+
+function vehicleKey(v) {
+  const isl = v.island || activeIsland;
+  return `${isl}:${v.id}`;
+}
+
+function islandApiUrl(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  return `${path}${sep}island=${encodeURIComponent(activeIsland)}`;
+}
+
+function currentIslandDef() {
+  return ISLAND_CATALOG.find(i => i.id === activeIsland) || ISLAND_CATALOG[0] || null;
+}
+
+function renderIslandSubTabs() {
+  const groups = [
+    { el: 'islandTabsVehicles', note: 'islandNoteVehicles' },
+    { el: 'islandTabsFleet', note: 'islandNoteFleet' },
+    { el: 'islandTabsRoutes', note: 'islandNoteRoutes' },
+  ];
+  for (const g of groups) {
+    const tabsEl = document.getElementById(g.el);
+    const noteEl = document.getElementById(g.note);
+    if (!tabsEl) continue;
+    tabsEl.innerHTML = ISLAND_CATALOG.map(isl => {
+      const st = islandStatus[isl.id] || {};
+      const n = st.vehicles != null ? st.vehicles : '—';
+      const live = st.vehicles > 0;
+      return `<div class="island-tab${activeIsland === isl.id ? ' active' : ''}" data-island="${isl.id}" onclick="switchIsland('${isl.id}')">
+        <span class="island-emoji">${isl.emoji || '🏝️'}</span>
+        <span>${isl.short || isl.name}</span>
+        <span class="island-count" title="Live buses">${n}</span>
+      </div>`;
+    }).join('');
+    if (noteEl) {
+      const cur = currentIslandDef();
+      if (!cur) { noteEl.innerHTML = ''; continue; }
+      const st = islandStatus[cur.id] || {};
+      const apiHost = cur.host || '';
+      const agency = cur.agency || cur.name;
+      const extra = cur.id === 'big-island'
+        ? `Road-snapped routes, transformer ETAs, and full fleet history. <a href="https://www.hawaiiislandbike.com/" target="_blank">HIBIKE</a> + <a href="https://gobiki.org/" target="_blank">Biki</a> bikeshare on the map.`
+        : `Keyless Syncromatics GTFS-RT + RTPI from <a href="https://${apiHost}/" target="_blank">${apiHost}</a>. ${st.routes || '—'} routes · ${st.shapes || '—'} patterns.`;
+      noteEl.innerHTML = `<strong>${agency}</strong> — ${extra} TheBus (Oʻahu) requires a registered AppID — not included.`;
+    }
+  }
+}
+
+function flyToIsland(isl) {
+  if (!mapReady || !isl || !isl.mapCenter) return;
+  map.flyTo({ center: isl.mapCenter, zoom: isl.mapZoom || 9, duration: 1400, essential: true });
+}
+
+async function switchIsland(id) {
+  if (id === activeIsland) return;
+  activeIsland = id;
+  Object.keys(markers).forEach(k => { markers[k].marker.remove(); delete markers[k]; });
+  renderIslandSubTabs();
+  const isl = currentIslandDef();
+  flyToIsland(isl);
+  if (activeTab === 'fleet') await fetchFleet();
+  else {
+    await Promise.all([fetchAll(), fetchShapes()]);
+    if (activeIsland !== 'big-island') {
+      trailEdgesData = null;
+      trailData = {};
+      renderTrails();
+    } else {
+      fetchTrails();
+    }
+  }
+}
+
+async function fetchIslands() {
+  try {
+    const data = await (await fetch('/api/islands')).json();
+    ISLAND_CATALOG = data.islands || [];
+    islandStatus = data.status || {};
+    if (!ISLAND_CATALOG.find(i => i.id === activeIsland) && ISLAND_CATALOG.length) {
+      activeIsland = ISLAND_CATALOG[0].id;
+    }
+    renderIslandSubTabs();
+  } catch (e) { console.error('[fetchIslands]', e); }
+}
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
 let allVehicles = [];
@@ -3382,21 +3541,27 @@ function flashVehicle(id) {
 
 async function fetchAll() {
   try {
-    const res = await fetch('/api/vehicles');
+    const res = await fetch(islandApiUrl('/api/vehicles'));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const prevVehicles = allVehicles;
-    allVehicles = data.vehicles || [];
+    allVehicles = (data.vehicles || []).map(v => Object.assign({ island: data.island || activeIsland }, v));
+    islandVehicleCache[activeIsland] = allVehicles;
+    if (data.stats) islandStatus[activeIsland] = Object.assign({}, islandStatus[activeIsland] || {}, { vehicles: data.stats.total, lastPollTs: data.stats.ts });
     apiLog = data.vehicles ? [{ ok: true, ts: new Date() }] : [];
 
     // Initialize route visibility for new vehicles
-    allVehicles.forEach(v => { if (routeVisible[v.routeId] === undefined) routeVisible[v.routeId] = true; });
+    allVehicles.forEach(v => {
+      const rk = `${activeIsland}:${v.routeId}`;
+      if (islandRouteVisible[rk] === undefined) islandRouteVisible[rk] = true;
+      if (routeVisible[v.routeId] === undefined) routeVisible[v.routeId] = true;
+    });
 
     // Detect vehicles that just became fresh (were stale, now aren't)
-    const nowStaleIds = new Set(allVehicles.filter(v => isStale(v)).map(v => v.id));
+    const nowStaleIds = new Set(allVehicles.filter(v => isStale(v)).map(v => vehicleKey(v)));
     allVehicles.forEach(v => {
-      if (prevStaleIds.has(v.id) && !nowStaleIds.has(v.id)) {
-        // Vehicle just came back online — flash its card briefly
+      const vk = vehicleKey(v);
+      if (prevStaleIds.has(vk) && !nowStaleIds.has(vk)) {
         flashVehicle(v.id);
       }
     });
@@ -3405,15 +3570,16 @@ async function fetchAll() {
 
     fetchFailCount = 0;
     setApiStatus(allVehicles.length > 0 ? 'ok' : 'partial');
-    // Header count = in-service buses (excludes parked/not-in-service ones that
-    // are only shown faded on the map).
     const vcount = visibleVehicles().filter(v => !v.unassigned).length;
-    document.getElementById('vehicleCountText').textContent = `${vcount} bus${vcount !== 1 ? 'es' : ''}`;
+    const isl = currentIslandDef();
+    const islLabel = isl ? isl.short : '';
+    document.getElementById('vehicleCountText').textContent = `${vcount} bus${vcount !== 1 ? 'es' : ''}${islLabel ? ' · ' + islLabel : ''}`;
     document.getElementById('lastUpdate').textContent = 'Updated ' + new Date().toLocaleTimeString();
 
+    renderIslandSubTabs();
     renderVehicleList();
     renderRouteList();
-    renderStatus();
+    if (activeIsland === 'big-island') renderStatus();
     renderMarkers();
     renderRouteShapes();
     resetCountdown();
@@ -3451,10 +3617,9 @@ function normalizeColor(c) {
 
 async function fetchShapes() {
   try {
-    const res = await fetch('/api/shapes');
+    const res = await fetch(islandApiUrl('/api/shapes'));
     routeShapes = await res.json();
-    // Populate route metadata from shape data + ROUTES constant so routes
-    // render correctly even before any vehicle reports on them.
+    islandShapeCache[activeIsland] = routeShapes;
     routeShapes.forEach(s => {
       if (!ROUTES_META[s.route_id]) {
         const known = (typeof ROUTES !== 'undefined' && ROUTES.find(r => r.id === s.route_id)) || null;
@@ -3464,6 +3629,7 @@ async function fetchShapes() {
           color: known?.color || normalizeColor(s.color) || '#888'
         };
         if (known) ROUTE_COLOR_MAP[s.route_id] = known.color;
+        else ROUTE_COLOR_MAP[s.route_id] = normalizeColor(s.color) || '#888';
       }
     });
     renderRouteShapes();
@@ -7166,9 +7332,10 @@ function renderAheadArrows() {
   const src = map.getSource('ahead');
   if (!src) return;
   aheadSegments = [];
-  const visible = visibleVehicles().filter(v => routeVisible[v.routeId] !== false);
+  const visible = visibleVehicles().filter(v => (v.island || activeIsland) === activeIsland && routeVisible[v.routeId] !== false);
   visible.forEach(v => {
-    const m = markers[v.id];
+    const mk = vehicleKey(v);
+    const m = markers[mk];
     // Anchor the chevrons to the bus's ANIMATED position on the route (m.curDist
     // along m.rc), not the raw GPS fix — so they flow smoothly from where the bus
     // icon actually is. Off-route buses (no m.rc) get no chevrons.
@@ -7182,7 +7349,7 @@ function renderAheadArrows() {
     const end = doublebackLimit(rc, start, AHEAD_MAX_M);
     if (end - start < 5) return;
     aheadSegments.push({ rc, start, end, color: v.routeColor || '#ffd21a',
-                         getStart: () => markers[v.id] && markers[v.id].rc === rc ? markers[v.id].curDist : start });
+                         getStart: () => { const mm = markers[mk]; return mm && mm.rc === rc ? mm.curDist : start; } });
   });
   drawAheadAt(0);
   if (map.getLayer('ahead-arrows')) map.moveLayer('ahead-arrows'); // keep above route lines
@@ -7358,12 +7525,55 @@ function renderRouteShapes(force) {
   });
 
   if (showRouteShapes) {
-    renderRouteRibbons();
-    if (map.getLayer(RIBBON_LAYER)) map.setLayoutProperty(RIBBON_LAYER, 'visibility', 'visible');
-  } else if (map.getLayer(RIBBON_LAYER)) {
-    map.setLayoutProperty(RIBBON_LAYER, 'visibility', 'none');
+    if (activeIsland === 'big-island') {
+      renderRouteRibbons();
+      if (map.getLayer(RIBBON_LAYER)) map.setLayoutProperty(RIBBON_LAYER, 'visibility', 'visible');
+      if (map.getLayer('island-route-lines')) map.setLayoutProperty('island-route-lines', 'visibility', 'none');
+    } else {
+      if (map.getLayer(RIBBON_LAYER)) map.setLayoutProperty(RIBBON_LAYER, 'visibility', 'none');
+      renderIslandRouteLines(routeMeta);
+    }
+  } else {
+    if (map.getLayer(RIBBON_LAYER)) map.setLayoutProperty(RIBBON_LAYER, 'visibility', 'none');
+    if (map.getLayer('island-route-lines')) map.setLayoutProperty('island-route-lines', 'visibility', 'none');
   }
   renderAheadArrows();
+}
+
+function renderIslandRouteLines(routeMeta) {
+  if (!mapReady) return;
+  const features = [];
+  Object.entries(allPatternCoords).forEach(([rid, patterns]) => {
+    if (routeVisible[rid] === false) return;
+    const meta = routeMeta[rid] || ROUTES_META[rid] || {};
+    const color = meta.color || '#888';
+    patterns.forEach(coords => {
+      if (!coords || coords.length < 2) return;
+      features.push({
+        type: 'Feature',
+        properties: { routeId: +rid, color, name: meta.name || `Route ${rid}` },
+        geometry: { type: 'LineString', coordinates: coords },
+      });
+    });
+  });
+  const data = { type: 'FeatureCollection', features };
+  if (!map.getSource('island-route-lines')) {
+    map.addSource('island-route-lines', { type: 'geojson', data });
+    map.addLayer({
+      id: 'island-route-lines',
+      type: 'line',
+      source: 'island-route-lines',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 12, 4, 15, 6],
+        'line-opacity': 0.85,
+      },
+    });
+  } else {
+    map.getSource('island-route-lines').setData(data);
+    map.setLayoutProperty('island-route-lines', 'visibility', 'visible');
+  }
 }
 
 // ─── RIBBON ROUTE RENDERING ─────────────────────────────────────────────────
@@ -9020,85 +9230,57 @@ function wireLayerHover(layerId, buildHtml) {
 // ─── RENDER MARKERS ───────────────────────────────────────────────────────────
 function renderMarkers() {
   if (!mapReady) return;
-  const visible = visibleVehicles();
-  const visibleIds = new Set(visible.filter(v => routeVisible[v.routeId] !== false).map(v => v.id));
+  const visible = visibleVehicles().filter(v => (v.island || activeIsland) === activeIsland);
+  const visibleIds = new Set(visible.filter(v => routeVisible[v.routeId] !== false).map(v => vehicleKey(v)));
 
   Object.keys(markers).forEach(id => {
-    if (!visibleIds.has(parseInt(id))) { markers[id].marker.remove(); delete markers[id]; }
+    if (!visibleIds.has(id)) { markers[id].marker.remove(); delete markers[id]; }
   });
 
   visible.forEach(v => {
     if (routeVisible[v.routeId] === false || isNaN(v.lat) || isNaN(v.lon)) return;
+    const mk = vehicleKey(v);
 
     function wire(el, vdata) {
-      const inner = el.querySelector('.bus-rot') || el.firstChild; // the rotating div
-      // Click is bound to the WHOLE marker root (not just .bus-rot) so clicks
-      // on any part of the bus icon (the bubble, the arrow, transparent edges)
-      // hit the bus instead of passing through to an underlying map symbol
-      // layer. The bus is always on top, regardless of where you click it.
+      const inner = el.querySelector('.bus-rot') || el.firstChild;
       el.onclick = (e) => { e.stopPropagation(); e.preventDefault(); selectVehicle(vdata.id); };
       inner.onmouseenter = e => {
         showBusTooltip(vdata, e.clientX, e.clientY);
-        const h = (markers[vdata.id] && markers[vdata.id].heading) ?? vdata.headingDegrees ?? 0;
+        const h = (markers[mk] && markers[mk].heading) ?? vdata.headingDegrees ?? 0;
         inner.style.transform = `rotate(${h}deg) scale(1.25)`;
       };
       inner.onmousemove = e => positionTooltip(e.clientX, e.clientY);
       inner.onmouseleave = () => {
         hideBusTooltip();
-        const h = (markers[vdata.id] && markers[vdata.id].heading) ?? vdata.headingDegrees ?? 0;
+        const h = (markers[mk] && markers[mk].heading) ?? vdata.headingDegrees ?? 0;
         inner.style.transform = `rotate(${h}deg) scale(1)`;
       };
     }
 
     const loadFrac = loadFraction(v);
-    // Buses drive on roads: the server snaps the raw GPS onto the nearest real
-    // road-graph edge (snapLon/snapLat). Use that as the position when present
-    // so the dot rides the street instead of floating; fall back to raw GPS if
-    // the point was too far from any road to snap confidently.
     const fix = (v.snapLon != null && v.snapLat != null) ? [v.snapLon, v.snapLat] : [v.lon, v.lat];
     const nowT = performance.now();
-    // Snap to whichever of the route's PATTERNS the bus is nearest (a bus on
-    // pattern 2/3 is far from pattern 1). Pick the closest; if it's within 120 m
-    // we trust route-snapped motion, else the bus glides straight to its fix.
-    const { rc, snap } = nearestPatternSnap(v.routeId, fix, v.headingDegrees);
-    const onRoute = snap && snap.offRoute < 120;
-    // Orient the bus ALONG THE ROAD it's driving on, in the direction of travel.
-    // Buses don't drive sideways, so we ignore the noisy raw GPS heading when the
-    // bus is on a known route and instead use the centerline bearing at its
-    // snapped position (snap.dist is already on the correct travel direction
-    // because nearestPatternSnap used the GPS heading to disambiguate patterns).
-    // Off-route buses fall back to the raw GPS heading.
+    const useRoadSnap = activeIsland === 'big-island';
+    const { rc, snap } = useRoadSnap ? nearestPatternSnap(v.routeId, fix, v.headingDegrees) : { rc: null, snap: null };
+    const onRoute = useRoadSnap && snap && snap.offRoute < 120;
     const roadBrg = onRoute ? roadBearingAt(rc, snap.dist) : null;
     const heading = roadBrg != null ? roadBrg
                   : (v.headingDegrees != null ? v.headingDegrees : 0);
 
-    if (markers[v.id]) {
-      const m = markers[v.id];
-      const dt = Math.max(0.1, (nowT - m.fixTime) / 1000); // s since last fix
+    if (markers[mk]) {
+      const m = markers[mk];
+      const dt = Math.max(0.1, (nowT - m.fixTime) / 1000);
       if (onRoute && m.onRoute && m.rc === rc) {
-        // Measured pace between the last two fixes (forward-only).
         const measured = (snap.dist - (m.prevAnchorDist ?? snap.dist)) / Math.max(dt, 1);
-        // Anchor the glide. The marker has been gliding ahead of GPS on purpose
-        // (showing where the bus should be). If the new fix is AHEAD of the
-        // rendered position, the marker fell behind — anchor forward to the fix.
-        // If the fix is BEHIND (marker over-glided), keep the rendered position as
-        // the anchor so motion stays smooth and forward — the fix just recalibrates
-        // pace, it doesn't yank the bus backward.
         m.anchorDist = Math.max(m.curDist ?? snap.dist, snap.dist);
         m.anchorTime = nowT;
-        // Expected pace: prefer the agency's prediction (dist-to-next-stop ÷ ETA);
-        // fall back to measured. This keeps the bus gliding smoothly between fixes.
         m.pace = paceFromEta(v, m) ?? (measured > 0 ? measured : 0);
         if (!(m.pace >= 0)) m.pace = 0;
         m.prevAnchorDist = snap.dist;
       } else if (onRoute) {
-        // First time on this route (or route changed): start at the fix.
         m.rc = rc; m.curDist = snap.dist; m.anchorDist = snap.dist; m.prevAnchorDist = snap.dist;
         m.anchorTime = nowT; m.pace = paceFromEta(v, m) ?? 0;
       } else {
-        // Off-route bus (too far from its shape to trust route motion): glide
-        // smoothly in a straight line from where it's rendered to the new fix
-        // instead of snapping — a 200 m jump per poll looks broken.
         m.rc = null; m.alongSpeed = 0;
         const cur = m.marker.getLngLat();
         m.linFrom = [cur.lng, cur.lat];
@@ -9109,25 +9291,12 @@ function renderMarkers() {
       m.fix = fix;
       m.fixTime = nowT;
       m.heading = heading;
-      // Reconcile the continuous (unwrapped) angle to this new heading via the
-      // shortest path. We do NOT repaint rotation here — the per-frame glide loop
-      // (startMarkerAnim) owns the live `transform: rotate(...)`, smoothly easing
-      // toward whatever m.headingUnwrapped is. Rebuilding the icon's innerHTML on
-      // every ~15s poll (as before) threw away the just-rendered rotation and
-      // re-painted a brand-new element at the fresh heading with no prior frame to
-      // transition from, so the CSS transition couldn't animate it — the bus
-      // visibly snapped/jerked to the new angle every single poll. Only the static
-      // bits (color/label/load/weather/number) need a fresh render on poll; the
-      // rotating div is reused as-is so its current visual angle carries forward.
       const prevU = m.headingUnwrapped ?? heading;
       m.headingUnwrapped = prevU + (((heading - (prevU % 360)) + 540) % 360 - 180);
       const prevInner = m.el.querySelector('.bus-rot');
       const prevTransform = prevInner ? prevInner.style.transform : null;
       m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, m.headingUnwrapped, loadFrac, v.weather, v.name);
       const newInner = m.el.querySelector('.bus-rot');
-      // Restore the angle the bus was actually visually at a moment ago (instead of
-      // the just-baked m.headingUnwrapped) so there is no discontinuity; the rAF
-      // loop will then smoothly ease it the rest of the way on the next frame(s).
       if (newInner && prevTransform) newInner.style.transform = prevTransform;
       applyAgeOpacity(m.el, v);
       wire(m.el, v);
@@ -9137,7 +9306,7 @@ function renderMarkers() {
       applyAgeOpacity(el, v);
       wire(el, v);
       const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(fix).addTo(map);
-      markers[v.id] = {
+      markers[mk] = {
         marker, el, heading, headingUnwrapped: heading, fix, fixTime: nowT,
         rc: onRoute ? rc : null, onRoute,
         curDist: onRoute ? snap.dist : 0,
@@ -9673,9 +9842,12 @@ const FLEET_STATUS_META = {
 async function fetchFleet() {
   const wrap = document.getElementById('fleetTableWrap');
   try {
-    const res = await fetch('/api/fleet');
+    const res = await fetch(islandApiUrl('/api/fleet'));
     const data = await res.json();
     fleetData = data.fleet || [];
+    if (data.island) activeIsland = data.island;
+    islandStatus[activeIsland] = Object.assign({}, islandStatus[activeIsland] || {}, { vehicles: data.counts?.live || 0, routes: fleetData.length });
+    renderIslandSubTabs();
     renderFleetSummary(data.counts || {}, data.total || fleetData.length);
     renderFleetTable();
   } catch (e) {
@@ -10117,6 +10289,7 @@ async function pollLearn() {
 initMap();
 // Kick off all data fetches in parallel — fastest possible load
 Promise.all([
+  fetchIslands(),
   fetchReference(),
   fetchMapLore(),
   fetchShapes(),
@@ -10171,7 +10344,7 @@ setInterval(() => { if (activeTab === 'agent' && !document.hidden) { refreshAgen
 setInterval(() => { if (!document.hidden) refreshAgentRobot(); }, 3500);
 // Refresh the Fleet table while it's open (it's a heavier multi-request scrape,
 // so only when actually visible).
-setInterval(() => { if (activeTab === 'fleet' && !document.hidden) fetchFleet(); }, 15000);
+setInterval(() => { if (!document.hidden) fetchIslands(); }, 60000);
 
 // Trail + ETA refresh on their own cadence — skipped while the tab is hidden.
 setInterval(() => { if (!document.hidden) fetchTrails(); }, TRAIL_UPDATE_INTERVAL);

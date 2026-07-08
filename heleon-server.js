@@ -19,6 +19,8 @@ const { execSync } = require('child_process');
 const WebSocket = require('ws');
 const { parseFeedMessage } = require('./gtfs-rt');
 const { nearestPointOnGraph } = require('./road-graph.js');
+const { createIslandManager } = require('./island-transit');
+const islandTransit = createIslandManager();
 
 // ─── SELF-HEALING: never let one bad request or feed kill the whole server ────
 // A single uncaught exception or unhandled promise rejection would otherwise
@@ -1769,7 +1771,9 @@ async function pollAll() {
     if (v.routeId) { try { detectArrivals(v, v.routeId); } catch(e) {} }
   });
   lastPollStats = { ts: Date.now(), total: latestVehicles.length };
-  process.stdout.write(`\r[${new Date().toLocaleTimeString()}] ${latestVehicles.length} vehicles  `);
+  process.stdout.write(`\r[${new Date().toLocaleTimeString()}] ${latestVehicles.length} vehicles (Big Island)  `);
+  // Kauaʻi + Maui — same Syncromatics stack, lighter pipeline (no road-snap / transformer).
+  islandTransit.pollAll().catch(() => {});
 }
 
 // ─── AUTO-DISCOVERY ───────────────────────────────────────────────────────────
@@ -2317,15 +2321,42 @@ function json(res, data, status = 200) {
 async function handleApi(url, res, req) {
   const p = url.pathname;
   const q = url.searchParams;
+  const islandParam = q.get('island') || 'big-island';
+
+  if (p === '/api/islands') {
+    const islands = islandTransit.listIslands();
+    const status = {};
+    for (const isl of islands) {
+      if (isl.id === 'big-island') {
+        status[isl.id] = { vehicles: latestVehicles.length, routes: ROUTES.length, lastPollTs: lastPollStats.ts };
+      } else {
+        const poller = islandTransit.getPoller(isl.id);
+        status[isl.id] = poller ? poller.getApiInfo() : { error: 'not configured' };
+      }
+    }
+    return json(res, { islands, status, ts: Date.now() });
+  }
 
   if (p === '/api/vehicles') {
-    return json(res, { ts: lastPollStats.ts, vehicles: latestVehicles, stats: lastPollStats });
+    if (islandParam !== 'big-island') {
+      const poller = islandTransit.getPoller(islandParam);
+      if (!poller) return json(res, { error: 'unknown island' }, 404);
+      const vehicles = poller.getVehicles().map(v => Object.assign({}, v, { weather: weatherByVehicle[`${islandParam}:${v.id}`] || null }));
+      return json(res, { ts: poller.getStats().ts, island: islandParam, vehicles, stats: poller.getStats() });
+    }
+    return json(res, { ts: lastPollStats.ts, island: 'big-island', vehicles: latestVehicles.map(v => Object.assign({}, v, { island: 'big-island' })), stats: lastPollStats });
   }
 
   // Everything we can scrape about the WHOLE fleet — every vehicle the agency
   // API knows about, live or not, with all telemetry and a derived status that
   // explains why a bus is or isn't on the map. Powers the Fleet tab.
   if (p === '/api/fleet') {
+    if (islandParam !== 'big-island') {
+      const poller = islandTransit.getPoller(islandParam);
+      if (!poller) return json(res, { error: 'unknown island' }, 404);
+      const data = await poller.getFleet();
+      return json(res, data);
+    }
     const now = Date.now();
     // Full roster (every vehicle ever registered) …
     let roster = [];
@@ -2393,7 +2424,7 @@ async function handleApi(url, res, req) {
     const rank = { live: 0, idle: 1, recent: 2, offshift: 3, dormant: 4, unknown: 5 };
     fleet.sort((a, b) => (rank[a.status] - rank[b.status]) || ((a.ageMin ?? 1e9) - (b.ageMin ?? 1e9)));
     const counts = fleet.reduce((m, f) => { m[f.status] = (m[f.status] || 0) + 1; return m; }, {});
-    return json(res, { ts: now, total: fleet.length, counts, fleet });
+    return json(res, { ts: now, island: 'big-island', total: fleet.length, counts, fleet });
   }
 
   // ── Learned, real-world data from observed GPS history ───────────────────
@@ -2669,6 +2700,11 @@ async function handleApi(url, res, req) {
   }
 
   if (p === '/api/shapes') {
+    if (islandParam !== 'big-island') {
+      const poller = islandTransit.getPoller(islandParam);
+      if (!poller) return json(res, { error: 'unknown island' }, 404);
+      return json(res, poller.getShapes());
+    }
     const rows = dbAll(`SELECT route_id, pattern_id, name, direction, color, shape FROM route_shapes ORDER BY route_id, pattern_id`);
     rows.forEach(r => {
       // Curated dark/distinct palette over the upstream pattern colors (those
@@ -2688,7 +2724,12 @@ async function handleApi(url, res, req) {
   }
 
   if (p === '/api/routes') {
-    return json(res, ROUTES);
+    if (islandParam !== 'big-island') {
+      const poller = islandTransit.getPoller(islandParam);
+      if (!poller) return json(res, { error: 'unknown island' }, 404);
+      return json(res, poller.getRoutes());
+    }
+    return json(res, ROUTES.map(r => Object.assign({}, r, { island: 'big-island' })));
   }
 
   if (p === '/api/stats') {
@@ -6787,6 +6828,7 @@ const server = http.createServer((req, res) => {
   buildTripIndex();
   // Train learning model on past stop_arrivals history
   try { await trainFromHistory(); } catch(e) { console.error('[learn] train error:', e.message); }
+  try { await islandTransit.boot(); } catch (e) { console.error('[islands] boot error:', e.message); }
   await pollAll();
   setInterval(pollAll, POLL_INTERVAL);
   // Boats layer — only connects if AISSTREAM_API_KEY is set. With no key, the

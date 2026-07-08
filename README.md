@@ -54,7 +54,10 @@ noted). All of it is polled server-side, cached, and served from `/api/*`.
 
 | Layer | Source | Endpoint | Notes |
 |-------|--------|----------|-------|
-| Buses (live GPS) | Syncromatics RTPI + GTFS-RT (`myheleonbus.org`) | `/api/vehicles` | positions snapped to the OSM road graph |
+| Buses — Hawaiʻi Island | Hele-On (`myheleonbus.org`) | `/api/vehicles?island=big-island` | road-snapped routes, transformer ETAs, SQLite history |
+| Buses — Kauaʻi | The Kauai Bus (`thekauaibus.com`) | `/api/vehicles?island=kauai` | keyless Syncromatics GTFS-RT + RTPI |
+| Buses — Maui | Maui Bus (`mauibus.org`) | `/api/vehicles?island=maui` | keyless Syncromatics GTFS-RT + RTPI |
+| Island catalog | all keyless bus systems | `/api/islands` | bbox, map center, API map, live counts |
 | Bikeshare (HIBIKE + Biki) | PBSC GBFS v3 — Big Island + Honolulu | `/api/mobility`, `/api/hibike` | keyless; dock bike/dock counts (not per-bike GPS) |
 | APRS trackers | aprs2.net (ham radio positions) | `/api/aprs` | keyless RX; vehicles/boats/weather beacons statewide |
 | Route ribbons | GTFS shapes matched to OSM roads | `/api/route-edges`, `/api/route-roads` | 25 routes, colors the actual road via feature-state |
@@ -295,6 +298,7 @@ If Render assigned a different hostname, edit
 
 ## Files
 
+- `island-transit.js` — multi-island Syncromatics polling (Kauaʻi + Maui GTFS-RT + RTPI)
 - `heleon-server.js` — main backend (GTFS-RT polling, DB, GTFS, transformer, weather)
 - `gtfs-rt.js` — dependency-free GTFS-realtime protobuf decoder
 - `heleon-tracker.html` — single-file dashboard
