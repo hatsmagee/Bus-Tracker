@@ -14,11 +14,19 @@
  *        BACKUP_GITHUB_REPO    "owner/repo" to store snapshots in
  *        BACKUP_GITHUB_PATH    optional, default "backups/heleon.db"
  *        BACKUP_GITHUB_BRANCH  optional, default "main"
- *      The DB is committed (base64) to that path; restored from it on boot.
+ *      INCREMENTAL: the DB is split into fixed-size shards; only shards whose
+ *      content changed since the last upload are pushed (gzipped), plus a small
+ *      manifest listing shard hashes for reassembly. SQLite is page-oriented,
+ *      so a day of new rows touches a handful of shards, not the whole file.
+ *      After each upload the branch history is squashed to a single commit
+ *      (guarded — only when the repo contains nothing but backups) so the
+ *      backup repo never balloons.
  *
  *   2. S3-compatible object store (Backblaze B2 / Cloudflare R2 / etc). Set:
  *        BACKUP_S3_ENDPOINT BACKUP_S3_BUCKET BACKUP_S3_KEY
  *        BACKUP_S3_ACCESS_KEY BACKUP_S3_SECRET BACKUP_S3_REGION (default us-east-1)
+ *      S3 objects overwrite in place (no history problem) so this backend
+ *      stays a single gzipped snapshot.
  *
  * The snapshot is the raw sql.js export (a normal SQLite file). Restore just
  * writes it to DB_PATH before openDb() reads it.
@@ -27,22 +35,22 @@ const https = require('https');
 const crypto = require('crypto');
 const zlib = require('zlib');
 
-// Bandwidth guard: a full base64 DB pushed every 5 min was the #1 consumer of
-// Render's outbound bandwidth (a 40 MB DB ≈ 15 GB/day). Snapshots are now
-// gzipped (SQLite compresses ~5-8×), skipped when the DB bytes haven't changed,
-// and throttled to hourly. Shutdown still force-uploads, so a crash loses at
-// most an hour of learned history.
-// Default once a day: SIGTERM (deploy/spin-down/nightly sleep) force-uploads a
-// final snapshot, so the daily scheduled upload only insures against a hard
-// crash. ~9.4 MB/day of egress instead of 75.
+// Scheduled uploads default to once a day: SIGTERM (deploy/spin-down/nightly
+// sleep) force-uploads a final snapshot, so the daily timer only insures
+// against a hard crash. Override with BACKUP_MIN_INTERVAL_MIN.
 const MIN_UPLOAD_MS = Math.max(5, parseInt(process.env.BACKUP_MIN_INTERVAL_MIN, 10) || 1440) * 60 * 1000;
 const GZIP_MAGIC = Buffer.from([0x1f, 0x8b]);
+// Shard granularity: smaller shards = less re-upload per change but more API
+// calls. 512 KB raw (~100-150 KB gzipped) is a good balance for a ~40 MB DB.
+const SHARD_SIZE = Math.max(64, parseInt(process.env.BACKUP_SHARD_KB, 10) || 512) * 1024;
 
 // ── GitHub Contents API backend ────────────────────────────────────────────────
 const GH_TOKEN  = process.env.BACKUP_GITHUB_TOKEN;
 const GH_REPO   = process.env.BACKUP_GITHUB_REPO;
 const GH_PATH   = process.env.BACKUP_GITHUB_PATH   || 'backups/heleon.db';
 const GH_BRANCH = process.env.BACKUP_GITHUB_BRANCH || 'main';
+const GH_SHARD_DIR = `${GH_PATH}.shards`;
+const GH_MANIFEST  = `${GH_PATH}.manifest.json`;
 
 // ── S3 backend ─────────────────────────────────────────────────────────────────
 const S3_ENDPOINT = process.env.BACKUP_S3_ENDPOINT; // e.g. https://s3.us-west-004.backblazeb2.com
@@ -74,49 +82,188 @@ function req(opts, body) {
 }
 
 // ── GitHub ──────────────────────────────────────────────────────────────────────
-function ghHeaders() {
+function ghHeaders(extra) {
   return {
     'Authorization': `Bearer ${GH_TOKEN}`,
     'Accept': 'application/vnd.github+json',
     'User-Agent': 'heleon-tracker-backup',
     'X-GitHub-Api-Version': '2022-11-28',
+    ...(extra || {}),
   };
 }
-async function ghGetSha() {
-  const r = await req({
+function ghApi(method, apiPath, bodyObj, extraHeaders) {
+  const body = bodyObj ? JSON.stringify(bodyObj) : null;
+  return req({
     hostname: 'api.github.com',
-    path: `/repos/${GH_REPO}/contents/${encodeURIComponent(GH_PATH)}?ref=${GH_BRANCH}`,
-    method: 'GET', headers: ghHeaders(),
-  });
-  if (r.status === 404) return null;
-  if (r.status !== 200) throw new Error(`github get ${r.status}: ${r.body.toString().slice(0, 120)}`);
-  return JSON.parse(r.body.toString()).sha;
-}
-async function ghRestore() {
-  const r = await req({
-    hostname: 'api.github.com',
-    path: `/repos/${GH_REPO}/contents/${encodeURIComponent(GH_PATH)}?ref=${GH_BRANCH}`,
-    method: 'GET', headers: Object.assign(ghHeaders(), { 'Accept': 'application/vnd.github.raw' }),
-  });
-  if (r.status === 404) return null;
-  if (r.status !== 200) throw new Error(`github restore ${r.status}`);
-  return r.body; // raw bytes
-}
-async function ghUpload(buf) {
-  const sha = await ghGetSha().catch(() => null);
-  const body = JSON.stringify({
-    message: `db snapshot ${new Date().toISOString()}`,
-    content: buf.toString('base64'),
-    branch: GH_BRANCH,
-    ...(sha ? { sha } : {}),
-  });
-  const r = await req({
-    hostname: 'api.github.com',
-    path: `/repos/${GH_REPO}/contents/${encodeURIComponent(GH_PATH)}`,
-    method: 'PUT',
-    headers: Object.assign(ghHeaders(), { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }),
+    path: apiPath,
+    method,
+    headers: ghHeaders({
+      ...(body ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } : {}),
+      ...(extraHeaders || {}),
+    }),
   }, body);
-  if (r.status !== 200 && r.status !== 201) throw new Error(`github put ${r.status}: ${r.body.toString().slice(0, 160)}`);
+}
+const encPath = p => p.split('/').map(encodeURIComponent).join('/');
+
+async function ghGetRaw(filePath) {
+  const r = await ghApi('GET', `/repos/${GH_REPO}/contents/${encPath(filePath)}?ref=${GH_BRANCH}`,
+    null, { 'Accept': 'application/vnd.github.raw' });
+  if (r.status === 404) return null;
+  if (r.status !== 200) throw new Error(`github get ${filePath} ${r.status}`);
+  return r.body;
+}
+// name → blob sha for every file in a repo directory ({} when the dir is absent).
+async function ghListShas(dirPath) {
+  const r = await ghApi('GET', `/repos/${GH_REPO}/contents${dirPath ? '/' + encPath(dirPath) : ''}?ref=${GH_BRANCH}`);
+  if (r.status === 404) return {};
+  if (r.status !== 200) throw new Error(`github list ${dirPath} ${r.status}`);
+  const out = {};
+  for (const f of JSON.parse(r.body.toString())) out[f.name] = f.sha;
+  return out;
+}
+async function ghPutFile(filePath, buf, sha, message) {
+  const r = await ghApi('PUT', `/repos/${GH_REPO}/contents/${encPath(filePath)}`, {
+    message, content: buf.toString('base64'), branch: GH_BRANCH, ...(sha ? { sha } : {}),
+  });
+  if (r.status !== 200 && r.status !== 201) {
+    throw new Error(`github put ${filePath} ${r.status}: ${r.body.toString().slice(0, 160)}`);
+  }
+  return JSON.parse(r.body.toString()).content.sha;
+}
+async function ghDeleteFile(filePath, sha, message) {
+  const r = await ghApi('DELETE', `/repos/${GH_REPO}/contents/${encPath(filePath)}`, {
+    message, sha, branch: GH_BRANCH,
+  });
+  if (r.status !== 200) throw new Error(`github delete ${filePath} ${r.status}`);
+}
+
+// Squash the branch to a single parentless commit so the backup repo never
+// accumulates a snapshot-per-upload history. GUARD: refuses to touch a repo
+// whose root contains anything besides the backup directory (and repo
+// boilerplate) — squashing rewrites history for the whole branch, and this
+// must never nuke a repo that also holds real code.
+async function ghSquashHistory() {
+  const rootAllow = new Set([
+    GH_PATH.split('/')[0], GH_SHARD_DIR.split('/')[0], GH_MANIFEST.split('/')[0],
+    'README.md', '.gitignore', 'LICENSE',
+  ]);
+  const rootR = await ghApi('GET', `/repos/${GH_REPO}/contents?ref=${GH_BRANCH}`);
+  if (rootR.status !== 200) throw new Error(`github root list ${rootR.status}`);
+  const entries = JSON.parse(rootR.body.toString());
+  const strangers = entries.filter(e => !rootAllow.has(e.name)).map(e => e.name);
+  if (strangers.length) {
+    console.log(`[backup] history squash skipped — repo has non-backup content (${strangers.slice(0, 5).join(', ')})`);
+    return;
+  }
+  const refR = await ghApi('GET', `/repos/${GH_REPO}/git/ref/${encodeURIComponent('heads/' + GH_BRANCH)}`);
+  if (refR.status !== 200) throw new Error(`github ref ${refR.status}`);
+  const headSha = JSON.parse(refR.body.toString()).object.sha;
+  const commitR = await ghApi('GET', `/repos/${GH_REPO}/git/commits/${headSha}`);
+  if (commitR.status !== 200) throw new Error(`github commit ${commitR.status}`);
+  const head = JSON.parse(commitR.body.toString());
+  if (!head.parents || head.parents.length === 0) return; // already a single root commit
+  const newR = await ghApi('POST', `/repos/${GH_REPO}/git/commits`, {
+    message: `db snapshot ${new Date().toISOString()} (history squashed)`,
+    tree: head.tree.sha,
+    parents: [],
+  });
+  if (newR.status !== 201) throw new Error(`github new commit ${newR.status}`);
+  const newSha = JSON.parse(newR.body.toString()).sha;
+  const patchR = await ghApi('PATCH', `/repos/${GH_REPO}/git/refs/${encodeURIComponent('heads/' + GH_BRANCH)}`, {
+    sha: newSha, force: true,
+  });
+  if (patchR.status !== 200) throw new Error(`github ref update ${patchR.status}`);
+  console.log('[backup] github history squashed to a single commit');
+}
+
+// Cached remote state so repeat snapshots in one process life only upload deltas.
+// { shas: {name→sha}, manifest: {shardSize,totalLen,hashes[]}, legacyChecked }
+let ghState = null;
+const shardName = i => `s${String(i).padStart(4, '0')}.gz`;
+const sha256 = b => crypto.createHash('sha256').update(b).digest('hex');
+
+async function ghLoadState() {
+  if (ghState) return ghState;
+  const shas = await ghListShas(GH_SHARD_DIR);
+  let manifest = null;
+  try {
+    const m = await ghGetRaw(GH_MANIFEST);
+    if (m) manifest = JSON.parse(m.toString());
+  } catch { manifest = null; }
+  ghState = { shas, manifest, legacyChecked: false };
+  return ghState;
+}
+
+async function ghUploadIncremental(buf) {
+  const st = await ghLoadState();
+  const count = Math.ceil(buf.length / SHARD_SIZE) || 1;
+  const hashes = [];
+  const changed = [];
+  for (let i = 0; i < count; i++) {
+    const raw = buf.subarray(i * SHARD_SIZE, Math.min((i + 1) * SHARD_SIZE, buf.length));
+    const h = sha256(raw);
+    hashes.push(h);
+    const prev = st.manifest && st.manifest.shardSize === SHARD_SIZE ? st.manifest.hashes[i] : undefined;
+    if (h !== prev || !st.shas[shardName(i)]) changed.push({ i, raw });
+  }
+  let sentBytes = 0;
+  for (const { i, raw } of changed) {
+    const gz = zlib.gzipSync(raw, { level: 6 });
+    const name = shardName(i);
+    st.shas[name] = await ghPutFile(`${GH_SHARD_DIR}/${name}`, gz, st.shas[name] || null, `db shard ${i}`);
+    sentBytes += gz.length;
+  }
+  // DB shrank → drop shards past the new tail so restore can't concat stale data.
+  for (const name of Object.keys(st.shas)) {
+    const idx = parseInt(name.slice(1, 5), 10);
+    if (Number.isFinite(idx) && idx >= count) {
+      try { await ghDeleteFile(`${GH_SHARD_DIR}/${name}`, st.shas[name], `drop stale shard ${idx}`); } catch {}
+      delete st.shas[name];
+    }
+  }
+  const manifest = { v: 1, shardSize: SHARD_SIZE, totalLen: buf.length, count, hashes, updatedAt: new Date().toISOString() };
+  const manifestBuf = Buffer.from(JSON.stringify(manifest));
+  if (st.manifestSha === undefined) {
+    try {
+      const dir = GH_MANIFEST.split('/').slice(0, -1).join('/');
+      st.manifestSha = (await ghListShas(dir))[GH_MANIFEST.split('/').pop()] || null;
+    } catch { st.manifestSha = null; }
+  }
+  st.manifestSha = await ghPutFile(GH_MANIFEST, manifestBuf, st.manifestSha, 'db manifest');
+  st.manifest = manifest;
+  // One-time migration: remove the legacy monolithic snapshot file.
+  if (!st.legacyChecked) {
+    st.legacyChecked = true;
+    try {
+      const dir = GH_PATH.split('/').slice(0, -1).join('/') || '.';
+      const legacySha = (await ghListShas(dir))[GH_PATH.split('/').pop()];
+      if (legacySha) await ghDeleteFile(GH_PATH, legacySha, 'remove legacy monolithic snapshot');
+    } catch {}
+  }
+  try { await ghSquashHistory(); } catch (e) { console.log(`[backup] squash skipped: ${e.message}`); }
+  return { changed: changed.length, count, sentBytes };
+}
+
+async function ghRestoreIncremental() {
+  const m = await ghGetRaw(GH_MANIFEST);
+  if (!m) return null;
+  const manifest = JSON.parse(m.toString());
+  const parts = [];
+  for (let i = 0; i < manifest.count; i++) {
+    const gz = await ghGetRaw(`${GH_SHARD_DIR}/${shardName(i)}`);
+    if (!gz) throw new Error(`shard ${i} missing`);
+    const raw = zlib.gunzipSync(gz);
+    if (sha256(raw) !== manifest.hashes[i]) throw new Error(`shard ${i} hash mismatch`);
+    parts.push(raw);
+  }
+  const buf = Buffer.concat(parts);
+  if (buf.length !== manifest.totalLen) throw new Error(`assembled ${buf.length} ≠ manifest ${manifest.totalLen}`);
+  return buf;
+}
+
+// Legacy single-file restore (pre-shard snapshots, raw or gzipped).
+async function ghRestoreLegacy() {
+  return ghGetRaw(GH_PATH);
 }
 
 // ── S3 (SigV4, single PUT/GET — no SDK) ──────────────────────────────────────────
@@ -162,8 +309,15 @@ async function restore() {
   const b = backend();
   if (!b) return null;
   try {
-    let buf = b === 's3' ? await s3Restore() : await ghRestore();
-    // Older snapshots were raw SQLite; new ones are gzipped. Auto-detect.
+    let buf = null;
+    if (b === 's3') {
+      buf = await s3Restore();
+    } else {
+      try { buf = await ghRestoreIncremental(); }
+      catch (e) { console.error(`[backup] sharded restore failed (${e.message}) — trying legacy snapshot`); }
+      if (!buf) buf = await ghRestoreLegacy();
+    }
+    // Older snapshots were raw SQLite; single-file ones may be gzipped. Auto-detect.
     if (buf && buf.length > 2 && buf[0] === GZIP_MAGIC[0] && buf[1] === GZIP_MAGIC[1]) buf = zlib.gunzipSync(buf);
     if (buf && buf.length > 0) { console.log(`[backup] restored ${Math.round(buf.length / 1024)} KB from ${b}`); return buf; }
     console.log(`[backup] no snapshot found in ${b} (fresh start)`);
@@ -177,15 +331,20 @@ async function snapshot(buf, { force = false } = {}) {
   const now = Date.now();
   if (!force && now - lastUpload < MIN_UPLOAD_MS) return;
   // Skip entirely when the DB hasn't changed since the last successful upload.
-  const hash = crypto.createHash('sha256').update(buf).digest('hex');
+  const hash = sha256(buf);
   if (hash === lastUploadHash) { lastUpload = now; return; }
   uploading = true;
   try {
-    const gz = zlib.gzipSync(buf, { level: 6 });
-    if (b === 's3') await s3Upload(gz); else await ghUpload(gz);
+    if (b === 's3') {
+      const gz = zlib.gzipSync(buf, { level: 6 });
+      await s3Upload(gz);
+      console.log(`[backup] snapshot uploaded to s3 (${Math.round(buf.length / 1024)} KB → ${Math.round(gz.length / 1024)} KB gz)`);
+    } else {
+      const r = await ghUploadIncremental(buf);
+      console.log(`[backup] incremental snapshot to github: ${r.changed}/${r.count} shards changed, ${Math.round(r.sentBytes / 1024)} KB sent`);
+    }
     lastUpload = now;
     lastUploadHash = hash;
-    console.log(`[backup] snapshot uploaded to ${b} (${Math.round(buf.length / 1024)} KB → ${Math.round(gz.length / 1024)} KB gz)`);
   } catch (e) { console.error(`[backup] snapshot failed (${b}):`, e.message); }
   finally { uploading = false; }
 }
