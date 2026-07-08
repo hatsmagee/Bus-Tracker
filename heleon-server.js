@@ -266,7 +266,10 @@ function spawnAgent(mode) {
 // cycle running on an interval so the map is continuously enriched. Skips if a
 // run is in flight or the circuit breaker is open. Publishing to main stays a
 // separate, gated step (manual button or external cron).
-const AGENT_RESEARCH_INTERVAL = Math.max(60000, parseInt(process.env.AGENT_RESEARCH_INTERVAL, 10) || 10 * 60 * 1000);
+// Default 30 min (was 10): each cycle with fresh work fetches web sources and
+// round-trips images through AI Horde — real bandwidth. Override with
+// AGENT_RESEARCH_INTERVAL (ms) to speed enrichment bursts back up.
+const AGENT_RESEARCH_INTERVAL = Math.max(60000, parseInt(process.env.AGENT_RESEARCH_INTERVAL, 10) || 30 * 60 * 1000);
 function agentAutoResearch() {
   if (!AGENT_ENABLED || agentRunInFlight) return;
   try {
@@ -2262,6 +2265,7 @@ function learnCorridor(routeId) {
 const stoplineMemo = new Map();
 
 // ─── HTTP SERVER ──────────────────────────────────────────────────────────────
+const crypto = require('crypto');
 const MIME = { '.html':'text/html', '.js':'application/javascript', '.css':'text/css', '.ico':'image/x-icon', '.svg':'image/svg+xml', '.png':'image/png', '.json':'application/json' };
 
 // gzip when the client advertises support and the payload is big enough to be
@@ -2272,6 +2276,23 @@ function acceptsGzip(res) {
   return /\bgzip\b/.test(ae);
 }
 function endMaybeGzip(res, status, headers, buf) {
+  // Conditional GET: hash the exact body and answer 304 when the client already
+  // has it. The dashboard polls many endpoints on timers; unchanged payloads
+  // (places, heritage, infrastructure, stops…) now cost ~200 bytes instead of
+  // a full body. Endpoints whose body embeds a fresh timestamp simply never
+  // match — correct, just not cheaper.
+  if (status === 200 && buf.length >= GZIP_MIN) {
+    const etag = `W/"${crypto.createHash('sha1').update(buf).digest('base64').slice(0, 20)}"`;
+    // no-cache = store but always revalidate → browser sends If-None-Match on
+    // the next poll and we answer 304 when nothing changed.
+    headers = { ...headers, 'ETag': etag, 'Cache-Control': 'no-cache' };
+    const inm = res.req && res.req.headers && res.req.headers['if-none-match'];
+    if (inm && inm === etag) {
+      res.writeHead(304, { 'ETag': etag, 'Access-Control-Allow-Origin': '*' });
+      res.end();
+      return;
+    }
+  }
   if (buf.length >= GZIP_MIN && acceptsGzip(res)) {
     zlib.gzip(buf, (err, gz) => {
       if (err) { res.writeHead(status, headers); res.end(buf); return; }
@@ -6849,7 +6870,12 @@ const server = http.createServer((req, res) => {
   }, 20 * 1000);
   pollRepeaters();
   pollMobility();
-  setInterval(pollMobility, 60 * 1000);
+  // Bikeshare updates every minute for viewers; every 10 min unattended.
+  let mobilityIdleSkip = 0;
+  setInterval(() => {
+    if (!clientsActive() && (++mobilityIdleSkip % 10) !== 0) return;
+    pollMobility();
+  }, 60 * 1000);
   // Meshtastic node list is ~30 MB — kick off in background (disk cache serves until ready).
   pollMeshtastic();
   connectAprs();
