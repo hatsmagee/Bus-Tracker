@@ -148,6 +148,14 @@
     @media (max-width: 360px) {
       .tab { font-size: 10px; padding: 10px 2px; }
     }
+    .tabs {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      flex-wrap: nowrap;
+    }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab { flex: 0 0 auto; min-width: 68px; padding: 10px 12px; white-space: nowrap; }
   }
 
   /* ─── GOLDEN PATH ARROWS (animated dashed line ahead of each bus) ── */
@@ -687,68 +695,182 @@
   .route-toggle::after { content:''; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:#fff; transition:left .2s; }
   .route-toggle.on::after { left:14px; }
 
-  /* ── Island sub-tabs (Buses / Fleet / Routes) ── */
-  .island-tabs {
-    display: flex;
-    gap: 4px;
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    background: linear-gradient(180deg, rgba(22,27,34,.95) 0%, rgba(13,17,23,.6) 100%);
+  /* ── Island slider (Buses / Fleet / Routes) ── */
+  .island-slider-wrap {
     flex-shrink: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(22,27,34,.97) 0%, rgba(13,17,23,.75) 100%);
   }
-  .island-tabs::-webkit-scrollbar { display: none; }
+  .island-slider-wrap.hidden { display: none; }
+  .island-slider {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    padding: 6px 4px 4px;
+    position: relative;
+  }
+  .island-slider-viewport {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+  }
+  .island-slider-viewport::-webkit-scrollbar { display: none; }
+  .island-slider-track {
+    display: flex;
+    gap: 8px;
+    padding: 2px 10px 6px;
+    width: max-content;
+    min-width: 100%;
+  }
+  .island-slider-btn {
+    flex-shrink: 0;
+    width: 28px;
+    align-self: center;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel2);
+    color: var(--muted);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color .15s, border-color .15s, background .15s;
+    user-select: none;
+    padding: 0;
+  }
+  .island-slider-btn:hover:not(:disabled) {
+    color: var(--fg);
+    border-color: var(--accent);
+    background: rgba(31,111,235,.12);
+  }
+  .island-slider-btn:disabled { opacity: .25; cursor: default; }
   .island-tab {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
-    padding: 6px 12px;
-    border-radius: 20px;
+    padding: 8px 14px;
+    border-radius: 12px;
     font-size: 11px;
     font-weight: 600;
     color: var(--muted);
-    background: transparent;
-    border: 1px solid transparent;
+    background: var(--panel2);
+    border: 1px solid var(--border);
     cursor: pointer;
     white-space: nowrap;
     transition: all .2s ease;
     user-select: none;
+    flex-shrink: 0;
+    scroll-snap-align: center;
+    min-width: 118px;
+    touch-action: manipulation;
   }
-  .island-tab:hover {
+  .island-tab:hover:not(.unavailable) {
     color: var(--fg);
-    background: var(--panel2);
-    border-color: var(--border);
+    border-color: rgba(56,139,253,.35);
   }
   .island-tab.active {
     color: #fff;
-    background: linear-gradient(135deg, rgba(31,111,235,.35) 0%, rgba(56,139,253,.15) 100%);
-    border-color: rgba(56,139,253,.45);
-    box-shadow: 0 0 12px rgba(31,111,235,.15);
+    background: linear-gradient(135deg, rgba(31,111,235,.45) 0%, rgba(56,139,253,.2) 100%);
+    border-color: rgba(56,139,253,.55);
+    box-shadow: 0 2px 14px rgba(31,111,235,.2);
   }
-  .island-tab .island-emoji { font-size: 14px; line-height: 1; }
+  .island-tab.unavailable {
+    opacity: .45;
+    cursor: not-allowed;
+    border-style: dashed;
+  }
+  .island-tab .island-emoji { font-size: 16px; line-height: 1; }
+  .island-tab .island-label { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+  .island-tab .island-name { font-size: 11px; font-weight: 700; line-height: 1.2; }
+  .island-tab .island-agency { font-size: 9px; font-weight: 500; color: var(--muted); max-width: 88px; overflow: hidden; text-overflow: ellipsis; }
+  .island-tab.active .island-agency { color: rgba(255,255,255,.65); }
   .island-tab .island-count {
-    font-size: 9px;
-    font-weight: 700;
-    padding: 1px 5px;
-    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 10px;
     background: rgba(255,255,255,.08);
     color: var(--muted);
+    margin-left: auto;
   }
   .island-tab.active .island-count {
-    background: rgba(56,139,253,.25);
-    color: #79c0ff;
+    background: rgba(56,139,253,.35);
+    color: #cfe3ff;
   }
+  .island-slider-dots {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 12px 6px;
+  }
+  .island-slider-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--border);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: transform .2s, background .2s;
+  }
+  .island-slider-dot.active {
+    background: var(--accent);
+    transform: scale(1.25);
+  }
+  .island-slider-dot:disabled { opacity: .35; cursor: not-allowed; }
   .island-tab-note {
-    padding: 5px 12px 8px;
+    padding: 0 12px 8px;
     font-size: 10px;
     color: var(--muted);
     line-height: 1.45;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
   }
   .island-tab-note a { color: #58a6ff; text-decoration: none; }
   .island-tab-note a:hover { text-decoration: underline; }
+
+  @media (max-width: 768px) {
+    .island-slider { padding: 8px 2px 4px; }
+    .island-slider-btn {
+      width: 36px;
+      min-height: 44px;
+      font-size: 22px;
+      border-radius: 10px;
+    }
+    .island-slider-viewport {
+      mask-image: linear-gradient(90deg, transparent 0, #000 4px, #000 calc(100% - 4px), transparent 100%);
+    }
+    .island-slider-track {
+      gap: 10px;
+      padding: 2px 8px 8px;
+    }
+    .island-tab {
+      min-width: calc(100vw - 108px);
+      max-width: calc(100vw - 108px);
+      padding: 10px 16px;
+      font-size: 12px;
+      border-radius: 14px;
+    }
+    .island-tab .island-emoji { font-size: 20px; }
+    .island-tab .island-name { font-size: 13px; }
+    .island-tab .island-agency { font-size: 10px; max-width: 140px; }
+    .island-tab .island-count { font-size: 11px; padding: 3px 8px; }
+    .island-slider-dots { padding-bottom: 8px; }
+    .island-slider-dot {
+      width: 8px;
+      height: 8px;
+    }
+  }
+  @media (min-width: 769px) and (max-width: 420px) {
+    .island-tab { min-width: 100px; }
+  }
 
   .api-section { padding:12px; display:flex; flex-direction:column; gap:8px; }
   .api-row { background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
@@ -869,9 +991,19 @@
       <div class="tab" data-tab="docs">📚 Docs</div>
     </div>
 
+    <div class="island-slider-wrap" id="islandSliderWrap">
+      <div class="island-slider">
+        <button type="button" class="island-slider-btn prev" id="islandSliderPrev" aria-label="Previous island">‹</button>
+        <div class="island-slider-viewport" id="islandSliderViewport">
+          <div class="island-slider-track" id="islandSliderTrack"></div>
+        </div>
+        <button type="button" class="island-slider-btn next" id="islandSliderNext" aria-label="Next island">›</button>
+      </div>
+      <div class="island-slider-dots" id="islandSliderDots"></div>
+      <div class="island-tab-note" id="islandNote"></div>
+    </div>
+
     <div class="tab-content active" id="tab-vehicles">
-      <div class="island-tabs" id="islandTabsVehicles"></div>
-      <div class="island-tab-note" id="islandNoteVehicles"></div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--border);">
         <label><input type="checkbox" id="showHibike" onchange="toggleHibike()" checked> Bikeshare docks (HIBIKE + Biki)</label>
         <span class="vessel-status" id="hibikeStatus"></span>
@@ -887,8 +1019,6 @@
     </div>
 
     <div class="tab-content" id="tab-fleet">
-      <div class="island-tabs" id="islandTabsFleet"></div>
-      <div class="island-tab-note" id="islandNoteFleet"></div>
       <div id="fleetSummary" class="fleet-summary"></div>
       <div id="fleetTableWrap" style="overflow:auto;flex:1;">
         <div class="empty"><div class="empty-icon">🚍</div>Loading fleet…</div>
@@ -896,8 +1026,6 @@
     </div>
 
     <div class="tab-content" id="tab-routes">
-      <div class="island-tabs" id="islandTabsRoutes"></div>
-      <div class="island-tab-note" id="islandNoteRoutes"></div>
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
         <label>Trail history:</label>
         <select id="trailMinutes" onchange="onTrailMinutesChange()">
@@ -1260,41 +1388,110 @@ function islandApiUrl(path) {
 }
 
 function currentIslandDef() {
-  return ISLAND_CATALOG.find(i => i.id === activeIsland) || ISLAND_CATALOG[0] || null;
+  return ISLAND_CATALOG.find(i => i.id === activeIsland) || ISLAND_CATALOG.find(i => i.available !== false) || ISLAND_CATALOG[0] || null;
+}
+
+const ISLAND_TABS = new Set(['vehicles', 'fleet', 'routes']);
+
+function updateIslandSliderVisibility() {
+  const wrap = document.getElementById('islandSliderWrap');
+  if (wrap) wrap.classList.toggle('hidden', !ISLAND_TABS.has(activeTab));
+}
+
+function islandTabHtml(isl) {
+  const st = islandStatus[isl.id] || {};
+  const unavailable = isl.available === false;
+  const n = unavailable ? '—' : (st.vehicles != null ? st.vehicles : '—');
+  const countLabel = unavailable ? '🔒' : n;
+  const agency = isl.agency || isl.name || '';
+  const tip = unavailable ? (isl.reason || 'Not available') : agency;
+  return `<button type="button" class="island-tab${activeIsland === isl.id ? ' active' : ''}${unavailable ? ' unavailable' : ''}"
+    data-island="${isl.id}" ${unavailable ? 'disabled' : ''} title="${escapeHtml(tip)}">
+    <span class="island-emoji">${isl.emoji || '🏝️'}</span>
+    <span class="island-label">
+      <span class="island-name">${isl.short || isl.name}</span>
+      <span class="island-agency">${unavailable ? (isl.reason || 'No public API') : agency}</span>
+    </span>
+    <span class="island-count" title="${unavailable ? 'Unavailable' : 'Buses tracked'}">${countLabel}</span>
+  </button>`;
+}
+
+function scrollActiveIslandIntoView(smooth) {
+  const viewport = document.getElementById('islandSliderViewport');
+  const active = document.querySelector('#islandSliderTrack .island-tab.active');
+  if (!viewport || !active) return;
+  const left = active.offsetLeft - (viewport.clientWidth - active.offsetWidth) / 2;
+  viewport.scrollTo({ left: Math.max(0, left), behavior: smooth ? 'smooth' : 'auto' });
+}
+
+function updateIslandSliderButtons() {
+  const viewport = document.getElementById('islandSliderViewport');
+  const prev = document.getElementById('islandSliderPrev');
+  const next = document.getElementById('islandSliderNext');
+  if (!viewport || !prev || !next) return;
+  const max = viewport.scrollWidth - viewport.clientWidth;
+  prev.disabled = viewport.scrollLeft <= 2;
+  next.disabled = viewport.scrollLeft >= max - 2;
+}
+
+function wireIslandSlider() {
+  const viewport = document.getElementById('islandSliderViewport');
+  const prev = document.getElementById('islandSliderPrev');
+  const next = document.getElementById('islandSliderNext');
+  if (!viewport || viewport._wired) return;
+  viewport._wired = true;
+  viewport.addEventListener('scroll', () => updateIslandSliderButtons(), { passive: true });
+  if (prev) prev.onclick = () => {
+    const step = Math.max(viewport.clientWidth * 0.75, 120);
+    viewport.scrollBy({ left: -step, behavior: 'smooth' });
+  };
+  if (next) next.onclick = () => {
+    const step = Math.max(viewport.clientWidth * 0.75, 120);
+    viewport.scrollBy({ left: step, behavior: 'smooth' });
+  };
+  window.addEventListener('resize', () => { updateIslandSliderButtons(); scrollActiveIslandIntoView(false); });
 }
 
 function renderIslandSubTabs() {
-  const groups = [
-    { el: 'islandTabsVehicles', note: 'islandNoteVehicles' },
-    { el: 'islandTabsFleet', note: 'islandNoteFleet' },
-    { el: 'islandTabsRoutes', note: 'islandNoteRoutes' },
-  ];
-  for (const g of groups) {
-    const tabsEl = document.getElementById(g.el);
-    const noteEl = document.getElementById(g.note);
-    if (!tabsEl) continue;
-    tabsEl.innerHTML = ISLAND_CATALOG.map(isl => {
-      const st = islandStatus[isl.id] || {};
-      const n = st.vehicles != null ? st.vehicles : '—';
-      const live = st.vehicles > 0;
-      return `<div class="island-tab${activeIsland === isl.id ? ' active' : ''}" data-island="${isl.id}" onclick="switchIsland('${isl.id}')">
-        <span class="island-emoji">${isl.emoji || '🏝️'}</span>
-        <span>${isl.short || isl.name}</span>
-        <span class="island-count" title="Live buses">${n}</span>
-      </div>`;
-    }).join('');
-    if (noteEl) {
-      const cur = currentIslandDef();
-      if (!cur) { noteEl.innerHTML = ''; continue; }
+  const track = document.getElementById('islandSliderTrack');
+  const dotsEl = document.getElementById('islandSliderDots');
+  const noteEl = document.getElementById('islandNote');
+  if (!track) return;
+  wireIslandSlider();
+  track.innerHTML = ISLAND_CATALOG.map(islandTabHtml).join('');
+  track.querySelectorAll('.island-tab:not(.unavailable)').forEach(btn => {
+    btn.onclick = () => switchIsland(btn.dataset.island);
+  });
+  if (dotsEl) {
+    dotsEl.innerHTML = ISLAND_CATALOG.map(isl =>
+      `<button type="button" class="island-slider-dot${activeIsland === isl.id ? ' active' : ''}"
+        aria-label="${escapeHtml(isl.short || isl.name)}"
+        ${isl.available === false ? 'disabled' : ''}
+        data-island="${isl.id}"></button>`
+    ).join('');
+    dotsEl.querySelectorAll('.island-slider-dot:not([disabled])').forEach(dot => {
+      dot.onclick = () => switchIsland(dot.dataset.island);
+    });
+  }
+  if (noteEl) {
+    const cur = currentIslandDef();
+    if (!cur) { noteEl.innerHTML = ''; }
+    else {
       const st = islandStatus[cur.id] || {};
       const apiHost = cur.host || '';
       const agency = cur.agency || cur.name;
       const extra = cur.id === 'big-island'
         ? `Road-snapped routes, transformer ETAs, and full fleet history. <a href="https://www.hawaiiislandbike.com/" target="_blank">HIBIKE</a> + <a href="https://gobiki.org/" target="_blank">Biki</a> bikeshare on the map.`
-        : `Keyless Syncromatics GTFS-RT + RTPI from <a href="https://${apiHost}/" target="_blank">${apiHost}</a>. ${st.routes || '—'} routes · ${st.shapes || '—'} patterns.`;
-      noteEl.innerHTML = `<strong>${agency}</strong> — ${extra} TheBus (Oʻahu) requires a registered AppID — not included.`;
+        : cur.available === false
+          ? (cur.reason || 'No keyless public feed.')
+          : `Keyless Syncromatics GTFS-RT + RTPI from <a href="https://${apiHost}/" target="_blank">${apiHost}</a>. ${st.routes || '—'} routes · ${st.shapes || '—'} patterns.`;
+      noteEl.innerHTML = `<strong>${agency}</strong> — ${extra}`;
     }
   }
+  requestAnimationFrame(() => {
+    scrollActiveIslandIntoView(false);
+    updateIslandSliderButtons();
+  });
 }
 
 function flyToIsland(isl) {
@@ -1303,7 +1500,8 @@ function flyToIsland(isl) {
 }
 
 async function switchIsland(id) {
-  if (id === activeIsland) return;
+  const target = ISLAND_CATALOG.find(i => i.id === id);
+  if (!target || target.available === false || id === activeIsland) return;
   activeIsland = id;
   Object.keys(markers).forEach(k => { markers[k].marker.remove(); delete markers[k]; });
   renderIslandSubTabs();
@@ -1331,6 +1529,7 @@ async function fetchIslands() {
       activeIsland = ISLAND_CATALOG[0].id;
     }
     renderIslandSubTabs();
+    updateIslandSliderVisibility();
   } catch (e) { console.error('[fetchIslands]', e); }
 }
 
@@ -9810,6 +10009,7 @@ function switchTab(name) {
   activeTab = name;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.id === `tab-${name}`));
+  updateIslandSliderVisibility();
   if (name === 'system') { fetchApiStats(); pollLearn(); }
   if (name === 'agent') { refreshAgentPanel(); refreshAgentLog(); refreshAgentWork(); refreshAgentRobot(); }
   if (name === 'fleet') fetchFleet();

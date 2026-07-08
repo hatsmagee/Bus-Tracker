@@ -470,6 +470,7 @@ const BIG_ISLAND_DEF = {
   host: 'myheleonbus.org',
   agency: 'Hele-On Bus',
   url: 'https://www.myheleonbus.org/',
+  available: true,
   bbox: { minLat: 18.8, maxLat: 20.4, minLon: -156.2, maxLon: -154.7 },
   mapCenter: [-155.0608, 19.7063],
   mapZoom: 10,
@@ -482,6 +483,44 @@ const BIG_ISLAND_DEF = {
     alerts: '/gtfs-rt/alerts',
   },
 };
+
+// No keyless live feed — shown in the island slider as unavailable (AppID / no API).
+const UNAVAILABLE_ISLANDS = [
+  {
+    id: 'oahu',
+    name: 'Oʻahu',
+    short: 'Oʻahu',
+    emoji: '🏙️',
+    agency: 'TheBus',
+    url: 'https://www.thebus.org/',
+    available: false,
+    reason: 'AppID required',
+    mapCenter: [-157.8583, 21.3099],
+    mapZoom: 10,
+  },
+  {
+    id: 'molokai',
+    name: 'Molokaʻi',
+    short: 'Molokaʻi',
+    emoji: '🌊',
+    agency: 'MEO Bus',
+    available: false,
+    reason: 'No public API',
+    mapCenter: [-157.02, 21.14],
+    mapZoom: 10,
+  },
+  {
+    id: 'lanai',
+    name: 'Lānaʻi',
+    short: 'Lānaʻi',
+    emoji: '🏖️',
+    agency: 'County shuttle',
+    available: false,
+    reason: 'No public API',
+    mapCenter: [-156.92, 20.83],
+    mapZoom: 11,
+  },
+];
 
 function createIslandManager() {
   const pollers = {};
@@ -500,11 +539,13 @@ function createIslandManager() {
         host: d.host,
         agency: d.agency,
         url: d.url,
+        available: true,
         bbox: d.bbox,
         mapCenter: d.mapCenter,
         mapZoom: d.mapZoom,
         api: d.api,
       })),
+      ...UNAVAILABLE_ISLANDS,
     ];
   }
 
