@@ -6691,11 +6691,17 @@ function hawaiiItemSummary(catId, item) {
 function renderHawaiiBrowser() {
   const el = document.getElementById('hawaiiBrowser');
   if (!el) return;
+  // PERF: this list holds thousands of agent-published items. Never materialize
+  // DOM for what can't be seen — skip entirely when the tab is hidden, and
+  // render items only for categories the user has opened. Closed categories
+  // are a header + live count. This keeps the page at O(open items), not
+  // O(total catalog), no matter how much content the agent publishes.
+  if (activeTab !== 'hawaii') { el.innerHTML = ''; return; }
   const cats = hawaiiCategories();
   el.innerHTML = cats.map(cat => {
     const open = hawaiiBrowse.openCats.has(cat.id);
     const items = cat.items || [];
-    const itemHtml = items.length ? items.map((item, idx) => {
+    const itemHtml = !open ? '' : items.length ? items.map((item, idx) => {
       const id = String(item.id ?? item.nodeId ?? item.callsign ?? item.icao ?? item.site_no ?? item.name ?? idx);
       const key = `${cat.id}:${id}`;
       const openItem = hawaiiBrowse.openItems.has(key);
@@ -6726,8 +6732,15 @@ function renderHawaiiBrowser() {
   wireRepeaterStreamControls(el);
 }
 
+// Debounced: dozens of fetchers call this as their polls resolve (many land in
+// the same tick at boot). Coalesce to at most one rebuild per 250 ms.
+let _hawaiiRefreshTimer = null;
 function hawaiiBrowseRefresh() {
-  if (activeTab === 'hawaii') renderHawaiiBrowser();
+  if (activeTab !== 'hawaii' || _hawaiiRefreshTimer) return;
+  _hawaiiRefreshTimer = setTimeout(() => {
+    _hawaiiRefreshTimer = null;
+    if (activeTab === 'hawaii') renderHawaiiBrowser();
+  }, 250);
 }
 
 // ─── LIVE RADIO STREAMS ─────────────────────────────────────────────────────

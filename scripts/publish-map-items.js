@@ -28,6 +28,12 @@ async function runPrePushGate() {
   const smoke = await runSmoke({ minItems: 0 });
   if (!smoke.ok) return { ok: false, error: 'smoke test failed', detail: (smoke.errors || []).join('; ') };
 
+  // Performance budgets: content volume, timer count, layer count. A breach
+  // blocks publish exactly like a failing test — the page must stay fast no
+  // matter how much the agent adds.
+  const perf = require('./perf-budget').checkPerfBudget();
+  if (!perf.ok) return { ok: false, error: 'performance budget exceeded', detail: perf.errors.join('; ') };
+
   const boot = await checkServerBoot();
   if (!boot.ok) return { ok: false, error: 'server boot check failed', detail: boot.error };
 
