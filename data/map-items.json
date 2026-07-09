@@ -6068,6 +6068,359 @@
         "reviewed": false
       },
       "status": "ok"
+    },
+    "heritage:puukohola-heiau": {
+      "title": "Puʻukoholā Heiau",
+      "summary": "Puʻukoholā Heiau National Historic Site is a United States National Historic Site located on the northwestern coast of the island of Hawaiʻi.",
+      "history": [
+        {
+          "year": 1782,
+          "text": "Kamehameha I took control of western and northern Hawaiʻi island (the Kona and Kohala districts) in 1782, but for the eight years following, fought in a number of inconclusive battles.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBukohol%C4%81_Heiau_National_Historic_Site"
+        },
+        {
+          "year": 1790,
+          "text": "After returning from Maui in 1790, he was attacked by his cousin Keōua Kuahuʻula who still controlled the East side of the island.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBukohol%C4%81_Heiau_National_Historic_Site"
+        },
+        {
+          "year": 1791,
+          "text": "In the summer of 1791, the massive temple was finished, measuring about 224 by 100 feet.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBukohol%C4%81_Heiau_National_Historic_Site"
+        },
+        {
+          "year": 1794,
+          "text": "The campaign to unite all the islands continued with Maui in 1794, and Oʻahu in 1795 at the Battle of Nuʻuanu.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBukohol%C4%81_Heiau_National_Historic_Site"
+        },
+        {
+          "year": 1810,
+          "text": "The unification was completed when the king of the island of Kauaʻi became a vassal to Kamehameha I, in 1810 making the latter the first king of a unified Hawai'i.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBukohol%C4%81_Heiau_National_Historic_Site"
+        },
+        {
+          "year": 1991,
+          "text": "On the 200th anniversary in 1991, a healing ceremony was held here by descendants of some of those who took part in the assassination. .",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBukohol%C4%81_Heiau_National_Historic_Site"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Pu%27ukohola_Heiau_temple2.jpg/330px-Pu%27ukohola_Heiau_temple2.jpg",
+          "credit": "Wikipedia — Puʻukoholā Heiau National Historic Site (CC/PD)",
+          "caption": "Puʻukoholā Heiau National Historic Site",
+          "alt": "an image of a grassy hillside with rocks and grass in the foreground and a sky background"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Pu%CA%BBukohol%C4%81_Heiau_National_Historic_Site"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Pu%CA%BBukohol%C4%81_Heiau_National_Historic_Site"
+        ],
+        "resolvedTitle": "Puʻukoholā Heiau National Historic Site",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Pu%27ukohola_Heiau_temple2.jpg/330px-Pu%27ukohola_Heiau_temple2.jpg",
+            "caption": "an image of a grassy hillside with rocks and grass in the foreground and a sky background",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-09T20:55:59.441Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-09T20:55:59.441Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-09T20:55:59.441Z"
+      }
+    },
+    "heritage:mookini-heiau": {
+      "title": "Moʻokini Heiau",
+      "summary": "A heiau ( HAY-ow, Hawaiian: [hejˈjɐw]) is a Hawaiian temple. Made in different architectural styles depending upon their purpose and location, they range from simple earth terraces, to elaborately constructed stone platforms.",
+      "history": [
+        {
+          "year": 1819,
+          "text": "After the official end of Hawaiian religion in 1819 and with later pressure from Christian missionaries (who first arrived in 1820), many were deliberately destroyed, while others were left into disrepair.",
+          "source": "https://en.wikipedia.org/wiki/Heiau"
+        },
+        {
+          "year": 1820,
+          "text": "Missionaries arrived in 1820, and most of the aliʻi converted to Christianity, including Kaʻahumanu and Keōpūolani.",
+          "source": "https://en.wikipedia.org/wiki/Heiau"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Hale-o-pi-ilani-heiau.jpg/330px-Hale-o-pi-ilani-heiau.jpg",
+          "credit": "Wikipedia — Heiau (CC/PD)",
+          "caption": "Heiau",
+          "alt": "a sketched map of the ancient roman city of corinumumna in italy"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Heiau"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Heiau"
+        ],
+        "resolvedTitle": "Heiau",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Hale-o-pi-ilani-heiau.jpg/330px-Hale-o-pi-ilani-heiau.jpg",
+            "caption": "a sketched map of the ancient roman city of corinumumna in italy",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-09T20:56:08.932Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-09T20:56:08.932Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-history",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-09T20:56:08.932Z"
+      }
+    },
+    "heritage:puuhonua-o-honaunau-city-of-refuge": {
+      "title": "Puʻuhonua o Hōnaunau (City of Refuge)",
+      "summary": "Puʻuhonua o Hōnaunau National Historical Park is a United States National Historical Park located on the west coast of the island of Hawaiʻi in the U.S. state of Hawaii.",
+      "history": [
+        {
+          "year": 1818,
+          "text": "The last person buried here was a son of Kamehameha I in 1818.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBuhonua_o_H%C5%8Dnaunau_National_Historical_Park"
+        },
+        {
+          "year": 1825,
+          "text": "It was looted by Lord George Byron (cousin of the distinguished English poet) in 1825.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBuhonua_o_H%C5%8Dnaunau_National_Historical_Park"
+        },
+        {
+          "year": 1829,
+          "text": "In 1829, High Chiefess Kapiʻolani removed the remaining bones and hid them in the Pali Kapu O Keōua cliffs above nearby Kealakekua Bay.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBuhonua_o_H%C5%8Dnaunau_National_Historical_Park"
+        },
+        {
+          "year": 1858,
+          "text": "The bones were later moved to the Royal Mausoleum of Hawaii in 1858.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBuhonua_o_H%C5%8Dnaunau_National_Historical_Park"
+        },
+        {
+          "year": 1955,
+          "text": "The 420 acre (1.7 km2) site was originally established in 1955 as City of Refuge National Historical Park and was renamed on November 10, 1978.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBuhonua_o_H%C5%8Dnaunau_National_Historical_Park"
+        },
+        {
+          "year": 2000,
+          "text": "In 2000 the name was changed by the Hawaiian National Park Language Correction Act of 2000, observing the Hawaiian spelling.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBuhonua_o_H%C5%8Dnaunau_National_Historical_Park"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Pu%CA%BBuhonua_o_H%C5%8Dnaunau.jpg/330px-Pu%CA%BBuhonua_o_H%C5%8Dnaunau.jpg",
+          "credit": "Wikipedia — Puʻuhonua o Hōnaunau National Historical Park (CC/PD)",
+          "caption": "Puʻuhonua o Hōnaunau National Historical Park",
+          "alt": "a beach with a hut and palm trees in the background, tulum, tulum, tulum, tulum, tulum, tu"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Pu%CA%BBuhonua_o_H%C5%8Dnaunau_National_Historical_Park"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Pu%CA%BBuhonua_o_H%C5%8Dnaunau_National_Historical_Park"
+        ],
+        "resolvedTitle": "Puʻuhonua o Hōnaunau National Historical Park",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Pu%CA%BBuhonua_o_H%C5%8Dnaunau.jpg/330px-Pu%CA%BBuhonua_o_H%C5%8Dnaunau.jpg",
+            "caption": "a beach with a hut and palm trees in the background, tulum, tulum, tulum, tulum, tulum, tu",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-09T21:25:02.190Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-09T21:25:02.190Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-09T21:25:02.190Z"
+      }
+    },
+    "heritage:ahuena-heiau": {
+      "title": "Ahuʻena Heiau",
+      "summary": "A heiau ( HAY-ow, Hawaiian: [hejˈjɐw]) is a Hawaiian temple. Made in different architectural styles depending upon their purpose and location, they range from simple earth terraces, to elaborately constructed stone platforms.",
+      "history": [
+        {
+          "year": 1819,
+          "text": "After the official end of Hawaiian religion in 1819 and with later pressure from Christian missionaries (who first arrived in 1820), many were deliberately destroyed, while others were left into disrepair.",
+          "source": "https://en.wikipedia.org/wiki/Heiau"
+        },
+        {
+          "year": 1820,
+          "text": "Missionaries arrived in 1820, and most of the aliʻi converted to Christianity, including Kaʻahumanu and Keōpūolani.",
+          "source": "https://en.wikipedia.org/wiki/Heiau"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Hale-o-pi-ilani-heiau.jpg/330px-Hale-o-pi-ilani-heiau.jpg",
+          "credit": "Wikipedia — Heiau (CC/PD)",
+          "caption": "Heiau",
+          "alt": "this is an overview map of the site in use in this drawing from the book"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Heiau"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Heiau"
+        ],
+        "resolvedTitle": "Heiau",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Hale-o-pi-ilani-heiau.jpg/330px-Hale-o-pi-ilani-heiau.jpg",
+            "caption": "this is an overview map of the site in use in this drawing from the book",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-09T21:27:29.563Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-09T21:27:29.563Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-history",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-09T21:27:29.563Z"
+      }
+    },
+    "heritage:hikiau-heiau": {
+      "title": "Hikiau Heiau",
+      "summary": "Kealakekua Bay is located on the Kona coast of the island of Hawaiʻi about 12 miles (19 km) south of Kailua-Kona.",
+      "history": [
+        {
+          "year": 1779,
+          "text": "He and his crews on the Resolution and Discovery sighted Kealakekua Bay on the morning of January 17, 1779.",
+          "source": "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        },
+        {
+          "year": 1782,
+          "text": "When Kalaniʻōpuʻu died in 1782, his oldest son Kīwalaʻō officially inherited the kingdom, but his nephew Kamehameha I became guardian of the god Kūkaʻilimoku.",
+          "source": "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        },
+        {
+          "year": 1786,
+          "text": "In 1786, merchant ships of the King George's Sound Company under command of the maritime fur traders Nathaniel Portlock and Captain George Dixon anchored in the harbor, but avoided coming ashore.",
+          "source": "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        },
+        {
+          "year": 1788,
+          "text": "In December 1788, the Iphigenia under William Douglas arrived with Chief Kaʻiana, who had already traveled to China.",
+          "source": "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        },
+        {
+          "year": 1790,
+          "text": "Two sailors, Parson Howel and James Boyd, left the ship (in 1790 or when it returned in 1793) and lived on the island.",
+          "source": "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        },
+        {
+          "year": 1973,
+          "text": "It was listed in the National Register of Historic Places listings on the island of Hawaiʻi in 1973 as the Kealakekua Bay Historical District.",
+          "source": "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Kealakekua_Bay_in_the_morning.jpg/330px-Kealakekua_Bay_in_the_morning.jpg",
+          "credit": "Wikipedia — Kealakekua Bay (CC/PD)",
+          "caption": "Kealakekua Bay",
+          "alt": "a rocky shore with blue waters and clear sky and white clouds over the mountains and rocks"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        ],
+        "resolvedTitle": "Kealakekua Bay",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Kealakekua_Bay_in_the_morning.jpg/330px-Kealakekua_Bay_in_the_morning.jpg",
+            "caption": "a rocky shore with blue waters and clear sky and white clouds over the mountains and rocks",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-09T21:28:04.046Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-09T21:28:04.046Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-09T21:28:04.046Z"
+      }
     }
   }
 }
