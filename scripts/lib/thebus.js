@@ -446,56 +446,65 @@ function createTheBusPoller(opts = {}) {
     console.log(`[thebus] GTFS loaded: ${state.routes.length} routes, ${state.stops.length} stops, ${state.gtfsMeta.shapes} shapes → ${shapes.length} patterns`);
   }
 
-  function normalizeVehicle(raw, ts) {
-    const id = String(raw.number);
-    const lat = parseFloat(raw.latitude);
-    const lon = parseFloat(raw.longitude);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    if (!inBbox(lat, lon, OAHU_DEF.bbox)) return null;
-    const luMs = parseOahuTs(raw.last_message) || ts;
-    if ((ts - luMs) > VEHICLE_RETAIN_MS) return null;
-    const routeShort = raw.route_short_name || null;
-    const route = routeShort ? state.routeMap[routeShort] : null;
-    const adherence = raw.adherence != null && raw.adherence !== '' ? parseInt(raw.adherence, 10) : null;
-    const ageMin = (() => {
-      let a = (ts - luMs) / 60000;
-      if (a < 0) a = a > -180 ? 0 : a;
-      return Math.round(a * 10) / 10;
-    })();
-    return {
-      id,
-      island: 'oahu',
-      name: id,
-      lat,
-      lon,
-      speed: null,
-      headingDegrees: null,
-      heading: null,
-      passengerLoad: null,
-      capacity: null,
-      shapeDistanceTraveled: null,
-      patternId: null,
-      tripId: raw.trip || null,
-      headsign: raw.headsign || null,
-      direction: null,
-      shapeId: null,
-      vehicleTs: luMs,
-      ageMin,
-      stale: (ts - luMs) > VEHICLE_STALE_MS && (ts - luMs) > 0,
-      lastUpdated: new Date(luMs).toISOString(),
-      lastMessage: raw.last_message || null,
-      routeId: routeShort,
-      unassigned: !routeShort,
-      routeName: route ? route.name : (routeShort ? `Route ${routeShort}` : 'Not in service'),
-      routeShort: routeShort || '—',
-      routeColor: route ? route.color : '#8b949e',
-      adherence: Number.isFinite(adherence) ? adherence : null,
-      occupancyStatus: null,
-      gtfsCurrentStatus: null,
-      congestionLevel: null,
-      attribution: ATTRIBUTION,
-    };
-  }
+  function cleanStr(v) {
+  if (v == null) return null;
+  const s = String(v).trim();
+  if (!s || s === 'null' || s === 'undefined' || s === 'None' || s === '???') return null;
+  return s;
+}
+
+function normalizeVehicle(raw, ts) {
+  const id = cleanStr(raw.number);
+  if (!id) return null;
+  const lat = parseFloat(raw.latitude);
+  const lon = parseFloat(raw.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (!inBbox(lat, lon, OAHU_DEF.bbox)) return null;
+  const luMs = parseOahuTs(raw.last_message) || ts;
+  if ((ts - luMs) > VEHICLE_RETAIN_MS) return null;
+  const routeShort = cleanStr(raw.route_short_name);
+  const route = routeShort ? state.routeMap[routeShort] : null;
+  const adherenceRaw = cleanStr(raw.adherence);
+  const adherence = adherenceRaw != null ? parseInt(adherenceRaw, 10) : null;
+  const ageMin = (() => {
+    let a = (ts - luMs) / 60000;
+    if (a < 0) a = a > -180 ? 0 : a;
+    return Math.round(a * 10) / 10;
+  })();
+  return {
+    id,
+    island: 'oahu',
+    name: id,
+    lat,
+    lon,
+    speed: null,
+    headingDegrees: null,
+    heading: null,
+    passengerLoad: null,
+    capacity: null,
+    shapeDistanceTraveled: null,
+    patternId: null,
+    tripId: cleanStr(raw.trip),
+    headsign: cleanStr(raw.headsign),
+    direction: null,
+    shapeId: null,
+    vehicleTs: luMs,
+    ageMin,
+    stale: (ts - luMs) > VEHICLE_STALE_MS && (ts - luMs) > 0,
+    lastUpdated: new Date(luMs).toISOString(),
+    lastMessage: cleanStr(raw.last_message),
+    routeId: routeShort,
+    unassigned: !routeShort,
+    routeName: route ? route.name : (routeShort ? `Route ${routeShort}` : 'Not in service'),
+    routeShort: routeShort || '—',
+    routeColor: route ? route.color : '#8b949e',
+    adherence: Number.isFinite(adherence) ? adherence : null,
+    occupancyStatus: null,
+    gtfsCurrentStatus: null,
+    congestionLevel: null,
+    attribution: ATTRIBUTION,
+  };
+}
 
   async function poll() {
     if (!appId()) {
