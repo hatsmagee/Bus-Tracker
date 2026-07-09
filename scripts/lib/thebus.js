@@ -658,7 +658,14 @@ function normalizeVehicle(raw, ts) {
     getShapes: () => state.shapes,
     getStops: () => state.stops,
     getStop: (id) => state.stopById[String(id)] || null,
-    getVehicles: () => state.latestVehicles,
+    getVehicles: () => state.latestVehicles.filter(v =>
+      !v.unassigned
+      && v.routeShort
+      && v.routeShort !== '—'
+      && String(v.routeShort).toLowerCase() !== 'null'
+      && Number.isFinite(v.lat)
+      && Number.isFinite(v.lon)
+    ),
     getStats: () => state.lastPollStats,
     getApiInfo: () => ({
       island: 'oahu',

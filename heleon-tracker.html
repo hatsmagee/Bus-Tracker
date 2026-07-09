@@ -8621,7 +8621,28 @@ const OCCUPANCY_LABELS = ['Empty','Many seats','Few seats','Standing room','Crus
 const GTFS_STATUS_LABELS = ['Approaching stop','At stop','En route'];
 function occupancyLabel(n) { return n == null ? null : (OCCUPANCY_LABELS[n] || null); }
 function gtfsStatusLabel(n) { return n == null ? null : (GTFS_STATUS_LABELS[n] || null); }
-function visibleVehicles() { return showStale ? allVehicles : allVehicles.filter(v => !isStale(v)); }
+// Buses without a real route assignment (TheBus often returns XML "null" for
+ // idle/deadhead units) clutter the map — hide them by default. Fleet tab still
+ // shows the full roster via /api/fleet.
+function hasValidRoute(v) {
+  if (!v || v.unassigned) return false;
+  const short = v.routeShort;
+  const rid = v.routeId;
+  const bad = x => x == null || x === '' || x === '—' || x === 'null' || x === 'None' || x === 'undefined' || x === '???';
+  if (bad(short) && bad(rid)) return false;
+  if (!bad(short) && (short === '—' || String(short).toLowerCase() === 'null')) return false;
+  return true;
+}
+function isPlottableVehicle(v) {
+  if (!hasValidRoute(v)) return false;
+  if (v.lat == null || v.lon == null || isNaN(+v.lat) || isNaN(+v.lon)) return false;
+  return true;
+}
+function visibleVehicles() {
+  let list = allVehicles.filter(isPlottableVehicle);
+  if (!showStale) list = list.filter(v => !isStale(v));
+  return list;
+}
 
 function toggleStale() {
   showStale = !showStale;
