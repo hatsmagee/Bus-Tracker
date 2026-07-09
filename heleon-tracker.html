@@ -472,10 +472,21 @@
   }
   .bus-occ-seg.lit { background: #fff; }
 
-  /* Bus markers scale geographically with the map (same as roads):
-     --bsc is set on #map from meters-per-pixel so icons shrink/grow with zoom. */
+  /* Bus markers: MapLibre writes inline transform on the marker ROOT to pin it
+     to a lat/lon — never put scale there (it gets clobbered → huge north-facing
+     icons). Scale lives on the inner .bus-scale wrapper, same pattern as
+     .stream-gauge / .gauge-scale. --bsc is set on #map from road width. */
   .bus-marker {
-    transform: scale(var(--bsc, 0.3));
+    position: relative;
+    width: 0;
+    height: 0;
+    line-height: 0;
+  }
+  .bus-marker .bus-scale {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: translate(-50%, -50%) scale(var(--bsc, 0.12));
     transform-origin: center center;
     will-change: transform;
     line-height: 0;
@@ -1385,8 +1396,10 @@ function applyActiveIslandData() {
   if (vcEl) vcEl.textContent = `${vcount} bus${vcount !== 1 ? 'es' : ''}${islLabel ? ' · ' + islLabel : ''}`;
   renderVehicleList();
   renderRouteList();
+  // Shapes must decode into allPatternCoords BEFORE markers so road-snap
+  // heading works on the first paint (otherwise every bus points north at 0°).
+  renderRouteShapes(true);
   renderMarkers();
-  renderRouteShapes();
   renderHibikeMarkers();
   if (lastMobilityData) updateHibikeStatus(lastMobilityData);
   if (activeIsland === 'big-island') {
@@ -1706,13 +1719,12 @@ function initMap() {
     // them resolves quickly. ensureMarkerImages() is idempotent.
     try { ensureMarkerImages(); } catch (e) {}
     try { initMapLayers(); } catch (e) { console.error('[map] layers:', e); }
-    try { renderMarkers(); } catch (e) { console.error('[map] markers:', e); }
-    // Stops/shapes may have been fetched before the style finished loading;
-    // (re)render them now that the layers exist.
+    // Decode shapes first so road-snap heading is available on the first marker paint.
     try { renderStopMarkers(); } catch (e) { console.error('[map] stops:', e); }
     try { renderLearnedStops(); } catch (e) {}
-    try { renderRouteShapes(); } catch (e) { console.error('[map] shapes:', e); }
+    try { renderRouteShapes(true); } catch (e) { console.error('[map] shapes:', e); }
     try { renderRouteRibbons(); } catch (e) { console.error('[map] ribbons:', e); }
+    try { renderMarkers(); } catch (e) { console.error('[map] markers:', e); }
     // Layers whose boot fetch may have resolved before the style loaded — (re)draw.
     try { fetchSummits(); } catch (e) {}
     try { fetchStreamflow(); } catch (e) {}
@@ -3874,7 +3886,8 @@ async function fetchShapes() {
   if (islandShapeCache[activeIsland]) {
     routeShapes = islandShapeCache[activeIsland];
     applyShapeMeta(routeShapes);
-    renderRouteShapes();
+    renderRouteShapes(true);
+    renderMarkers();
     return;
   }
   try {
@@ -3882,7 +3895,8 @@ async function fetchShapes() {
     routeShapes = await res.json();
     islandShapeCache[activeIsland] = routeShapes;
     applyShapeMeta(routeShapes);
-    renderRouteShapes();
+    renderRouteShapes(true);
+    renderMarkers();
   } catch(e) { console.error('[fetchShapes]', e); }
 }
 
@@ -5171,21 +5185,42 @@ function scheduleMarkerRescale() {
   });
 }
 
-// Geographic bus scale: icon width tracks ground meters the same way roads do
-// (Web Mercator meters-per-pixel ∝ 1/2^z). Visual width ≈ one lane so buses
-// read as road-scale vehicles at every zoom.
-const BUS_ARTBOARD_W = 22;          // CSS px of the icon artboard
-const BUS_GROUND_WIDTH_M = 28;      // exaggerated lane-ish footprint (real bus ~2.5 m)
-const BUS_SCALE_MIN = 0.04;         // still a clickable speck when zoomed way out
-const BUS_SCALE_MAX = 1.35;         // don't dominate the street when zoomed in
-const BUS_COMPACT_ZOOM = 13.5;      // hide weather/# chrome when tiny
+// Bus scale tracks the DRAWN route line width so icons shrink/grow with the
+// roads (same zoom curve) and are never wider than the road ribbon on screen.
+// Also capped by a real-world lane width via meters-per-pixel so street-level
+// zoom doesn't let buses balloon past the pavement.
+const BUS_ARTBOARD_W = 22;          // CSS px of the icon artboard (body width)
+const BUS_GROUND_WIDTH_M = 3.5;     // ~one lane / bus width on the ground
+const BUS_SCALE_MIN = 0.03;         // ~0.7 px — speck when fully zoomed out
+const BUS_SCALE_MAX = 0.85;         // never dominate a street-level view
+const BUS_COMPACT_ZOOM = 14;        // hide weather/# chrome when tiny
 let _busScaleRaf = 0;
 function metersPerPixelAt(lat, z) {
-  return 156543.03392 * Math.cos((lat || 0) * Math.PI / 180) / Math.pow(2, z);
+  // MapLibre/Mapbox GL use 512px tiles → equator m/px at z0 is ~78271.5
+  return 78271.51696 * Math.cos((lat || 0) * Math.PI / 180) / Math.pow(2, z);
+}
+// Matches island-route-lines / ribbon paint so buses and roads share one curve.
+function roadLineWidthPx(z) {
+  const stops = [[8, 2], [12, 4], [15, 6], [18, 8]];
+  if (z <= stops[0][0]) return stops[0][1];
+  if (z >= stops[stops.length - 1][0]) return stops[stops.length - 1][1];
+  for (let i = 1; i < stops.length; i++) {
+    const [z0, w0] = stops[i - 1], [z1, w1] = stops[i];
+    if (z <= z1) {
+      const t = (z - z0) / (z1 - z0);
+      return w0 + t * (w1 - w0);
+    }
+  }
+  return stops[stops.length - 1][1];
 }
 function busScaleGeographic(z, lat) {
-  const mpp = metersPerPixelAt(lat, z);
-  const px = BUS_GROUND_WIDTH_M / Math.max(mpp, 1e-9);
+  // Match the painted route line so buses and roads shrink/grow together.
+  // Also never exceed a real lane on the ground (street-level safety cap).
+  const roadPx = roadLineWidthPx(z) * 0.92;
+  const lanePx = BUS_GROUND_WIDTH_M / Math.max(metersPerPixelAt(lat, z), 1e-9);
+  // Zoomed out: lanePx is <<1 — follow the road so icons stay road-width marks.
+  // Zoomed in: never wider than either the paint or a real lane.
+  const px = lanePx < roadPx ? roadPx : Math.min(roadPx, lanePx);
   return Math.max(BUS_SCALE_MIN, Math.min(BUS_SCALE_MAX, px / BUS_ARTBOARD_W));
 }
 function scheduleBusScale() {
@@ -7754,6 +7789,47 @@ function bearingDeg(a, b) {
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 
+// Smallest signed angle difference a→b in (-180, 180].
+function bearingDelta(a, b) {
+  return ((b - a + 540) % 360) - 180;
+}
+
+// Align a road-centerline bearing to the bus's actual travel direction. Route
+// polylines are often digitized one way; if the bus is going the other way the
+// nose would point backward — flip 180° when travel disagrees with the road.
+function alignBearingToTravel(roadBrg, travelBrg) {
+  if (roadBrg == null) return travelBrg != null ? travelBrg : null;
+  if (travelBrg == null) return roadBrg;
+  return Math.abs(bearingDelta(roadBrg, travelBrg)) > 90
+    ? (roadBrg + 180) % 360
+    : roadBrg;
+}
+
+// Travel bearing from recent GPS fixes (not the agency heading field). Needs
+// enough displacement to ignore GPS jitter / dwelling at a stop.
+const TRAVEL_MIN_M = 12;
+const TRAVEL_HIST_MAX = 8;
+function recordTravelFix(m, fix, nowT) {
+  if (!m.travelHist) m.travelHist = [];
+  const hist = m.travelHist;
+  const last = hist[hist.length - 1];
+  if (last && metersBetween(last.pt, fix) < 2 && (nowT - last.t) < 8000) return;
+  hist.push({ pt: [fix[0], fix[1]], t: nowT });
+  while (hist.length > TRAVEL_HIST_MAX) hist.shift();
+}
+function travelBearingFromHist(m) {
+  const hist = m && m.travelHist;
+  if (!hist || hist.length < 2) return m && m.travelBearing != null ? m.travelBearing : null;
+  const newest = hist[hist.length - 1];
+  for (let i = hist.length - 2; i >= 0; i--) {
+    const older = hist[i];
+    if (metersBetween(older.pt, newest.pt) >= TRAVEL_MIN_M) {
+      return bearingDeg(older.pt, newest.pt);
+    }
+  }
+  return m.travelBearing != null ? m.travelBearing : null;
+}
+
 // Road bearing (deg) of the route centerline at distance `d` along rc. This is
 // the direction the road runs where the bus is, so the bus icon can be oriented
 // along the road (in the direction of travel) rather than to the noisy raw GPS
@@ -7895,7 +7971,8 @@ function renderRouteShapes(force) {
   });
 
   if (showRouteShapes) {
-    if (activeIsland === 'big-island') {
+    // Same road-snap + ribbon/line treatment on every island that has shapes.
+    if (activeIsland === 'big-island' && routeEdgesData) {
       renderRouteRibbons();
       if (map.getLayer(RIBBON_LAYER)) map.setLayoutProperty(RIBBON_LAYER, 'visibility', 'visible');
       if (map.getLayer('island-route-lines')) map.setLayoutProperty('island-route-lines', 'visibility', 'none');
@@ -7936,7 +8013,7 @@ function renderIslandRouteLines(routeMeta) {
       layout: { 'line-join': 'round', 'line-cap': 'round' },
       paint: {
         'line-color': ['get', 'color'],
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 12, 4, 15, 6],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 12, 4, 15, 6, 18, 8],
         'line-opacity': 0.85,
       },
     });
@@ -9396,9 +9473,9 @@ function makeBusIcon(color, label, heading, load, weather, busNo) {
     : `<div class="bus-route-lbl" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
         pointer-events:none;font-family:system-ui,sans-serif;font-size:9px;font-weight:900;
         letter-spacing:.2px;color:${tc};text-shadow:0 1px 2px ${shd};">${safeLabel}</div>`;
-  // Compact 22×46 artboard — zoom CSS scale (--bsc) grows it at street level.
+  // Compact 22×46 artboard — zoom CSS scale (--bsc on .bus-scale) grows it with roads.
   // Lengthwise labels live INSIDE .bus-rot so they turn with the vehicle.
-  return `<div style="position:relative;width:22px;height:46px;">
+  return `<div class="bus-scale"><div style="position:relative;width:22px;height:46px;">
     ${weatherBadge}
     <div class="bus-rot" style="
       width:22px; height:46px;
@@ -9446,7 +9523,7 @@ function makeBusIcon(color, label, heading, load, weather, busNo) {
     </div>
     ${alongBody ? '' : routeLbl}
     ${numBadge}
-  </div>`;
+  </div></div>`;
 }
 
 // ─── HOVER TOOLTIP ────────────────────────────────────────────────────────────
@@ -9681,13 +9758,13 @@ function renderMarkers() {
       inner.onmouseenter = e => {
         if (mapGesturing()) return;
         showBusTooltip(vdata, e.clientX, e.clientY);
-        const h = (markers[mk] && markers[mk].heading) ?? vdata.headingDegrees ?? 0;
+        const h = (markers[mk] && (markers[mk].headingUnwrapped ?? markers[mk].heading)) ?? 0;
         inner.style.transform = `rotate(${h}deg) scale(1.25)`;
       };
       inner.onmousemove = e => { if (mapGesturing()) return; positionTooltip(e.clientX, e.clientY); };
       inner.onmouseleave = () => {
         hideBusTooltip();
-        const h = (markers[mk] && markers[mk].heading) ?? vdata.headingDegrees ?? 0;
+        const h = (markers[mk] && (markers[mk].headingUnwrapped ?? markers[mk].heading)) ?? 0;
         inner.style.transform = `rotate(${h}deg) scale(1)`;
       };
     }
@@ -9695,18 +9772,41 @@ function renderMarkers() {
     const loadFrac = loadFraction(v);
     const fix = (v.snapLon != null && v.snapLat != null) ? [v.snapLon, v.snapLat] : [v.lon, v.lat];
     const nowT = performance.now();
-    const useRoadSnap = activeIsland === 'big-island';
-    const { rc, snap } = useRoadSnap ? nearestPatternSnap(v.routeId, fix, v.headingDegrees) : { rc: null, snap: null };
-    const onRoute = useRoadSnap && snap && snap.offRoute < 120;
+    // Prefer travel direction from position history (not agency heading). Use it
+    // to pick the matching pattern and to flip road bearing when the polyline
+    // was digitized opposite the bus's actual direction of travel.
+    const prevM = markers[mk];
+    if (prevM) recordTravelFix(prevM, fix, nowT);
+    const travelBrg = prevM ? travelBearingFromHist(prevM) : null;
+    if (prevM && travelBrg != null) prevM.travelBearing = travelBrg;
+
+    const hasShapes = !!(allPatternCoords[v.routeId] || routeShapeCoords[v.routeId]);
+    const { rc, snap } = hasShapes
+      ? nearestPatternSnap(v.routeId, fix, travelBrg)
+      : { rc: null, snap: null };
+    const onRoute = !!(snap && snap.offRoute < 120);
     const roadBrg = onRoute ? roadBearingAt(rc, snap.dist) : null;
-    const heading = roadBrg != null ? roadBrg
-                  : (v.headingDegrees != null ? v.headingDegrees : 0);
+    // Nose points along the road in the direction of movement. Never use the
+    // API heading for icon orientation — only motion history + road geometry.
+    // Until we have travel history, still use road bearing so buses aren't
+    // stuck pointing north (0°) on first paint.
+    let heading = alignBearingToTravel(roadBrg, travelBrg);
+    if (heading == null) heading = travelBrg != null ? travelBrg
+                  : ((prevM && prevM.heading != null) ? prevM.heading : 0);
 
     if (markers[mk]) {
       const m = markers[mk];
       const dt = Math.max(0.1, (nowT - m.fixTime) / 1000);
       if (onRoute && m.onRoute && m.rc === rc) {
         const measured = (snap.dist - (m.prevAnchorDist ?? snap.dist)) / Math.max(dt, 1);
+        // Along-route progress also implies travel direction when GPS jitter is low.
+        if (Math.abs(snap.dist - (m.prevAnchorDist ?? snap.dist)) >= TRAVEL_MIN_M) {
+          const alongBrg = roadBearingAt(rc, snap.dist);
+          if (alongBrg != null) {
+            m.travelBearing = measured >= 0 ? alongBrg : (alongBrg + 180) % 360;
+            heading = alignBearingToTravel(roadBrg, m.travelBearing);
+          }
+        }
         m.anchorDist = Math.max(m.curDist ?? snap.dist, snap.dist);
         m.anchorTime = nowT;
         m.pace = paceFromEta(v, m) ?? (measured > 0 ? measured : 0);
@@ -9727,7 +9827,7 @@ function renderMarkers() {
       m.fixTime = nowT;
       m.heading = heading;
       const prevU = m.headingUnwrapped ?? heading;
-      m.headingUnwrapped = prevU + (((heading - (prevU % 360)) + 540) % 360 - 180);
+      m.headingUnwrapped = prevU + bearingDelta(prevU % 360, heading);
       const prevInner = m.el.querySelector('.bus-rot');
       const prevTransform = prevInner ? prevInner.style.transform : null;
       m.el.classList.add('bus-marker');
@@ -9749,6 +9849,8 @@ function renderMarkers() {
         curDist: onRoute ? snap.dist : 0,
         anchorDist: onRoute ? snap.dist : 0, prevAnchorDist: onRoute ? snap.dist : 0,
         anchorTime: nowT, pace: onRoute ? (paceFromEta(v) ?? 0) : 0,
+        travelHist: [{ pt: [fix[0], fix[1]], t: nowT }],
+        travelBearing: null,
       };
     }
   });
@@ -10082,6 +10184,18 @@ function startMarkerAnim() {
           const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
           m.marker.setLngLat([m.linFrom[0] + (m.linTo[0]-m.linFrom[0])*e,
                               m.linFrom[1] + (m.linTo[1]-m.linFrom[1])*e]);
+          // Point nose along the glide when we've moved enough to trust it.
+          if (metersBetween(m.linFrom, m.linTo) >= TRAVEL_MIN_M) {
+            const tb = bearingDeg(m.linFrom, m.linTo);
+            m.travelBearing = tb;
+            const prev = m.headingUnwrapped ?? tb;
+            const next = prev + bearingDelta(prev % 360, tb);
+            if (Math.abs(next - prev) > 0.5) {
+              m.headingUnwrapped = next; m.heading = tb;
+              const inner = m.el && (m.el.querySelector('.bus-rot') || m.el.firstChild);
+              if (inner) inner.style.transform = `rotate(${next}deg)`;
+            }
+          }
           if (t < 1) anyMoving = true; else { m.linFrom = null; }
         }
         continue;
@@ -10104,15 +10218,15 @@ function startMarkerAnim() {
         const speed = eased + Math.min(diff, 30) * 0.6;
         m.curDist = Math.min(want, m.curDist + speed * frameDt);
         m.marker.setLngLat(posAtDist(m.rc, m.curDist));
-        // Keep the bus pointed along the road as it rounds curves between fixes.
+        // Keep the bus pointed along the road as it rounds curves between fixes,
+        // flipped to match travel direction when the polyline runs the other way.
         const rb = roadBearingAt(m.rc, m.curDist);
         if (rb != null) {
-          // Unwrap so a 359°→1° crossing rotates the short way, not a full spin.
-          const prev = m.headingUnwrapped ?? rb;
-          let delta = ((rb - (prev % 360)) + 540) % 360 - 180;
-          const next = prev + delta;
+          const aligned = alignBearingToTravel(rb, m.travelBearing);
+          const prev = m.headingUnwrapped ?? aligned;
+          const next = prev + bearingDelta(prev % 360, aligned);
           if (Math.abs(next - prev) > 0.5) {
-            m.headingUnwrapped = next; m.heading = rb;
+            m.headingUnwrapped = next; m.heading = aligned;
             const inner = m.el && (m.el.querySelector('.bus-rot') || m.el.firstChild);
             if (inner) inner.style.transform = `rotate(${next}deg)`;
           }
