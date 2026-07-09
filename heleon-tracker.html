@@ -1446,6 +1446,7 @@ async function switchIsland(id) {
   else {
     await refreshIslandCaches();
     applyActiveIslandData();
+    setApiStatus(allVehicles.length > 0 ? 'ok' : 'partial');
     if (activeIsland === 'big-island') {
       fetchTrails();
       fetchStoplines();
@@ -3788,6 +3789,7 @@ function flashVehicle(v) {
 }
 
 async function fetchAll() {
+  setApiStatus('fetching');
   try {
     const prevVehicles = allVehicles.slice();
     await refreshIslandCaches();
@@ -8549,7 +8551,7 @@ function setApiStatus(state) {
   if (state === 'ok') { badge.classList.add('badge-green'); dot.classList.add('pulse-green'); text.textContent = 'Live'; }
   else if (state === 'partial') { badge.classList.add('badge-yellow'); dot.classList.add('pulse-yellow'); text.textContent = fetchFailCount > 0 ? 'Reconnecting…' : 'No buses out'; }
   else if (state === 'error') { badge.classList.add('badge-red'); dot.classList.add('pulse-red'); text.textContent = 'Error'; }
-  else { badge.classList.add('badge-blue'); dot.classList.add('pulse-green'); text.textContent = 'Fetching…'; }
+  else { badge.classList.add('badge-blue'); dot.classList.add('pulse-green'); text.textContent = 'Connecting…'; }
 }
 
 // ─── STALENESS ───────────────────────────────────────────────────────────────
@@ -10624,6 +10626,9 @@ Promise.all([
 ]).then(async () => {
   await refreshIslandCaches();
   applyActiveIslandData();
+  fetchFailCount = 0;
+  setApiStatus(allVehicles.length > 0 ? 'ok' : 'partial');
+  resetCountdown();
   if (activeIsland === 'big-island') {
     await Promise.all([fetchAllStops(), fetchTrails()]);
     fetchStoplines();
