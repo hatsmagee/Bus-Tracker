@@ -6725,6 +6725,295 @@
         "level": 70,
         "updatedAt": "2026-07-09T22:00:55.560Z"
       }
+    },
+    "heritage:lyman-museum-mission-house": {
+      "title": "Lyman Museum & Mission House",
+      "summary": "The Lyman House Memorial Museum, also known as the Lyman Museum and Lyman House, is a Hilo, Hawaii-based natural history museum founded in 1931 in the Lyman family mission house, originally built in 1838.",
+      "history": [
+        {
+          "year": 1832,
+          "text": "Reverend David Belden Lyman and his wife, Sarah Joiner Lyman, arrived in 1832, missionaries from the American Board of Commissioners for Foreign Missions.",
+          "source": "https://en.wikipedia.org/wiki/Lyman_House_Memorial_Museum"
+        },
+        {
+          "year": 1854,
+          "text": "In 1854 - 1859 the new Haili Church was built across the street, replacing the thatched structures that served previously for the congregation.",
+          "source": "https://en.wikipedia.org/wiki/Lyman_House_Memorial_Museum"
+        },
+        {
+          "year": 1903,
+          "text": "It has extensive displays on Hawaiian culture and is renowned for its collection of shells and minerals, including a specimen of orlymanite, named for Orlando Hammond Lyman (1903–1986), the museum's founder and great grandson of David and…",
+          "source": "https://en.wikipedia.org/wiki/Lyman_House_Memorial_Museum"
+        },
+        {
+          "year": 1931,
+          "text": "The Lyman House Memorial Museum, also known as the Lyman Museum and Lyman House, is a Hilo, Hawaii-based natural history museum founded in 1931 in the Lyman family mission house, originally built in 1838.",
+          "source": "https://en.wikipedia.org/wiki/Lyman_House_Memorial_Museum"
+        },
+        {
+          "year": 1978,
+          "text": "The mission house was added to the National Register of Historic Places on March 24, 1978, as site 78001012.",
+          "source": "https://en.wikipedia.org/wiki/Lyman_House_Memorial_Museum"
+        },
+        {
+          "year": 2002,
+          "text": "The Museum has been an affiliate of the Smithsonian Institution since 2002. . .",
+          "source": "https://en.wikipedia.org/wiki/Lyman_House_Memorial_Museum"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Lyman_House_Museum%2C_Hilo.jpg/330px-Lyman_House_Museum%2C_Hilo.jpg",
+          "credit": "Wikipedia — Lyman House Memorial Museum (CC/PD)",
+          "caption": "Lyman House Memorial Museum",
+          "alt": "a white house with palm trees on the yard and a white fence around it, as seen from an outside walkway"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Lyman_House_Memorial_Museum"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Lyman_House_Memorial_Museum"
+        ],
+        "resolvedTitle": "Lyman House Memorial Museum",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Lyman_House_Museum%2C_Hilo.jpg/330px-Lyman_House_Museum%2C_Hilo.jpg",
+            "caption": "a white house with palm trees on the yard and a white fence around it, as seen from an outside walkway",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-09T22:04:40.931Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-09T22:04:40.931Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-09T22:04:40.932Z"
+      }
+    },
+    "heritage:palace-theater-hilo": {
+      "title": "Palace Theater (Hilo)",
+      "summary": "The Palace Theater is a historic movie theater in downtown Hilo, Hawaiʻi. Built in 1925, the Beaux-Arts–style building was added to the National Register of Historic Places on May 11, 1993.",
+      "history": [
+        {
+          "year": 1925,
+          "text": "Built in 1925, the Beaux-Arts–style building was added to the National Register of Historic Places on May 11, 1993.",
+          "source": "https://en.wikipedia.org/wiki/Palace_Theater_(Hilo%2C_Hawaii)"
+        },
+        {
+          "year": 1940,
+          "text": "The organ was moved in 1940 to the Hilo Theater, which was destroyed by the 1960 tsunami.",
+          "source": "https://en.wikipedia.org/wiki/Palace_Theater_(Hilo%2C_Hawaii)"
+        },
+        {
+          "year": 1998,
+          "text": "After closing as a commercial cinema, the theatre reopened in 1998 as an arthouse venue and performance space, hosting films, concerts, and live theatrical productions. .",
+          "source": "https://en.wikipedia.org/wiki/Palace_Theater_(Hilo%2C_Hawaii)"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e2/Palaceneonsign.jpg/330px-Palaceneonsign.jpg",
+          "credit": "Wikipedia — Palace Theater (Hilo, Hawaii) (CC/PD)",
+          "caption": "Palace Theater (Hilo, Hawaii)",
+          "alt": "the building has a lit up neon sign on it's side of it and is next to a clock tower"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Palace_Theater_(Hilo%2C_Hawaii)"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Palace_Theater_(Hilo%2C_Hawaii)"
+        ],
+        "resolvedTitle": "Palace Theater (Hilo, Hawaii)",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e2/Palaceneonsign.jpg/330px-Palaceneonsign.jpg",
+            "caption": "the building has a lit up neon sign on it's side of it and is next to a clock tower",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-09T22:33:16.789Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-09T22:33:16.789Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-history",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-09T22:33:16.789Z"
+      }
+    },
+    "heritage:pacific-tsunami-museum": {
+      "title": "Pacific Tsunami Museum",
+      "summary": "The Pacific Tsunami Museum (originally, the Hilo Tsunami Museum) is a museum in Hilo, Hawaii dedicated to the history of the April 1, 1946 Pacific tsunami and the May 23, 1960 Chilean tsunami which devastated much of the east coast of the Big Island, especially Hilo.",
+      "history": [
+        {
+          "year": 1946,
+          "text": "The Pacific Tsunami Museum (originally, the Hilo Tsunami Museum) is a museum in Hilo, Hawaii dedicated to the history of the April 1, 1946 Pacific tsunami and the May 23, 1960 Chilean tsunami which devastated much of the east coast of the…",
+          "source": "https://en.wikipedia.org/wiki/Pacific_Tsunami_Museum"
+        },
+        {
+          "year": 1988,
+          "text": "The museum traces its origins to 1988, when Dr.",
+          "source": "https://en.wikipedia.org/wiki/Pacific_Tsunami_Museum"
+        },
+        {
+          "year": 1993,
+          "text": "Jeanne Branch Johnston, a tsunami survivor, decided there was a need for a tsunami museum in 1993 and formed a steering committee; she and Dr.",
+          "source": "https://en.wikipedia.org/wiki/Pacific_Tsunami_Museum"
+        },
+        {
+          "year": 1994,
+          "text": "The museum was incorporated in August 1994; partners include the International Tsunami Information Center, the Pacific Tsunami Warning Center, the University of Hawaiʻi (both the Hilo and Manoa campuses), and State and County Civil Defense…",
+          "source": "https://en.wikipedia.org/wiki/Pacific_Tsunami_Museum"
+        },
+        {
+          "year": 1997,
+          "text": "On May 22, 1997, First Hawaiian Bank announced it would donate its Kamehameha Branch building as the permanent site for the museum.",
+          "source": "https://en.wikipedia.org/wiki/Pacific_Tsunami_Museum"
+        },
+        {
+          "year": 2004,
+          "text": "The museum also has a mission to educate people in general about tsunamis, including the 2004 Indian Ocean earthquake and tsunami.",
+          "source": "https://en.wikipedia.org/wiki/Pacific_Tsunami_Museum"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Hilo_Pacific_Tsnumai_Museum_Big_island_Hawaii_Park_%2846226726062%29.jpg/330px-Hilo_Pacific_Tsnumai_Museum_Big_island_Hawaii_Park_%2846226726062%29.jpg",
+          "credit": "Wikipedia — Pacific Tsunami Museum (CC/PD)",
+          "caption": "Pacific Tsunami Museum",
+          "alt": "a building near some trees and water at sunset under a cloudy sky, near the intersection of street"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Pacific_Tsunami_Museum"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Pacific_Tsunami_Museum"
+        ],
+        "resolvedTitle": "Pacific Tsunami Museum",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cd/Hilo_Pacific_Tsnumai_Museum_Big_island_Hawaii_Park_%2846226726062%29.jpg/330px-Hilo_Pacific_Tsnumai_Museum_Big_island_Hawaii_Park_%2846226726062%29.jpg",
+            "caption": "a building near some trees and water at sunset under a cloudy sky, near the intersection of street",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-09T22:34:13.264Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-09T22:34:13.264Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-09T22:34:13.264Z"
+      }
+    },
+    "heritage:imiloa-astronomy-center": {
+      "title": "ʻImiloa Astronomy Center",
+      "summary": "ʻImiloa Astronomy Center is an astronomy and culture education center located in Hilo, Hawaii.",
+      "history": [
+        {
+          "year": 2000,
+          "text": "In the Hawaiian language, ʻImiloa means \"exploring new knowledge.\" It is located at 600 ʻImiloa Place in Hilo, just north of Hawaii Route 2000 (Pūʻāinakō Street). .",
+          "source": "https://en.wikipedia.org/wiki/%CA%BBImiloa_Astronomy_Center"
+        },
+        {
+          "year": 2001,
+          "text": "Conceived by founding Director George Jacob in 2001, it features exhibits and shows dealing with Hawaiian culture and history, astronomy (particularly at the Mauna Kea Observatories), and the overlap between the two. ʻImiloa includes a…",
+          "source": "https://en.wikipedia.org/wiki/%CA%BBImiloa_Astronomy_Center"
+        },
+        {
+          "year": 2006,
+          "text": "Additional small theaters show a Kumulipo (Hawaiian origins) story, and an astronomy \"birth of the universe\" 3D presentation, underwritten by the National Astronomical Observatory of Japan (Subaru Telescope). ʻImiloa opened to the public…",
+          "source": "https://en.wikipedia.org/wiki/%CA%BBImiloa_Astronomy_Center"
+        },
+        {
+          "year": 2012,
+          "text": "In September 2012 the Sagan Planet Walk, until then located only in Ithaca, New York, was extended with a statue representing Alpha Centauri installed at the ʻImiloa Astronomy Center.",
+          "source": "https://en.wikipedia.org/wiki/%CA%BBImiloa_Astronomy_Center"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Imiloa_Astronomy_Center_of_Hawaii.jpg/330px-Imiloa_Astronomy_Center_of_Hawaii.jpg",
+          "credit": "Wikipedia — ʻImiloa Astronomy Center (CC/PD)",
+          "caption": "ʻImiloa Astronomy Center",
+          "alt": "there are many buildings in this photo with the umbrella open to let it in the rain"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/%CA%BBImiloa_Astronomy_Center"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/%CA%BBImiloa_Astronomy_Center"
+        ],
+        "resolvedTitle": "ʻImiloa Astronomy Center",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Imiloa_Astronomy_Center_of_Hawaii.jpg/330px-Imiloa_Astronomy_Center_of_Hawaii.jpg",
+            "caption": "there are many buildings in this photo with the umbrella open to let it in the rain",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-09T22:34:21.117Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-09T22:34:21.117Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-09T22:34:21.117Z"
+      }
     }
   }
 }
