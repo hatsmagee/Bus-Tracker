@@ -6,9 +6,14 @@ const fresh = new Date().toISOString();
 const old = new Date(Date.now() - 200 * 86400000).toISOString();
 
 const full = {
-  summary: 'x',
-  history: [{ year: 1, text: 'a', source: 's' }, { year: 2, text: 'b', source: 's' }],
-  photos: [{ url: 'u', credit: 'c' }],
+  summary: 'A substantive summary of the place with enough context for visitors to understand what it is, why it matters on the island, and what to look for when visiting.',
+  history: [
+    { year: 1, text: 'a', source: 's' },
+    { year: 2, text: 'b', source: 's' },
+    { year: 3, text: 'c', source: 's' },
+    { year: 4, text: 'd', source: 's' },
+  ],
+  photos: [{ url: 'u', credit: 'c' }, { url: 'u2', credit: 'c2' }],
   provenance: { generatedAt: fresh },
 };
 
@@ -26,7 +31,7 @@ module.exports = {
     assert.strictEqual(isSufficient(full), true);
   },
   'entry with one history item is insufficient'() {
-    assert.strictEqual(isSufficient({ ...full, history: [full.history[0]] }), false);
+    assert.strictEqual(isSufficient({ ...full, history: [full.history[0], full.history[1]] }), false);
   },
   'entry with no photos is insufficient'() {
     assert.strictEqual(isSufficient({ ...full, photos: [] }), false);

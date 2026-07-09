@@ -405,21 +405,13 @@ async function addArticle(title, acc) {
   return countYears(ex.extract);
 }
 
-// Wikipedia-primary, keyless research. Lean and paced: one relevance-ranked
-// search on the specific title, the top article, and a second one only if the
-// top is thin on dated content. Plus a license-safe Commons photo. Kept to a
-// handful of calls per item so a full cycle doesn't get rate-limited.
-async function researchItem(item) {
+// Wikipedia-primary, keyless research. Pass 1: lean (1–2 articles). Pass 2+:
+// more articles, open-web supplement, and extra Commons queries for partial items.
+async function researchItem(item, opts = {}) {
+  const { existing, pass = 1 } = opts;
   const query = item.researchQuery || item.title || item.name;
   const acc = { sources: [], photos: [], sourceText: '', resolvedTitle: null };
 
-  // Resolve the right article. Wikipedia's own relevance ranking on the item's
-  // specific title is correct for most named landmarks. Only when the top hit is
-  // a generic umbrella page (e.g. "Maunakea Observatories") or shares no
-  // distinctive term with the item do we fall back to the curated research
-  // query — and even then we only accept a query hit that's non-generic and (for
-  // items with distinctive terms) actually related. This keeps content real and
-  // on-topic rather than mislabeling one facility with another's history.
   const titleDistinct = distinctiveTokens({ title: item.title });
   let tHits = [];
   try { tHits = await wikiSearch(item.title || query); } catch {}
@@ -439,47 +431,59 @@ async function researchItem(item) {
   }
 
   const ordered = [...new Set([primary, ...tHits, ...qHits].filter(Boolean))];
-  let years = primary ? await addArticle(primary, acc) : 0;
-  // Pull a second, still-related article only when the first is thin on dates.
-  if (years < 2) {
-    const second = ordered.find(t => t !== primary
-      && (titleDistinct.size === 0 || relevanceScore(t, titleDistinct) > 0));
-    if (second) years += await addArticle(second, acc);
+  const maxArticles = pass >= 3 ? 4 : pass >= 2 ? 3 : 2;
+  let years = 0;
+  const used = new Set();
+  for (const title of ordered) {
+    if (used.size >= maxArticles) break;
+    if (used.has(title)) continue;
+    if (titleDistinct.size > 0 && title !== primary && relevanceScore(title, titleDistinct) === 0) continue;
+    used.add(title);
+    years += await addArticle(title, acc);
+    if (years >= 4 && pass < 2) break;
   }
 
-  // Open-web fallback: only when Wikipedia yielded no article at all. Search the
-  // web, read the top results, and add their text as sources. Purely additive —
-  // it can't affect items that already resolved to a Wikipedia article, and the
-  // synthesis stage still requires ≥2 real dated events, so a page with no
-  // datable history just skips instead of producing filler.
-  if (!acc.sourceText) {
+  const needWeb = !acc.sourceText || (pass >= 2 && years < 4);
+  if (needWeb) {
     try {
-      const hits = await webSearch(item.researchQuery || query);
-      for (const h of hits.slice(0, 3)) {
-        if (acc.sourceText.length > 4000) break;
+      const searchQ = pass >= 2
+        ? `${item.researchQuery || query} history Hawaii`
+        : (item.researchQuery || query);
+      const hits = await webSearch(searchQ);
+      const limit = pass >= 3 ? 5 : 3;
+      for (const h of hits.slice(0, limit)) {
+        if (acc.sourceText.length > 8000) break;
         let body = '';
         try { body = await jinaRead(h.url); } catch { continue; }
         if (!body || body.length < 200) continue;
         if (!acc.resolvedTitle) acc.resolvedTitle = h.title || null;
-        acc.sourceText += `\n\n--- Web: ${h.title || h.url} (${h.url}) ---\n${body.slice(0, 3000)}`;
+        acc.sourceText += `\n\n--- Web: ${h.title || h.url} (${h.url}) ---\n${body.slice(0, 3500)}`;
         acc.sources.push(h.url);
       }
     } catch { /* web fallback is best-effort */ }
   }
 
-  // Supplement with a Commons photo, but only one that its own metadata ties to
-  // this subject. Build the match set from the item's distinctive terms plus the
-  // resolved article title (the confirmed subject), dropping generic filler.
   const mustMatch = new Set([
     ...distinctiveTokens({ title: item.title, researchQuery: item.researchQuery }),
     ...tokenize(acc.resolvedTitle || '').filter(t => t.length > 2 && !GENERIC_TOKENS.has(t)),
   ]);
-  const photo = await commonsImage(acc.resolvedTitle || item.title || query, { mustMatch }).catch(() => null);
-  if (photo) acc.photos.push({ ...photo, pri: 1 });
+  const photoTerms = [...new Set([
+    acc.resolvedTitle,
+    item.title,
+    item.researchQuery,
+    ...(pass >= 2 ? [`${item.title} Hawaii`, `${acc.resolvedTitle || item.title} historic`] : []),
+  ].filter(Boolean))];
+  for (const term of photoTerms.slice(0, pass >= 2 ? 4 : 2)) {
+    const photo = await commonsImage(term, { mustMatch }).catch(() => null);
+    if (photo) acc.photos.push({ ...photo, pri: 1 });
+  }
 
-  // Rank by trust: a real article lead photo (2) > relevance-matched Commons
-  // photo (1) > a logo/icon lead image (0). So the right subject always wins,
-  // and a real photo beats a mere logo of the right subject.
+  if (existing && Array.isArray(existing.photos)) {
+    for (const p of existing.photos) {
+      if (p && p.url) acc.photos.push({ ...p, pri: 2 });
+    }
+  }
+
   const seen = new Set();
   const candidatePhotos = acc.photos
     .filter(p => p && p.url && !seen.has(p.url) && seen.add(p.url))
@@ -487,6 +491,7 @@ async function researchItem(item) {
 
   return {
     query,
+    pass,
     resolvedTitle: acc.resolvedTitle,
     sourceText: acc.sourceText.trim(),
     sources: [...new Set(acc.sources.filter(Boolean))],

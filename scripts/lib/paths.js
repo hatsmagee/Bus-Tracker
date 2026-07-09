@@ -8,6 +8,8 @@ const TMP_AGENT = process.env.AGENT_TMP_DIR || (process.env.RENDER ? '/tmp/agent
 
 const MAP_ITEMS_PATH = path.join(DATA_DIR, 'map-items.json');
 const MAP_ITEMS_STAGED_PATH = path.join(DATA_DIR, 'map-items.staged.json');
+const HERITAGE_SITES_PATH = path.join(DATA_DIR, 'heritage-sites.json');
+const ASSET_MEDIA_PATH = path.join(DATA_DIR, 'asset-media.json');
 const AGENT_STATE_PATH = path.join(TMP_AGENT, 'agent-state.json');
 const AGENT_QUEUE_PATH = path.join(TMP_AGENT, 'agent-queue.json');
 const REFERENCE_PATH = path.join(DATA_DIR, 'heleon-reference.json');
@@ -22,6 +24,8 @@ module.exports = {
   TMP_AGENT,
   MAP_ITEMS_PATH,
   MAP_ITEMS_STAGED_PATH,
+  HERITAGE_SITES_PATH,
+  ASSET_MEDIA_PATH,
   AGENT_STATE_PATH,
   AGENT_QUEUE_PATH,
   REFERENCE_PATH,

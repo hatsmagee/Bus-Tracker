@@ -88,6 +88,18 @@ real-time Hawaiʻi Island grid MW / fuel mix (HECO has no keyless feed; islandpu
 live cell-tower load or per-carrier coverage API (FCC maps are propagation models only),
 per-pump live gas prices (GasBuddy GraphQL is not a public keyless API; we use AAA monthly regional averages).
 
+### Islands without live bus tracking
+
+Verified with live endpoint probes (`node scripts/verify-island-transit-feeds.js`):
+
+| Island | Agency | Why locked | What exists (keyless) |
+|--------|--------|------------|------------------------|
+| **Oʻahu** | TheBus (OTS) | **AppID required** on every `api.thebus.org` call; Swiftly GTFS-RT needs `Authorization` header | [Static GTFS](https://www.thebus.org/transitdata/production/google_transit.zip) (schedules only); [Biki GBFS](/api/mobility) (bikeshare docks, not buses). Register AppID at [api.thebus.org/NewAccount](http://api.thebus.org/NewAccount). Docs: [hea.thebus.org/api_info.asp](https://hea.thebus.org/api_info.asp) |
+| **Molokaʻi** | MEO rural shuttles | **No public API** — demand-responsive service, PDF schedules only | [MEO schedule PDF](https://www.meoinc.org/wp-content/uploads/2026/02/MKK-Bus-Schedule-Updated_02-28-25.pdf) |
+| **Lānaʻi** | MEO county shuttle | **No public API** — reservation-based human-services transport | [MEO transportation](https://www.meoinc.org/programs-services/transportation-services/) |
+
+Oʻahu does **not** use the keyless Syncromatics stack (`/api/rtpi`, `/gtfs-rt/vehiclepositions`) that powers Big Island, Kauaʻi, and Maui. Probing `api.thebus.org` without a key returns `Invalid or unspecified API key`; Swiftly returns `401 Missing Authorization Header`.
+
 ## Architecture
 
 ```
@@ -152,7 +164,10 @@ data-only deploy still triggers a refresh).
 ## Self-development agent
 
 A keyless research agent that keeps the map's item cards (history, photos,
-summaries) growing on their own. When enabled it **researches continuously**,
+summaries) growing on their own. **Policy:** every named site of interest on the
+map should carry at least one verified photo and a sourced historical timeline
+where credible material exists — see [`scripts/agent/ENRICHMENT_POLICY.md`](scripts/agent/ENRICHMENT_POLICY.md).
+When enabled it **researches continuously**,
 and once it has vetted new material it runs a full test gate and ships a PR that
 auto-deploys on Render — so the app keeps evolving with no one at the keyboard.
 **Off by default** (`AGENT_ENABLED=false`) until you switch it on.
@@ -165,9 +180,11 @@ always-on research → stage findings → PRE-PUSH GATE → PR → merge → dep
 ```
 
 1. **Research** — every `AGENT_RESEARCH_INTERVAL` (default 10 min) the server
-   audits the item universe, picks what's missing/stale/thin, gathers real
-   sourced content (DuckDuckGo, Wikipedia, Wikimedia Commons, Jina Reader) and
-   synthesizes a card via AI Horde. Results are *staged*, never live yet.
+   audits the item universe (~215 named pins: summits, heritage sites, landmarks,
+   power plants, buoys, …), prioritizes gaps (missing → no photos → thin history),
+   gathers real sourced content (DuckDuckGo, Wikipedia, Wikimedia Commons, Jina
+   Reader) and synthesizes a card. **No photo = not publishable** — the item stays
+   queued for a deeper pass. Results are *staged*, never live yet.
 2. **Gate** — before anything touches `main`, `npm test` (unit suite) → smoke
    test (schema + image liveness + `node --check`) → a real server boot on a
    throwaway port that must serve `/healthz` + `/api/map-items`. Any failure

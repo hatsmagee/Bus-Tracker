@@ -20,6 +20,7 @@ const WebSocket = require('ws');
 const { parseFeedMessage } = require('./gtfs-rt');
 const { nearestPointOnGraph } = require('./road-graph.js');
 const { createIslandManager } = require('./island-transit');
+const { parseGbfsStations } = require('./scripts/lib/gbfs-mobility');
 const islandTransit = createIslandManager();
 
 // ─── SELF-HEALING: never let one bad request or feed kill the whole server ────
@@ -2331,7 +2332,13 @@ async function handleApi(url, res, req) {
         status[isl.id] = { vehicles: latestVehicles.length, routes: ROUTES.length, lastPollTs: lastPollStats.ts };
       } else {
         const poller = islandTransit.getPoller(isl.id);
-        status[isl.id] = poller ? poller.getApiInfo() : { error: 'not configured' };
+        status[isl.id] = poller ? poller.getApiInfo() : {
+          available: false,
+          reason: isl.reason,
+          reasonDetail: isl.reasonDetail || isl.reason,
+          registerUrl: isl.registerUrl || null,
+          docs: isl.docs || [],
+        };
       }
     }
     return json(res, { islands, status, ts: Date.now() });
@@ -2339,8 +2346,9 @@ async function handleApi(url, res, req) {
 
   if (p === '/api/vehicles') {
     if (islandParam !== 'big-island') {
-      const poller = islandTransit.getPoller(islandParam);
-      if (!poller) return json(res, { error: 'unknown island' }, 404);
+      const gate = islandTransit.resolveIslandRequest(islandParam);
+      if (!gate.ok) return json(res, gate, gate.status);
+      const poller = gate.poller;
       const vehicles = poller.getVehicles().map(v => Object.assign({}, v, { weather: weatherByVehicle[`${islandParam}:${v.id}`] || null }));
       return json(res, { ts: poller.getStats().ts, island: islandParam, vehicles, stats: poller.getStats() });
     }
@@ -2352,9 +2360,9 @@ async function handleApi(url, res, req) {
   // explains why a bus is or isn't on the map. Powers the Fleet tab.
   if (p === '/api/fleet') {
     if (islandParam !== 'big-island') {
-      const poller = islandTransit.getPoller(islandParam);
-      if (!poller) return json(res, { error: 'unknown island' }, 404);
-      const data = await poller.getFleet();
+      const gate = islandTransit.resolveIslandRequest(islandParam);
+      if (!gate.ok) return json(res, gate, gate.status);
+      const data = await gate.poller.getFleet();
       return json(res, data);
     }
     const now = Date.now();
@@ -2701,9 +2709,9 @@ async function handleApi(url, res, req) {
 
   if (p === '/api/shapes') {
     if (islandParam !== 'big-island') {
-      const poller = islandTransit.getPoller(islandParam);
-      if (!poller) return json(res, { error: 'unknown island' }, 404);
-      return json(res, poller.getShapes());
+      const gate = islandTransit.resolveIslandRequest(islandParam);
+      if (!gate.ok) return json(res, gate, gate.status);
+      return json(res, gate.poller.getShapes());
     }
     const rows = dbAll(`SELECT route_id, pattern_id, name, direction, color, shape FROM route_shapes ORDER BY route_id, pattern_id`);
     rows.forEach(r => {
@@ -2725,9 +2733,9 @@ async function handleApi(url, res, req) {
 
   if (p === '/api/routes') {
     if (islandParam !== 'big-island') {
-      const poller = islandTransit.getPoller(islandParam);
-      if (!poller) return json(res, { error: 'unknown island' }, 404);
-      return json(res, poller.getRoutes());
+      const gate = islandTransit.resolveIslandRequest(islandParam);
+      if (!gate.ok) return json(res, gate, gate.status);
+      return json(res, gate.poller.getRoutes());
     }
     return json(res, ROUTES.map(r => Object.assign({}, r, { island: 'big-island' })));
   }
@@ -3330,7 +3338,7 @@ async function handleApi(url, res, req) {
       count: mobilityCache.length,
       bikesAvailable: mobilityCache.reduce((s, st) => s + (st.bikes || 0), 0),
       systems: MOBILITY_GBFS_FEEDS.map(f => ({
-        id: f.id, name: f.name,
+        id: f.id, name: f.name, island: f.island,
         count: mobilityCache.filter(s => s.system === f.id).length,
         bikes: mobilityCache.filter(s => s.system === f.id).reduce((n, st) => n + (st.bikes || 0), 0),
         error: mobilityErrors[f.id] || null,
@@ -3896,22 +3904,12 @@ function scheduleAisReconnect() {
 // Dock-based bikeshare — stations with live bike/dock counts (not per-bike GPS).
 // HIBIKE: Big Island (Hilo + Kona). Biki: Oʻahu (Honolulu). No API keys.
 const MOBILITY_GBFS_FEEDS = [
-  { id: 'hibike', name: 'HIBIKE', host: 'kona.publicbikesystem.net', path: '/customer/gbfs/v3.0/gbfs.json' },
-  { id: 'biki', name: 'Biki', host: 'honolulu.publicbikesystem.net', path: '/customer/gbfs/v3.0/gbfs.json' },
+  { id: 'hibike', name: 'HIBIKE', island: 'big-island', host: 'kona.publicbikesystem.net', path: '/customer/gbfs/v3.0/gbfs.json' },
+  { id: 'biki', name: 'Biki', island: 'oahu', host: 'honolulu.publicbikesystem.net', path: '/customer/gbfs/v3.0/gbfs.json' },
 ];
 let mobilityCache = [];
 let mobilityLastPollTs = null;
 let mobilityErrors = {};
-
-function gbfsText(field) {
-  if (!field) return '';
-  if (typeof field === 'string') return field;
-  if (Array.isArray(field)) {
-    const en = field.find(x => x.language === 'en');
-    return (en && en.text) || (field[0] && field[0].text) || '';
-  }
-  return '';
-}
 
 async function fetchGbfsStations(host, path) {
   const root = await fetchJson(host, path);
@@ -3925,21 +3923,7 @@ async function fetchGbfsStations(host, path) {
     fetchJson(infoUrl.hostname, infoUrl.pathname + infoUrl.search),
     fetchJson(statusUrl.hostname, statusUrl.pathname + statusUrl.search),
   ]);
-  const statusById = new Map((status.data.stations || []).map(s => [s.station_id, s]));
-  return (info.data.stations || []).map(st => {
-    const stStat = statusById.get(st.station_id) || {};
-    return {
-      id: st.station_id,
-      name: gbfsText(st.name) || gbfsText(st.short_name) || `Station ${st.station_id}`,
-      lat: st.lat,
-      lon: st.lon,
-      address: st.address || '',
-      capacity: st.capacity,
-      bikes: stStat.num_bikes_available ?? 0,
-      docks: stStat.num_docks_available ?? 0,
-      isRenting: stStat.is_renting !== false,
-    };
-  });
+  return parseGbfsStations(info, status);
 }
 
 async function pollMobility() {
@@ -3951,7 +3935,7 @@ async function pollMobility() {
   settled.forEach((r, i) => {
     const feed = MOBILITY_GBFS_FEEDS[i];
     if (r.status === 'fulfilled') {
-      for (const st of r.value) next.push({ ...st, system: feed.id, systemName: feed.name });
+      for (const st of r.value) next.push({ ...st, system: feed.id, systemName: feed.name, island: feed.island });
     } else {
       errs[feed.id] = r.reason?.message || String(r.reason);
     }

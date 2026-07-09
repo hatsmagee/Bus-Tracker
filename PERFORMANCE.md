@@ -44,6 +44,18 @@ but do it in the same commit as the feature, with a comment saying why.
    Backups are incremental shards — see `backup.js`. Details in
    `~/.claude` memory `render-bandwidth` and comments in `heleon-server.js`.
 
+7. **Map gestures shed non-essential work — keep it that way.**
+   While the user is panning/zooming (`movestart`/`zoomstart` → `moveend`/`zoomend`),
+   the client pauses chevron GeoJSON rebuilds, DOM bus-glide loops, hover hit-tests,
+   symbol collision, and hillshade/pill overlays. Everything restores on `moveend`.
+   New per-frame work must respect `mapGesturing()` the same way hover handlers do.
+
+8. **Every site of interest deserves a photo + history card.**
+   Named map pins must be in the agent catalog and enriched per
+   `scripts/agent/ENRICHMENT_POLICY.md`. Image URLs + text summaries only — never
+   embed binaries in JSON. The agent must not publish photo-less cards when sources
+   exist; deeper research retries are preferred over thin placeholders.
+
 ## Current measured baseline (2026-07-08, production)
 
 - DOM nodes at idle: ~4,000 (map) + <1,000 (sidebar collapsed lists)

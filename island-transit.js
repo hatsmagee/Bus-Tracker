@@ -484,17 +484,36 @@ const BIG_ISLAND_DEF = {
   },
 };
 
-// No keyless live feed — shown in the island slider as unavailable (AppID / no API).
+// Islands with no keyless live bus feed — verified via scripts/verify-island-transit-feeds.js
 const UNAVAILABLE_ISLANDS = [
   {
     id: 'oahu',
     name: 'Oʻahu',
     short: 'Oʻahu',
     emoji: '🏙️',
-    agency: 'TheBus',
+    agency: 'TheBus (DTS / OTS)',
     url: 'https://www.thebus.org/',
     available: false,
     reason: 'AppID required',
+    reasonDetail:
+      'Oahu Transit Services publishes real-time AVL only through api.thebus.org with a registered AppID (key=… on every call). '
+      + 'GTFS-RT is hosted by Swiftly and requires an Authorization header. '
+      + 'Static GTFS schedules and Biki bikeshare (GBFS) are keyless, but live TheBus GPS is not.',
+    registerUrl: 'http://api.thebus.org/NewAccount',
+    docs: [
+      { label: 'OTS Web API overview', url: 'https://hea.thebus.org/api_info.asp' },
+      { label: 'Web Services API (PDF)', url: 'https://hea.thebus.org/api/documentation/Web%20Services%20API.pdf' },
+      { label: 'AppID registration', url: 'http://api.thebus.org/NewAccount' },
+      { label: 'Swiftly GTFS-RT key request', url: 'https://goswift.ly/realtime-api-key' },
+    ],
+    liveEndpoints: [
+      { url: 'http://api.thebus.org/arrivals/?key=APPID&stop=STOP_ID', auth: 'query AppID (required)' },
+      { url: 'http://api.thebus.org/vehicle/?key=APPID&num=VEHICLE_NUM', auth: 'query AppID (required)' },
+      { url: 'https://api.goswift.ly/real-time/thebus/gtfs-rt-vehicle-positions', auth: 'Authorization header (Swiftly key)' },
+    ],
+    staticEndpoints: [
+      { url: 'https://www.thebus.org/transitdata/production/google_transit.zip', auth: 'none (schedule only, no live buses)' },
+    ],
     mapCenter: [-157.8583, 21.3099],
     mapZoom: 10,
   },
@@ -504,8 +523,19 @@ const UNAVAILABLE_ISLANDS = [
     short: 'Molokaʻi',
     emoji: '🌊',
     agency: 'MEO Bus',
+    url: 'https://www.meoinc.org/',
     available: false,
     reason: 'No public API',
+    reasonDetail:
+      'Maui Economic Opportunity runs demand-responsive rural shuttles on Molokaʻi (Maunaloa, East End, Kaunakakai). '
+      + 'Schedules are published as PDFs only — no GTFS, GTFS-RT, Syncromatics, or other machine-readable live feed exists.',
+    docs: [
+      { label: 'MEO transportation', url: 'https://www.meoinc.org/programs-services/transportation-services/' },
+      { label: 'Molokaʻi bus schedule (PDF)', url: 'https://www.meoinc.org/wp-content/uploads/2026/02/MKK-Bus-Schedule-Updated_02-28-25.pdf' },
+      { label: 'Maui County human services transit', url: 'https://www.mauicounty.gov/2047/MEO-Human-Services-Transportation-Progra' },
+    ],
+    liveEndpoints: [],
+    staticEndpoints: [],
     mapCenter: [-157.02, 21.14],
     mapZoom: 10,
   },
@@ -514,9 +544,19 @@ const UNAVAILABLE_ISLANDS = [
     name: 'Lānaʻi',
     short: 'Lānaʻi',
     emoji: '🏖️',
-    agency: 'County shuttle',
+    agency: 'MEO county shuttle',
+    url: 'https://www.meoinc.org/',
     available: false,
     reason: 'No public API',
+    reasonDetail:
+      'Lānaʻi has no fixed-route public bus system. Maui County funds MEO human-services shuttles (shopping runs, dialysis, seniors) '
+      + 'with advance reservations — no GTFS or live AVL feed is published.',
+    docs: [
+      { label: 'MEO human services transportation', url: 'https://www.meoinc.org/programs-services/transportation-services/' },
+      { label: 'Maui County program overview', url: 'https://www.mauicounty.gov/2047/MEO-Human-Services-Transportation-Progra' },
+    ],
+    liveEndpoints: [],
+    staticEndpoints: [],
     mapCenter: [-156.92, 20.83],
     mapZoom: 11,
   },
@@ -549,6 +589,32 @@ function createIslandManager() {
     ];
   }
 
+  function getIslandDef(islandId) {
+    return listIslands().find(i => i.id === islandId) || null;
+  }
+
+  function resolveIslandRequest(islandId) {
+    const def = getIslandDef(islandId);
+    if (!def) return { ok: false, status: 404, error: 'unknown_island', island: islandId };
+    if (def.available === false) {
+      return {
+        ok: false,
+        status: 403,
+        error: 'island_unavailable',
+        island: islandId,
+        reason: def.reason,
+        reasonDetail: def.reasonDetail || def.reason,
+        registerUrl: def.registerUrl || null,
+        docs: def.docs || [],
+      };
+    }
+    const poller = pollers[islandId] || null;
+    if (!poller && islandId !== 'big-island') {
+      return { ok: false, status: 404, error: 'unknown_island', island: islandId };
+    }
+    return { ok: true, def, poller };
+  }
+
   function getPoller(islandId) {
     return pollers[islandId] || null;
   }
@@ -569,7 +635,7 @@ function createIslandManager() {
     }
   }
 
-  return { pollers, listIslands, getPoller, pollAll, boot, BIG_ISLAND_DEF, ISLAND_DEFS };
+  return { pollers, listIslands, getIslandDef, resolveIslandRequest, getPoller, pollAll, boot, BIG_ISLAND_DEF, ISLAND_DEFS, UNAVAILABLE_ISLANDS };
 }
 
-module.exports = { createIslandManager, createIslandPoller, ISLAND_DEFS, BIG_ISLAND_DEF };
+module.exports = { createIslandManager, createIslandPoller, ISLAND_DEFS, BIG_ISLAND_DEF, UNAVAILABLE_ISLANDS };

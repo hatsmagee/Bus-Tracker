@@ -4,6 +4,7 @@ const { staticCatalog } = require('./lib/item-catalog');
 const { MAP_ITEMS_PATH } = require('./lib/paths');
 const { readJsonFile } = require('./lib/map-items-schema');
 const { saveQueue } = require('./lib/agent-state');
+const { entryGaps, enrichmentMeta, isComplete } = require('./lib/enrichment-policy');
 
 const STALE_DAYS = parseInt(process.env.AGENT_STALE_DAYS || '90', 10);
 
@@ -16,9 +17,8 @@ function isStale(entry) {
 
 function isSufficient(entry) {
   if (!entry || entry.status === 'skipped') return true;
-  if (!entry.summary || !Array.isArray(entry.history) || entry.history.length < 2) return false;
-  if (!Array.isArray(entry.photos) || !entry.photos.length) return false;
-  return !isStale(entry);
+  if (isStale(entry)) return false;
+  return isComplete(entry);
 }
 
 function audit() {
@@ -33,21 +33,34 @@ function audit() {
     needsResearch: [],
     stale: [],
     missing: [],
+    noPhotos: [],
+    thinHistory: [],
+    partial: [],
   };
 
   const queue = [];
 
   for (const item of catalog) {
     const existing = liveItems[item.key];
+    const meta = enrichmentMeta(existing);
     if (!existing) {
       report.missing.push(item.key);
-      queue.push({ ...item, reason: 'missing' });
+      queue.push({ ...item, reason: 'missing', gaps: ['missing'] });
     } else if (isStale(existing)) {
       report.stale.push(item.key);
-      queue.push({ ...item, reason: 'stale' });
-    } else if (!isSufficient(existing)) {
+      queue.push({ ...item, reason: 'stale', gaps: entryGaps(existing), enrichment: meta });
+    } else if (meta.status === 'partial') {
+      report.partial.push(item.key);
       report.needsResearch.push(item.key);
-      queue.push({ ...item, reason: 'insufficient' });
+      if (meta.gaps.includes('more-photos') || meta.gaps.includes('no-photos')) report.noPhotos.push(item.key);
+      if (meta.gaps.includes('more-history') || meta.gaps.includes('thin-history')) report.thinHistory.push(item.key);
+      queue.push({ ...item, reason: 'partial', gaps: meta.gaps, enrichment: meta });
+    } else if (!isSufficient(existing)) {
+      const gaps = entryGaps(existing);
+      report.needsResearch.push(item.key);
+      if (gaps.includes('no-photos')) report.noPhotos.push(item.key);
+      if (gaps.includes('thin-history')) report.thinHistory.push(item.key);
+      queue.push({ ...item, reason: 'insufficient', gaps, enrichment: meta });
     } else {
       report.sufficient.push(item.key);
     }

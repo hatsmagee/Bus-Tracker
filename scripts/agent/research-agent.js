@@ -10,6 +10,7 @@ const {
   loadState, saveState, recordFailure, circuitOk, bumpEnriched, loadQueue,
 } = require('../lib/agent-state');
 const { MAP_ITEMS_PATH, MAP_ITEMS_STAGED_PATH } = require('../lib/paths');
+const { enrichmentPriority, enrichmentMeta, mergeEnrichmentEntries, isPublishable } = require('../lib/enrichment-policy');
 
 const BUDGET = parseInt(process.env.AGENT_ITEM_BUDGET || '3', 10);
 // How long to wait before retrying an item we couldn't source/synthesize, so the
@@ -17,6 +18,10 @@ const BUDGET = parseInt(process.env.AGENT_ITEM_BUDGET || '3', 10);
 const SKIP_COOLDOWN_MS = Math.max(
   60 * 60 * 1000,
   parseInt(process.env.AGENT_SKIP_COOLDOWN_MS, 10) || 7 * 24 * 60 * 60 * 1000
+);
+const PARTIAL_RETRY_MS = Math.max(
+  30 * 60 * 1000,
+  parseInt(process.env.AGENT_PARTIAL_RETRY_MS, 10) || 6 * 60 * 60 * 1000
 );
 
 function agentEnabled() {
@@ -109,11 +114,19 @@ const CATEGORY_TERMS = {
   summit: ['telescope', 'observatory', 'dome', 'domes', 'antenna', 'dish', 'mountain', 'building', 'structure', 'astronomical', 'array', 'radio'],
   lco: ['telescope', 'observatory', 'dome', 'building', 'mountain', 'structure'],
   power: ['wind', 'turbine', 'windmill', 'blade', 'blades', 'solar', 'panel', 'panels', 'array', 'dam', 'hydro', 'power', 'plant', 'station', 'farm', 'energy', 'field', 'tower', 'pipe', 'steam'],
+  asset: ['wind', 'turbine', 'solar', 'panel', 'plant', 'power', 'station', 'airport', 'runway', 'terminal', 'building', 'dam', 'hydro', 'geothermal', 'volcano', 'lava'],
+  heritage: ['heiau', 'temple', 'church', 'palace', 'historic', 'ruins', 'monument', 'statue', 'lighthouse', 'bridge', 'bay', 'coast', 'volcano', 'lava', 'fishpond', 'ranch', 'plantation', 'museum', 'park', 'trail', 'petroglyph', 'royal', 'hawaiian'],
   volcano: ['volcano', 'crater', 'lava', 'mountain', 'smoke', 'eruption', 'summit', 'caldera', 'steam', 'rock', 'landscape', 'ash'],
   ocean: ['buoy', 'ocean', 'sea', 'water', 'wave', 'waves', 'boat', 'ship', 'coast', 'beach', 'harbor'],
   airport: ['airport', 'runway', 'plane', 'airplane', 'aircraft', 'terminal', 'airfield', 'tarmac', 'jet', 'hangar'],
   hub: ['bus', 'station', 'building', 'street', 'terminal', 'parking', 'road', 'sign', 'plaza', 'shop', 'store', 'building'],
   pnr: ['parking', 'lot', 'car', 'cars', 'road', 'sign', 'building', 'street'],
+  mobility: ['bicycle', 'bike', 'bikes', 'dock', 'station', 'rack', 'urban', 'street', 'city'],
+  maui: ['volcano', 'crater', 'beach', 'coast', 'harbor', 'town', 'road', 'highway', 'island', 'hawaii', 'historic'],
+  oahu: ['beach', 'palace', 'harbor', 'memorial', 'monument', 'city', 'coast', 'bay', 'historic', 'diamond', 'volcano'],
+  kauai: ['canyon', 'coast', 'cliff', 'waterfall', 'bay', 'beach', 'island', 'valley'],
+  molokai: ['cliff', 'coast', 'settlement', 'historic', 'church', 'bay'],
+  lanai: ['rock', 'bay', 'coast', 'garden', 'island', 'beach'],
   sat: ['satellite', 'space', 'telescope', 'spacecraft', 'orbit', 'station', 'solar'],
   airquality: ['city', 'town', 'street', 'building', 'landscape', 'sky', 'mountain', 'aerial'],
 };
@@ -183,30 +196,62 @@ async function polishSummary(item, research, fallback) {
   return fallback;
 }
 
-async function synthesizeEntry(item, research) {
-  const history = deriveHistory(research);
+async function synthesizeEntry(item, research, existing = null) {
+  let history = deriveHistory(research);
+  if (existing && Array.isArray(existing.history)) {
+    const seenYears = new Set(history.map(h => h.year));
+    for (const h of existing.history) {
+      if (!seenYears.has(h.year)) { history.push(h); seenYears.add(h.year); }
+    }
+    history.sort((a, b) => a.year - b.year);
+  }
   if (history.length < 2) {
-    return { skip: true, reason: `only ${history.length} dated events found in sources` };
+    return {
+      skip: true,
+      partialRetry: !!(existing && enrichmentMeta(existing).status === 'partial'),
+      reason: `only ${history.length} dated events found in sources`,
+    };
   }
 
   let summary = deriveSummary(research);
   let model = 'deterministic';
-  // Only spend an LLM call to improve the summary when a key is configured
-  // (anonymous generation is slow); otherwise the extract-based summary is used.
   if (process.env.AIHORDE_API_KEY) {
     const polished = await polishSummary(item, research, summary);
     if (polished !== summary) { summary = polished; model = 'aihorde+extract'; }
   }
   if (!summary) summary = `${item.title} — see sources for details.`;
+  if (existing && existing.summary && existing.summary.length > summary.length) {
+    summary = existing.summary;
+  }
 
-  // Confirm the photos actually depict the subject before publishing them.
   const verified = await verifyPhotos(item, research.candidatePhotos || []);
-  const photos = verified.slice(0, 3).map(p => ({
+  let photos = verified.slice(0, 3).map(p => ({
     url: p.url,
     credit: p.credit,
     caption: p.caption || item.title,
     ...(p.verifiedCaption ? { alt: p.verifiedCaption } : {}),
   }));
+  if (existing && Array.isArray(existing.photos)) {
+    const urls = new Set(photos.map(p => p.url));
+    for (const p of existing.photos) {
+      if (p.url && !urls.has(p.url)) { photos.push(p); urls.add(p.url); }
+    }
+    photos = photos.slice(0, 5);
+  }
+  if (!photos.length) {
+    const hadCandidates = (research.candidatePhotos || []).length;
+    return {
+      skip: true,
+      partialRetry: !!(existing && enrichmentMeta(existing).status === 'partial'),
+      reason: hadCandidates
+        ? 'no verified photos — retry with deeper image research'
+        : 'no photos found — needs deeper research (see ENRICHMENT_POLICY.md)',
+    };
+  }
+
+  const pass = ((existing && existing.enrichment && existing.enrichment.pass)
+    || (existing && existing.provenance && existing.provenance.researchPass)
+    || 0) + 1;
 
   const entry = {
     title: item.title,
@@ -219,15 +264,33 @@ async function synthesizeEntry(item, research) {
       resolvedTitle: research.resolvedTitle || null,
       model,
       imageChecks: verified.map(p => ({ url: p.url, caption: p.verifiedCaption || null, visionOk: p.visionOk === undefined ? null : p.visionOk })),
-      generatedAt: new Date().toISOString(),
+      generatedAt: (existing && existing.provenance && existing.provenance.generatedAt) || new Date().toISOString(),
+      researchPass: pass,
+      lastDeepenedAt: new Date().toISOString(),
       reviewed: false,
     },
     status: 'ok',
   };
 
-  const errs = validateEntry(item.key, entry);
+  let merged = existing ? mergeEnrichmentEntries(existing, entry) : entry;
+  if (!existing) {
+    const meta = enrichmentMeta(merged);
+    merged.enrichment = {
+      status: meta.status === 'complete' ? 'complete' : 'partial',
+      gaps: meta.gaps,
+      pass: 1,
+      level: meta.level,
+      updatedAt: new Date().toISOString(),
+    };
+    merged.status = meta.status === 'complete' ? 'ok' : 'partial';
+  }
+
+  const errs = validateEntry(item.key, merged);
   if (errs.length) throw new Error(`validation: ${errs.join('; ')}`);
-  return { entry };
+  if (!isPublishable(merged)) {
+    return { skip: true, partialRetry: true, reason: 'blocking gaps after merge' };
+  }
+  return { entry: merged, partial: enrichmentMeta(merged).status === 'partial' };
 }
 
 async function runResearchCycle({ budget = BUDGET, force = false } = {}) {
@@ -256,20 +319,27 @@ async function runResearchCycle({ budget = BUDGET, force = false } = {}) {
   }
 
   // audit() returns { report, queue } where `queue` is an ARRAY of work items.
-  const { queue } = audit();
+  const { report, queue } = audit();
   const queueItems = Array.isArray(queue) ? queue : (queue.items || []);
+  const liveItems = readJsonFile(MAP_ITEMS_PATH, { items: {} }).items || {};
+
+  console.log(`[agent] enrichment policy: publish partial when minimum met; cycle back for depth (see scripts/agent/ENRICHMENT_POLICY.md)`);
+  console.log(`[agent] audit: catalog=${report.totalCatalog} sufficient=${report.sufficient.length} missing=${report.missing.length} partial=${(report.partial || []).length} insufficient=${report.needsResearch.length} noPhotos=${(report.noPhotos || []).length}`);
 
   const staged = readJsonFile(MAP_ITEMS_STAGED_PATH, emptyDoc());
 
-  // Advance through the queue: skip items already staged (awaiting publish) and
-  // ones we recently tried but couldn't source, so each cycle reaches NEW work
-  // instead of re-grinding the same front-of-queue items. Without this, staged
-  // work caps at the per-cycle budget and can never reach the publish batch size.
   state.skipped = state.skipped || {};
   const now = Date.now();
-  const recentlySkipped = k => state.skipped[k] && (now - state.skipped[k]) < SKIP_COOLDOWN_MS;
+  const skipCooldown = (key) => {
+    const live = liveItems[key];
+    const meta = enrichmentMeta(live);
+    if (meta.status === 'partial' || meta.status === 'incomplete') return PARTIAL_RETRY_MS;
+    return SKIP_COOLDOWN_MS;
+  };
+  const recentlySkipped = k => state.skipped[k] && (now - state.skipped[k]) < skipCooldown(k);
   const work = queueItems
     .filter(i => !staged.items[i.key] && !recentlySkipped(i.key))
+    .sort((a, b) => enrichmentPriority(b, liveItems[b.key]) - enrichmentPriority(a, liveItems[a.key]))
     .slice(0, budget);
   if (!work.length) {
     state.lastResearchAt = new Date().toISOString();
@@ -282,14 +352,19 @@ async function runResearchCycle({ budget = BUDGET, force = false } = {}) {
 
   for (const item of work) {
     try {
-      console.log(`[agent] researching ${item.key} (${item.reason})`);
-      const research = await researchItem(item);
+      const existing = liveItems[item.key];
+      const pass = ((existing && existing.enrichment && existing.enrichment.pass)
+        || (existing && existing.provenance && existing.provenance.researchPass)
+        || 0) + 1;
+      const deepen = existing && enrichmentMeta(existing).status === 'partial';
+      console.log(`[agent] researching ${item.key} (${item.reason}${deepen ? ` pass=${pass}` : ''})`);
+      const research = await researchItem(item, { existing, pass });
       if (!research.sourceText || research.sources.length < 1) {
         console.log(`[agent] skip ${item.key}: no sources`);
         markSkip(item.key);
         continue;
       }
-      const synth = await synthesizeEntry(item, research);
+      const synth = await synthesizeEntry(item, research, existing);
       if (synth.skip) {
         console.log(`[agent] skip ${item.key}: ${synth.reason}`);
         markSkip(item.key);
@@ -299,6 +374,9 @@ async function runResearchCycle({ budget = BUDGET, force = false } = {}) {
       delete state.skipped[item.key];
       bumpEnriched(state);
       results.push(item.key);
+      if (synth.partial) {
+        console.log(`[agent] staged partial ${item.key} — gaps: ${(synth.entry.enrichment && synth.entry.enrichment.gaps || []).join(', ') || 'quality'}`);
+      }
       writeJsonFile(MAP_ITEMS_STAGED_PATH, staged);
     } catch (e) {
       console.error(`[agent] failed ${item.key}:`, e.message);

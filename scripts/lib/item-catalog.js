@@ -1,7 +1,12 @@
 'use strict';
 
-const { REFERENCE_PATH } = require('./paths');
+// Catalog of every named map pin that should carry agent-researched history +
+// photos. See scripts/agent/ENRICHMENT_POLICY.md — enrichment is mandatory for
+// all sites of interest, not optional garnish.
+
+const { REFERENCE_PATH, HERITAGE_SITES_PATH, ASSET_MEDIA_PATH } = require('./paths');
 const { readJsonFile } = require('./map-items-schema');
+const { heritageKey, assetKey, mobilityKey } = require('./enrichment-policy');
 
 function mk(key, title, extra = {}) {
   return { key, title, ...extra };
@@ -146,6 +151,42 @@ function staticCatalog() {
     items.push(mk(`airport:${a.name}`, a.name, { researchQuery: `${a.name} airport Hawaii history` }));
   }
 
+  const heritageDoc = readJsonFile(HERITAGE_SITES_PATH, { sites: [] });
+  for (const s of (heritageDoc.sites || [])) {
+    const title = s.name;
+    const wiki = s.wiki || title;
+    items.push(mk(heritageKey(title), title, {
+      researchQuery: `${wiki} Hawaii history`,
+      priority: 'high',
+    }));
+  }
+
+  const assetDoc = readJsonFile(ASSET_MEDIA_PATH, { assets: [] });
+  for (const a of (assetDoc.assets || [])) {
+    const id = a.id || a.icao || a.match;
+    if (!id) continue;
+    const title = a.wiki || String(a.match || id);
+    items.push(mk(assetKey(id), title, {
+      researchQuery: `${title} Hawaii`,
+      priority: 'high',
+    }));
+  }
+
+  for (const [id, name, query] of [
+    ['hibike', 'HIBIKE bikeshare (Big Island)', 'HIBIKE Hawaii Island bikeshare history'],
+    ['biki', 'Biki bikeshare (Honolulu)', 'Biki Honolulu bikeshare history'],
+  ]) {
+    items.push(mk(mobilityKey(id), name, { researchQuery: query, priority: 'medium' }));
+  }
+
+  items.push(mk('category:places', 'Historical & notable places (Wikipedia)', {
+    researchQuery: 'Big Island Hawaii historical places landmarks',
+    categoryLevel: true,
+  }));
+  items.push(mk('category:heritage', 'Heritage & ancient sites (curated atlas)', {
+    researchQuery: 'Hawaii Island heiau historic sites National Park',
+    categoryLevel: true,
+  }));
   items.push(mk('category:repeaters', 'Ham radio repeaters statewide', {
     researchQuery: 'Amateur radio repeaters Hawaii',
     categoryLevel: true,

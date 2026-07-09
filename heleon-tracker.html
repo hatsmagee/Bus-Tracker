@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hawaiʻi Bus Live Tracker</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%231f6feb'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='white' font-family='system-ui'%3E%F0%9F%9A%8C%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   :root {
@@ -88,7 +88,9 @@
   @media (max-width: 768px) {
     .mobile-menu-btn { display: inline-flex; }
     .main { flex-direction: column; }
-    #map { flex: 1 1 auto; min-height: 0; }
+    #map { flex: 1 1 auto; min-height: 0; contain: strict; }
+    #map .maplibregl-canvas { will-change: transform; }
+    body.map-gesturing .maplibregl-canvas-container { cursor: grabbing !important; }
     /* NOTE: these are scoped under `body` to out-specify the DESKTOP
        `.sidebar` / `.sidebar-resizer` rules that appear LATER in the
        stylesheet — without the extra specificity, source order would let the
@@ -695,181 +697,90 @@
   .route-toggle::after { content:''; position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:#fff; transition:left .2s; }
   .route-toggle.on::after { left:14px; }
 
-  /* ── Island slider (Buses / Fleet / Routes) ── */
-  .island-slider-wrap {
+  /* ── Island picker — all islands visible; click filters the panel ── */
+  .island-grid-wrap {
     flex-shrink: 0;
     border-bottom: 1px solid var(--border);
     background: linear-gradient(180deg, rgba(22,27,34,.97) 0%, rgba(13,17,23,.75) 100%);
   }
-  .island-slider-wrap.hidden { display: none; }
-  .island-slider {
-    display: flex;
-    align-items: stretch;
-    gap: 0;
-    padding: 6px 4px 4px;
-    position: relative;
+  .island-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 8px 10px 4px;
   }
-  .island-slider-viewport {
-    flex: 1;
-    min-width: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scroll-snap-type: x mandatory;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
-  }
-  .island-slider-viewport::-webkit-scrollbar { display: none; }
-  .island-slider-track {
-    display: flex;
-    gap: 8px;
-    padding: 2px 10px 6px;
-    width: max-content;
-    min-width: 100%;
-  }
-  .island-slider-btn {
-    flex-shrink: 0;
-    width: 28px;
-    align-self: center;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--panel2);
-    color: var(--muted);
-    font-size: 18px;
-    line-height: 1;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: color .15s, border-color .15s, background .15s;
-    user-select: none;
-    padding: 0;
-  }
-  .island-slider-btn:hover:not(:disabled) {
-    color: var(--fg);
-    border-color: var(--accent);
-    background: rgba(31,111,235,.12);
-  }
-  .island-slider-btn:disabled { opacity: .25; cursor: default; }
   .island-tab {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 8px 14px;
-    border-radius: 12px;
-    font-size: 11px;
+    gap: 2px;
+    padding: 7px 4px;
+    border-radius: 10px;
+    font-size: 10px;
     font-weight: 600;
     color: var(--muted);
     background: var(--panel2);
     border: 1px solid var(--border);
     cursor: pointer;
-    white-space: nowrap;
-    transition: all .2s ease;
+    transition: all .18s ease;
     user-select: none;
-    flex-shrink: 0;
-    scroll-snap-align: center;
-    min-width: 118px;
     touch-action: manipulation;
+    min-width: 0;
+    width: 100%;
   }
-  .island-tab:hover:not(.unavailable) {
+  .island-tab:hover:not(.unavailable):not(.active) {
     color: var(--fg);
     border-color: rgba(56,139,253,.35);
   }
   .island-tab.active {
     color: #fff;
-    background: linear-gradient(135deg, rgba(31,111,235,.45) 0%, rgba(56,139,253,.2) 100%);
+    background: linear-gradient(135deg, rgba(31,111,235,.45) 0%, rgba(56,139,253,.22) 100%);
     border-color: rgba(56,139,253,.55);
-    box-shadow: 0 2px 14px rgba(31,111,235,.2);
+    box-shadow: 0 2px 12px rgba(31,111,235,.18);
   }
   .island-tab.unavailable {
-    opacity: .45;
+    opacity: .42;
     cursor: not-allowed;
     border-style: dashed;
   }
-  .island-tab .island-emoji { font-size: 16px; line-height: 1; }
-  .island-tab .island-label { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
-  .island-tab .island-name { font-size: 11px; font-weight: 700; line-height: 1.2; }
-  .island-tab .island-agency { font-size: 9px; font-weight: 500; color: var(--muted); max-width: 88px; overflow: hidden; text-overflow: ellipsis; }
-  .island-tab.active .island-agency { color: rgba(255,255,255,.65); }
+  .island-tab .island-emoji { font-size: 18px; line-height: 1; }
+  .island-tab .island-name { font-size: 10px; font-weight: 700; line-height: 1.15; text-align: center; }
   .island-tab .island-count {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 800;
-    padding: 2px 7px;
-    border-radius: 10px;
+    padding: 1px 6px;
+    border-radius: 8px;
     background: rgba(255,255,255,.08);
     color: var(--muted);
-    margin-left: auto;
   }
   .island-tab.active .island-count {
     background: rgba(56,139,253,.35);
     color: #cfe3ff;
   }
-  .island-slider-dots {
-    display: flex;
-    justify-content: center;
-    gap: 6px;
-    padding: 0 12px 6px;
-  }
-  .island-slider-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--border);
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    transition: transform .2s, background .2s;
-  }
-  .island-slider-dot.active {
-    background: var(--accent);
-    transform: scale(1.25);
-  }
-  .island-slider-dot:disabled { opacity: .35; cursor: not-allowed; }
   .island-tab-note {
-    padding: 0 12px 8px;
+    padding: 4px 12px 8px;
     font-size: 10px;
     color: var(--muted);
     line-height: 1.45;
   }
   .island-tab-note a { color: #58a6ff; text-decoration: none; }
   .island-tab-note a:hover { text-decoration: underline; }
+  .island-only-big { display: none; }
+  body.island-big-island .island-only-big { display: flex; }
+  .island-only-mobility { display: none; }
+  body.island-big-island .island-only-mobility,
+  body.island-oahu .island-only-mobility { display: flex; }
 
   @media (max-width: 768px) {
-    .island-slider { padding: 8px 2px 4px; }
-    .island-slider-btn {
-      width: 36px;
-      min-height: 44px;
-      font-size: 22px;
-      border-radius: 10px;
-    }
-    .island-slider-viewport {
-      mask-image: linear-gradient(90deg, transparent 0, #000 4px, #000 calc(100% - 4px), transparent 100%);
-    }
-    .island-slider-track {
-      gap: 10px;
-      padding: 2px 8px 8px;
-    }
-    .island-tab {
-      min-width: calc(100vw - 108px);
-      max-width: calc(100vw - 108px);
-      padding: 10px 16px;
-      font-size: 12px;
-      border-radius: 14px;
-    }
-    .island-tab .island-emoji { font-size: 20px; }
-    .island-tab .island-name { font-size: 13px; }
-    .island-tab .island-agency { font-size: 10px; max-width: 140px; }
-    .island-tab .island-count { font-size: 11px; padding: 3px 8px; }
-    .island-slider-dots { padding-bottom: 8px; }
-    .island-slider-dot {
-      width: 8px;
-      height: 8px;
-    }
+    .island-grid { gap: 8px; padding: 10px 10px 6px; }
+    .island-tab { padding: 10px 6px; min-height: 64px; border-radius: 12px; }
+    .island-tab .island-emoji { font-size: 22px; }
+    .island-tab .island-name { font-size: 11px; }
+    .island-tab .island-count { font-size: 10px; padding: 2px 7px; }
   }
-  @media (min-width: 769px) and (max-width: 420px) {
-    .island-tab { min-width: 100px; }
+  @media (max-width: 360px) {
+    .island-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
   .api-section { padding:12px; display:flex; flex-direction:column; gap:8px; }
@@ -991,21 +902,14 @@
       <div class="tab" data-tab="docs">📚 Docs</div>
     </div>
 
-    <div class="island-slider-wrap" id="islandSliderWrap">
-      <div class="island-slider">
-        <button type="button" class="island-slider-btn prev" id="islandSliderPrev" aria-label="Previous island">‹</button>
-        <div class="island-slider-viewport" id="islandSliderViewport">
-          <div class="island-slider-track" id="islandSliderTrack"></div>
-        </div>
-        <button type="button" class="island-slider-btn next" id="islandSliderNext" aria-label="Next island">›</button>
-      </div>
-      <div class="island-slider-dots" id="islandSliderDots"></div>
+    <div class="island-grid-wrap" id="islandGridWrap">
+      <div class="island-grid" id="islandGrid"></div>
       <div class="island-tab-note" id="islandNote"></div>
     </div>
 
     <div class="tab-content active" id="tab-vehicles">
-      <div class="trail-controls" style="flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--border);">
-        <label><input type="checkbox" id="showHibike" onchange="toggleHibike()" checked> Bikeshare docks (HIBIKE + Biki)</label>
+      <div class="trail-controls island-only-mobility" style="flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--border);">
+        <label><input type="checkbox" id="showHibike" onchange="toggleHibike()" checked> Bikeshare docks (HIBIKE / Biki)</label>
         <span class="vessel-status" id="hibikeStatus"></span>
       </div>
       <div id="vehicleList"><div class="empty"><div class="empty-icon">🚌</div>Loading…</div></div>
@@ -1027,18 +931,20 @@
 
     <div class="tab-content" id="tab-routes">
       <div class="trail-controls" style="flex-wrap:wrap;gap:6px;">
-        <label>Trail history:</label>
-        <select id="trailMinutes" onchange="onTrailMinutesChange()">
-          <option value="30">30 min</option>
-          <option value="60" selected>1 hour</option>
-          <option value="120">2 hours</option>
-          <option value="240">4 hours</option>
-          <option value="480">8 hours</option>
-          <option value="1440">24 hours</option>
-        </select>
-        <label><input type="checkbox" id="showTrails" onchange="toggleTrails()" checked> Trails</label>
+        <span class="island-only-big" style="display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;">
+          <label>Trail history:</label>
+          <select id="trailMinutes" onchange="onTrailMinutesChange()">
+            <option value="30">30 min</option>
+            <option value="60" selected>1 hour</option>
+            <option value="120">2 hours</option>
+            <option value="240">4 hours</option>
+            <option value="480">8 hours</option>
+            <option value="1440">24 hours</option>
+          </select>
+          <label><input type="checkbox" id="showTrails" onchange="toggleTrails()" checked> Trails</label>
+        </span>
         <label><input type="checkbox" id="showRoutes" onchange="toggleRouteShapes()" checked> Route lines</label>
-        <label><input type="checkbox" id="showControls" onchange="toggleControls()" checked> Signals &amp; stops</label>
+        <label class="island-only-big"><input type="checkbox" id="showControls" onchange="toggleControls()" checked> Signals &amp; stops</label>
       </div>
       <div id="routeList"><div class="empty"><div class="empty-icon">🗺️</div>Loading…</div></div>
     </div>
@@ -1199,7 +1105,10 @@
           Kauaʻi (<a href="https://www.thekauaibus.com/" target="_blank" style="color:#58a6ff">thekauaibus.com</a>) and
           Maui (<a href="https://www.mauibus.org/" target="_blank" style="color:#58a6ff">mauibus.org</a>) use the same
           platform with live GPS, fleet roster, route shapes, and GTFS-RT trip updates.
-          TheBus (Oʻahu) requires a registered AppID — not included.
+          TheBus (Oʻahu) requires a registered AppID at
+          <a href="http://api.thebus.org/NewAccount" target="_blank" style="color:#58a6ff">api.thebus.org</a>
+          — live GPS is not keyless (verified). Molokaʻi and Lānaʻi MEO shuttles have PDF schedules only, no API.
+          Run <code style="font-size:10px">node scripts/verify-island-transit-feeds.js</code> to re-check endpoints.
         </div>
       </div>
 
@@ -1391,88 +1300,112 @@ function currentIslandDef() {
   return ISLAND_CATALOG.find(i => i.id === activeIsland) || ISLAND_CATALOG.find(i => i.available !== false) || ISLAND_CATALOG[0] || null;
 }
 
-const ISLAND_TABS = new Set(['vehicles', 'fleet', 'routes']);
-
-function updateIslandSliderVisibility() {
-  const wrap = document.getElementById('islandSliderWrap');
-  if (wrap) wrap.classList.toggle('hidden', !ISLAND_TABS.has(activeTab));
+function updateIslandBodyClass() {
+  document.body.classList.remove('island-big-island', 'island-kauai', 'island-maui', 'island-oahu', 'island-molokai', 'island-lanai');
+  document.body.classList.add('island-' + activeIsland);
 }
 
 function islandTabHtml(isl) {
   const st = islandStatus[isl.id] || {};
   const unavailable = isl.available === false;
-  const n = unavailable ? '—' : (st.vehicles != null ? st.vehicles : '—');
+  const cached = islandVehicleCache[isl.id];
+  const liveCount = cached ? cached.filter(v => !v.unassigned && !isStale(v)).length : null;
+  const n = unavailable ? '—' : (liveCount != null ? liveCount : (st.vehicles != null ? st.vehicles : '—'));
   const countLabel = unavailable ? '🔒' : n;
-  const agency = isl.agency || isl.name || '';
-  const tip = unavailable ? (isl.reason || 'Not available') : agency;
+  const tip = unavailable ? (isl.reason || 'Not available') : `${isl.agency || isl.name} — ${n} bus${n === 1 ? '' : 'es'} live`;
   return `<button type="button" class="island-tab${activeIsland === isl.id ? ' active' : ''}${unavailable ? ' unavailable' : ''}"
     data-island="${isl.id}" ${unavailable ? 'disabled' : ''} title="${escapeHtml(tip)}">
     <span class="island-emoji">${isl.emoji || '🏝️'}</span>
-    <span class="island-label">
-      <span class="island-name">${isl.short || isl.name}</span>
-      <span class="island-agency">${unavailable ? (isl.reason || 'No public API') : agency}</span>
-    </span>
-    <span class="island-count" title="${unavailable ? 'Unavailable' : 'Buses tracked'}">${countLabel}</span>
+    <span class="island-name">${isl.short || isl.name}</span>
+    <span class="island-count">${countLabel}</span>
   </button>`;
 }
 
-function scrollActiveIslandIntoView(smooth) {
-  const viewport = document.getElementById('islandSliderViewport');
-  const active = document.querySelector('#islandSliderTrack .island-tab.active');
-  if (!viewport || !active) return;
-  const left = active.offsetLeft - (viewport.clientWidth - active.offsetWidth) / 2;
-  viewport.scrollTo({ left: Math.max(0, left), behavior: smooth ? 'smooth' : 'auto' });
+function applyShapeMeta(shapes) {
+  (shapes || []).forEach(s => {
+    if (!ROUTES_META[s.route_id]) {
+      const known = (typeof ROUTES !== 'undefined' && ROUTES.find(r => r.id === s.route_id)) || null;
+      ROUTES_META[s.route_id] = {
+        name: s.name || known?.name || `Route ${s.route_id}`,
+        short: known?.short || String(s.route_id),
+        color: known?.color || normalizeColor(s.color) || '#888'
+      };
+      if (known) ROUTE_COLOR_MAP[s.route_id] = known.color;
+      else ROUTE_COLOR_MAP[s.route_id] = normalizeColor(s.color) || '#888';
+    }
+  });
 }
 
-function updateIslandSliderButtons() {
-  const viewport = document.getElementById('islandSliderViewport');
-  const prev = document.getElementById('islandSliderPrev');
-  const next = document.getElementById('islandSliderNext');
-  if (!viewport || !prev || !next) return;
-  const max = viewport.scrollWidth - viewport.clientWidth;
-  prev.disabled = viewport.scrollLeft <= 2;
-  next.disabled = viewport.scrollLeft >= max - 2;
+function applyActiveIslandData() {
+  updateIslandBodyClass();
+  allVehicles = (islandVehicleCache[activeIsland] || []).slice();
+  routeShapes = islandShapeCache[activeIsland] || [];
+  applyShapeMeta(routeShapes);
+  allVehicles.forEach(v => {
+    const rk = `${activeIsland}:${v.routeId}`;
+    if (islandRouteVisible[rk] === undefined) islandRouteVisible[rk] = true;
+    if (routeVisible[v.routeId] === undefined) routeVisible[v.routeId] = true;
+  });
+  if (activeIsland !== 'big-island') stoplineCache = {};
+  const vcount = visibleVehicles().filter(v => !v.unassigned).length;
+  const isl = currentIslandDef();
+  const islLabel = isl ? isl.short : '';
+  const vcEl = document.getElementById('vehicleCountText');
+  if (vcEl) vcEl.textContent = `${vcount} bus${vcount !== 1 ? 'es' : ''}${islLabel ? ' · ' + islLabel : ''}`;
+  renderVehicleList();
+  renderRouteList();
+  renderMarkers();
+  renderRouteShapes();
+  renderHibikeMarkers();
+  if (lastMobilityData) updateHibikeStatus(lastMobilityData);
+  if (activeIsland === 'big-island') {
+    renderStatus();
+    renderStopMarkers();
+  } else if (mapReady && map.getSource('stops')) {
+    map.getSource('stops').setData({ type: 'FeatureCollection', features: [] });
+    if (map.getLayer('controls-circle')) map.setLayoutProperty('controls-circle', 'visibility', 'none');
+  }
 }
 
-function wireIslandSlider() {
-  const viewport = document.getElementById('islandSliderViewport');
-  const prev = document.getElementById('islandSliderPrev');
-  const next = document.getElementById('islandSliderNext');
-  if (!viewport || viewport._wired) return;
-  viewport._wired = true;
-  viewport.addEventListener('scroll', () => updateIslandSliderButtons(), { passive: true });
-  if (prev) prev.onclick = () => {
-    const step = Math.max(viewport.clientWidth * 0.75, 120);
-    viewport.scrollBy({ left: -step, behavior: 'smooth' });
-  };
-  if (next) next.onclick = () => {
-    const step = Math.max(viewport.clientWidth * 0.75, 120);
-    viewport.scrollBy({ left: step, behavior: 'smooth' });
-  };
-  window.addEventListener('resize', () => { updateIslandSliderButtons(); scrollActiveIslandIntoView(false); });
+async function refreshIslandCaches() {
+  const live = ISLAND_CATALOG.filter(i => i.available !== false);
+  await Promise.all(live.map(async isl => {
+    try {
+      const [vRes, sRes] = await Promise.all([
+        fetch(`/api/vehicles?island=${encodeURIComponent(isl.id)}`),
+        fetch(`/api/shapes?island=${encodeURIComponent(isl.id)}`),
+      ]);
+      if (vRes.ok) {
+        const data = await vRes.json();
+        islandVehicleCache[isl.id] = (data.vehicles || []).map(v => Object.assign({ island: isl.id }, v));
+        if (data.stats) {
+          islandStatus[isl.id] = Object.assign({}, islandStatus[isl.id] || {}, {
+            vehicles: data.stats.total,
+            lastPollTs: data.stats.ts,
+          });
+        }
+      }
+      if (sRes.ok) {
+        const shapes = await sRes.json();
+        islandShapeCache[isl.id] = shapes;
+        islandStatus[isl.id] = Object.assign({}, islandStatus[isl.id] || {}, {
+          shapes: shapes.length,
+          routes: new Set(shapes.map(s => s.route_id)).size,
+        });
+      }
+    } catch (e) { console.warn('[refreshIslandCaches]', isl.id, e.message); }
+  }));
+  renderIslandGrid();
 }
 
-function renderIslandSubTabs() {
-  const track = document.getElementById('islandSliderTrack');
-  const dotsEl = document.getElementById('islandSliderDots');
+function renderIslandGrid() {
+  const grid = document.getElementById('islandGrid');
   const noteEl = document.getElementById('islandNote');
-  if (!track) return;
-  wireIslandSlider();
-  track.innerHTML = ISLAND_CATALOG.map(islandTabHtml).join('');
-  track.querySelectorAll('.island-tab:not(.unavailable)').forEach(btn => {
+  if (!grid) return;
+  grid.innerHTML = ISLAND_CATALOG.map(islandTabHtml).join('');
+  grid.querySelectorAll('.island-tab:not(.unavailable)').forEach(btn => {
     btn.onclick = () => switchIsland(btn.dataset.island);
   });
-  if (dotsEl) {
-    dotsEl.innerHTML = ISLAND_CATALOG.map(isl =>
-      `<button type="button" class="island-slider-dot${activeIsland === isl.id ? ' active' : ''}"
-        aria-label="${escapeHtml(isl.short || isl.name)}"
-        ${isl.available === false ? 'disabled' : ''}
-        data-island="${isl.id}"></button>`
-    ).join('');
-    dotsEl.querySelectorAll('.island-slider-dot:not([disabled])').forEach(dot => {
-      dot.onclick = () => switchIsland(dot.dataset.island);
-    });
-  }
   if (noteEl) {
     const cur = currentIslandDef();
     if (!cur) { noteEl.innerHTML = ''; }
@@ -1481,17 +1414,18 @@ function renderIslandSubTabs() {
       const apiHost = cur.host || '';
       const agency = cur.agency || cur.name;
       const extra = cur.id === 'big-island'
-        ? `Road-snapped routes, transformer ETAs, and full fleet history. <a href="https://www.hawaiiislandbike.com/" target="_blank">HIBIKE</a> + <a href="https://gobiki.org/" target="_blank">Biki</a> bikeshare on the map.`
+        ? `Road-snapped routes, transformer ETAs, and full fleet history. <a href="https://www.hawaiiislandbike.com/" target="_blank">HIBIKE</a> docks on the map.`
         : cur.available === false
-          ? (cur.reason || 'No keyless public feed.')
-          : `Keyless Syncromatics GTFS-RT + RTPI from <a href="https://${apiHost}/" target="_blank">${apiHost}</a>. ${st.routes || '—'} routes · ${st.shapes || '—'} patterns.`;
+          ? (() => {
+            const reg = cur.registerUrl ? ` <a href="${cur.registerUrl}" target="_blank">Register for API access</a>.` : '';
+            const detail = cur.reasonDetail || cur.reason || 'No keyless public feed.';
+            const doc = (cur.docs && cur.docs[0]) ? ` <a href="${cur.docs[0].url}" target="_blank">${cur.docs[0].label}</a>` : '';
+            return `${detail}${doc}${reg}`;
+          })()
+          : `Keyless Syncromatics GTFS-RT + RTPI from <a href="https://${apiHost}/" target="_blank">${apiHost}</a>. ${st.routes || '—'} routes · ${st.shapes || '—'} patterns. Live GPS — no schedule ETAs yet.`;
       noteEl.innerHTML = `<strong>${agency}</strong> — ${extra}`;
     }
   }
-  requestAnimationFrame(() => {
-    scrollActiveIslandIntoView(false);
-    updateIslandSliderButtons();
-  });
 }
 
 function flyToIsland(isl) {
@@ -1503,19 +1437,22 @@ async function switchIsland(id) {
   const target = ISLAND_CATALOG.find(i => i.id === id);
   if (!target || target.available === false || id === activeIsland) return;
   activeIsland = id;
+  selectedVehicleKey = null;
   Object.keys(markers).forEach(k => { markers[k].marker.remove(); delete markers[k]; });
-  renderIslandSubTabs();
-  const isl = currentIslandDef();
-  flyToIsland(isl);
+  applyActiveIslandData();
+  renderIslandGrid();
+  flyToIsland(target);
   if (activeTab === 'fleet') await fetchFleet();
   else {
-    await Promise.all([fetchAll(), fetchShapes()]);
-    if (activeIsland !== 'big-island') {
+    await refreshIslandCaches();
+    applyActiveIslandData();
+    if (activeIsland === 'big-island') {
+      fetchTrails();
+      fetchStoplines();
+    } else {
       trailEdgesData = null;
       trailData = {};
       renderTrails();
-    } else {
-      fetchTrails();
     }
   }
 }
@@ -1526,10 +1463,10 @@ async function fetchIslands() {
     ISLAND_CATALOG = data.islands || [];
     islandStatus = data.status || {};
     if (!ISLAND_CATALOG.find(i => i.id === activeIsland) && ISLAND_CATALOG.length) {
-      activeIsland = ISLAND_CATALOG[0].id;
+      activeIsland = (ISLAND_CATALOG.find(i => i.available !== false) || ISLAND_CATALOG[0]).id;
     }
-    renderIslandSubTabs();
-    updateIslandSliderVisibility();
+    renderIslandGrid();
+    updateIslandBodyClass();
   } catch (e) { console.error('[fetchIslands]', e); }
 }
 
@@ -1541,7 +1478,7 @@ let stoplineCache = {};     // vehicleId -> stopline data
 let routeVisible = {};
 let markers = {};
 let popup = null;
-let selectedVehicleId = null;
+let selectedVehicleKey = null;
 let routeShapes = [];
 let trailData = {};
 let countdownVal = REFRESH_INTERVAL;
@@ -1584,6 +1521,108 @@ function installStaticFallback(reason) {
   </div>`;
 }
 
+// ─── MAP GESTURE PERF ─────────────────────────────────────────────────────────
+// While the user is panning/zooming, shed the work that doesn't help the gesture:
+// hover hit-tests, per-frame GeoJSON chevron rebuilds, DOM-marker glide loops,
+// label/symbol collision, and hillshade/pill overlays. Everything restores on
+// moveend/zoomend so there's no visual compromise at rest — only during motion.
+let _mapGestureRefs = 0;
+let _gestureHiddenLayers = null;
+const _gestureSetDataQueue = new Map();
+const GESTURE_HIDE_LAYERS = [
+  'relief-hillshade', 'hillshade-layer', 'route-pills-symbol', 'ahead-arrows',
+  'vessel-trails-line', 'aircraft-trails-line', 'trails-line', 'trail-dots-circle',
+  'infra-lines', 'streamflow-label',
+];
+function mapGesturing() { return _mapGestureRefs > 0; }
+function patchGeoJsonSetData() {
+  if (!map || map._geoSetDataPatched) return;
+  map._geoSetDataPatched = true;
+  const wrap = (id) => {
+    const src = map.getSource(id);
+    if (!src || src.type !== 'geojson' || src._gesturePatched) return;
+    const orig = src.setData.bind(src);
+    src.setData = (data) => {
+      if (mapGesturing()) { _gestureSetDataQueue.set(id, data); return; }
+      orig(data);
+    };
+    src._gesturePatched = true;
+  };
+  const style = map.getStyle();
+  for (const id of Object.keys(style.sources || {})) wrap(id);
+  const origAdd = map.addSource.bind(map);
+  map.addSource = function(id, spec) {
+    const r = origAdd(id, spec);
+    if (spec && spec.type === 'geojson') wrap(id);
+    return r;
+  };
+}
+function flushGestureSetData() {
+  if (!mapReady) return;
+  for (const [id, data] of _gestureSetDataQueue) {
+    const s = map.getSource(id);
+    if (s) s.setData(data);
+  }
+  _gestureSetDataQueue.clear();
+}
+function beginMapGesture() {
+  if (_mapGestureRefs++ > 0) return;
+  document.body.classList.add('map-gesturing');
+  if (aheadAnimRAF) { cancelAnimationFrame(aheadAnimRAF); aheadAnimRAF = null; aheadLastFrame = 0; }
+  if (markerAnimRAF) { cancelAnimationFrame(markerAnimRAF); markerAnimRAF = null; markerLastFrame = 0; }
+  try { hideLayerHover(); } catch (e) {}
+  if (mapReady) {
+    _gestureHiddenLayers = new Map();
+    for (const id of GESTURE_HIDE_LAYERS) {
+      if (!map.getLayer(id)) continue;
+      _gestureHiddenLayers.set(id, map.getLayoutProperty(id, 'visibility') || 'visible');
+      map.setLayoutProperty(id, 'visibility', 'none');
+    }
+  }
+}
+function endMapGesture() {
+  if (_mapGestureRefs <= 0) return;
+  if (--_mapGestureRefs > 0) return;
+  document.body.classList.remove('map-gesturing');
+  if (mapReady) {
+    flushGestureSetData();
+    if (_gestureHiddenLayers) {
+      for (const [id, vis] of _gestureHiddenLayers) {
+        if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis);
+      }
+      _gestureHiddenLayers = null;
+    }
+  }
+  try { scheduleMarkerRescale(); } catch (e) {}
+  try { deOverlapMarkers(); } catch (e) {}
+  try { if (aheadSegments.length) startAheadAnim(); } catch (e) {}
+  try { if (Object.keys(markers).length) startMarkerAnim(); } catch (e) {}
+}
+function wireMapGesturePerf() {
+  const on = () => beginMapGesture();
+  const off = () => endMapGesture();
+  map.on('movestart', on);
+  map.on('moveend', off);
+  map.on('zoomstart', on);
+  map.on('zoomend', off);
+  map.on('dragstart', on);
+  map.on('dragend', off);
+  patchGeoJsonSetData();
+}
+function scheduleIdleWork(fn, timeoutMs) {
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(() => { try { fn(); } catch (e) { console.error(e); } }, { timeout: timeoutMs || 2500 });
+  } else {
+    setTimeout(() => { try { fn(); } catch (e) { console.error(e); } }, 50);
+  }
+}
+const GEO_EMPTY = { type: 'FeatureCollection', features: [] };
+function geoSource(data, maxzoom) {
+  const src = { type: 'geojson', data: data || GEO_EMPTY };
+  if (maxzoom != null) src.maxzoom = maxzoom;
+  return src;
+}
+
 // ─── MAP INIT ─────────────────────────────────────────────────────────────────
 function initMap() {
   try {
@@ -1594,6 +1633,11 @@ function initMap() {
       zoom: 10,
       attributionControl: false,
       fadeDuration: 0,
+      crossSourceCollisions: false,
+      renderWorldCopies: false,
+      maxTileCacheSize: 256,
+      prefetchZoomDelta: 0,
+      canvasContextAttributes: { powerPreference: 'high-performance', antialias: false },
     });
   } catch (e) {
     // Synchronous constructor failure (e.g. WebGL truly unavailable in this
@@ -1628,22 +1672,27 @@ function initMap() {
     try { fetchStreamflow(); } catch (e) {}
     try { fetchOcean(); } catch (e) {}
     try { fetchMarine(); } catch (e) {}
-    try { fetchAprs(); } catch (e) {}
-    try { fetchAirQuality(); } catch (e) {}
-    try { fetchWaterQuality(); } catch (e) {}
-    try { fetchVolcano(); } catch (e) {}
-    try { fetchMetars(); } catch (e) {}
-    try { fetchMeshtastic(); } catch (e) {}
-    try { fetchRepeaters(); } catch (e) {}
-    try { fetchScanner(); } catch (e) {}
-    try { fetchInfrastructure(); } catch (e) {}
-    try { fetchLocal(); } catch (e) {}
-    try { fetchEv(); } catch (e) {}
-    try { fetchSurf(); } catch (e) {}
+    scheduleIdleWork(() => {
+      try { fetchAprs(); } catch (e) {}
+      try { fetchAirQuality(); } catch (e) {}
+      try { fetchWaterQuality(); } catch (e) {}
+      try { fetchVolcano(); } catch (e) {}
+      try { fetchMetars(); } catch (e) {}
+      try { fetchMeshtastic(); } catch (e) {}
+      try { fetchRepeaters(); } catch (e) {}
+      try { fetchScanner(); } catch (e) {}
+    }, 1200);
+    scheduleIdleWork(() => {
+      try { fetchInfrastructure(); } catch (e) {}
+      try { fetchLocal(); } catch (e) {}
+      try { fetchEv(); } catch (e) {}
+      try { fetchSurf(); } catch (e) {}
+    }, 2400);
     // Most layers ship on by default now. Setting a checkbox's `checked` in HTML
     // doesn't fire its onchange, and layers initialise hidden, so invoke each
     // toggle once here to actually reveal them (lava + tsunami stay off).
     try { applyDefaultLayers(); } catch (e) { console.error('[map] default layers:', e); }
+    wireMapGesturePerf();
     // Keep an open click-card glued to its map anchor as the map moves.
     map.on('move', positionMapCard);
     // Click on empty map (no interactive feature) closes the card.
@@ -1787,7 +1836,7 @@ function initMapLayers() {
   // layer never got created on the very first render — routes never drew.
 
   // Trail layer
-  map.addSource('trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   // Ribbon-capable: when the server returns edge-keyed trail data (the normal
   // case), each feature carries a `slot` used to offset overlapping vehicle
   // trails into tight parallel stripes, same as the live route ribbons —
@@ -1807,7 +1856,7 @@ function initMapLayers() {
   });
 
   // Trail dots (recent pings)
-  map.addSource('trail-dots', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('trail-dots', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({ id: 'trail-dots-circle', type: 'circle', source: 'trail-dots',
     paint: { 'circle-radius': 3, 'circle-color': ['get', 'color'], 'circle-opacity': 0.6, 'circle-stroke-width': 1, 'circle-stroke-color': 'rgba(0,0,0,.4)' }
   });
@@ -1826,7 +1875,7 @@ function initMapLayers() {
   // exactly along travel direction. The chevron is an SDF icon so icon-color can
   // tint it to the route's colour. Animating the sampling offset marches them all
   // forward together (a flowing stream). Source data is rebuilt each frame.
-  map.addSource('ahead', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('ahead', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({ id: 'ahead-arrows', type: 'symbol', source: 'ahead',
     layout: {
       'icon-image': 'chevron',
@@ -1845,7 +1894,7 @@ function initMapLayers() {
   });
 
   // Stop markers layer.
-  map.addSource('stops', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('stops', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   // Small base dot (route-coloured) so a stop is still locatable when zoomed out.
   map.addLayer({ id: 'stops-circle', type: 'circle', source: 'stops',
     maxzoom: 13,
@@ -1875,7 +1924,7 @@ function initMapLayers() {
   // Learned (observed) stops — places buses repeatedly dwell that aren't an
   // official stop. Distinct HOLLOW marker so it's clearly "observed, not
   // published". Drawn under the official stops.
-  map.addSource('learned-stops', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('learned-stops', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({ id: 'learned-stops-circle', type: 'circle', source: 'learned-stops',
     minzoom: 12,
     paint: {
@@ -1892,7 +1941,7 @@ function initMapLayers() {
   // so we accumulate each craft's recent positions client-side and draw a
   // fading dashed wake beneath the marker — the same idea as the bus trails.
   // Added before the vessel icon so the wake draws underneath.
-  map.addSource('vessel-trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('vessel-trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({ id: 'vessel-trails-line', type: 'line', source: 'vessel-trails',
     paint: { 'line-color': '#22d3ee', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.2, 12, 2.4],
       'line-opacity': 0.6, 'line-dasharray': [1, 1.5] },
@@ -1901,7 +1950,7 @@ function initMapLayers() {
   // Plain circle layer so a vessel is always locatable at low zoom; the
   // heading chevron is layered on top via a second symbol layer that rotates
   // per-feature. Same pattern as the bus-ahead chevrons.
-  map.addSource('vessels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('vessels', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'vessels-icon', type: 'symbol', source: 'vessels',
     layout: {
@@ -1948,14 +1997,14 @@ function initMapLayers() {
     <div style="color:var(--muted);font-size:11px;">${p.speedKts} kts · heading ${Math.round(p.heading)}°</div>`);
 
   // ─── Bikeshare docks (GBFS — HIBIKE + Biki, keyless) ─────────────────────
-  map.addSource('hibike', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('hibike', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'hibike-icon', type: 'symbol', source: 'hibike',
     layout: {
       'icon-image': 'marker-hibike', 'icon-anchor': 'left', 'icon-allow-overlap': true,
       'icon-ignore-placement': true,
       'icon-size': ICON_SIZE.md,
-      'text-field': ['get', 'bikes'],
+      'text-field': ['to-string', ['get', 'bikes']],
       'text-size': ['interpolate', ['linear'], ['zoom'], 10, 11, 14, 14],
       'text-font': EMOJI_FONT,
       'text-anchor': 'left', 'text-offset': [1.3, 0],
@@ -1980,12 +2029,12 @@ function initMapLayers() {
   });
   wireLayerHover('hibike-icon', p => `
     <div style="font-weight:600;">🚲 ${escapeHtml(p.name)}</div>
-    <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.systemName || '')} · ${p.bikes} bikes · ${p.docks} open docks</div>`);
+    <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.systemName || '')} · ${Number(p.bikes) || 0} bikes · ${Number(p.docks) || 0} open docks</div>`);
 
   // ─── AIRCRAFT trail + layer ───────────────────────────────────────────────
   // Client-accumulated flight paths (see vessel trails above). Drawn beneath
   // the aircraft triangles.
-  map.addSource('aircraft-trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('aircraft-trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({ id: 'aircraft-trails-line', type: 'line', source: 'aircraft-trails',
     minzoom: 7,
     paint: { 'line-color': '#ffd33d', 'line-width': ['interpolate', ['linear'], ['zoom'], 7, 1.2, 12, 2.4],
@@ -1997,7 +2046,7 @@ function initMapLayers() {
   if (!map.hasImage('aircraft-triangle')) {
     map.addImage('aircraft-triangle', makeAircraftIcon(), { pixelRatio: 2, sdf: true });
   }
-  map.addSource('aircraft', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('aircraft', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'aircraft-triangles', type: 'symbol', source: 'aircraft',
     minzoom: 7,
@@ -2092,11 +2141,11 @@ function initMapLayers() {
       'hillshade-shadow-color': '#1a2332',
       'hillshade-highlight-color': '#fdf6e3',
       'hillshade-accent-color': '#3d5a3d',
-      'hillshade-exaggeration': 0.55,
+      'hillshade-exaggeration': 0.32,
     },
   }, 'stops-circle');
 
-  map.addSource('lava-zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('lava-zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'lava-zones-fill', type: 'fill', source: 'lava-zones',
     layout: { visibility: 'none' },
@@ -2120,7 +2169,7 @@ function initMapLayers() {
     <div style="font-weight:600;">🌋 Lava Flow Hazard Zone ${escapeHtml(String(p.hzone))}</div>
     <div style="color:var(--muted);font-size:11px;">1 = highest risk, 9 = lowest — Hawaii Statewide GIS</div>`);
 
-  map.addSource('tsunami-zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('tsunami-zones', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'tsunami-zones-fill', type: 'fill', source: 'tsunami-zones',
     layout: { visibility: 'none' },
@@ -2135,7 +2184,7 @@ function initMapLayers() {
     <div style="font-weight:600;">🌊 ${escapeHtml(p.zone_type || 'Tsunami Evacuation Zone')}</div>
     <div style="color:var(--muted);font-size:11px;">${escapeHtml(p.zone_desc || '')}</div>`);
 
-  map.addSource('earthquakes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('earthquakes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'earthquakes-icon', type: 'symbol', source: 'earthquakes',
     layout: {
@@ -2157,7 +2206,7 @@ function initMapLayers() {
   // Wildfire / thermal hotspots (NASA VIIRS satellite detections) — note this
   // layer also lights up on active lava (Kīlauea), not just wildfire; the
   // popup says "thermal hotspot" rather than assuming fire.
-  map.addSource('wildfire', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('wildfire', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'wildfire-icon', type: 'symbol', source: 'wildfire',
     layout: {
@@ -2178,7 +2227,7 @@ function initMapLayers() {
 
   // USGS real-time streamflow gauges (Big Island rivers/streams), fed by the
   // NWIS water-information system. Sizes ~linearly with discharge in ft³/s.
-  map.addSource('streamflow', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('streamflow', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'streamflow-circle', type: 'circle', source: 'streamflow',
     layout: { visibility: 'none' },
@@ -2237,7 +2286,7 @@ function initMapLayers() {
 
   // NWS weather stations — current temperature/humidity/wind at each Big
   // Island station. Big readable temp label, click for full popup.
-  map.addSource('weather-stations', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('weather-stations', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'weather-stations-icon', type: 'symbol', source: 'weather-stations',
     layout: {
@@ -2280,7 +2329,7 @@ function initMapLayers() {
   // text-allow-overlap:false so MapLibre's collision engine automatically hides
   // any that would pile up — they thin out when zoomed out, fill in when zoomed
   // in. `icon` prop is set per-feature in fetchOcean.
-  map.addSource('ocean', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('ocean', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'ocean-dot', type: 'symbol', source: 'ocean',
     layout: {
@@ -2331,7 +2380,7 @@ function initMapLayers() {
   wireLayerCard('ocean-dot', oceanCard);
 
   // Marine reef webcams (MEGA Lab / Aqualink) + Sofar spotter sensor sites.
-  map.addSource('marine', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('marine', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'marine-dot', type: 'symbol', source: 'marine',
     layout: {
@@ -2353,7 +2402,7 @@ function initMapLayers() {
   // APRS ham-radio positions (vehicles/stations/weather beacons, keyless). Emoji
   // by kind (🚗 vehicle / 🌤 wx / ⛵ boat / 📻 station); collision-hidden so a
   // busy area doesn't turn to mush. Populates in production.
-  map.addSource('aprs', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('aprs', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'aprs-icon', type: 'symbol', source: 'aprs',
     layout: {
@@ -2376,7 +2425,7 @@ function initMapLayers() {
   // Air quality / vog — sampled Big Island towns (Open-Meteo, keyless). A dot
   // colored by US AQI (green→maroon) with the AQI number; vog usually hits
   // Kona/Ka'ū worst. Always on. Circle (not emoji) so the color IS the signal.
-  map.addSource('airquality', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('airquality', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'airquality-icon', type: 'symbol', source: 'airquality',
     layout: {
@@ -2409,7 +2458,7 @@ function initMapLayers() {
   // Ocean water quality: PacIOOS moored buoys (Hilo Bay, Pelekane Bay). Real
   // in-situ sensors reporting sea temp/salinity/turbidity/chlorophyll/DO/pH
   // every 15 min. Card carries a real photo of the bay + a description.
-  map.addSource('waterquality', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('waterquality', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'waterquality-icon', type: 'symbol', source: 'waterquality',
     layout: {
@@ -2445,7 +2494,7 @@ function initMapLayers() {
   // Volcano: USGS HVO alert badges at Kīlauea/Mauna Loa summits + live webcam
   // points. Clicking a webcam opens a card with the live USGS JPEG (refreshed
   // continuously by HVO — public domain). Keyless.
-  map.addSource('volcano', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('volcano', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'volcano-dot', type: 'symbol', source: 'volcano',
     layout: {
@@ -2485,7 +2534,7 @@ function initMapLayers() {
   // Aviation METARs: live observed weather at every Big Island airfield including
   // Bradshaw Army Airfield inside Pōhakuloa Training Area. Colored by flight
   // category (VFR green / MVFR blue / IFR red / LIFR magenta). Keyless.
-  map.addSource('metars', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('metars', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'metars-dot', type: 'symbol', source: 'metars',
     layout: {
@@ -2521,7 +2570,7 @@ function initMapLayers() {
   // A translucent footprint ring shows the radio/visibility horizon; the emoji
   // marks the sub-satellite point. When it's actually over Hawaiʻi the ring
   // glows. Poll is fast (20s) so the track visibly creeps across the map.
-  map.addSource('satellites', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('satellites', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'satellites-footprint', type: 'circle', source: 'satellites',
     paint: {
@@ -2568,7 +2617,7 @@ function initMapLayers() {
   // Rainfall — standalone USGS rain gauges (keyless). Emoji intensifies with
   // the last-6h accumulation (☁️ trace → 🌧️ → ⛈️ heavy), colored blue. Auto-
   // declutters via collision so it never turns into a wall of raindrops.
-  map.addSource('rainfall', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('rainfall', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'rainfall-icon', type: 'symbol', source: 'rainfall',
     layout: {
@@ -2597,7 +2646,7 @@ function initMapLayers() {
   // (shipwrecks, battle sites, heiau, old docks, waterfalls, landmarks) with a
   // photo + notes on click. Kind-based emoji; collision auto-declutters. Off by
   // default (it's a browse-y layer, not live status).
-  map.addSource('places', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('places', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'places-icon', type: 'symbol', source: 'places',
     minzoom: 9,
@@ -2629,7 +2678,7 @@ function initMapLayers() {
   // ghost towns, fishponds, ranches, famous natural landmarks. Per-category
   // vendored icons; cards carry a real photo + deep write-up + link. Off by
   // default (dense browse layer) — toggled from the map controls.
-  map.addSource('heritage', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('heritage', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'heritage-icon', type: 'symbol', source: 'heritage',
     minzoom: 8,
@@ -2658,7 +2707,7 @@ function initMapLayers() {
 
   // Meshtastic / LoRa mesh nodes — real community radios (solar repeaters on
   // ridgelines, pocket nodes) heard over MQTT. Keyless.
-  map.addSource('meshtastic', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('meshtastic', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'meshtastic-icon', type: 'symbol', source: 'meshtastic',
     layout: {
@@ -2691,7 +2740,7 @@ function initMapLayers() {
   // Ham radio repeaters (hearham.com, keyless): every VHF/UHF machine on the
   // island with frequency/offset/tone. Static-ish infrastructure, so off by
   // default behind the APRS/ham toggle... shown always for now, collision-thinned.
-  map.addSource('repeaters', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('repeaters', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'repeaters-icon', type: 'symbol', source: 'repeaters',
     layout: {
@@ -2768,12 +2817,12 @@ function initMapLayers() {
 
   // Power grid — plants, substations, transmission lines (OSM + curated HECO plants).
   // No live MW feed exists; cards show fuel type and annual mix reference.
-  map.addSource('infra-power', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-  map.addSource('infra-subs', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-  map.addSource('infra-lines', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('infra-power', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
+  map.addSource('infra-subs', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
+  map.addSource('infra-lines', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   // Railways — heritage/tourist track + stations (Laupāhoehoe, Pana'ewa Zoo
   // train, old sugar lines). Dashed brown "railroad tie" line + 🚂 stations.
-  map.addSource('infra-rail', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('infra-rail', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'infra-rail-line', type: 'line', source: 'infra-rail',
     filter: ['==', ['get', 'kind'], 'track'],
@@ -2846,7 +2895,7 @@ function initMapLayers() {
   });
 
   // ─── EV charging stations (NREL AFDC) ────────────────────────────────────
-  map.addSource('ev', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('ev', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'ev-icon', type: 'symbol', source: 'ev',
     layout: {
@@ -2863,7 +2912,7 @@ function initMapLayers() {
   wireLayerCard('ev-icon', p => ({ title: `🔌 ${p.name || 'EV charging'}`, body: buildEvCard(p) }));
 
   // ─── Surf & beaches (Open-Meteo waves + curated breaks) ───────────────────
-  map.addSource('surf', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('surf', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'surf-icon', type: 'symbol', source: 'surf',
     layout: {
@@ -2919,7 +2968,7 @@ function initMapLayers() {
     <div style="color:var(--muted);font-size:10px;">${p.voltage ? escapeHtml(p.voltage) + ' · ' : ''}substation</div>`);
 
   // Cell / radio towers mapped in OpenStreetMap (subset of full FCC ASR database).
-  map.addSource('infra-cell', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('infra-cell', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'infra-cell-icon', type: 'symbol', source: 'infra-cell',
     minzoom: 10,
@@ -2943,7 +2992,7 @@ function initMapLayers() {
   });
 
   // Internet colocation + exchange points (PeeringDB — statewide, mostly Oʻahu).
-  map.addSource('infra-net', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('infra-net', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'infra-net-icon', type: 'symbol', source: 'infra-net',
     layout: {
@@ -2975,11 +3024,11 @@ function initMapLayers() {
   map.setLayoutProperty('infra-net-icon', 'visibility', 'none');
 
   // Local: gas stations, AADT roads, Blyncsy sensors, LCO telescopes, iNaturalist.
-  map.addSource('local-fuel', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-  map.addSource('local-traffic', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-  map.addSource('local-sensors', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-  map.addSource('local-lco', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-  map.addSource('local-inat', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('local-fuel', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
+  map.addSource('local-traffic', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
+  map.addSource('local-sensors', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
+  map.addSource('local-lco', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
+  map.addSource('local-inat', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'local-traffic-line', type: 'line', source: 'local-traffic', minzoom: 10,
     layout: { 'line-join': 'round', 'line-cap': 'round' },
@@ -3054,7 +3103,7 @@ function initMapLayers() {
   // Summit observatories (Maunakea CFHT tower, Mauna Loa NOAA) — live conditions
   // straight from the observatories, no key. A telescope glyph with a small
   // readout; hover for full readings.
-  map.addSource('summits', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  map.addSource('summits', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   map.addLayer({
     id: 'summits-dot', type: 'symbol', source: 'summits',
     layout: {
@@ -3076,7 +3125,7 @@ function initMapLayers() {
   // Public-safety facility markers — static reference locations, off by
   // default so they don't clutter the map; toggled from the Hawaiʻi tab.
   ['police', 'fire', 'ems', 'trauma'].forEach(kind => {
-    map.addSource(`facility-${kind}`, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addSource(`facility-${kind}`, { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
     map.addLayer({
       id: `facility-${kind}-icon`, type: 'symbol', source: `facility-${kind}`,
       layout: {
@@ -3674,7 +3723,7 @@ function buildHeritageCardBody(p) {
   const extract = p.extract ? `<div style="font-size:11.5px;line-height:1.55;color:#c9d1d9;border-top:1px solid #30363d;padding-top:8px;">${escapeHtml(p.extract)}</div>` : '';
   const link = p.url ? `<div style="margin-top:8px;font-size:10px;"><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener" style="color:#58a6ff;">Read more on Wikipedia ↗</a></div>` : '';
   const dir = (p.lat != null && p.lon != null) ? `<div style="margin-top:4px;font-size:10px;"><a href="https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}" target="_blank" rel="noopener" style="color:#58a6ff;">Directions / satellite ↗</a></div>` : '';
-  return cat + img + note + extract + link + dir + timelineHtml(p.id, p.name);
+  return cat + img + note + extract + link + dir + timelineHtml(p.id, p.name) + itemLoreHtml(loreKeyHeritage(p.name));
 }
 const ICON_PX = 40;
 const ICON_Z = (z0, s0, z1, s1, z2, s2) => ['interpolate', ['linear'], ['zoom'], z0, s0, z1, s1, z2, s2];
@@ -3732,62 +3781,38 @@ function makeAircraftIcon() {
 const prevStaleIds = new Set();
 const freshFlashIds = new Set(); // vehicles to flash green on next render
 
-function flashVehicle(id) {
-  freshFlashIds.add(id);
-  // Also auto-expand the card so user notices it
-  expandedCards.add(id);
+function flashVehicle(v) {
+  const vk = vehicleKey(v);
+  freshFlashIds.add(vk);
+  expandedCards.add(vk);
 }
 
 async function fetchAll() {
   try {
-    const res = await fetch(islandApiUrl('/api/vehicles'));
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const prevVehicles = allVehicles;
-    allVehicles = (data.vehicles || []).map(v => Object.assign({ island: data.island || activeIsland }, v));
-    islandVehicleCache[activeIsland] = allVehicles;
-    if (data.stats) islandStatus[activeIsland] = Object.assign({}, islandStatus[activeIsland] || {}, { vehicles: data.stats.total, lastPollTs: data.stats.ts });
-    apiLog = data.vehicles ? [{ ok: true, ts: new Date() }] : [];
+    const prevVehicles = allVehicles.slice();
+    await refreshIslandCaches();
+    applyActiveIslandData();
 
-    // Initialize route visibility for new vehicles
-    allVehicles.forEach(v => {
-      const rk = `${activeIsland}:${v.routeId}`;
-      if (islandRouteVisible[rk] === undefined) islandRouteVisible[rk] = true;
-      if (routeVisible[v.routeId] === undefined) routeVisible[v.routeId] = true;
-    });
-
-    // Detect vehicles that just became fresh (were stale, now aren't)
     const nowStaleIds = new Set(allVehicles.filter(v => isStale(v)).map(v => vehicleKey(v)));
     allVehicles.forEach(v => {
       const vk = vehicleKey(v);
-      if (prevStaleIds.has(vk) && !nowStaleIds.has(vk)) {
-        flashVehicle(v.id);
-      }
+      const wasStale = prevStaleIds.has(vk);
+      if (wasStale && !nowStaleIds.has(vk)) flashVehicle(v);
     });
     prevStaleIds.clear();
     nowStaleIds.forEach(id => prevStaleIds.add(id));
 
     fetchFailCount = 0;
     setApiStatus(allVehicles.length > 0 ? 'ok' : 'partial');
-    const vcount = visibleVehicles().filter(v => !v.unassigned).length;
-    const isl = currentIslandDef();
-    const islLabel = isl ? isl.short : '';
-    document.getElementById('vehicleCountText').textContent = `${vcount} bus${vcount !== 1 ? 'es' : ''}${islLabel ? ' · ' + islLabel : ''}`;
     document.getElementById('lastUpdate').textContent = 'Updated ' + new Date().toLocaleTimeString();
-
-    renderIslandSubTabs();
-    renderVehicleList();
-    renderRouteList();
-    if (activeIsland === 'big-island') renderStatus();
-    renderMarkers();
-    renderRouteShapes();
+    if (activeIsland === 'big-island') {
+      renderStatus();
+      fetchStoplines();
+    }
     resetCountdown();
   } catch (e) {
     console.error('[fetchAll]', e);
-    // Don't strobe red on a single transient hiccup — one failed poll on a flaky
-    // connection shouldn't alarm a rider at the stop. Show "Reconnecting…" and
-    // only escalate to a hard error after several consecutive failures. The map
-    // keeps showing the last-known buses the whole time.
+    applyActiveIslandData();
     fetchFailCount++;
     setApiStatus(fetchFailCount >= 3 ? 'error' : 'partial');
     resetCountdown();
@@ -3815,22 +3840,17 @@ function normalizeColor(c) {
 }
 
 async function fetchShapes() {
+  if (islandShapeCache[activeIsland]) {
+    routeShapes = islandShapeCache[activeIsland];
+    applyShapeMeta(routeShapes);
+    renderRouteShapes();
+    return;
+  }
   try {
     const res = await fetch(islandApiUrl('/api/shapes'));
     routeShapes = await res.json();
     islandShapeCache[activeIsland] = routeShapes;
-    routeShapes.forEach(s => {
-      if (!ROUTES_META[s.route_id]) {
-        const known = (typeof ROUTES !== 'undefined' && ROUTES.find(r => r.id === s.route_id)) || null;
-        ROUTES_META[s.route_id] = {
-          name: s.name || known?.name || `Route ${s.route_id}`,
-          short: known?.short || String(s.route_id),
-          color: known?.color || normalizeColor(s.color) || '#888'
-        };
-        if (known) ROUTE_COLOR_MAP[s.route_id] = known.color;
-        else ROUTE_COLOR_MAP[s.route_id] = normalizeColor(s.color) || '#888';
-      }
-    });
+    applyShapeMeta(routeShapes);
     renderRouteShapes();
   } catch(e) { console.error('[fetchShapes]', e); }
 }
@@ -3868,13 +3888,20 @@ function itemLoreHtml(key) {
       `<a href="${escapeHtml(l.url)}" target="_blank" rel="noopener" style="color:#58a6ff;margin-right:8px;">${escapeHtml(l.label)} ↗</a>`
     ).join('') + '</div>';
   }
+  if (entry.enrichment && entry.enrichment.status === 'partial') {
+    html += '<div style="font-size:9px;color:#d29922;margin-top:6px;">More history & photos coming — research in progress.</div>';
+  }
   html += '</div>';
   return html;
 }
 
+function loreSlug(s) {
+  return String(s || '').normalize('NFD').replace(/\p{M}/gu, '').replace(/[\u02BB\u2018\u2019'`ʻʼ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
 function loreKeySummit(id) { return id ? `summit:${id}` : ''; }
 function loreKeyOcean(id) { return id ? `ocean:${id}` : ''; }
 function loreKeyHub(name, kind) { return kind === 'pnr' ? `pnr:${name}` : `hub:${name}`; }
+function loreKeyHeritage(name) { return name ? `heritage:${loreSlug(name)}` : ''; }
 
 async function refreshAgentPanel() {
   const el = document.getElementById('agentPanel');
@@ -4079,7 +4106,7 @@ function renderHubMarkers() {
   }));
   if (!feats.length) return;
   if (!map.getSource('hubs')) {
-    map.addSource('hubs', { type: 'geojson', data: { type: 'FeatureCollection', features: feats } });
+    map.addSource('hubs', { type: 'geojson', data: { type: 'FeatureCollection', features: feats }, maxzoom: 16 });
     map.addLayer({
       id: 'hubs-marker', type: 'circle', source: 'hubs',
       minzoom: 8,
@@ -4306,13 +4333,26 @@ function toggleBoats() {
 }
 
 // ─── Bikeshare / micromobility (GBFS — HIBIKE + Biki, keyless) ─────────────
+const MOBILITY_ISLAND = { hibike: 'big-island', biki: 'oahu' };
 let allMobility = [];
+let lastMobilityData = null;
 let hibikeVisible = true;
+function mobilityIsland(st) {
+  return st.island || MOBILITY_ISLAND[st.system] || null;
+}
+function mobilityForIsland(island) {
+  return allMobility.filter(st => mobilityIsland(st) === island);
+}
+function mobilityStationLabel(name) {
+  const s = String(name || '').trim();
+  return s.replace(/^\d+\s*-\s*/, '').trim() || s || 'Dock';
+}
 async function fetchHibike() {
   try {
     const res = await fetch('/api/mobility');
     const data = await res.json();
     allMobility = data.stations || [];
+    lastMobilityData = data;
     hawaiiList.mobility = allMobility.map(st => ({ id: `${st.system}:${st.id}`, ...st }));
     recordHealth('mobility', data, allMobility.length);
     hawaiiBrowseRefresh();
@@ -4326,29 +4366,46 @@ function updateHibikeStatus(data) {
   const el = document.getElementById('hibikeStatus');
   if (!el) return;
   if (!data) { el.className = 'vessel-status err'; el.innerHTML = '<span class="vessel-dot"></span><span>Offline</span>'; return; }
-  const errs = Object.values(data.errors || {}).filter(Boolean);
-  if (errs.length && !data.count) {
+  const islandSt = mobilityForIsland(activeIsland);
+  const islandSys = (data.systems || []).filter(s => s.island === activeIsland);
+  const errs = islandSys.map(s => s.error).filter(Boolean);
+  if (errs.length && !islandSt.length) {
     el.className = 'vessel-status err';
     el.innerHTML = `<span class="vessel-dot"></span><span title="${escapeHtml(errs[0])}">Feed error</span>`;
     return;
   }
-  const sys = (data.systems || []).map(s => `${s.name} ${s.count}`).join(' · ');
+  if (!islandSt.length && !mobilityForIsland(activeIsland).length && !['big-island', 'oahu'].includes(activeIsland)) {
+    el.className = 'vessel-status';
+    el.innerHTML = '<span class="vessel-dot"></span><span>No bikeshare on this island</span>';
+    return;
+  }
+  const bikes = islandSt.reduce((s, st) => s + (Number(st.bikes) || 0), 0);
+  const sys = islandSys.map(s => `${s.name} ${s.count}`).join(' · ');
   el.className = 'vessel-status live';
-  el.innerHTML = `<span class="vessel-dot"></span><span>${data.bikesAvailable || 0} bikes · ${data.count || 0} docks (${sys || 'GBFS'})</span>`;
+  el.innerHTML = `<span class="vessel-dot"></span><span>${bikes} bikes · ${islandSt.length} docks${sys ? ` (${sys})` : ''}</span>`;
 }
 function renderHibikeMarkers() {
   if (!mapReady || !map.getSource('hibike')) return;
   const src = map.getSource('hibike');
-  if (!hibikeVisible) { src.setData({ type: 'FeatureCollection', features: [] }); return; }
+  if (!hibikeVisible) {
+    src.setData({ type: 'FeatureCollection', features: [] });
+    return;
+  }
+  const stations = mobilityForIsland(activeIsland);
   src.setData({
     type: 'FeatureCollection',
-    features: allMobility.map(st => ({
+    features: stations.map(st => ({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [st.lon, st.lat] },
       properties: {
-        id: st.id, name: st.name, address: st.address || '', bikes: st.bikes, docks: st.docks,
-        system: st.system || '', systemName: st.systemName || '',
-        badge: `${st.bikes}`,
+        id: st.id,
+        name: mobilityStationLabel(st.name),
+        address: st.address || '',
+        bikes: Number(st.bikes) || 0,
+        docks: Number(st.docks) || 0,
+        capacity: Number(st.capacity) || 0,
+        system: st.system || '',
+        systemName: st.systemName || '',
       },
     })),
   });
@@ -5067,6 +5124,7 @@ const COMPACT_ZOOM = 11.5;                  // below this, wheel-only
 // continuous pinch/scroll triggers at most one style pass per frame.
 let _rescaleRaf = 0;
 function scheduleMarkerRescale() {
+  if (mapGesturing()) return;
   if (_rescaleRaf) return;
   _rescaleRaf = requestAnimationFrame(() => {
     _rescaleRaf = 0;
@@ -6732,10 +6790,11 @@ function hawaiiItemBody(catId, item) {
     case 'meshtastic': return hawaiiMeshDetail(item);
     case 'mobility':
       return hawaiiDetailRow('🚲', 'System', escapeHtml(item.systemName || item.system || '')) +
-        hawaiiDetailRow('📍', 'Station', escapeHtml(item.name || '')) +
+        hawaiiDetailRow('📍', 'Station', escapeHtml(mobilityStationLabel(item.name))) +
         (item.address ? hawaiiDetailRow('🏠', 'Address', escapeHtml(item.address)) : '') +
-        hawaiiDetailRow('🚲', 'Bikes available', String(item.bikes ?? '—')) +
-        hawaiiDetailRow('🅿️', 'Open docks', String(item.docks ?? '—')) +
+        hawaiiDetailRow('🚲', 'Bikes available', String(Number(item.bikes) || 0)) +
+        hawaiiDetailRow('🅿️', 'Open docks', String(Number(item.docks) || 0)) +
+        (item.capacity ? hawaiiDetailRow('📊', 'Capacity', String(item.capacity)) : '') +
         hawaiiMapBtn(item.lon, item.lat, 14);
     case 'aprs':
       return hawaiiDetailRow('📻', 'Callsign', escapeHtml(item.call)) +
@@ -6947,7 +7006,7 @@ function hawaiiCategories() {
     { id: 'meshtastic', icon: '📶', label: 'Meshtastic / LoRa',
       items: [...hawaiiList.meshtastic].sort((a, b) => String(a.name).localeCompare(b.name)) },
     { id: 'mobility', icon: '🚲', label: 'Bikeshare Docks',
-      items: [...hawaiiList.mobility].sort((a, b) => String(a.systemName).localeCompare(b.systemName) || String(a.name).localeCompare(b.name)) },
+      items: [...mobilityForIsland(activeIsland)].sort((a, b) => String(a.systemName).localeCompare(b.systemName) || String(a.name).localeCompare(b.name)) },
     { id: 'aprs', icon: '📻', label: 'APRS Trackers',
       items: [...hawaiiList.aprs].sort((a, b) => String(a.call).localeCompare(b.call)) },
     { id: 'weather', icon: '🌡️', label: 'NWS Weather Stations',
@@ -7008,7 +7067,7 @@ function hawaiiItemSummary(catId, item) {
     case 'scanner': return { icon: item.genre === 'Aviation' ? '✈️' : '🚨', title: item.name, meta: item.shortName || `Feed ${item.feedId}` };
     case 'repeaters': return { icon: item.icon || '📡', title: item.callsign, meta: `${item.freqMhz} MHz · ${item.typeLabel || item.group || 'FM'}` };
     case 'meshtastic': return { icon: '📶', title: item.name || item.idHex, meta: [item.hwName, item.battery != null ? `🔋${item.battery}%` : ''].filter(Boolean).join(' · ') };
-    case 'mobility': return { icon: '🚲', title: item.name, meta: `${item.systemName || ''} · ${item.bikes ?? 0} bikes` };
+    case 'mobility': return { icon: '🚲', title: mobilityStationLabel(item.name), meta: `${item.systemName || ''} · ${Number(item.bikes) || 0} bikes · ${Number(item.docks) || 0} open` };
     case 'aprs': return { icon: item.kind === 'vehicle' ? '🚗' : item.kind === 'boat' ? '⛵' : '📻', title: item.call, meta: item.kind || 'APRS' };
     case 'weather': return { icon: item.wxIcon || '🌡️', title: item.name, meta: item.temperatureC != null ? `🌡️ ${(+item.temperatureC).toFixed(0)}°C · ${item.textDescription || ''}` : item.stationId };
     case 'streamflow': {
@@ -7471,6 +7530,12 @@ function labelHour(h) { const ampm = h < 12 ? 'AM':'PM'; const hh = h % 12 || 12
 
 function renderStopMarkers() {
   if (!mapReady) return;
+  const src = map.getSource('stops');
+  if (!src) return;
+  if (activeIsland !== 'big-island') {
+    src.setData({ type: 'FeatureCollection', features: [] });
+    return;
+  }
   buildRouteMetaFromVehicles();
   const features = allStops
     .filter(s => routeVisible[s.route_id] !== false)
@@ -7482,8 +7547,7 @@ function renderStopMarkers() {
         properties: { stopId: s.id, name: s.name, stopCode: s.stopCode || '', routeColor: meta.color || '#888', lat: s.lat.toFixed(5), lon: s.lon.toFixed(5), routeId: s.route_id, routeName: meta.name || '' }
       };
     });
-  const src = map.getSource('stops');
-  if (src) src.setData({ type: 'FeatureCollection', features });
+  src.setData({ type: 'FeatureCollection', features });
 }
 
 async function fetchApiStats() {
@@ -7655,7 +7719,7 @@ let aheadAnimRAF = null, aheadLastFrame = 0, aheadPhase = 0;
 function startAheadAnim() {
   if (aheadAnimRAF) return;
   const tick = (now) => {
-    if (!aheadSegments.length || document.hidden) { aheadAnimRAF = null; aheadLastFrame = 0; return; }
+    if (!aheadSegments.length || document.hidden || mapGesturing()) { aheadAnimRAF = null; aheadLastFrame = 0; return; }
     const dt = aheadLastFrame ? (now - aheadLastFrame) / 1000 : 0.016;
     aheadLastFrame = now;
     aheadPhase = (aheadPhase + 12 * dt) % chevronSpacingM(); // ~12 m/s flow, loops over current spacing
@@ -7757,7 +7821,7 @@ function renderIslandRouteLines(routeMeta) {
   });
   const data = { type: 'FeatureCollection', features };
   if (!map.getSource('island-route-lines')) {
-    map.addSource('island-route-lines', { type: 'geojson', data });
+    map.addSource('island-route-lines', { type: 'geojson', data, maxzoom: 16 });
     map.addLayer({
       id: 'island-route-lines',
       type: 'line',
@@ -7819,7 +7883,7 @@ function renderControls() {
   const data = { type: 'FeatureCollection', features };
   const src = map.getSource('controls');
   if (src) { src.setData(data); return; }
-  map.addSource('controls', { type: 'geojson', data });
+  map.addSource('controls', { type: 'geojson', data, maxzoom: 16 });
   // Signals/stops as filled circles; crossings smaller/fainter (context only).
   map.addLayer({
     id: 'controls-circle', type: 'circle', source: 'controls',
@@ -8121,7 +8185,7 @@ function renderRouteRibbons() {
   const data = { type: 'FeatureCollection', features };
   const bandSrc = map.getSource(RIBBON_SRC);
   if (bandSrc) { bandSrc.setData(data); return; }
-  map.addSource(RIBBON_SRC, { type: 'geojson', data });
+  map.addSource(RIBBON_SRC, { type: 'geojson', data, maxzoom: 16 });
   map.addLayer({
     id: RIBBON_LAYER, type: 'line', source: RIBBON_SRC,
     paint: {
@@ -8147,7 +8211,7 @@ function renderRouteRibbons() {
 // feature id so setFeatureState({id: wayId}) targets the right road.
 function ensureRouteRoadLayer() {
   if (!mapReady || map.getSource(ROAD_SRC) || !routeRoadsData) return;
-  map.addSource(ROAD_SRC, { type: 'geojson', data: routeRoadsData, promoteId: 'wayId' });
+  map.addSource(ROAD_SRC, { type: 'geojson', data: routeRoadsData, promoteId: 'wayId', maxzoom: 16, buffer: 64 });
   // NOTE: MapLibre disallows feature-state in a layer `filter`, so visibility is
   // driven by opacity — a way with no state (`on` unset) renders fully
   // transparent; only recolored roads show.
@@ -8169,6 +8233,7 @@ function ensureRouteRoadLayer() {
   // Hover a road → list EVERY route on it, right at the cursor. Uses wayRouteMap
   // (wayId → routes) built in renderRouteRibbons, so it's always in sync.
   map.on('mousemove', ROAD_LAYER, e => {
+    if (mapGesturing()) return;
     if (!e.features || !e.features.length) return;
     const wid = e.features[0].properties.wayId ?? e.features[0].id;
     const routes = wayRouteMap.get(wid) || wayRouteMap.get(Number(wid));
@@ -8261,7 +8326,7 @@ function renderRoutePills(wayColors) {
   const data = { type: 'FeatureCollection', features: feats };
   const src = map.getSource(PILLS_SRC);
   if (src) { src.setData(data); return; }
-  map.addSource(PILLS_SRC, { type: 'geojson', data });
+  map.addSource(PILLS_SRC, { type: 'geojson', data, maxzoom: 16 });
   map.addLayer({
     id: PILLS_LAYER, type: 'symbol', source: PILLS_SRC,
     minzoom: 13,   // only when zoomed in enough that the label is readable
@@ -8558,27 +8623,41 @@ function onTimeHtml(sl) {
 // ─── VEHICLE LIST ─────────────────────────────────────────────────────────────
 function renderVehicleList() {
   const el = document.getElementById('vehicleList');
-  // The Buses list shows in-service buses only — unassigned/"not in service"
-  // ones still appear on the map (faded) but would just be noise in this list.
+  const isl = currentIslandDef();
+  const islLabel = isl ? isl.short : 'this island';
   const visible = visibleVehicles().filter(v => !v.unassigned);
-  if (!allVehicles.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">🚌</div>No vehicles reporting</div>'; return; }
-  if (!visible.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">👻</div>No buses in service right now<br><span style="font-size:11px">Check the Fleet tab for all vehicles</span></div>'; return; }
+  const hasIslandData = ISLAND_CATALOG.length > 0;
+  if (!hasIslandData) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🚌</div>Loading islands…</div>';
+    return;
+  }
+  if (!allVehicles.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">🚌</div>No vehicles reporting on ${escapeHtml(islLabel)}<br><span style="font-size:11px">Check the Fleet tab for the full roster</span></div>`;
+    return;
+  }
+  if (!visible.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">👻</div>No buses in service on ${escapeHtml(islLabel)} right now<br><span style="font-size:11px">Check the Fleet tab — off-shift buses may still appear on the map</span></div>`;
+    return;
+  }
+  const bigIsland = activeIsland === 'big-island';
   const sorted = [...visible].sort((a,b) => (parseInt(a.name)||0) - (parseInt(b.name)||0));
   el.innerHTML = sorted.map(v => {
+    const vk = vehicleKey(v);
     const age = stalenessClass(v), load = v.passengerLoad || 0, color = v.routeColor || '#444';
     const tc = isLight(color) ? '#111' : '#fff';
-    const sel = selectedVehicleId === v.id ? 'selected' : '';
-    const sl = stoplineCache[v.id];
-    const isOpen = expandedCards.has(v.id);
-    const stoplineHtml = sl ? buildStoplineHtml(sl, color) : `<div style="color:var(--muted);font-size:10px;padding:4px 0;text-align:center;">Loading route…</div>`;
+    const sel = selectedVehicleKey === vk ? 'selected' : '';
+    const sl = bigIsland ? stoplineCache[vk] : null;
+    const isOpen = expandedCards.has(vk);
+    const stoplineHtml = sl ? buildStoplineHtml(sl, color) : '';
     const nextStop = sl?.next_stop;
-    const nextStopStr = nextStop
-      ? `▶ ${nextStop.name.split('(')[0].trim()} — ${nextStop.etaMin != null ? (nextStop.etaMin < 1 ? 'arriving' : `~${Math.round(nextStop.etaMin)} min`) : 'arriving'}`
-      : sl ? 'At terminal' : 'Loading…';
+    const nextStopStr = bigIsland
+      ? (nextStop
+        ? `▶ ${nextStop.name.split('(')[0].trim()} — ${nextStop.etaMin != null ? (nextStop.etaMin < 1 ? 'arriving' : `~${Math.round(nextStop.etaMin)} min`) : 'arriving'}`
+        : sl ? 'At terminal' : '')
+      : (v.headsign ? `▶ ${v.headsign}` : (v.routeName && v.routeName !== 'Not in service' ? v.routeName : 'Live GPS'));
 
-    // Rich next-stop detail row: Predicted / Scheduled / Typical at a glance
     const nextStopDetail = (() => {
-      if (!nextStop || !sl) return '';
+      if (!bigIsland || !nextStop || !sl) return '';
       const schedTime = nextStop.scheduledMs
         ? new Date(nextStop.scheduledMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : '—';
@@ -8621,20 +8700,25 @@ function renderVehicleList() {
         </div>`;
     })();
 
-    const flashCls = freshFlashIds.has(v.id) ? ' just-fresh' : '';
+    const flashCls = freshFlashIds.has(vk) ? ' just-fresh' : '';
+    const stoplineBlock = bigIsland
+      ? `<div class="stopline-wrap">${sl ? stoplineHtml : ''}</div>
+         <div class="stop-list ${isOpen?'open':''}">${sl ? buildStopListHtml(sl, color) : ''}</div>`
+      : '';
     return `<div class="vehicle-card ${sel}${flashCls}">
       <div class="vc-header" onclick="selectVehicle(${v.id})" style="cursor:pointer;">
         <div class="vc-badge" style="background:${color};color:${tc}">${v.routeShort}</div>
         <div class="vc-info">
           <div class="vc-name">Bus #${v.name}</div>
           <div class="vc-route">${v.routeName}${(() => {
+            if (!bigIsland) return '';
             const rc = routeClass(v.routeShort);
             return rc ? ` <span title="${rc.desc}" style="display:inline-block;vertical-align:middle;margin-left:4px;padding:0 5px;border-radius:6px;font-size:9px;font-weight:700;line-height:14px;color:#fff;background:${rc.color};">${rc.label}</span>` : '';
           })()}</div>
         </div>
-        ${onTimeHtml(sl)}
+        ${bigIsland ? onTimeHtml(sl) : ''}
         <div class="vc-freshness ${age}">${stalenessLabel(v)}</div>
-        <div class="vc-expand-btn ${isOpen?'open':''}" title="${isOpen?'Collapse stops':'Show all stops'}">▼</div>
+        ${bigIsland ? `<div class="vc-expand-btn ${isOpen?'open':''}" title="${isOpen?'Collapse stops':'Show all stops'}">▼</div>` : ''}
       </div>
       <div class="vc-stats">
         <div class="vc-stat"><div class="vc-stat-label">Speed</div><div class="vc-stat-val">${v.speed} <span style="font-size:9px;color:var(--muted)">mph</span></div></div>
@@ -8646,44 +8730,39 @@ function renderVehicleList() {
       <div class="vc-load-bar"><div class="vc-load-fill" style="width:${load*100}%;background:${loadColor(load)}"></div></div>
       <div style="margin-top:5px;font-size:10px;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${nextStopStr}</div>
       ${nextStopDetail}
-      <div class="stopline-wrap">${sl ? stoplineHtml : '<div style="color:var(--muted);font-size:10px;padding:4px 0;">Loading route…</div>'}</div>
-      <div class="stop-list ${isOpen?'open':''}">
-        ${sl ? buildStopListHtml(sl, color) : ''}
-      </div>
+      ${stoplineBlock}
     </div>`;
   }).join('');
 
-  // Wire up stop-node hover tooltips after render
-  document.querySelectorAll('.stop-node[data-stop]').forEach(node => {
-    node.addEventListener('mouseenter', e => showStopTooltip(e, node));
-    node.addEventListener('mousemove',  e => posStopTooltip(e));
-    node.addEventListener('mouseleave', hideStopTooltip);
-  });
-
-  // Drag-to-scroll for all stopline-wrap elements
-  document.querySelectorAll('.stopline-wrap').forEach(wrap => {
-    let dragging = false, startX = 0, scrollLeft = 0;
-    wrap.addEventListener('mousedown', e => {
-      dragging = true; startX = e.pageX; scrollLeft = wrap.scrollLeft;
-      wrap.style.cursor = 'grabbing';
+  if (bigIsland) {
+    document.querySelectorAll('.stop-node[data-stop]').forEach(node => {
+      node.addEventListener('mouseenter', e => showStopTooltip(e, node));
+      node.addEventListener('mousemove',  e => posStopTooltip(e));
+      node.addEventListener('mouseleave', hideStopTooltip);
     });
-    document.addEventListener('mousemove', e => {
-      if (!dragging) return;
-      wrap.scrollLeft = scrollLeft - (e.pageX - startX);
+
+    document.querySelectorAll('.stopline-wrap').forEach(wrap => {
+      let dragging = false, startX = 0, scrollLeft = 0;
+      wrap.addEventListener('mousedown', e => {
+        dragging = true; startX = e.pageX; scrollLeft = wrap.scrollLeft;
+        wrap.style.cursor = 'grabbing';
+      });
+      document.addEventListener('mousemove', e => {
+        if (!dragging) return;
+        wrap.scrollLeft = scrollLeft - (e.pageX - startX);
+      });
+      document.addEventListener('mouseup', () => { dragging = false; wrap.style.cursor = 'grab'; });
     });
-    document.addEventListener('mouseup', () => { dragging = false; wrap.style.cursor = 'grab'; });
-  });
 
-  // Auto-scroll active stopline to show bus position
-  document.querySelectorAll('.stopline-wrap').forEach(wrap => {
-    const busMarker = wrap.querySelector('.bus-pos-marker');
-    if (busMarker) {
-      const busLeft = parseFloat(busMarker.style.left) || 0;
-      wrap.scrollLeft = busLeft - wrap.clientWidth / 2;
-    }
-  });
+    document.querySelectorAll('.stopline-wrap').forEach(wrap => {
+      const busMarker = wrap.querySelector('.bus-pos-marker');
+      if (busMarker) {
+        const busLeft = parseFloat(busMarker.style.left) || 0;
+        wrap.scrollLeft = busLeft - wrap.clientWidth / 2;
+      }
+    });
+  }
 
-  // Clear flash IDs after render — animation already running in CSS
   freshFlashIds.clear();
 }
 
@@ -8995,16 +9074,18 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 // ─── ROUTE LIST ───────────────────────────────────────────────────────────────
 function renderRouteList() {
   const el = document.getElementById('routeList');
+  const isl = currentIslandDef();
   const counts = {};
-  allVehicles.forEach(v => counts[v.routeId] = (counts[v.routeId]||0)+1);
-  // Build unique routes list from shapes + vehicles
-  const routeIds = [...new Set([...Object.keys(counts).map(Number), ...routeShapes.map(s=>s.route_id)])];
-  // Get route meta
+  allVehicles.forEach(v => { if (v.routeId != null) counts[v.routeId] = (counts[v.routeId]||0)+1; });
   const routeMeta = {};
-  allVehicles.forEach(v => routeMeta[v.routeId] = { name: v.routeName, short: v.routeShort, color: v.routeColor });
+  allVehicles.forEach(v => { if (v.routeId != null) routeMeta[v.routeId] = { name: v.routeName, short: v.routeShort, color: v.routeColor }; });
   routeShapes.forEach(s => { if (!routeMeta[s.route_id]) routeMeta[s.route_id] = { name: s.name||'Route '+s.route_id, short: String(s.route_id), color: normalizeColor(s.color)||'#888' }; });
-
-  el.innerHTML = Object.entries(routeMeta).map(([rid, meta]) => {
+  const entries = Object.entries(routeMeta).sort((a, b) => String(a[1].name).localeCompare(String(b[1].name)));
+  if (!entries.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">🛣️</div>${routeShapes.length ? 'No live buses on routes right now' : `No route shapes loaded for ${escapeHtml(isl?.short || 'this island')}`}<br><span style="font-size:11px">Routes appear when shapes are available from the agency feed</span></div>`;
+    return;
+  }
+  el.innerHTML = entries.map(([rid, meta]) => {
     const n = counts[rid] || 0;
     const on = routeVisible[rid] !== false;
     return `<div class="route-row">
@@ -9370,7 +9451,7 @@ function showMapCard(bodyHtml, lngLat, title) {
   wireRepeaterStreamControls(mapCard);
   wireWebcamCardRefresh();
   mapCard.style.display = 'block';
-  positionMapCard();
+  positionMapCardNow();
 }
 function hideMapCard() {
   if (meshCardRefreshTimer) { clearInterval(meshCardRefreshTimer); meshCardRefreshTimer = null; }
@@ -9380,6 +9461,15 @@ function hideMapCard() {
   if (mapCard) { mapCard.style.display = 'none'; mapCardAnchor = null; }
 }
 function positionMapCard() {
+  if (!mapCard || mapCard.style.display === 'none') return;
+  if (_cardPosRaf) return;
+  _cardPosRaf = requestAnimationFrame(() => {
+    _cardPosRaf = 0;
+    positionMapCardNow();
+  });
+}
+let _cardPosRaf = 0;
+function positionMapCardNow() {
   if (!mapCard || mapCard.style.display === 'none') return;
   let x, y;
   if (mapCardAnchor && mapReady) { const pt = map.project(mapCardAnchor); const r = map.getCanvas().getBoundingClientRect(); x = pt.x + r.left; y = pt.y + r.top; }
@@ -9416,6 +9506,7 @@ function wireLayerCard(layerId, buildCard) {
 // leave. Also sets the pointer cursor so it reads as interactive.
 function wireLayerHover(layerId, buildHtml) {
   map.on('mousemove', layerId, e => {
+    if (mapGesturing()) return;
     if (!e.features || !e.features.length) return;
     map.getCanvas().style.cursor = 'pointer';
     showLayerHover(buildHtml(e.features[0].properties), e.originalEvent.clientX, e.originalEvent.clientY);
@@ -9444,11 +9535,12 @@ function renderMarkers() {
       const inner = el.querySelector('.bus-rot') || el.firstChild;
       el.onclick = (e) => { e.stopPropagation(); e.preventDefault(); selectVehicle(vdata.id); };
       inner.onmouseenter = e => {
+        if (mapGesturing()) return;
         showBusTooltip(vdata, e.clientX, e.clientY);
         const h = (markers[mk] && markers[mk].heading) ?? vdata.headingDegrees ?? 0;
         inner.style.transform = `rotate(${h}deg) scale(1.25)`;
       };
-      inner.onmousemove = e => positionTooltip(e.clientX, e.clientY);
+      inner.onmousemove = e => { if (mapGesturing()) return; positionTooltip(e.clientX, e.clientY); };
       inner.onmouseleave = () => {
         hideBusTooltip();
         const h = (markers[mk] && markers[mk].heading) ?? vdata.headingDegrees ?? 0;
@@ -9756,7 +9848,7 @@ function smoothstep(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 
 // renamed since this is now the CRUISE speed that approach/departure easing
 // scales against, not the literal speed applied every frame.
 function cruisePaceFromEta(v) {
-  const sl = stoplineCache[v.id];
+  const sl = stoplineCache[vehicleKey(v)];
   if (!sl || !sl.next_stop) return null;
   const ns = sl.next_stop;
   const etaMin = ns.etaMin;
@@ -9781,7 +9873,7 @@ const ACCEL_ZONE_M = 45;
 function paceFromEta(v, m) {
   const cruise = cruisePaceFromEta(v);
   if (cruise == null) return null;
-  const sl = stoplineCache[v.id];
+  const sl = stoplineCache[vehicleKey(v)];
   const distToNext = (sl?.next_stop?.distKm || 0) * 1000;
   // Record where (in route-distance space) the next stop is, anchored to the
   // glide position we have *right now* — so liveEasedPace can recompute the
@@ -9827,6 +9919,7 @@ const PACE_LEAD_CAP_M = 250; // don't glide more than this past the last fix's a
 function startMarkerAnim() {
   if (markerAnimRAF) return;
   const tick = (now) => {
+    if (mapGesturing()) { markerAnimRAF = null; markerLastFrame = 0; return; }
     const markerLastFramePrev = markerLastFrame;
     markerLastFrame = now;
     let anyMoving = false;
@@ -9938,17 +10031,17 @@ async function showEtaPanel(v) {
 
 // ─── SELECT VEHICLE ───────────────────────────────────────────────────────────
 function selectVehicle(id) {
-  // Clicking same vehicle toggles expand/collapse; clicking new one expands it
-  if (selectedVehicleId === id) {
-    if (expandedCards.has(id)) expandedCards.delete(id);
-    else expandedCards.add(id);
-  } else {
-    expandedCards.delete(selectedVehicleId); // collapse previous
-    expandedCards.add(id);
-    selectedVehicleId = id;
-  }
   const v = allVehicles.find(x => x.id === id);
   if (!v) return;
+  const vk = vehicleKey(v);
+  if (selectedVehicleKey === vk) {
+    if (expandedCards.has(vk)) expandedCards.delete(vk);
+    else expandedCards.add(vk);
+  } else {
+    if (selectedVehicleKey) expandedCards.delete(selectedVehicleKey);
+    expandedCards.add(vk);
+    selectedVehicleKey = vk;
+  }
   renderVehicleList();
   map.flyTo({ center: [v.lon, v.lat], zoom: Math.max(map.getZoom(), 14), duration: 600 });
   if (popup) popup.remove();
@@ -9974,33 +10067,33 @@ function selectVehicle(id) {
       <div class="popup-coords">⏱ ${stalenessLabel(v)}</div>
       <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
         <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Next Stops (Est.)</div>
-        <div id="popupEta" style="font-size:11px;color:var(--muted);">Loading…</div>
+        <div id="popupEta" style="font-size:11px;color:var(--muted);">${activeIsland === 'big-island' ? 'Loading…' : 'Live GPS only — schedule ETAs not available for this island.'}</div>
       </div>
     </div>`)
     .addTo(map);
 
-  // Fetch ETAs and inject into popup
-  fetch(`/api/eta?vehicle_id=${v.id}`).then(r => r.json()).then(data => {
-    const el = document.getElementById('popupEta');
-    if (!el) return;
-    if (!data.etas || !data.etas.length) { el.textContent = 'No stop data.'; return; }
-    el.innerHTML = data.etas.slice(0, 5).map(s => {
-      const etaStr = s.etaMin !== null ? (s.etaMin < 1 ? 'arriving' : `~${s.etaMin} min`) : '—';
-      const distStr = s.distKm < 1 ? `${Math.round(s.distKm*1000)}m` : `${s.distKm.toFixed(1)}km`;
-      const etaColor = s.etaMin === null ? 'var(--muted)' : s.etaMin < 2 ? 'var(--green)' : s.etaMin < 10 ? 'var(--yellow)' : 'var(--text)';
-      return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);">
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.name||'Stop '+s.stopId}</span>
-        <span style="color:var(--muted);margin:0 6px;flex-shrink:0;">${distStr}</span>
-        <span style="color:${etaColor};font-weight:600;flex-shrink:0;">${etaStr}</span>
-      </div>`;
-    }).join('');
-  }).catch(() => {
-    const el = document.getElementById('popupEta'); if (el) el.textContent = 'Could not load ETAs.';
-  });
+  if (activeIsland === 'big-island') {
+    fetch(`/api/eta?vehicle_id=${v.id}`).then(r => r.json()).then(data => {
+      const el = document.getElementById('popupEta');
+      if (!el) return;
+      if (!data.etas || !data.etas.length) { el.textContent = 'No stop data.'; return; }
+      el.innerHTML = data.etas.slice(0, 5).map(s => {
+        const etaStr = s.etaMin !== null ? (s.etaMin < 1 ? 'arriving' : `~${s.etaMin} min`) : '—';
+        const distStr = s.distKm < 1 ? `${Math.round(s.distKm*1000)}m` : `${s.distKm.toFixed(1)}km`;
+        const etaColor = s.etaMin === null ? 'var(--muted)' : s.etaMin < 2 ? 'var(--green)' : s.etaMin < 10 ? 'var(--yellow)' : 'var(--text)';
+        return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05);">
+          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.name||'Stop '+s.stopId}</span>
+          <span style="color:var(--muted);margin:0 6px;flex-shrink:0;">${distStr}</span>
+          <span style="color:${etaColor};font-weight:600;flex-shrink:0;">${etaStr}</span>
+        </div>`;
+      }).join('');
+    }).catch(() => {
+      const el = document.getElementById('popupEta'); if (el) el.textContent = 'Could not load ETAs.';
+    });
+  }
 
-  // Also show ETAs in sidebar
   switchTab('vehicles');
-  showEtaPanel(v);
+  if (activeIsland === 'big-island') showEtaPanel(v);
 }
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
@@ -10009,7 +10102,6 @@ function switchTab(name) {
   activeTab = name;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.id === `tab-${name}`));
-  updateIslandSliderVisibility();
   if (name === 'system') { fetchApiStats(); pollLearn(); }
   if (name === 'agent') { refreshAgentPanel(); refreshAgentLog(); refreshAgentWork(); refreshAgentRobot(); }
   if (name === 'fleet') fetchFleet();
@@ -10045,9 +10137,9 @@ async function fetchFleet() {
     const res = await fetch(islandApiUrl('/api/fleet'));
     const data = await res.json();
     fleetData = data.fleet || [];
-    if (data.island) activeIsland = data.island;
+    if (data.island && data.island !== activeIsland) { /* ignore — client owns island selection */ }
     islandStatus[activeIsland] = Object.assign({}, islandStatus[activeIsland] || {}, { vehicles: data.counts?.live || 0, routes: fleetData.length });
-    renderIslandSubTabs();
+    renderIslandGrid();
     renderFleetSummary(data.counts || {}, data.total || fleetData.length);
     renderFleetTable();
   } catch (e) {
@@ -10166,6 +10258,7 @@ function updateCountdownUI() {
 
 // ─── STOPLINE FETCH ───────────────────────────────────────────────────────────
 async function fetchStoplines() {
+  if (activeIsland !== 'big-island') return;
   const visible = visibleVehicles();
   await Promise.all(visible.map(async v => {
     try {
@@ -10173,11 +10266,11 @@ async function fetchStoplines() {
       if (!res.ok) return;
       const data = await res.json();
       if (data && data.stops) {
-        stoplineCache[v.id] = data;
+        stoplineCache[vehicleKey(v)] = data;
       }
     } catch(e) { console.warn(`[stopline ${v.id}]`, e.message); }
   }));
-  renderVehicleList(); // re-render with stopline data
+  renderVehicleList();
 }
 
 // ─── SIDEBAR RESIZE / BOTTOM-SHEET (mouse + touch) ───────────────────────────
@@ -10324,10 +10417,10 @@ function ensureLocateLayers() {
   if (!map || !mapReady) return false;
   if (locateMarkerSrc) return true;
   if (!map.getSource('user-location')) {
-    map.addSource('user-location', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addSource('user-location', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   }
   if (!map.getSource('user-accuracy')) {
-    map.addSource('user-accuracy', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addSource('user-accuracy', { type: 'geojson', data: { type: 'FeatureCollection', features: [] }, maxzoom: 16 });
   }
   if (!map.getLayer('user-accuracy-circle')) {
     map.addLayer({
@@ -10492,13 +10585,9 @@ Promise.all([
   fetchIslands(),
   fetchReference(),
   fetchMapLore(),
-  fetchShapes(),
   Promise.all([fetchRouteEdges(), fetchRouteRoads()]).then(() => { ensureRouteRoadLayer(); renderRouteRibbons(); }),
-  fetchAll(),
-  fetchAllStops(),
   fetchLearnedStops(),
   fetchGtfsStops(),
-  fetchTrails(),
   fetchVessels(),
   fetchHibike(),
   fetchAircraft(),
@@ -10532,7 +10621,15 @@ Promise.all([
   fetchLocal(),
   fetchEv(),
   fetchSurf(),
-]).then(() => { renderHubMarkers(); fetchStoplines(); fetchHazardZonesOnce(); ensureHawaiiFacilitiesBrowse().then(() => renderHawaiiBrowser()); renderHawaiiBrowser(); wireAgentButtons(); refreshAgentPanel(); refreshAgentLog(); ensureAgentRobot(); refreshAgentRobot(); });
+]).then(async () => {
+  await refreshIslandCaches();
+  applyActiveIslandData();
+  if (activeIsland === 'big-island') {
+    await Promise.all([fetchAllStops(), fetchTrails()]);
+    fetchStoplines();
+  }
+  renderHubMarkers(); fetchHazardZonesOnce(); ensureHawaiiFacilitiesBrowse().then(() => renderHawaiiBrowser()); renderHawaiiBrowser(); wireAgentButtons(); refreshAgentPanel(); refreshAgentLog(); ensureAgentRobot(); refreshAgentRobot();
+});
 // Diagnostics (System tab) only refresh while that tab is open — no point
 // hammering /api/learn/status or /api/stats when nobody's looking (battery/data).
 setInterval(() => { if (activeTab === 'system' && !document.hidden) { pollLearn(); fetchApiStats(); } }, 5000);
@@ -10548,7 +10645,7 @@ setInterval(() => { if (!document.hidden) fetchIslands(); }, 60000);
 
 // Trail + ETA refresh on their own cadence — skipped while the tab is hidden.
 setInterval(() => { if (!document.hidden) fetchTrails(); }, TRAIL_UPDATE_INTERVAL);
-setInterval(() => { if (!document.hidden) fetchStoplines(); }, 30000); // refresh ETAs every 30s
+setInterval(() => { if (!document.hidden && activeIsland === 'big-island') fetchStoplines(); }, 30000);
 
 // Vessel refresh — 30 s is plenty; the AIS stream on the server updates in
 // near real time. Skip while tab is hidden to save mobile data.
