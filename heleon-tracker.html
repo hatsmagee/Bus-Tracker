@@ -472,17 +472,17 @@
   }
   .bus-occ-seg.lit { background: #fff; }
 
-  /* Bus markers scale with zoom (road-relative): tiny at island overview,
-     larger at street level — so dense fleets (Oʻahu) don't pile up. */
+  /* Bus markers scale geographically with the map (same as roads):
+     --bsc is set on #map from meters-per-pixel so icons shrink/grow with zoom. */
   .bus-marker {
-    transform: scale(var(--bsc, 0.45));
+    transform: scale(var(--bsc, 0.3));
     transform-origin: center center;
     will-change: transform;
     line-height: 0;
   }
-  .bus-marker.compact .bus-wx,
-  .bus-marker.compact .bus-num { display: none !important; }
-  .bus-marker.compact .bus-route-lbl { font-size: 7px !important; letter-spacing: 0 !important; }
+  #map.bus-compact .bus-marker .bus-wx,
+  #map.bus-compact .bus-marker .bus-num { display: none !important; }
+  #map.bus-compact .bus-marker .bus-route-lbl { font-size: 7px !important; letter-spacing: 0 !important; }
   .bus-route-along {
     position: absolute;
     inset: 0;
@@ -1739,6 +1739,7 @@ function initMap() {
     // toggle once here to actually reveal them (lava + tsunami stay off).
     try { applyDefaultLayers(); } catch (e) { console.error('[map] default layers:', e); }
     wireMapGesturePerf();
+    try { updateBusScale(); } catch (e) {}
     // Keep an open click-card glued to its map anchor as the map moves.
     map.on('move', positionMapCard);
     // Click on empty map (no interactive feature) closes the card.
@@ -5156,11 +5157,12 @@ const COMPACT_ZOOM = 11.5;                  // below this, wheel-only
 // continuous pinch/scroll triggers at most one style pass per frame.
 let _rescaleRaf = 0;
 function scheduleMarkerRescale() {
+  // Buses must track zoom even mid-gesture so they stay road-scale while pinching.
+  scheduleBusScale();
   if (mapGesturing()) return;
   if (_rescaleRaf) return;
   _rescaleRaf = requestAnimationFrame(() => {
     _rescaleRaf = 0;
-    try { updateBusScale(); } catch (e) {}
     try { updateWheelScale(); } catch (e) {}
     try { updateWindScale(); } catch (e) {}
     try { updateSolarScale(); } catch (e) {}
@@ -5169,29 +5171,38 @@ function scheduleMarkerRescale() {
   });
 }
 
-// Bus icons are fixed screen-size DOM markers — scale them with zoom so they
-// read like road-scale vehicles: pin-dots at island overview, readable at street
-// level. Compact mode drops weather/bus-number chrome when zoomed out.
-const BUS_MIN_Z = 9, BUS_MAX_Z = 16;
-const BUS_MIN_SCALE = 0.22, BUS_MAX_SCALE = 0.68;
-const BUS_COMPACT_ZOOM = 12.2;
-function busScaleForZoom(z) {
-  const t = Math.max(0, Math.min(1, (z - BUS_MIN_Z) / (BUS_MAX_Z - BUS_MIN_Z)));
-  // Ease-in so mid zooms stay small (more buses visible) and size ramps near street level.
-  const eased = t * t;
-  return BUS_MIN_SCALE + eased * (BUS_MAX_SCALE - BUS_MIN_SCALE);
+// Geographic bus scale: icon width tracks ground meters the same way roads do
+// (Web Mercator meters-per-pixel ∝ 1/2^z). Visual width ≈ one lane so buses
+// read as road-scale vehicles at every zoom.
+const BUS_ARTBOARD_W = 22;          // CSS px of the icon artboard
+const BUS_GROUND_WIDTH_M = 28;      // exaggerated lane-ish footprint (real bus ~2.5 m)
+const BUS_SCALE_MIN = 0.04;         // still a clickable speck when zoomed way out
+const BUS_SCALE_MAX = 1.35;         // don't dominate the street when zoomed in
+const BUS_COMPACT_ZOOM = 13.5;      // hide weather/# chrome when tiny
+let _busScaleRaf = 0;
+function metersPerPixelAt(lat, z) {
+  return 156543.03392 * Math.cos((lat || 0) * Math.PI / 180) / Math.pow(2, z);
+}
+function busScaleGeographic(z, lat) {
+  const mpp = metersPerPixelAt(lat, z);
+  const px = BUS_GROUND_WIDTH_M / Math.max(mpp, 1e-9);
+  return Math.max(BUS_SCALE_MIN, Math.min(BUS_SCALE_MAX, px / BUS_ARTBOARD_W));
+}
+function scheduleBusScale() {
+  if (_busScaleRaf) return;
+  _busScaleRaf = requestAnimationFrame(() => {
+    _busScaleRaf = 0;
+    try { updateBusScale(); } catch (e) {}
+  });
 }
 function updateBusScale() {
   if (!mapReady) return;
   const z = map.getZoom();
-  const scale = busScaleForZoom(z).toFixed(3);
-  const compact = z < BUS_COMPACT_ZOOM;
-  for (const id of Object.keys(markers)) {
-    const el = markers[id].el;
-    if (!el) continue;
-    el.style.setProperty('--bsc', scale);
-    el.classList.toggle('compact', compact);
-  }
+  const lat = map.getCenter().lat;
+  const scale = busScaleGeographic(z, lat);
+  const root = map.getContainer();
+  root.style.setProperty('--bsc', scale.toFixed(4));
+  root.classList.toggle('bus-compact', z < BUS_COMPACT_ZOOM);
 }
 
 function updateWheelScale() {
@@ -9368,14 +9379,25 @@ function makeBusIcon(color, label, heading, load, weather, busNo) {
   const numBadge = busNo ? `<div class="bus-num" style="position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);
       background:#0d1117;color:#e6edf3;border:1px solid rgba(255,255,255,.4);border-radius:7px;
       padding:0 4px;font-size:8px;font-weight:700;line-height:12px;pointer-events:none;white-space:nowrap;
-      filter:drop-shadow(0 1px 1px rgba(0,0,0,.5));">#${busNo}</div>` : '';
+      filter:drop-shadow(0 1px 1px rgba(0,0,0,.5));">#${escapeHtml(String(busNo))}</div>` : '';
   const tc  = isLight(color) ? '#111' : '#fff';
   const shd = isLight(color) ? 'rgba(0,0,0,.35)' : 'rgba(0,0,0,.6)';
   // Occupancy: 3 segments light up based on load (0..1)
   const l = Math.max(0, Math.min(1, load || 0));
   const occColor = l < 0.5 ? '#3fb950' : l < 0.8 ? '#d29922' : '#f85149';
   const segs = [0, 1, 2].map(i => l > (i + 1) / 3 - 0.05);
-  // Compact 22×46 artboard (was 28×58) — zoom CSS scale (--bsc) grows it at street level.
+  const rawLabel = String(label == null ? '' : label).trim();
+  const safeLabel = escapeHtml(rawLabel);
+  // Short codes (1–2 chars) fit across the body upright. Longer names ("W LINE",
+  // "1L", "503") run lengthwise along the bus so they stay readable.
+  const alongBody = rawLabel.replace(/\s+/g, '').length > 2;
+  const routeLbl = alongBody
+    ? `<div class="bus-route-lbl bus-route-along" style="color:${tc};text-shadow:0 1px 2px ${shd};"><span>${safeLabel}</span></div>`
+    : `<div class="bus-route-lbl" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+        pointer-events:none;font-family:system-ui,sans-serif;font-size:9px;font-weight:900;
+        letter-spacing:.2px;color:${tc};text-shadow:0 1px 2px ${shd};">${safeLabel}</div>`;
+  // Compact 22×46 artboard — zoom CSS scale (--bsc) grows it at street level.
+  // Lengthwise labels live INSIDE .bus-rot so they turn with the vehicle.
   return `<div style="position:relative;width:22px;height:46px;">
     ${weatherBadge}
     <div class="bus-rot" style="
@@ -9420,11 +9442,9 @@ function makeBusIcon(color, label, heading, load, weather, busNo) {
       </g>
 
     </svg>
+    ${alongBody ? routeLbl : ''}
     </div>
-    <!-- Route label — OUTSIDE the rotating div so it stays upright at any heading -->
-    <div class="bus-route-lbl" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-      pointer-events:none;font-family:system-ui,sans-serif;font-size:9px;font-weight:900;
-      letter-spacing:.2px;color:${tc};text-shadow:0 1px 2px ${shd};">${label}</div>
+    ${alongBody ? '' : routeLbl}
     ${numBadge}
   </div>`;
 }
@@ -9754,7 +9774,8 @@ function deOverlapMarkers() {
     const p = map.project(ll);
     return { id, x: p.x, y: p.y };
   });
-  const THRESH = 14; // px — closer than this counts as overlapping (scaled with smaller icons)
+  const bsc = parseFloat(map.getContainer().style.getPropertyValue('--bsc')) || 0.3;
+  const THRESH = Math.max(6, Math.round(22 * bsc)); // px — scales with geographic bus size
   const used = new Set();
   for (let i = 0; i < pts.length; i++) {
     if (used.has(pts[i].id)) continue;
@@ -9768,7 +9789,7 @@ function deOverlapMarkers() {
       used.add(pts[i].id);
     } else {
       // Fan the cluster out evenly around a small ring.
-      const R = 10;
+      const R = Math.max(4, Math.round(THRESH * 0.7));
       cluster.forEach((c, k) => {
         const ang = (2 * Math.PI * k) / cluster.length - Math.PI / 2;
         markers[c.id].marker.setOffset([Math.cos(ang) * R, Math.sin(ang) * R]);
