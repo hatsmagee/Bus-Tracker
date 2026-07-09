@@ -1523,15 +1523,14 @@ function installStaticFallback(reason) {
 }
 
 // ─── MAP GESTURE PERF ─────────────────────────────────────────────────────────
-// While the user is panning/zooming, shed the work that doesn't help the gesture:
-// hover hit-tests, per-frame GeoJSON chevron rebuilds, DOM-marker glide loops,
-// label/symbol collision, and hillshade/pill overlays. Everything restores on
-// moveend/zoomend so there's no visual compromise at rest — only during motion.
+// While the user is panning/zooming, shed non-essential work (chevrons, trails,
+// pills). Hillshade/topo is left visible — toggling it off/on each gesture forced
+// MapLibre to recompute the entire DEM hillshade and looked like a full reload.
 let _mapGestureRefs = 0;
 let _gestureHiddenLayers = null;
 const _gestureSetDataQueue = new Map();
 const GESTURE_HIDE_LAYERS = [
-  'relief-hillshade', 'hillshade-layer', 'route-pills-symbol', 'ahead-arrows',
+  'route-pills-symbol', 'ahead-arrows',
   'vessel-trails-line', 'aircraft-trails-line', 'trails-line', 'trail-dots-circle',
   'infra-lines', 'streamflow-label',
 ];
@@ -1606,8 +1605,6 @@ function wireMapGesturePerf() {
   map.on('moveend', off);
   map.on('zoomstart', on);
   map.on('zoomend', off);
-  map.on('dragstart', on);
-  map.on('dragend', off);
   patchGeoJsonSetData();
 }
 function scheduleIdleWork(fn, timeoutMs) {
@@ -1636,8 +1633,13 @@ function initMap() {
       fadeDuration: 0,
       crossSourceCollisions: false,
       renderWorldCopies: false,
-      maxTileCacheSize: 256,
-      prefetchZoomDelta: 0,
+      maxTileCacheSize: 512,
+      prefetchZoomDelta: 2,
+      refreshExpiredTiles: false,
+      // In-session: MapLibre keeps fetched raster/DEM tiles in memory — panning
+      // only requests tiles for newly visible areas; visited tiles are reused.
+      // Cross-session: sw-tiles.js (service worker) caches MapTiler + Terrarium
+      // tile responses in the browser so return visits skip the network.
       canvasContextAttributes: { powerPreference: 'high-performance', antialias: false },
     });
   } catch (e) {
@@ -1659,7 +1661,6 @@ function initMap() {
     // Register Twemoji marker images first (async), so any layer that needs
     // them resolves quickly. ensureMarkerImages() is idempotent.
     try { ensureMarkerImages(); } catch (e) {}
-    try { initTerrainRelief(); } catch (e) { console.error('[map] terrain:', e); }
     try { initMapLayers(); } catch (e) { console.error('[map] layers:', e); }
     try { renderMarkers(); } catch (e) { console.error('[map] markers:', e); }
     // Stops/shapes may have been fetched before the style finished loading;
@@ -1722,32 +1723,6 @@ function initMap() {
     }
     console.warn('[map]', e?.error?.message || e);
   });
-}
-
-// Subtle hillshade from free Terrarium DEM tiles (AWS Open Data, no key).
-function initTerrainRelief() {
-  if (!map || map.getSource('relief-dem')) return;
-  map.addSource('relief-dem', {
-    type: 'raster-dem',
-    tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-    tileSize: 256,
-    encoding: 'terrarium',
-    maxzoom: 13,
-  });
-  const styleLayers = map.getStyle().layers || [];
-  const beforeId = styleLayers.find(l => l.type === 'symbol' && l.layout && l.layout['text-field'])?.id;
-  map.addLayer({
-    id: 'relief-hillshade',
-    type: 'hillshade',
-    source: 'relief-dem',
-    paint: {
-      'hillshade-exaggeration': 0.22,
-      'hillshade-shadow-color': '#1e293b',
-      'hillshade-highlight-color': '#f1f5f9',
-      'hillshade-accent-color': '#94a3b8',
-      'hillshade-illumination-direction': 315,
-    },
-  }, beforeId);
 }
 
 function buildSummitCard(p) {
@@ -2126,10 +2101,9 @@ function initMapLayers() {
     paint: { 'raster-opacity': 0.55 },
   }, 'stops-circle');
 
-  // ─── TOPOGRAPHY — hillshade from a keyless terrain DEM (AWS Terrarium) ─────
-  // Shows the island's elevation relief — Maunakea/Mauna Loa, the valleys, the
-  // coastline — as shaded topography under the data layers. Off by default;
-  // toggled from the Map tab. Terrarium terrain-RGB tiles are public/keyless.
+  // ─── TOPOGRAPHY — single hillshade from Terrarium DEM (AWS Open Data, no key)
+  // One source/layer only (a duplicate relief layer was re-fetching the same DEM
+  // on every pan). Tiles are cached by MapLibre; prefetch loads adjacent tiles.
   map.addSource('terrain-dem', {
     type: 'raster-dem', tileSize: 256, maxzoom: 14,
     encoding: 'terrarium',

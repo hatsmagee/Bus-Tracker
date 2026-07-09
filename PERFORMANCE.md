@@ -47,7 +47,9 @@ but do it in the same commit as the feature, with a comment saying why.
 7. **Map gestures shed non-essential work — keep it that way.**
    While the user is panning/zooming (`movestart`/`zoomstart` → `moveend`/`zoomend`),
    the client pauses chevron GeoJSON rebuilds, DOM bus-glide loops, hover hit-tests,
-   symbol collision, and hillshade/pill overlays. Everything restores on `moveend`.
+   and hides route pills / trail overlays. **Do not** toggle hillshade/topo visibility
+   during gestures — that forces a full DEM recompute. Tiles use `prefetchZoomDelta`
+   and `refreshExpiredTiles: false` so panning loads only new tiles, not the whole map.
    New per-frame work must respect `mapGesturing()` the same way hover handlers do.
 
 8. **Every site of interest deserves a photo + history card.**
