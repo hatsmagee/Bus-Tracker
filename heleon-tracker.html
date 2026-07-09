@@ -482,7 +482,24 @@
   }
   .bus-marker.compact .bus-wx,
   .bus-marker.compact .bus-num { display: none !important; }
-  .bus-marker.compact .bus-route-lbl { font-size: 8px !important; letter-spacing: 0 !important; }
+  .bus-marker.compact .bus-route-lbl { font-size: 7px !important; letter-spacing: 0 !important; }
+  .bus-route-along {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .bus-route-along > span {
+    white-space: nowrap;
+    transform: rotate(-90deg);
+    font-family: system-ui, sans-serif;
+    font-weight: 900;
+    font-size: 8px;
+    letter-spacing: 0.4px;
+    line-height: 1;
+  }
 
   /* ─── DOCS TAB ────────────────────────────────────────────────────── */
   .docs-section { padding:14px 16px; border-bottom:1px solid var(--border); }
