@@ -68,6 +68,16 @@ const PROBES = [
   },
   {
     island: 'oahu',
+    label: 'TheBus vehicle fleet with THEBUS_APP_ID (optional live check)',
+    url: process.env.THEBUS_APP_ID
+      ? `http://api.thebus.org/vehicle/?key=${encodeURIComponent(process.env.THEBUS_APP_ID)}`
+      : null,
+    skip: !process.env.THEBUS_APP_ID,
+    expect: r => r.status === 200 && /<vehicle>|<vehicles>/i.test(r.body) && !hasTheBusKeyError(r.body),
+    note: 'Set THEBUS_APP_ID to verify live fleet unlock',
+  },
+  {
+    island: 'oahu',
     label: 'TheBus arrivalsJSON (no key)',
     url: 'https://api.thebus.org/arrivalsJSON/?stop=701',
     expect: r => r.status === 200 && hasTheBusKeyError(r.body),
@@ -136,6 +146,12 @@ async function main() {
   console.log('Island transit feed verification\n');
   let failed = 0;
   for (const probe of PROBES) {
+    if (probe.skip || !probe.url) {
+      console.log(`[SKIP] ${probe.island} — ${probe.label}`);
+      if (probe.note) console.log(`       note: ${probe.note}`);
+      console.log('');
+      continue;
+    }
     let result;
     try {
       result = await fetchUrl(probe.url, { binary: probe.binary });

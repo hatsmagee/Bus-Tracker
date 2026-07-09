@@ -6,7 +6,9 @@
  */
 
 const https = require('https');
+const path = require('path');
 const { parseFeedMessage } = require('./gtfs-rt');
+const thebus = require('./scripts/lib/thebus');
 
 const VEHICLE_STALE_MS = 5 * 60 * 1000;
 const VEHICLE_RETAIN_MS = 48 * 60 * 60 * 1000;
@@ -484,39 +486,39 @@ const BIG_ISLAND_DEF = {
   },
 };
 
+// Oʻahu placeholder when THEBUS_APP_ID is unset — same catalog shape as before.
+const OAHU_UNAVAILABLE = {
+  id: 'oahu',
+  name: 'Oʻahu',
+  short: 'Oʻahu',
+  emoji: '🏙️',
+  agency: 'TheBus (DTS / OTS)',
+  url: 'https://www.thebus.org/',
+  available: false,
+  reason: 'AppID required',
+  reasonDetail:
+    'Set THEBUS_APP_ID (OTS AppID from api.thebus.org) to enable live TheBus AVL. '
+    + 'Without it, only static GTFS schedules and Biki bikeshare are available.',
+  registerUrl: 'http://api.thebus.org/NewAccount',
+  docs: [
+    { label: 'OTS Web API overview', url: 'https://hea.thebus.org/api_info.asp' },
+    { label: 'Web Services API (PDF)', url: 'https://hea.thebus.org/api/documentation/Web%20Services%20API.pdf' },
+    { label: 'AppID registration', url: 'http://api.thebus.org/NewAccount' },
+  ],
+  liveEndpoints: [
+    { url: 'http://api.thebus.org/vehicle/?key=APPID', auth: 'query AppID (required) — omit num for full fleet' },
+    { url: 'http://api.thebus.org/arrivalsJSON/?key=APPID&stop=STOP_ID', auth: 'query AppID (required)' },
+    { url: 'http://api.thebus.org/routeJSON/?key=APPID&route=ROUTE', auth: 'query AppID (required)' },
+  ],
+  staticEndpoints: [
+    { url: 'https://www.thebus.org/transitdata/production/google_transit.zip', auth: 'none (schedule + shapes)' },
+  ],
+  mapCenter: [-157.8583, 21.3099],
+  mapZoom: 10,
+};
+
 // Islands with no keyless live bus feed — verified via scripts/verify-island-transit-feeds.js
 const UNAVAILABLE_ISLANDS = [
-  {
-    id: 'oahu',
-    name: 'Oʻahu',
-    short: 'Oʻahu',
-    emoji: '🏙️',
-    agency: 'TheBus (DTS / OTS)',
-    url: 'https://www.thebus.org/',
-    available: false,
-    reason: 'AppID required',
-    reasonDetail:
-      'Oahu Transit Services publishes real-time AVL only through api.thebus.org with a registered AppID (key=… on every call). '
-      + 'GTFS-RT is hosted by Swiftly and requires an Authorization header. '
-      + 'Static GTFS schedules and Biki bikeshare (GBFS) are keyless, but live TheBus GPS is not.',
-    registerUrl: 'http://api.thebus.org/NewAccount',
-    docs: [
-      { label: 'OTS Web API overview', url: 'https://hea.thebus.org/api_info.asp' },
-      { label: 'Web Services API (PDF)', url: 'https://hea.thebus.org/api/documentation/Web%20Services%20API.pdf' },
-      { label: 'AppID registration', url: 'http://api.thebus.org/NewAccount' },
-      { label: 'Swiftly GTFS-RT key request', url: 'https://goswift.ly/realtime-api-key' },
-    ],
-    liveEndpoints: [
-      { url: 'http://api.thebus.org/arrivals/?key=APPID&stop=STOP_ID', auth: 'query AppID (required)' },
-      { url: 'http://api.thebus.org/vehicle/?key=APPID&num=VEHICLE_NUM', auth: 'query AppID (required)' },
-      { url: 'https://api.goswift.ly/real-time/thebus/gtfs-rt-vehicle-positions', auth: 'Authorization header (Swiftly key)' },
-    ],
-    staticEndpoints: [
-      { url: 'https://www.thebus.org/transitdata/production/google_transit.zip', auth: 'none (schedule only, no live buses)' },
-    ],
-    mapCenter: [-157.8583, 21.3099],
-    mapZoom: 10,
-  },
   {
     id: 'molokai',
     name: 'Molokaʻi',
@@ -562,13 +564,32 @@ const UNAVAILABLE_ISLANDS = [
   },
 ];
 
-function createIslandManager() {
+function createIslandManager(opts = {}) {
   const pollers = {};
   for (const id of Object.keys(ISLAND_DEFS)) {
     pollers[id] = createIslandPoller(ISLAND_DEFS[id]);
   }
 
+  let theBusPoller = null;
+  if (thebus.isConfigured()) {
+    theBusPoller = thebus.createTheBusPoller({
+      dataDir: opts.dataDir || path.join(__dirname, 'data'),
+    });
+    pollers.oahu = theBusPoller;
+    console.log('[islands] THEBUS_APP_ID set — Oʻahu TheBus live AVL enabled');
+  } else {
+    console.log('[islands] THEBUS_APP_ID unset — Oʻahu stays locked until AppID is configured');
+  }
+
   function listIslands() {
+    const oahu = theBusPoller
+      ? {
+          ...thebus.OAHU_DEF,
+          available: true,
+          host: thebus.OAHU_DEF.host,
+          attribution: thebus.ATTRIBUTION,
+        }
+      : OAHU_UNAVAILABLE;
     return [
       BIG_ISLAND_DEF,
       ...Object.values(ISLAND_DEFS).map(d => ({
@@ -585,6 +606,7 @@ function createIslandManager() {
         mapZoom: d.mapZoom,
         api: d.api,
       })),
+      oahu,
       ...UNAVAILABLE_ISLANDS,
     ];
   }
@@ -625,17 +647,44 @@ function createIslandManager() {
 
   async function boot() {
     await Promise.all(Object.values(pollers).map(async p => {
-      await p.loadRoutes();
-      await p.loadShapes();
+      if (p.ensureGtfs) {
+        await p.ensureGtfs().catch(e => console.error(`[${p.def.id}] GTFS:`, e.message));
+      } else {
+        await p.loadRoutes();
+        await p.loadShapes();
+      }
     }));
     await pollAll();
-    console.log('[islands] Kauaʻi + Maui transit booted');
+    if (theBusPoller) {
+      theBusPoller.enrichActiveRoutes().catch(() => {});
+    }
+    console.log('[islands] Kauaʻi + Maui' + (theBusPoller ? ' + Oʻahu TheBus' : '') + ' transit booted');
     for (const p of Object.values(pollers)) {
       console.log(`  [${p.def.id}] ${p.state.routes.length} routes, ${p.state.shapes.length} shapes, ${p.state.latestVehicles.length} vehicles`);
     }
   }
 
-  return { pollers, listIslands, getIslandDef, resolveIslandRequest, getPoller, pollAll, boot, BIG_ISLAND_DEF, ISLAND_DEFS, UNAVAILABLE_ISLANDS };
+  return {
+    pollers,
+    listIslands,
+    getIslandDef,
+    resolveIslandRequest,
+    getPoller,
+    pollAll,
+    boot,
+    BIG_ISLAND_DEF,
+    ISLAND_DEFS,
+    UNAVAILABLE_ISLANDS,
+    OAHU_UNAVAILABLE,
+    theBusConfigured: () => !!theBusPoller,
+  };
 }
 
-module.exports = { createIslandManager, createIslandPoller, ISLAND_DEFS, BIG_ISLAND_DEF, UNAVAILABLE_ISLANDS };
+module.exports = {
+  createIslandManager,
+  createIslandPoller,
+  ISLAND_DEFS,
+  BIG_ISLAND_DEF,
+  UNAVAILABLE_ISLANDS,
+  OAHU_UNAVAILABLE,
+};

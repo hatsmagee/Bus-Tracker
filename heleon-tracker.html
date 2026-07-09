@@ -1097,18 +1097,20 @@
       <div class="docs-section">
         <div class="docs-h">🚌 About this dashboard</div>
         <div class="docs-p">
-          A live map of county buses across Hawaiʻi Island, Kauaʻi, and Maui — all
-          keyless Syncromatics GTFS-RT + RTPI feeds. Use the island sub-tabs in
+          A live map of county buses across Hawaiʻi Island, Kauaʻi, Maui, and
+          Oʻahu (TheBus when <code style="font-size:10px">THEBUS_APP_ID</code> is set). Use the island sub-tabs in
           <strong style="color:#e6edf3">Buses</strong>, <strong style="color:#e6edf3">Fleet</strong>, and
           <strong style="color:#e6edf3">Routes</strong> to switch islands. Hawaiʻi Island (Hele-On) adds
           road-snapped route ribbons, a transformer ETA learner, and full SQLite history.
           Kauaʻi (<a href="https://www.thekauaibus.com/" target="_blank" style="color:#58a6ff">thekauaibus.com</a>) and
           Maui (<a href="https://www.mauibus.org/" target="_blank" style="color:#58a6ff">mauibus.org</a>) use the same
           platform with live GPS, fleet roster, route shapes, and GTFS-RT trip updates.
-          TheBus (Oʻahu) requires a registered AppID at
-          <a href="http://api.thebus.org/NewAccount" target="_blank" style="color:#58a6ff">api.thebus.org</a>
-          — live GPS is not keyless (verified). Molokaʻi and Lānaʻi MEO shuttles have PDF schedules only, no API.
-          Run <code style="font-size:10px">node scripts/verify-island-transit-feeds.js</code> to re-check endpoints.
+          TheBus (Oʻahu) uses the official OTS Web Services API
+          (<a href="https://hea.thebus.org/api_info.asp" target="_blank" style="color:#58a6ff">hea.thebus.org</a>) —
+          vehicle fleet, stop arrivals, and route shapes — with AppID from
+          <a href="http://api.thebus.org/NewAccount" target="_blank" style="color:#58a6ff">api.thebus.org</a>.
+          Route and arrival data provided by permission of Oahu Transit Services, Inc.
+          Molokaʻi and Lānaʻi MEO shuttles have PDF schedules only, no API.
         </div>
       </div>
 
@@ -1361,6 +1363,9 @@ function applyActiveIslandData() {
   if (activeIsland === 'big-island') {
     renderStatus();
     renderStopMarkers();
+  } else if (activeIsland === 'oahu') {
+    renderStopMarkers();
+    if (mapReady && map.getLayer('controls-circle')) map.setLayoutProperty('controls-circle', 'visibility', 'none');
   } else if (mapReady && map.getSource('stops')) {
     map.getSource('stops').setData({ type: 'FeatureCollection', features: [] });
     if (map.getLayer('controls-circle')) map.setLayoutProperty('controls-circle', 'visibility', 'none');
@@ -1422,7 +1427,9 @@ function renderIslandGrid() {
             const doc = (cur.docs && cur.docs[0]) ? ` <a href="${cur.docs[0].url}" target="_blank">${cur.docs[0].label}</a>` : '';
             return `${detail}${doc}${reg}`;
           })()
-          : `Keyless Syncromatics GTFS-RT + RTPI from <a href="https://${apiHost}/" target="_blank">${apiHost}</a>. ${st.routes || '—'} routes · ${st.shapes || '—'} patterns. Live GPS — no schedule ETAs yet.`;
+          : cur.id === 'oahu'
+            ? `Live TheBus AVL via <code style="font-size:10px">THEBUS_APP_ID</code> · ${st.vehicles ?? st.routes ?? '—'} buses · ${st.shapes || '—'} patterns. <a href="https://hea.thebus.org/api_info.asp" target="_blank">OTS API</a>. Route and arrival data provided by permission of Oahu Transit Services, Inc. <a href="https://www.thebus.org/" target="_blank">Biki</a> docks on the map.`
+            : `Keyless Syncromatics GTFS-RT + RTPI from <a href="https://${apiHost}/" target="_blank">${apiHost}</a>. ${st.routes || '—'} routes · ${st.shapes || '—'} patterns. Live GPS — no schedule ETAs yet.`;
       noteEl.innerHTML = `<strong>${agency}</strong> — ${extra}`;
     }
   }
@@ -1450,10 +1457,18 @@ async function switchIsland(id) {
     if (activeIsland === 'big-island') {
       fetchTrails();
       fetchStoplines();
+      fetchAllStops();
+    } else if (activeIsland === 'oahu') {
+      trailEdgesData = null;
+      trailData = {};
+      renderTrails();
+      fetchAllStops();
     } else {
       trailEdgesData = null;
       trailData = {};
       renderTrails();
+      allStops = [];
+      renderStopMarkers();
     }
   }
 }
@@ -3123,9 +3138,19 @@ function initMapLayers() {
       .setLngLat(lngLat)
       .setHTML(buildStopPopupHtml(p, null))
       .addTo(map);
-    fetch(`/api/stop_arrivals?stop_id=${p.stopId}&route_id=${p.routeId}`)
+    const url = (activeIsland === 'oahu' || p.island === 'oahu')
+      ? `/api/thebus/arrivals?stop=${encodeURIComponent(p.stopId)}`
+      : `/api/stop_arrivals?stop_id=${p.stopId}&route_id=${p.routeId}`;
+    fetch(url)
       .then(r => r.json())
-      .then(data => { if (stopHoverPopup) stopHoverPopup.setHTML(buildStopPopupHtml(p, data)); })
+      .then(data => {
+        if (!stopHoverPopup) return;
+        if (activeIsland === 'oahu' || p.island === 'oahu') {
+          stopHoverPopup.setHTML(buildTheBusStopPopupHtml(p, data));
+        } else {
+          stopHoverPopup.setHTML(buildStopPopupHtml(p, data));
+        }
+      })
       .catch(() => {});
   }
   ['stops-circle', 'stops-icon'].forEach(layer => {
@@ -4133,8 +4158,10 @@ async function fetchGtfsStops() {
 
 async function fetchAllStops() {
   try {
-    const res = await fetch('/api/stops/all');
+    const q = activeIsland === 'oahu' ? '?island=oahu' : '';
+    const res = await fetch(`/api/stops/all${q}`);
     allStops = await res.json();
+    if (!Array.isArray(allStops)) allStops = [];
     renderStopMarkers();
   } catch(e) {}
 }
@@ -7364,6 +7391,34 @@ function fmtEta(min) {
   return `~${Math.round(min)} min`;
 }
 
+function buildTheBusStopPopupHtml(p, data) {
+  const name = p.name || `Stop ${p.stopId}`;
+  if (!data || data.error) {
+    return `<div class="popup-inner" style="padding:12px;min-width:260px;">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;">${escapeHtml(name)}</div>
+      <div style="color:#8b949e;font-size:10px;margin-bottom:8px;">Stop #${escapeHtml(String(p.stopCode || p.stopId))}</div>
+      <div style="color:#f85149;font-size:11px;">${escapeHtml((data && data.error) || 'Arrivals unavailable')}</div>
+      <div style="color:#8b949e;font-size:9px;margin-top:8px;">Route and arrival data provided by permission of Oahu Transit Services, Inc</div>
+    </div>`;
+  }
+  const rows = (data.arrivals || []).slice(0, 8).map(a => {
+    const canceled = String(a.canceled) === '1';
+    const est = a.estimated ? 'Live' : 'Sched';
+    const estColor = a.estimated ? '#3fb950' : '#8b949e';
+    return `<div style="display:grid;grid-template-columns:42px 1fr auto;gap:6px;align-items:center;padding:5px 0;border-top:1px solid #21262d;${canceled ? 'opacity:.45;text-decoration:line-through;' : ''}">
+      <span style="font-weight:800;color:#58a6ff;">${escapeHtml(String(a.route || '—'))}</span>
+      <span style="font-size:11px;color:#e6edf3;">${escapeHtml(a.headsign || '')}${a.vehicle && a.vehicle !== '???' ? ` · #${escapeHtml(String(a.vehicle))}` : ''}</span>
+      <span style="text-align:right;font-size:11px;"><span style="color:#d29922;font-weight:700;">${escapeHtml(a.stopTime || '—')}</span><br><span style="color:${estColor};font-size:9px;">${est}</span></span>
+    </div>`;
+  }).join('') || `<div style="color:#8b949e;font-size:11px;padding:8px 0;">No upcoming arrivals</div>`;
+  return `<div class="popup-inner" style="padding:12px;min-width:280px;">
+    <div style="font-weight:700;font-size:13px;margin-bottom:4px;">${escapeHtml(name)}</div>
+    <div style="color:#8b949e;font-size:10px;margin-bottom:8px;">Stop #${escapeHtml(String(data.stop || p.stopId))} · TheBus</div>
+    ${rows}
+    <div style="color:#8b949e;font-size:9px;margin-top:8px;">${escapeHtml(data.attribution || 'Route and arrival data provided by permission of Oahu Transit Services, Inc')}</div>
+  </div>`;
+}
+
 function buildStopPopupHtml(p, arrData) {
   const color = p.routeColor || '#888';
   const gtfsStop = gtfsStopMap[p.stopId] || {};
@@ -7508,19 +7563,29 @@ function renderStopMarkers() {
   if (!mapReady) return;
   const src = map.getSource('stops');
   if (!src) return;
-  if (activeIsland !== 'big-island') {
+  if (activeIsland !== 'big-island' && activeIsland !== 'oahu') {
     src.setData({ type: 'FeatureCollection', features: [] });
     return;
   }
   buildRouteMetaFromVehicles();
   const features = allStops
-    .filter(s => routeVisible[s.route_id] !== false)
+    .filter(s => activeIsland === 'oahu' || routeVisible[s.route_id] !== false)
     .map(s => {
       const meta = ROUTES_META[s.route_id] || {};
       return {
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
-        properties: { stopId: s.id, name: s.name, stopCode: s.stopCode || '', routeColor: meta.color || '#888', lat: s.lat.toFixed(5), lon: s.lon.toFixed(5), routeId: s.route_id, routeName: meta.name || '' }
+        properties: {
+          stopId: s.id,
+          name: s.name,
+          stopCode: s.stopCode || '',
+          routeColor: meta.color || (activeIsland === 'oahu' ? '#1f6feb' : '#888'),
+          lat: Number(s.lat).toFixed(5),
+          lon: Number(s.lon).toFixed(5),
+          routeId: s.route_id,
+          routeName: meta.name || '',
+          island: activeIsland,
+        }
       };
     });
   src.setData({ type: 'FeatureCollection', features });
@@ -7790,7 +7855,7 @@ function renderIslandRouteLines(routeMeta) {
       if (!coords || coords.length < 2) return;
       features.push({
         type: 'Feature',
-        properties: { routeId: +rid, color, name: meta.name || `Route ${rid}` },
+        properties: { routeId: rid, color, name: meta.name || `Route ${rid}` },
         geometry: { type: 'LineString', coordinates: coords },
       });
     });
@@ -8501,14 +8566,22 @@ function simplifyPath(pts, tol) {
 }
 
 function decodePolyline(encoded) {
+  // Neighbor-island / TheBus shapes may already be [[lon,lat],…] arrays.
+  if (Array.isArray(encoded)) {
+    return encoded.filter(c => Array.isArray(c) && c.length >= 2).map(c => [+c[0], +c[1]]);
+  }
+  if (encoded && typeof encoded === 'object' && Array.isArray(encoded.coordinates)) {
+    return decodePolyline(encoded.coordinates);
+  }
   const coords = [];
   let index = 0, lat = 0, lng = 0;
-  while (index < encoded.length) {
+  const s = String(encoded || '');
+  while (index < s.length) {
     let b, shift = 0, result = 0;
-    do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    do { b = s.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
     lat += (result & 1) ? ~(result >> 1) : (result >> 1);
     shift = 0; result = 0;
-    do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    do { b = s.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
     lng += (result & 1) ? ~(result >> 1) : (result >> 1);
     coords.push([lng / 1e5, lat / 1e5]);
   }
@@ -10760,6 +10833,12 @@ function startUpdateStream() {
   // and the next 'hello' carries the new build id. Nothing to poll.
 }
 startUpdateStream();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw-tiles.js').catch(() => {});
+  });
+}
 </script>
 </body>
 </html>

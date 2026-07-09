@@ -21,7 +21,9 @@ const { parseFeedMessage } = require('./gtfs-rt');
 const { nearestPointOnGraph } = require('./road-graph.js');
 const { createIslandManager } = require('./island-transit');
 const { parseGbfsStations } = require('./scripts/lib/gbfs-mobility');
-const islandTransit = createIslandManager();
+const islandTransit = createIslandManager({
+  dataDir: process.env.RENDER ? '/tmp' : path.join(__dirname, 'data'),
+});
 
 // ─── SELF-HEALING: never let one bad request or feed kill the whole server ────
 // A single uncaught exception or unhandled promise rejection would otherwise
@@ -2350,9 +2352,55 @@ async function handleApi(url, res, req) {
       if (!gate.ok) return json(res, gate, gate.status);
       const poller = gate.poller;
       const vehicles = poller.getVehicles().map(v => Object.assign({}, v, { weather: weatherByVehicle[`${islandParam}:${v.id}`] || null }));
-      return json(res, { ts: poller.getStats().ts, island: islandParam, vehicles, stats: poller.getStats() });
+      const out = { ts: poller.getStats().ts, island: islandParam, vehicles, stats: poller.getStats() };
+      if (poller.getApiInfo) {
+        const info = poller.getApiInfo();
+        if (info.attribution) out.attribution = info.attribution;
+      }
+      return json(res, out);
     }
     return json(res, { ts: lastPollStats.ts, island: 'big-island', vehicles: latestVehicles.map(v => Object.assign({}, v, { island: 'big-island' })), stats: lastPollStats });
+  }
+
+  // TheBus (Oʻahu) live arrivals at a stop — arrivalsJSON from api.thebus.org.
+  if (p === '/api/thebus/arrivals' || p === '/api/oahu/arrivals') {
+    const gate = islandTransit.resolveIslandRequest('oahu');
+    if (!gate.ok) return json(res, gate, gate.status);
+    const stop = q.get('stop') || q.get('stop_id');
+    if (!stop) return json(res, { error: 'stop required' }, 400);
+    if (!gate.poller.fetchArrivals) return json(res, { error: 'arrivals not supported' }, 501);
+    try {
+      const data = await gate.poller.fetchArrivals(stop);
+      return json(res, data);
+    } catch (e) {
+      return json(res, { error: e.message, stop }, 502);
+    }
+  }
+
+  if (p === '/api/thebus/route' || p === '/api/oahu/route') {
+    const gate = islandTransit.resolveIslandRequest('oahu');
+    if (!gate.ok) return json(res, gate, gate.status);
+    const route = q.get('route');
+    if (!route) return json(res, { error: 'route required' }, 400);
+    if (!gate.poller.fetchRouteMeta) return json(res, { error: 'route meta not supported' }, 501);
+    try {
+      const data = await gate.poller.fetchRouteMeta(route);
+      return json(res, Object.assign({ attribution: 'Route and arrival data provided by permission of Oahu Transit Services, Inc' }, data));
+    } catch (e) {
+      return json(res, { error: e.message, route }, 502);
+    }
+  }
+
+  if (p === '/api/thebus/status' || p === '/api/oahu/status') {
+    const poller = islandTransit.getPoller('oahu');
+    if (!poller) {
+      return json(res, {
+        configured: false,
+        env: 'THEBUS_APP_ID',
+        hint: 'Set THEBUS_APP_ID in Render to your OTS AppID from http://api.thebus.org/NewAccount',
+      });
+    }
+    return json(res, poller.getApiInfo());
   }
 
   // Everything we can scrape about the WHOLE fleet — every vehicle the agency
@@ -2801,6 +2849,13 @@ async function handleApi(url, res, req) {
   }
 
   if (p === '/api/stops') {
+    if (islandParam === 'oahu') {
+      const gate = islandTransit.resolveIslandRequest('oahu');
+      if (!gate.ok) return json(res, gate, gate.status);
+      const rid = q.get('route_id');
+      const stops = (gate.poller.getStops && gate.poller.getStops()) || [];
+      return json(res, rid ? stops.filter(s => false) : stops); // route filter via GTFS trip join not needed for map
+    }
     const rid = parseInt(q.get('route_id'));
     if (!rid) return json(res, { error: 'route_id required' }, 400);
     const stops = await ensureStops(rid);
@@ -2809,6 +2864,21 @@ async function handleApi(url, res, req) {
 
   // All stops for all routes (for map rendering)
   if (p === '/api/stops/all') {
+    if (islandParam === 'oahu') {
+      const gate = islandTransit.resolveIslandRequest('oahu');
+      if (!gate.ok) return json(res, gate, gate.status);
+      const stops = (gate.poller.getStops && gate.poller.getStops()) || [];
+      return json(res, stops.map(s => ({
+        id: s.id,
+        route_id: null,
+        lat: s.lat,
+        lon: s.lon,
+        name: s.name,
+        stopCode: s.stopCode,
+        seq: null,
+        island: 'oahu',
+      })));
+    }
     const rows = dbAll(`SELECT id,route_id,lat,lon,name,stop_code as stopCode,seq FROM stops ORDER BY route_id,seq`);
     return json(res, rows);
   }

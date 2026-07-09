@@ -13,6 +13,8 @@ services:
     healthCheckPath: /healthz
     autoDeploy: true
     envVars:
+      - key: THEBUS_APP_ID
+        sync: false
       - key: BACKUP_GITHUB_TOKEN
         sync: false
       - key: BACKUP_GITHUB_REPO

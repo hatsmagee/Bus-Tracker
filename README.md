@@ -94,11 +94,24 @@ Verified with live endpoint probes (`node scripts/verify-island-transit-feeds.js
 
 | Island | Agency | Why locked | What exists (keyless) |
 |--------|--------|------------|------------------------|
-| **Oʻahu** | TheBus (OTS) | **AppID required** on every `api.thebus.org` call; Swiftly GTFS-RT needs `Authorization` header | [Static GTFS](https://www.thebus.org/transitdata/production/google_transit.zip) (schedules only); [Biki GBFS](/api/mobility) (bikeshare docks, not buses). Register AppID at [api.thebus.org/NewAccount](http://api.thebus.org/NewAccount). Docs: [hea.thebus.org/api_info.asp](https://hea.thebus.org/api_info.asp) |
+| **Oʻahu** | TheBus (OTS) | Needs **`THEBUS_APP_ID`** (OTS AppID). Set it on Render to unlock live AVL. | [Static GTFS](https://www.thebus.org/transitdata/production/google_transit.zip); [Biki GBFS](/api/mobility). Docs: [hea.thebus.org/api_info.asp](https://hea.thebus.org/api_info.asp) |
 | **Molokaʻi** | MEO rural shuttles | **No public API** — demand-responsive service, PDF schedules only | [MEO schedule PDF](https://www.meoinc.org/wp-content/uploads/2026/02/MKK-Bus-Schedule-Updated_02-28-25.pdf) |
 | **Lānaʻi** | MEO county shuttle | **No public API** — reservation-based human-services transport | [MEO transportation](https://www.meoinc.org/programs-services/transportation-services/) |
 
-Oʻahu does **not** use the keyless Syncromatics stack (`/api/rtpi`, `/gtfs-rt/vehiclepositions`) that powers Big Island, Kauaʻi, and Maui. Probing `api.thebus.org` without a key returns `Invalid or unspecified API key`; Swiftly returns `401 Missing Authorization Header`.
+### Oʻahu TheBus (when `THEBUS_APP_ID` is set)
+
+The server uses the full OTS Web Services API ([docs PDF](https://hea.thebus.org/api/documentation/Web%20Services%20API.pdf)):
+
+| Endpoint | Use |
+|----------|-----|
+| `GET /vehicle/?key=APPID` | Full live fleet (omit `num`) — lat/lon, trip, route, headsign, schedule adherence, last AVL message |
+| `GET /arrivalsJSON/?key=APPID&stop=STOP` | Live + scheduled arrivals at a stop (estimated vs scheduled, canceled flag, vehicle, shape) |
+| `GET /routeJSON/?key=APPID&route=ROUTE` | Shape IDs + headsigns for a route (matched to GTFS `shapes.txt`) |
+| Static GTFS zip | Routes, stops, and polyline geometry (keyless) |
+
+UI: Oʻahu island tab shows live buses, route lines, stop markers with TheBus arrivals popups. Required legend: *Route and arrival data provided by permission of Oahu Transit Services, Inc*. Default quota is 250,000 requests/day per AppID.
+
+On Render: **Environment → `THEBUS_APP_ID` → paste your AppID → Save** (also declared in `render.yaml` as `sync: false`).
 
 ## Architecture
 
@@ -153,6 +166,7 @@ Set environment variables before starting the server:
 | `RENDER`       | unset         | When set by Render, the server stores SQLite + GTFS zip under `/tmp` (ephemeral disk) |
 | `POLL_INTERVAL`| 15000 (ms)    | How often to poll the realtime feeds |
 | `MAPTILER_KEY` | (built-in)    | MapTiler API key for basemap tiles   |
+| `THEBUS_APP_ID`| unset         | **Oʻahu TheBus** OTS AppID from [api.thebus.org](http://api.thebus.org/NewAccount). When set, live fleet GPS, stop arrivals, and route shapes unlock on the Oʻahu island tab. Aliases: `THEBUS_API_KEY`, `OTS_APP_ID`. |
 
 Open tabs **self-refresh on deploy**: the browser holds a Server-Sent Events
 stream (`/api/events`) carrying the server's build id. When a new version goes
