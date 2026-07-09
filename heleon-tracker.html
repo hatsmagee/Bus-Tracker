@@ -7808,7 +7808,7 @@ function alignBearingToTravel(roadBrg, travelBrg) {
 // Travel bearing from recent GPS fixes (not the agency heading field). Needs
 // enough displacement to ignore GPS jitter / dwelling at a stop.
 const TRAVEL_MIN_M = 12;
-const TRAVEL_HIST_MAX = 8;
+const TRAVEL_HIST_MAX = 10;
 function recordTravelFix(m, fix, nowT) {
   if (!m.travelHist) m.travelHist = [];
   const hist = m.travelHist;
@@ -7828,6 +7828,69 @@ function travelBearingFromHist(m) {
     }
   }
   return m.travelBearing != null ? m.travelBearing : null;
+}
+
+// Ground speed (m/s) from recent GPS fixes — works on every island even when the
+// agency feed has no speed/ETA. Looks back far enough to span at least one poll.
+function paceFromGpsHistory(m) {
+  const hist = m && m.travelHist;
+  if (!hist || hist.length < 2) return null;
+  const newest = hist[hist.length - 1];
+  // Prefer a window of ~8–45 s so one noisy poll doesn't dominate.
+  for (let i = 0; i < hist.length - 1; i++) {
+    const older = hist[i];
+    const dt = (newest.t - older.t) / 1000;
+    if (dt < 4) continue;
+    if (dt > 90) continue;
+    const dist = metersBetween(older.pt, newest.pt);
+    if (dist < 5) {
+      // Essentially stationary over this window.
+      if (dt >= 8) return 0;
+      continue;
+    }
+    const mps = dist / dt;
+    if (mps >= 0 && mps < 40) return mps; // sanity: < ~90 mph
+  }
+  return null;
+}
+
+// Agency-reported speed → m/s (Big Island Syncromatics uses mph).
+function paceFromApiSpeed(v) {
+  if (v == null || v.speed == null || !(v.speed > 0)) return null;
+  const mps = (+v.speed) * 0.44704; // mph → m/s
+  return mps > 0.3 && mps < 40 ? mps : null;
+}
+
+// Pick a cruise pace for dead-reckoning between polls. Prefer ETA (when we have
+// it), then API speed, then GPS-derived speed, then the previous smoothed pace
+// so a single zero/jitter sample doesn't freeze the bus.
+function resolveCruisePace(v, m, measuredAlong) {
+  const eta = paceFromEta(v, m);
+  if (eta != null) return eta;
+  const api = paceFromApiSpeed(v);
+  if (api != null) return api;
+  let gps = paceFromGpsHistory(m);
+  if (measuredAlong != null && measuredAlong > 0.4) {
+    // Along-route progress this poll — blend with GPS ground speed.
+    gps = gps != null ? (gps * 0.4 + measuredAlong * 0.6) : measuredAlong;
+  }
+  if (gps != null) {
+    // Soft-stop: only treat as stopped if GPS says so AND we didn't just move.
+    if (gps < 0.4) return (m && m.pace > 1.5) ? m.pace * 0.55 : 0;
+    return gps;
+  }
+  // No new signal — keep lumbering at the last known clip (slight decay).
+  if (m && m.pace > 0.4) return m.pace * 0.92;
+  return 0;
+}
+
+// Smooth pace toward a new target so buses don't lurch when a poll arrives.
+function blendPace(prev, next) {
+  if (next == null || !(next >= 0)) return prev || 0;
+  if (prev == null || !(prev >= 0)) return next;
+  // Faster to accelerate a little, slower to slam on the brakes from one sample.
+  const a = next > prev ? 0.45 : 0.28;
+  return prev + (next - prev) * a;
 }
 
 // Road bearing (deg) of the route centerline at distance `d` along rc. This is
@@ -9798,29 +9861,56 @@ function renderMarkers() {
       const m = markers[mk];
       const dt = Math.max(0.1, (nowT - m.fixTime) / 1000);
       if (onRoute && m.onRoute && m.rc === rc) {
-        const measured = (snap.dist - (m.prevAnchorDist ?? snap.dist)) / Math.max(dt, 1);
+        const alongDelta = snap.dist - (m.prevAnchorDist ?? snap.dist);
+        const measured = alongDelta / Math.max(dt, 1);
         // Along-route progress also implies travel direction when GPS jitter is low.
-        if (Math.abs(snap.dist - (m.prevAnchorDist ?? snap.dist)) >= TRAVEL_MIN_M) {
+        if (Math.abs(alongDelta) >= TRAVEL_MIN_M) {
           const alongBrg = roadBearingAt(rc, snap.dist);
           if (alongBrg != null) {
-            m.travelBearing = measured >= 0 ? alongBrg : (alongBrg + 180) % 360;
+            m.travelBearing = alongDelta >= 0 ? alongBrg : (alongBrg + 180) % 360;
             heading = alignBearingToTravel(roadBrg, m.travelBearing);
           }
+          m.alongSign = alongDelta >= 0 ? 1 : -1;
+        } else if (travelBrg != null && roadBrg != null) {
+          m.alongSign = Math.abs(bearingDelta(roadBrg, travelBrg)) > 90 ? -1 : 1;
         }
-        m.anchorDist = Math.max(m.curDist ?? snap.dist, snap.dist);
+        // Soft-correct toward the new GPS snap instead of teleporting. If we
+        // already dead-reckoned past the fix, ease back; if behind, catch up.
+        const err = snap.dist - (m.curDist ?? snap.dist);
+        if (Math.abs(err) > 180) {
+          // Huge jump (pattern change / GPS spike) — hard re-anchor.
+          m.curDist = snap.dist;
+        } else if (Math.abs(err) > 8) {
+          m.curDist = (m.curDist ?? snap.dist) + err * 0.35;
+        }
+        m.anchorDist = m.curDist;
         m.anchorTime = nowT;
-        m.pace = paceFromEta(v, m) ?? (measured > 0 ? measured : 0);
+        m.pace = blendPace(m.pace, resolveCruisePace(v, m, Math.abs(measured) > 0.4 ? Math.abs(measured) : null));
         if (!(m.pace >= 0)) m.pace = 0;
         m.prevAnchorDist = snap.dist;
+        m.fixAgeMs = 0;
       } else if (onRoute) {
         m.rc = rc; m.curDist = snap.dist; m.anchorDist = snap.dist; m.prevAnchorDist = snap.dist;
-        m.anchorTime = nowT; m.pace = paceFromEta(v, m) ?? 0;
+        m.anchorTime = nowT;
+        m.alongSign = (travelBrg != null && roadBrg != null && Math.abs(bearingDelta(roadBrg, travelBrg)) > 90) ? -1 : 1;
+        m.pace = blendPace(m.pace, resolveCruisePace(v, m, null));
+        m.fixAgeMs = 0;
       } else {
         m.rc = null; m.alongSpeed = 0;
         const cur = m.marker.getLngLat();
         m.linFrom = [cur.lng, cur.lat];
         m.linTo = fix;
         m.linStart = nowT;
+        // Off-route: still estimate ground speed so the next on-route stretch
+        // starts at a realistic clip, and glide toward the new fix over the
+        // poll interval rather than a short 1.4 s snap.
+        const gps = paceFromGpsHistory(m);
+        const api = paceFromApiSpeed(v);
+        const target = api ?? gps;
+        if (target != null) m.pace = blendPace(m.pace, target);
+        const jumpM = metersBetween(m.linFrom, m.linTo);
+        m.linDuration = Math.max(900, Math.min(REFRESH_INTERVAL * 1000,
+          jumpM > 1 && m.pace > 0.5 ? (jumpM / m.pace) * 1000 : REFRESH_INTERVAL * 1000));
       }
       m.onRoute = onRoute;
       m.fix = fix;
@@ -9843,14 +9933,17 @@ function renderMarkers() {
       applyAgeOpacity(el, v);
       wire(el, v);
       const marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(fix).addTo(map);
+      const seedPace = resolveCruisePace(v, { travelHist: [{ pt: [fix[0], fix[1]], t: nowT }], pace: 0 }, null);
       markers[mk] = {
         marker, el, heading, headingUnwrapped: heading, fix, fixTime: nowT,
         rc: onRoute ? rc : null, onRoute,
         curDist: onRoute ? snap.dist : 0,
         anchorDist: onRoute ? snap.dist : 0, prevAnchorDist: onRoute ? snap.dist : 0,
-        anchorTime: nowT, pace: onRoute ? (paceFromEta(v) ?? 0) : 0,
+        anchorTime: nowT, pace: onRoute ? seedPace : 0,
+        alongSign: (travelBrg != null && roadBrg != null && Math.abs(bearingDelta(roadBrg, travelBrg)) > 90) ? -1 : 1,
         travelHist: [{ pt: [fix[0], fix[1]], t: nowT }],
         travelBearing: null,
+        fixAgeMs: 0,
       };
     }
   });
@@ -10157,87 +10250,79 @@ function liveEasedPace(m) {
   return cruise * factor;
 }
 
-// Route-snapped motion (a PACING model, not a control loop): the marker glides
-// FORWARD along its road polyline at the expected pace, continuing smoothly
-// between GPS fixes instead of freezing at the last one. Each fix re-anchors the
-// distance; the marker keeps moving at `pace` from that anchor, capped so it
-// can't run more than a little past where the next fix could plausibly be. A bus
-// that's actually stopped (pace ≈ 0, e.g. dwelling at a stop) holds position.
+// Route-snapped dead reckoning: each bus keeps lumbering along its road at the
+// last known pace between GPS polls (~10 s). New fixes soft-correct the
+// position instead of teleporting, so the fleet looks like a live feed.
 let markerAnimRAF = null;
 let markerLastFrame = 0;
-const PACE_LEAD_CAP_M = 250; // don't glide more than this past the last fix's anchor
+const PACE_LEAD_CAP_M = 420; // ~allow ~30 s of coasting at city speed past last fix
+const PACE_MIN_GLIDE = 0.35; // m/s — below this, treat as stopped
+function applyBusHeading(m, bearing) {
+  if (bearing == null) return;
+  const prev = m.headingUnwrapped ?? bearing;
+  const next = prev + bearingDelta(prev % 360, bearing);
+  if (Math.abs(next - prev) <= 0.4) return;
+  m.headingUnwrapped = next;
+  m.heading = ((bearing % 360) + 360) % 360;
+  const inner = m.el && (m.el.querySelector('.bus-rot') || m.el.firstChild);
+  if (inner) inner.style.transform = `rotate(${next}deg)`;
+}
 function startMarkerAnim() {
   if (markerAnimRAF) return;
   const tick = (now) => {
     if (mapGesturing()) { markerAnimRAF = null; markerLastFrame = 0; return; }
     const markerLastFramePrev = markerLastFrame;
     markerLastFrame = now;
+    const frameDt = markerLastFramePrev ? Math.min(0.1, (now - markerLastFramePrev) / 1000) : 0.016;
     let anyMoving = false;
     for (const id in markers) {
       const m = markers[id];
       if (!m.fix) continue;
       if (!m.rc) {
-        // Off-route: ease in a straight line from last rendered spot to the fix
-        // over ~1.4 s, instead of a hard snap (a 200 m jump per poll looks broken).
+        // Off-route: ease toward the latest fix over ~one poll interval (or
+        // distance÷pace), then hold — still looks continuous between updates.
         if (m.linFrom && m.linTo) {
-          const t = Math.min(1, (now - m.linStart) / 1400);
+          const dur = m.linDuration || 1400;
+          const t = Math.min(1, (now - m.linStart) / dur);
           const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
           m.marker.setLngLat([m.linFrom[0] + (m.linTo[0]-m.linFrom[0])*e,
                               m.linFrom[1] + (m.linTo[1]-m.linFrom[1])*e]);
-          // Point nose along the glide when we've moved enough to trust it.
           if (metersBetween(m.linFrom, m.linTo) >= TRAVEL_MIN_M) {
-            const tb = bearingDeg(m.linFrom, m.linTo);
-            m.travelBearing = tb;
-            const prev = m.headingUnwrapped ?? tb;
-            const next = prev + bearingDelta(prev % 360, tb);
-            if (Math.abs(next - prev) > 0.5) {
-              m.headingUnwrapped = next; m.heading = tb;
-              const inner = m.el && (m.el.querySelector('.bus-rot') || m.el.firstChild);
-              if (inner) inner.style.transform = `rotate(${next}deg)`;
-            }
+            applyBusHeading(m, bearingDeg(m.linFrom, m.linTo));
+            m.travelBearing = m.heading;
           }
           if (t < 1) anyMoving = true; else { m.linFrom = null; }
         }
         continue;
       }
-      // Where the bus SHOULD be now: anchor distance + pace × time since anchor,
-      // capped so a missing update doesn't fling it too far ahead. The cap uses
-      // the raw cruise pace (an upper bound); actual frame-by-frame motion below
-      // uses the eased pace so it decelerates/accelerates near stops instead of
-      // moving at one constant speed and snapping to 0.
+      const pace = m.pace || 0;
+      if (pace < PACE_MIN_GLIDE) continue;
+      const sign = m.alongSign >= 0 ? 1 : -1;
+
+      // Dead-reckon along the road at cruise pace (forward or reverse along the
+      // polyline). Cap lead so a missed poll doesn't fling the bus kilometers.
       const sinceAnchor = (now - (m.anchorTime || now)) / 1000;
-      const want = m.anchorDist + Math.min((m.pace || 0) * sinceAnchor, PACE_LEAD_CAP_M);
-      const frameDt = markerLastFramePrev ? Math.min(0.1, (now - markerLastFramePrev) / 1000) : 0.016;
-      const diff = want - m.curDist;
-      if (diff > 0.05) {
-        // Glide at the EASED pace (slows approaching the next stop, ramps up
-        // leaving the last one) for natural motion, plus a gentle catch-up
-        // proportional to how far behind we are, so we still converge to the
-        // fix without a visible jump or overshoot.
-        const eased = liveEasedPace(m);
-        const speed = eased + Math.min(diff, 30) * 0.6;
-        m.curDist = Math.min(want, m.curDist + speed * frameDt);
+      const leadCap = Math.max(PACE_LEAD_CAP_M, pace * (REFRESH_INTERVAL + 8));
+      const want = m.anchorDist + sign * Math.min(pace * sinceAnchor, leadCap);
+      const diff = (want - m.curDist) * sign; // positive = still need to advance in travel dir
+
+      const eased = liveEasedPace(m);
+      let step = eased * frameDt;
+      if (diff > 0.5) step += Math.min(diff, 40) * 0.35 * frameDt;
+      else if (diff < -2) step = Math.max(0, step * 0.35);
+      if (step > 0.001) {
+        m.curDist = clamp(m.curDist + sign * step, 0, m.rc.total);
+        const lead = (m.curDist - m.anchorDist) * sign;
+        if (lead > leadCap) m.curDist = m.anchorDist + sign * leadCap;
         m.marker.setLngLat(posAtDist(m.rc, m.curDist));
-        // Keep the bus pointed along the road as it rounds curves between fixes,
-        // flipped to match travel direction when the polyline runs the other way.
         const rb = roadBearingAt(m.rc, m.curDist);
-        if (rb != null) {
-          const aligned = alignBearingToTravel(rb, m.travelBearing);
-          const prev = m.headingUnwrapped ?? aligned;
-          const next = prev + bearingDelta(prev % 360, aligned);
-          if (Math.abs(next - prev) > 0.5) {
-            m.headingUnwrapped = next; m.heading = aligned;
-            const inner = m.el && (m.el.querySelector('.bus-rot') || m.el.firstChild);
-            if (inner) inner.style.transform = `rotate(${next}deg)`;
-          }
-        }
+        if (rb != null) applyBusHeading(m, alignBearingToTravel(rb, m.travelBearing));
       }
-      // Keep the loop alive while this bus is still moving (pace>0) and hasn't
-      // hit its lead cap or the route end — so it glides continuously between
-      // fixes rather than freezing once it catches the current frame's target.
-      if ((m.pace || 0) > 0.3 && m.curDist < m.rc.total - 1 &&
-          (m.curDist - m.anchorDist) < PACE_LEAD_CAP_M) anyMoving = true;
-      else if (diff > 0.2) anyMoving = true;
+
+      const leadNow = (m.curDist - m.anchorDist) * sign;
+      const roomLeft = sign > 0 ? (m.rc.total - m.curDist) : m.curDist;
+      if (pace >= PACE_MIN_GLIDE && roomLeft > 1 && leadNow < leadCap - 0.5) anyMoving = true;
+      else if (Math.abs(diff) > 0.3) anyMoving = true;
     }
     if (anyMoving && !document.hidden) { markerAnimRAF = requestAnimationFrame(tick); }
     else { markerAnimRAF = null; markerLastFrame = 0; }
