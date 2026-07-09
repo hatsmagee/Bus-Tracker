@@ -6421,6 +6421,310 @@
         "level": 70,
         "updatedAt": "2026-07-09T21:28:04.046Z"
       }
+    },
+    "heritage:wahaula-heiau-buried-1997": {
+      "title": "Waha‘ula Heiau (buried 1997)",
+      "summary": "Puʻu ʻŌʻō (also spelled Pu‘u‘ō‘ō, and often written Puu Oo, pronounced [ˈpuʔu ˈʔoːʔoː], poo-oo-OH-oh) is a volcanic cone on the eastern rift zone of Kīlauea volcano in the Hawaiian Islands.",
+      "history": [
+        {
+          "year": 1965,
+          "text": "The hill was initially nicknamed \"Puʻu O\" by volcanologists, as its position when marked on a map of the area coincided with an \"o\" in \"Lava flow of 1965\".",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        },
+        {
+          "year": 1983,
+          "text": "The eruption that created Puʻu ʻŌʻō began on January 3, 1983, and continued nearly continuously until April 30, 2018, making it the longest-lived rift-zone eruption of the last two centuries.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        },
+        {
+          "year": 1986,
+          "text": "In July 1986, the conduit feeding magma to Puʻu ʻŌʻō ruptured, and the eruption abruptly shifted 3 kilometers (1.9 mi) downrift to form the Kūpaʻianahā vent.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        },
+        {
+          "year": 1987,
+          "text": "The coastal highway has been closed since 1987, as parts of the road have been buried under lava up to 35 meters (115 ft) thick. .",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        },
+        {
+          "year": 2005,
+          "text": "By January 2005, 2.7 cubic kilometers (0.65 mi3) of magma covered an area of more than 117 square kilometers (45 mi2) and added 230 acres (0.93 km2) of land to the southeast coast of Hawaiʻi.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        },
+        {
+          "year": 2021,
+          "text": "In 2021, the Hawaiʻi Board of Geographic Names updated the spelling of the cone as Pu‘u‘ō‘ō for consistency with the board's spelling guidelines.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Puu_Oo_cropped.jpg/330px-Puu_Oo_cropped.jpg",
+          "credit": "Wikipedia — Puʻu ʻŌʻō (CC/PD)",
+          "caption": "Puʻu ʻŌʻō",
+          "alt": "an orange and purple glowing volcano in the night sky at night time, a lot of fire on it's side"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        ],
+        "resolvedTitle": "Puʻu ʻŌʻō",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Puu_Oo_cropped.jpg/330px-Puu_Oo_cropped.jpg",
+            "caption": "an orange and purple glowing volcano in the night sky at night time, a lot of fire on it's side",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-09T21:31:07.690Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-09T21:31:07.690Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-09T21:31:07.690Z"
+      }
+    },
+    "heritage:hulihee-palace": {
+      "title": "Huliheʻe Palace",
+      "summary": "The Huliheʻe Palace is located in historic Kailua-Kona, Hawaiʻi, on Ali'i Drive. The former vacation home of Hawaiian royalty, it was converted to a museum run by the Daughters of Hawaiʻi, showcasing furniture and artifacts.",
+      "history": [
+        {
+          "year": 1844,
+          "text": "When he died in 1844 he left it to his hānai (adopted) son William Pitt Leleiohoku I, the son of Prime Minister William Pitt Kalanimoku.",
+          "source": "https://en.wikipedia.org/wiki/Hulihe%CA%BBe_Palace"
+        },
+        {
+          "year": 1848,
+          "text": "Leleiohoku died in the measles epidemic of 1848 and left it to his son John William Pitt Kīnaʻu, but he died young and the palace went to his mother Princess Ruth Keʻelikōlani.",
+          "source": "https://en.wikipedia.org/wiki/Hulihe%CA%BBe_Palace"
+        },
+        {
+          "year": 1885,
+          "text": "In 1885, King Kalākaua had the palace plastered over the outside to give the building a more refined appearance.",
+          "source": "https://en.wikipedia.org/wiki/Hulihe%CA%BBe_Palace"
+        },
+        {
+          "year": 1927,
+          "text": "In 1927, the Daughters of Hawaiʻi, a group dedicated to preserving the cultural legacy of the Hawaiian Islands, working alongside the Territory of Hawaii and the palace custodian Stella Maude Jones worked to restored Huliheʻe Palace and…",
+          "source": "https://en.wikipedia.org/wiki/Hulihe%CA%BBe_Palace"
+        },
+        {
+          "year": 1973,
+          "text": "It was added to the National Register of Historic Places listings on the island of Hawaii in 1973 as site 73000653.",
+          "source": "https://en.wikipedia.org/wiki/Hulihe%CA%BBe_Palace"
+        },
+        {
+          "year": 2006,
+          "text": "The palace's walls and ceiling had slight cracks following the 2006 Kiholo Bay earthquake that was centered on the Kohala coast. . . .",
+          "source": "https://en.wikipedia.org/wiki/Hulihe%CA%BBe_Palace"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Backside_of_the_Hulihee_Palace.JPG/330px-Backside_of_the_Hulihee_Palace.JPG",
+          "credit": "Wikipedia — Huliheʻe Palace (CC/PD)",
+          "caption": "Huliheʻe Palace",
+          "alt": "the old white building has a green roof and a front porch that sits outside on the grass in front of trees"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Hulihe%CA%BBe_Palace"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Hulihe%CA%BBe_Palace"
+        ],
+        "resolvedTitle": "Huliheʻe Palace",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Backside_of_the_Hulihee_Palace.JPG/330px-Backside_of_the_Hulihee_Palace.JPG",
+            "caption": "the old white building has a green roof and a front porch that sits outside on the grass in front of trees",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-09T21:31:16.173Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-09T21:31:16.173Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-09T21:31:16.173Z"
+      }
+    },
+    "heritage:mokuaikaua-church": {
+      "title": "Mokuʻaikaua Church",
+      "summary": "Mokuʻaikaua Church, located on the \"Big Island\" of Hawaii, is the oldest Christian church in the Hawaiian Islands.",
+      "history": [
+        {
+          "year": 1820,
+          "text": "The congregation dates to 1820 and the building was completed in 1837. .",
+          "source": "https://en.wikipedia.org/wiki/Moku%CA%BBaikaua_Church"
+        },
+        {
+          "year": 1823,
+          "text": "In October 1823, they learned that the people of Kailua-Kona had developed an interest in the new ways and had erected a small wooden church.",
+          "source": "https://en.wikipedia.org/wiki/Moku%CA%BBaikaua_Church"
+        },
+        {
+          "year": 1835,
+          "text": "After several fires, the present stone structure was constructed, partially from stones recycled from a nearby Heiau (ancient temple of the Hawaiian religion), from about 1835 to 1837.",
+          "source": "https://en.wikipedia.org/wiki/Moku%CA%BBaikaua_Church"
+        },
+        {
+          "year": 1978,
+          "text": "The state historic place register lists it as site 10-28-7231 as of January 1978.",
+          "source": "https://en.wikipedia.org/wiki/Moku%CA%BBaikaua_Church"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Mokuaikaua_Church_Kona.jpg/330px-Mokuaikaua_Church_Kona.jpg",
+          "credit": "Wikipedia — Mokuʻaikaua Church (CC/PD)",
+          "caption": "Mokuʻaikaua Church",
+          "alt": "a small brick church with a steeple that has a cross on it's roof"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Moku%CA%BBaikaua_Church"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Moku%CA%BBaikaua_Church"
+        ],
+        "resolvedTitle": "Mokuʻaikaua Church",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Mokuaikaua_Church_Kona.jpg/330px-Mokuaikaua_Church_Kona.jpg",
+            "caption": "a small brick church with a steeple that has a cross on it's roof",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-09T22:00:04.436Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-09T22:00:04.436Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-09T22:00:04.436Z"
+      }
+    },
+    "heritage:statue-of-kamehameha-i-kapaau": {
+      "title": "Statue of Kamehameha I (Kapaʻau)",
+      "summary": "Several Kamehameha statues honor the monarch who founded the Kingdom of Hawaii. .",
+      "history": [
+        {
+          "year": 1834,
+          "text": "Gould apparently relied mostly on a bust portrait of an elderly Kamehameha, an engraving of \"Tamea-mea\" that was a thirdhand copy printed in d'Urville's book (1834).",
+          "source": "https://en.wikipedia.org/wiki/Statues_of_Kamehameha_I"
+        },
+        {
+          "year": 1878,
+          "text": "The statue had its origins in 1878 when Walter M.",
+          "source": "https://en.wikipedia.org/wiki/Statues_of_Kamehameha_I"
+        },
+        {
+          "year": 1880,
+          "text": "In 1880, the initial sculpture was sent to Paris, France, to be cast in bronze.",
+          "source": "https://en.wikipedia.org/wiki/Statues_of_Kamehameha_I"
+        },
+        {
+          "year": 1883,
+          "text": "The original with minor damages was repaired, and was relocated to the legendary king's birthplace at ʻĀinakea in Kohala on Hawaiʻi Island with the dedication ceremony taking place on May 8, 1883.",
+          "source": "https://en.wikipedia.org/wiki/Statues_of_Kamehameha_I"
+        },
+        {
+          "year": 1912,
+          "text": "The statue was moved a short distance in 1912 to its present location at the courthouse Kapaʻau. .",
+          "source": "https://en.wikipedia.org/wiki/Statues_of_Kamehameha_I"
+        },
+        {
+          "year": 1969,
+          "text": "A third replica was commissioned when Hawaii attained statehood and was unveiled in 1969.",
+          "source": "https://en.wikipedia.org/wiki/Statues_of_Kamehameha_I"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/King_Kamehameha_statue_%2851872601941%29.jpg/330px-King_Kamehameha_statue_%2851872601941%29.jpg",
+          "credit": "Wikipedia — Statues of Kamehameha I (CC/PD)",
+          "caption": "Statues of Kamehameha I",
+          "alt": "there is a statue in front of a clock tower with a golden coat and a red cape on"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Statues_of_Kamehameha_I"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Statues_of_Kamehameha_I"
+        ],
+        "resolvedTitle": "Statues of Kamehameha I",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/King_Kamehameha_statue_%2851872601941%29.jpg/330px-King_Kamehameha_statue_%2851872601941%29.jpg",
+            "caption": "there is a statue in front of a clock tower with a golden coat and a red cape on",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-09T22:00:55.560Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-09T22:00:55.560Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-09T22:00:55.560Z"
+      }
     }
   }
 }
