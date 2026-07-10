@@ -5192,6 +5192,9 @@ const BUS_ARTBOARD_W = 22;                 // CSS px of the SVG element
 const BUS_BODY_VIEW_W = 18;                // body rect width in SVG viewBox units
 const BUS_VIEW_W = 28;                     // SVG viewBox width
 const BUS_BODY_CSS_W = BUS_ARTBOARD_W * (BUS_BODY_VIEW_W / BUS_VIEW_W); // ≈14.14px at scale 1
+// Stroke + antialiasing make the painted body read narrower than the road line;
+// bump so the bus fills the road the way it looks on the map.
+const BUS_WIDTH_FACTOR = 1.45;
 const BUS_COMPACT_ZOOM = 13.5;             // hide weather/# chrome when tiny
 // Screen-pixel width of a single route line vs zoom — used by island-route-lines
 // paint AND busScale so they cannot drift apart.
@@ -5220,8 +5223,9 @@ function roadLineWidthExpr() {
   return flat;
 }
 function busScaleGeographic(z) {
-  // Body width in CSS px after scale(s) must equal the painted road width.
-  const roadPx = roadLineWidthPx(z);
+  // Body width tracks the painted road, with a small visual boost so it reads
+  // as wide as the road (stroke/AA otherwise leave it looking skinny).
+  const roadPx = roadLineWidthPx(z) * BUS_WIDTH_FACTOR;
   return Math.max(0.02, roadPx / BUS_BODY_CSS_W);
 }
 function scheduleBusScale() {
