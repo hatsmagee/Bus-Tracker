@@ -8064,7 +8064,8 @@ function renderRouteShapes(force) {
   });
 
   if (showRouteShapes) {
-    // Same road-snap + ribbon/line treatment on every island that has shapes.
+    // Big Island: OSM-edge ribbons (precomputed). Other islands: shape-based
+    // corridor ribbons so shared roads still fan into parallel stripes.
     if (activeIsland === 'big-island' && routeEdgesData) {
       renderRouteRibbons();
       if (map.getLayer(RIBBON_LAYER)) map.setLayoutProperty(RIBBON_LAYER, 'visibility', 'visible');
@@ -8080,22 +8081,140 @@ function renderRouteShapes(force) {
   renderAheadArrows();
 }
 
-function renderIslandRouteLines(routeMeta) {
-  if (!mapReady) return;
-  const features = [];
-  Object.entries(allPatternCoords).forEach(([rid, patterns]) => {
-    if (routeVisible[rid] === false) return;
+// Build parallel "ribbon" features from GTFS shapes when we don't have OSM edge
+// membership (Oʻahu / Kauaʻi / Maui). Shared corridors get side-by-side slots
+// like Big Island; solo stretches stay on the centerline.
+function buildIslandCorridorFeatures(routeMeta) {
+  const routes = [];
+  for (const [rid, patterns] of Object.entries(allPatternCoords)) {
+    if (routeVisible[rid] === false) continue;
+    // One representative pattern per route (longest) — drawing every variant
+    // stacks the same color on itself and kills the ribbon look.
+    let best = null, bestLen = -1;
+    for (const coords of patterns) {
+      if (!coords || coords.length < 2) continue;
+      let len = 0;
+      for (let i = 1; i < coords.length; i++) len += metersBetween(coords[i - 1], coords[i]);
+      if (len > bestLen) { bestLen = len; best = coords; }
+    }
+    if (!best) continue;
     const meta = routeMeta[rid] || ROUTES_META[rid] || {};
-    const color = meta.color || '#888';
-    patterns.forEach(coords => {
-      if (!coords || coords.length < 2) return;
+    routes.push({
+      routeId: rid,
+      color: meta.color || '#888',
+      name: meta.name || `Route ${rid}`,
+      coords: best,
+    });
+  }
+  if (!routes.length) return [];
+
+  // Sample each route into ~45 m steps and hash midpoints so co-traveling
+  // routes land in the same corridor bucket (bearing-agnostic so inbound /
+  // outbound of different routes still share a road).
+  const CELL_M = 55;
+  const STEP_M = 45;
+  const corridor = new Map(); // cellKey -> Set(routeId)
+  const routeSamples = new Map(); // routeId -> [{lon,lat,key}, ...] densified
+
+  function cellKey(lon, lat) {
+    const mLat = 111320, mLon = mLat * Math.cos(lat * Math.PI / 180);
+    const x = Math.round((lon * mLon) / CELL_M);
+    const y = Math.round((lat * mLat) / CELL_M);
+    return `${x}:${y}`;
+  }
+
+  for (const r of routes) {
+    const samples = [];
+    let acc = 0;
+    samples.push({ lon: r.coords[0][0], lat: r.coords[0][1], key: cellKey(r.coords[0][0], r.coords[0][1]) });
+    for (let i = 1; i < r.coords.length; i++) {
+      const a = r.coords[i - 1], b = r.coords[i];
+      const seg = metersBetween(a, b);
+      if (seg < 1e-3) continue;
+      let t0 = STEP_M - (acc % STEP_M);
+      if (t0 > seg) { acc += seg; continue; }
+      for (let t = t0; t <= seg; t += STEP_M) {
+        const f = t / seg;
+        const lon = a[0] + (b[0] - a[0]) * f;
+        const lat = a[1] + (b[1] - a[1]) * f;
+        const key = cellKey(lon, lat);
+        samples.push({ lon, lat, key });
+        if (!corridor.has(key)) corridor.set(key, new Set());
+        corridor.get(key).add(r.routeId);
+      }
+      acc += seg;
+    }
+    // Ensure every vertex cell is registered even on short hops.
+    for (const c of r.coords) {
+      const key = cellKey(c[0], c[1]);
+      if (!corridor.has(key)) corridor.set(key, new Set());
+      corridor.get(key).add(r.routeId);
+    }
+    routeSamples.set(r.routeId, samples.length ? samples : [{
+      lon: r.coords[0][0], lat: r.coords[0][1], key: cellKey(r.coords[0][0], r.coords[0][1]),
+    }]);
+  }
+
+  // Stable lane order per corridor cell: sorted route ids → slot around 0.
+  // Cap at MAX_LANES so King St. (20+ routes) doesn't fan across half the map —
+  // overflow routes stay on the centerline under the ribbon.
+  const MAX_LANES = 8;
+  function slotFor(rid, peers) {
+    const sorted = [...peers].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+    if (sorted.length < 2) return 0;
+    const idx = sorted.indexOf(rid);
+    if (idx < 0) return 0;
+    if (sorted.length <= MAX_LANES) return idx - (sorted.length - 1) / 2;
+    // Too many peers: keep the first MAX_LANES in lanes; rest sit on center.
+    if (idx >= MAX_LANES) return 0;
+    return idx - (MAX_LANES - 1) / 2;
+  }
+
+  // Walk each route; split into runs where the lane slot is stable so MapLibre
+  // can apply a constant line-offset per feature (same idea as Big Island).
+  const features = [];
+  for (const r of routes) {
+    const samples = routeSamples.get(r.routeId) || [];
+    if (samples.length < 2) {
       features.push({
         type: 'Feature',
-        properties: { routeId: rid, color, name: meta.name || `Route ${rid}` },
-        geometry: { type: 'LineString', coordinates: coords },
+        properties: { routeId: r.routeId, color: r.color, name: r.name, slot: 0 },
+        geometry: { type: 'LineString', coordinates: r.coords },
       });
-    });
-  });
+      continue;
+    }
+    let runCoords = [[samples[0].lon, samples[0].lat]];
+    let runSlot = slotFor(r.routeId, corridor.get(samples[0].key) || new Set([r.routeId]));
+    const flush = () => {
+      if (runCoords.length < 2) return;
+      features.push({
+        type: 'Feature',
+        properties: { routeId: r.routeId, color: r.color, name: r.name, slot: runSlot },
+        geometry: { type: 'LineString', coordinates: runCoords },
+      });
+    };
+    for (let i = 1; i < samples.length; i++) {
+      const s = samples[i];
+      const peers = corridor.get(s.key) || new Set([r.routeId]);
+      const slot = slotFor(r.routeId, peers);
+      if (slot !== runSlot) {
+        // Carry one shared vertex so runs meet; then start a new lane.
+        runCoords.push([s.lon, s.lat]);
+        flush();
+        runCoords = [[s.lon, s.lat]];
+        runSlot = slot;
+      } else {
+        runCoords.push([s.lon, s.lat]);
+      }
+    }
+    flush();
+  }
+  return features;
+}
+
+function renderIslandRouteLines(routeMeta) {
+  if (!mapReady) return;
+  const features = buildIslandCorridorFeatures(routeMeta);
   const data = { type: 'FeatureCollection', features };
   if (!map.getSource('island-route-lines')) {
     map.addSource('island-route-lines', { type: 'geojson', data, maxzoom: 16 });
@@ -8106,13 +8225,38 @@ function renderIslandRouteLines(routeMeta) {
       layout: { 'line-join': 'round', 'line-cap': 'round' },
       paint: {
         'line-color': ['get', 'color'],
-        'line-width': roadLineWidthExpr(),
-        'line-opacity': 0.85,
+        // Slightly thinner than a solo road so N parallel stripes fit the corridor.
+        'line-width': [
+          'interpolate', ['linear'], ['zoom'],
+          8, 2, 12, 3.2, 15, 4.5, 18, 6,
+        ],
+        'line-opacity': 0.92,
+        // Side-by-side lanes on shared roads (slot 0 = centerline when alone).
+        'line-offset': ['interpolate', ['linear'], ['zoom'],
+          10, ['*', ['coalesce', ['get', 'slot'], 0], 2.2],
+          13, ['*', ['coalesce', ['get', 'slot'], 0], 3.4],
+          16, ['*', ['coalesce', ['get', 'slot'], 0], 5.0],
+          18, ['*', ['coalesce', ['get', 'slot'], 0], 6.5]],
       },
     });
+    try {
+      wireLayerHover('island-route-lines', p => `
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="width:10px;height:10px;border-radius:50%;background:${p.color};flex-shrink:0;border:1px solid rgba(255,255,255,.5);"></span>
+          <span style="font-weight:600;">${escapeHtml(p.name || ('Route ' + p.routeId))}</span>
+        </div>`);
+    } catch (e) {}
   } else {
     map.getSource('island-route-lines').setData(data);
-    map.setPaintProperty('island-route-lines', 'line-width', roadLineWidthExpr());
+    map.setPaintProperty('island-route-lines', 'line-width', [
+      'interpolate', ['linear'], ['zoom'],
+      8, 2, 12, 3.2, 15, 4.5, 18, 6,
+    ]);
+    map.setPaintProperty('island-route-lines', 'line-offset', ['interpolate', ['linear'], ['zoom'],
+      10, ['*', ['coalesce', ['get', 'slot'], 0], 2.2],
+      13, ['*', ['coalesce', ['get', 'slot'], 0], 3.4],
+      16, ['*', ['coalesce', ['get', 'slot'], 0], 5.0],
+      18, ['*', ['coalesce', ['get', 'slot'], 0], 6.5]]);
     map.setLayoutProperty('island-route-lines', 'visibility', 'visible');
   }
 }
