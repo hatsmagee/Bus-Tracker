@@ -7816,11 +7816,18 @@ function bearingDelta(a, b) {
   return ((b - a + 540) % 360) - 180;
 }
 
-// Align a road-centerline bearing to the bus's actual travel direction. Route
-// polylines are often digitized one way; if the bus is going the other way the
-// nose would point backward — flip 180° when travel disagrees with the road.
-function alignBearingToTravel(roadBrg, travelBrg) {
+// Align a road-centerline bearing to the bus's travel direction along the
+// polyline. alongSign +1 = digitized forward, -1 = opposite. Always returns a
+// bearing that lies ON the road — never a raw GPS diagonal.
+function roadTravelBearing(roadBrg, alongSign) {
+  if (roadBrg == null) return null;
+  return (alongSign < 0) ? (roadBrg + 180) % 360 : roadBrg;
+}
+
+// Prefer alongSign when we have it; otherwise flip from travel history vs road.
+function alignBearingToTravel(roadBrg, travelBrg, alongSign) {
   if (roadBrg == null) return travelBrg != null ? travelBrg : null;
+  if (alongSign === 1 || alongSign === -1) return roadTravelBearing(roadBrg, alongSign);
   if (travelBrg == null) return roadBrg;
   return Math.abs(bearingDelta(roadBrg, travelBrg)) > 90
     ? (roadBrg + 180) % 360
@@ -9575,7 +9582,6 @@ function makeBusIcon(color, label, heading, load, weather, busNo) {
       cursor:pointer;
       transform:rotate(${heading}deg);
       transform-origin:center center;
-      transition:transform .4s ease;
       will-change:transform;
     ">
     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="46" viewBox="0 0 28 58"
@@ -9879,13 +9885,15 @@ function renderMarkers() {
       : { rc: null, snap: null };
     const onRoute = !!(snap && snap.offRoute < 120);
     const roadBrg = onRoute ? roadBearingAt(rc, snap.dist) : null;
-    // Nose points along the road in the direction of movement. Never use the
-    // API heading for icon orientation — only motion history + road geometry.
-    // Until we have travel history, still use road bearing so buses aren't
-    // stuck pointing north (0°) on first paint.
-    let heading = alignBearingToTravel(roadBrg, travelBrg);
-    if (heading == null) heading = travelBrg != null ? travelBrg
-                  : ((prevM && prevM.heading != null) ? prevM.heading : 0);
+    // On-route: nose is ALWAYS the road tangent in the travel direction — never
+    // raw GPS (that points diagonally across the pavement). Off-route: GPS ok.
+    let alongSignGuess = (prevM && (prevM.alongSign === 1 || prevM.alongSign === -1))
+      ? prevM.alongSign
+      : ((travelBrg != null && roadBrg != null && Math.abs(bearingDelta(roadBrg, travelBrg)) > 90) ? -1 : 1);
+    let heading = onRoute
+      ? alignBearingToTravel(roadBrg, travelBrg, alongSignGuess)
+      : (travelBrg != null ? travelBrg : ((prevM && prevM.heading != null) ? prevM.heading : 0));
+    if (heading == null) heading = 0;
 
     if (markers[mk]) {
       const m = markers[mk];
@@ -9895,15 +9903,12 @@ function renderMarkers() {
         const measured = alongDelta / Math.max(dt, 1);
         // Along-route progress also implies travel direction when GPS jitter is low.
         if (Math.abs(alongDelta) >= TRAVEL_MIN_M) {
-          const alongBrg = roadBearingAt(rc, snap.dist);
-          if (alongBrg != null) {
-            m.travelBearing = alongDelta >= 0 ? alongBrg : (alongBrg + 180) % 360;
-            heading = alignBearingToTravel(roadBrg, m.travelBearing);
-          }
           m.alongSign = alongDelta >= 0 ? 1 : -1;
+          m.travelBearing = roadTravelBearing(roadBrg, m.alongSign);
         } else if (travelBrg != null && roadBrg != null) {
           m.alongSign = Math.abs(bearingDelta(roadBrg, travelBrg)) > 90 ? -1 : 1;
         }
+        heading = alignBearingToTravel(roadBrg, m.travelBearing, m.alongSign);
         // Soft-correct toward the new GPS snap instead of teleporting. If we
         // already dead-reckoned past the fix, ease back; if behind, catch up.
         const err = snap.dist - (m.curDist ?? snap.dist);
@@ -9922,7 +9927,9 @@ function renderMarkers() {
       } else if (onRoute) {
         m.rc = rc; m.curDist = snap.dist; m.anchorDist = snap.dist; m.prevAnchorDist = snap.dist;
         m.anchorTime = nowT;
-        m.alongSign = (travelBrg != null && roadBrg != null && Math.abs(bearingDelta(roadBrg, travelBrg)) > 90) ? -1 : 1;
+        m.alongSign = alongSignGuess;
+        m.travelBearing = roadTravelBearing(roadBrg, m.alongSign);
+        heading = alignBearingToTravel(roadBrg, m.travelBearing, m.alongSign);
         m.pace = blendPace(m.pace, resolveCruisePace(v, m, null));
         m.fixAgeMs = 0;
       } else {
@@ -9948,14 +9955,12 @@ function renderMarkers() {
       m.heading = heading;
       const prevU = m.headingUnwrapped ?? heading;
       m.headingUnwrapped = prevU + bearingDelta(prevU % 360, heading);
-      const prevInner = m.el.querySelector('.bus-rot');
-      const prevTransform = prevInner ? prevInner.style.transform : null;
       m.el.classList.add('bus-marker');
       m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, m.headingUnwrapped, loadFrac, v.weather, v.name);
-      const newInner = m.el.querySelector('.bus-rot');
-      if (newInner && prevTransform) newInner.style.transform = prevTransform;
       applyAgeOpacity(m.el, v);
       wire(m.el, v);
+      // Force road-aligned nose after rebuild (don't restore a stale transform).
+      applyBusHeading(m, heading);
     } else {
       const el = document.createElement('div');
       el.className = 'bus-marker';
@@ -10291,10 +10296,17 @@ function applyBusHeading(m, bearing) {
   if (bearing == null) return;
   const prev = m.headingUnwrapped ?? bearing;
   const next = prev + bearingDelta(prev % 360, bearing);
-  if (Math.abs(next - prev) <= 0.4) return;
-  m.headingUnwrapped = next;
   m.heading = ((bearing % 360) + 360) % 360;
-  const inner = m.el && (m.el.querySelector('.bus-rot') || m.el.firstChild);
+  if (Math.abs(next - prev) <= 0.15) {
+    // Still sync the DOM in case hover/scale left a stale transform.
+    const inner = m.el && m.el.querySelector('.bus-rot');
+    if (inner && !inner.style.transform.includes(`rotate(${next}deg)`)) {
+      inner.style.transform = `rotate(${next}deg)`;
+    }
+    return;
+  }
+  m.headingUnwrapped = next;
+  const inner = m.el && m.el.querySelector('.bus-rot');
   if (inner) inner.style.transform = `rotate(${next}deg)`;
 }
 function startMarkerAnim() {
@@ -10326,8 +10338,18 @@ function startMarkerAnim() {
         continue;
       }
       const pace = m.pace || 0;
+      const sign = (m.alongSign === -1) ? -1 : 1;
+
+      // Always lock nose to the road tangent at the current glide point — even
+      // when stopped — so buses never sit diagonal or sideways on the pavement.
+      const rb = roadBearingAt(m.rc, m.curDist);
+      if (rb != null) {
+        const nose = roadTravelBearing(rb, sign);
+        m.travelBearing = nose;
+        applyBusHeading(m, nose);
+      }
+
       if (pace < PACE_MIN_GLIDE) continue;
-      const sign = m.alongSign >= 0 ? 1 : -1;
 
       // Dead-reckon along the road at cruise pace (forward or reverse along the
       // polyline). Cap lead so a missed poll doesn't fling the bus kilometers.
@@ -10345,8 +10367,12 @@ function startMarkerAnim() {
         const lead = (m.curDist - m.anchorDist) * sign;
         if (lead > leadCap) m.curDist = m.anchorDist + sign * leadCap;
         m.marker.setLngLat(posAtDist(m.rc, m.curDist));
-        const rb = roadBearingAt(m.rc, m.curDist);
-        if (rb != null) applyBusHeading(m, alignBearingToTravel(rb, m.travelBearing));
+        const rb2 = roadBearingAt(m.rc, m.curDist);
+        if (rb2 != null) {
+          const nose = roadTravelBearing(rb2, sign);
+          m.travelBearing = nose;
+          applyBusHeading(m, nose);
+        }
       }
 
       const leadNow = (m.curDist - m.anchorDist) * sign;
