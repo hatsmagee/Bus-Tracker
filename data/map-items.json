@@ -7014,6 +7014,424 @@
         "level": 70,
         "updatedAt": "2026-07-09T22:34:21.117Z"
       }
+    },
+    "heritage:kona-coffee-living-history-farm": {
+      "title": "Kona Coffee Living History Farm",
+      "summary": "Kona coffee is the market name for coffee (Coffea arabica) cultivated on the slopes of Hualalai and Mauna Loa in the North and South Kona Districts of the Big Island of Hawaii.",
+      "history": [
+        {
+          "year": 1828,
+          "text": "The coffee plant was brought to the Kona district in 1828 by Reverend Samuel Ruggles from Brazilian cuttings.",
+          "source": "https://en.wikipedia.org/wiki/Kona_coffee"
+        },
+        {
+          "year": 1899,
+          "text": "In other parts of the Hawaiian islands, it was grown on large plantations, but the 1899 world coffee market crash caused plantation owners to lease land to their workers.",
+          "source": "https://en.wikipedia.org/wiki/Kona_coffee"
+        },
+        {
+          "year": 1910,
+          "text": "Fukunaga (1910–1984), who was superintendent of the University of Hawaii's Kona Research Station in Kainaliu in the 1950s through the 1970s. .",
+          "source": "https://en.wikipedia.org/wiki/Kona_coffee"
+        },
+        {
+          "year": 1993,
+          "text": "In 1993 the Kona Coffee Council, a regional coffee growers association, tried unsuccessfully to protect the name \"Kona Coffee\" by trademarking its logo with the United States Patent and Trademark Office.",
+          "source": "https://en.wikipedia.org/wiki/Kona_coffee"
+        },
+        {
+          "year": 1997,
+          "text": "In 1997, the total Kona coffee area was 2,290 acres (927 ha), and green coffee production was just over two million pounds. .",
+          "source": "https://en.wikipedia.org/wiki/Kona_coffee"
+        },
+        {
+          "year": 2001,
+          "text": "In 2001, rootstock from the Coffea liberica species was found resistant to the nematodes.",
+          "source": "https://en.wikipedia.org/wiki/Kona_coffee"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Kona_Coffee_fruits%282%29.jpg/330px-Kona_Coffee_fruits%282%29.jpg",
+          "credit": "Wikipedia — Kona coffee (CC/PD)",
+          "caption": "Kona coffee",
+          "alt": "several coffee beans on a tree in a forest, surrounded by leaves and branches,"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kona_coffee"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kona_coffee"
+        ],
+        "resolvedTitle": "Kona coffee",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Kona_Coffee_fruits%282%29.jpg/330px-Kona_Coffee_fruits%282%29.jpg",
+            "caption": "several coffee beans on a tree in a forest, surrounded by leaves and branches,",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-10T14:15:39.536Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-10T14:15:39.536Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-10T14:15:39.536Z"
+      }
+    },
+    "heritage:waipio-valley": {
+      "title": "Waipiʻo Valley",
+      "summary": "Waipiʻo Valley is a valley located in the Hāmākua District of the Hawaiʻi Island of Hawaiʻi.",
+      "history": [
+        {
+          "year": 1995,
+          "text": "The valley was the site of the final scene in the 1995 sci-fi film Waterworld, at which the main characters found dry land. . . .",
+          "source": "https://en.wikipedia.org/wiki/Waipi%CA%BBo_Valley"
+        },
+        {
+          "year": 2006,
+          "text": "The 2006 Kiholo Bay earthquake, caused a cliff at the entrance of the Waipiʻo Valley to collapse and slide into the ocean as well as rock falls on the access road leading to the valley. .",
+          "source": "https://en.wikipedia.org/wiki/Waipi%CA%BBo_Valley"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/72/Waipio_Lookout_View.jpg/330px-Waipio_Lookout_View.jpg",
+          "credit": "Wikipedia — Waipiʻo Valley (CC/PD)",
+          "caption": "Waipiʻo Valley",
+          "alt": "sheep grazing on grassy hill overlooking ocean on cloudy day, seen from coastal cliff edge"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Waipi%CA%BBo_Valley"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Waipi%CA%BBo_Valley"
+        ],
+        "resolvedTitle": "Waipiʻo Valley",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/72/Waipio_Lookout_View.jpg/330px-Waipio_Lookout_View.jpg",
+            "caption": "sheep grazing on grassy hill overlooking ocean on cloudy day, seen from coastal cliff edge",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-10T14:39:29.592Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-10T14:39:29.592Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-history",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 55,
+        "updatedAt": "2026-07-10T14:39:29.592Z"
+      }
+    },
+    "heritage:waimanu-valley": {
+      "title": "Waimanu Valley",
+      "summary": "Waimanu Valley is a remote valley on the northeast coast of Hawaiʻi island. Besides the main Waimanu Stream, it includes Waihīlau Falls on a tributary. .",
+      "history": [
+        {
+          "year": 1995,
+          "text": "The valley was the site of the final scene in the 1995 sci-fi film Waterworld, at which the main characters found dry land. . . .",
+          "source": "https://en.wikipedia.org/wiki/Waimanu_Valley"
+        },
+        {
+          "year": 2006,
+          "text": "The 2006 Kiholo Bay earthquake, caused a cliff at the entrance of the Waipiʻo Valley to collapse and slide into the ocean as well as rock falls on the access road leading to the valley. .",
+          "source": "https://en.wikipedia.org/wiki/Waimanu_Valley"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/72/Waipio_Lookout_View.jpg/330px-Waipio_Lookout_View.jpg",
+          "credit": "Wikipedia — Waipiʻo Valley (CC/PD)",
+          "caption": "Waipiʻo Valley",
+          "alt": "the view from atop a hill over a mountain and ocean, where the grass is green"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Waimanu_Valley"
+        },
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Waipi%CA%BBo_Valley"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Waimanu_Valley",
+          "https://en.wikipedia.org/wiki/Waipi%CA%BBo_Valley"
+        ],
+        "resolvedTitle": "Waimanu Valley",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/72/Waipio_Lookout_View.jpg/330px-Waipio_Lookout_View.jpg",
+            "caption": "the view from atop a hill over a mountain and ocean, where the grass is green",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-10T14:39:39.569Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-10T14:39:39.569Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-history",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-10T14:39:39.569Z"
+      }
+    },
+    "heritage:kealakekua-bay": {
+      "title": "Kealakekua Bay",
+      "summary": "Kealakekua Bay is located on the Kona coast of the island of Hawaiʻi about 12 miles (19 km) south of Kailua-Kona.",
+      "history": [
+        {
+          "year": 1779,
+          "text": "He and his crews on the Resolution and Discovery sighted Kealakekua Bay on the morning of January 17, 1779.",
+          "source": "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        },
+        {
+          "year": 1782,
+          "text": "When Kalaniʻōpuʻu died in 1782, his oldest son Kīwalaʻō officially inherited the kingdom, but his nephew Kamehameha I became guardian of the god Kūkaʻilimoku.",
+          "source": "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        },
+        {
+          "year": 1786,
+          "text": "In 1786, merchant ships of the King George's Sound Company under command of the maritime fur traders Nathaniel Portlock and Captain George Dixon anchored in the harbor, but avoided coming ashore.",
+          "source": "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        },
+        {
+          "year": 1788,
+          "text": "In December 1788, the Iphigenia under William Douglas arrived with Chief Kaʻiana, who had already traveled to China.",
+          "source": "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        },
+        {
+          "year": 1790,
+          "text": "Two sailors, Parson Howel and James Boyd, left the ship (in 1790 or when it returned in 1793) and lived on the island.",
+          "source": "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        },
+        {
+          "year": 1973,
+          "text": "It was listed in the National Register of Historic Places listings on the island of Hawaiʻi in 1973 as the Kealakekua Bay Historical District.",
+          "source": "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Kealakekua_Bay_in_the_morning.jpg/330px-Kealakekua_Bay_in_the_morning.jpg",
+          "credit": "Wikipedia — Kealakekua Bay (CC/PD)",
+          "caption": "Kealakekua Bay",
+          "alt": "a beautiful blue sea and beach with rocks on the shore of a small island in the ocean"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kealakekua_Bay"
+        ],
+        "resolvedTitle": "Kealakekua Bay",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Kealakekua_Bay_in_the_morning.jpg/330px-Kealakekua_Bay_in_the_morning.jpg",
+            "caption": "a beautiful blue sea and beach with rocks on the shore of a small island in the ocean",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-10T15:38:26.900Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-10T15:38:26.900Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-10T15:38:26.900Z"
+      }
+    },
+    "heritage:captain-cook-monument": {
+      "title": "Captain Cook Monument",
+      "summary": "Captain James Cook (7 November 1728 – 14 February 1779) was a British Royal Navy officer, explorer, and cartographer who led three voyages of exploration to the Pacific and Southern Oceans between 1768 and 1779.",
+      "history": [
+        {
+          "year": 1728,
+          "text": "Captain James Cook (7 November 1728 – 14 February 1779) was a British Royal Navy officer, explorer, and cartographer who led three voyages of exploration to the Pacific and Southern Oceans between 1768 and 1779.",
+          "source": "https://en.wikipedia.org/wiki/James_Cook"
+        },
+        {
+          "year": 1736,
+          "text": "In 1736, his family moved to Airey Holme farm at Great Ayton, where his father's employer, Thomas Skottowe, paid for Cook to attend a school run by a charitable foundation.",
+          "source": "https://en.wikipedia.org/wiki/James_Cook"
+        },
+        {
+          "year": 1741,
+          "text": "In 1741, after five years of schooling, he began working for his father who had been promoted to farm manager.",
+          "source": "https://en.wikipedia.org/wiki/James_Cook"
+        },
+        {
+          "year": 1755,
+          "text": "Cook joined the British merchant navy as a teenager before enlisting in the Royal Navy in 1755.",
+          "source": "https://en.wikipedia.org/wiki/James_Cook"
+        },
+        {
+          "year": 1768,
+          "text": "This acclaim came at a pivotal moment in British overseas exploration, and it led to his commission in 1768 as commander of HMS Endeavour for the first of his three voyages.",
+          "source": "https://en.wikipedia.org/wiki/James_Cook"
+        },
+        {
+          "year": 1779,
+          "text": "In 1779, during his second visit to Hawaii, Cook was killed when a dispute with Native Hawaiians turned violent.",
+          "source": "https://en.wikipedia.org/wiki/James_Cook"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Captainjamescookportrait.jpg/330px-Captainjamescookportrait.jpg",
+          "credit": "Wikipedia — James Cook (CC/PD)",
+          "caption": "James Cook",
+          "alt": "a painting of a man sitting down holding a paper and pen with an ocean view behind him"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/James_Cook"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/James_Cook"
+        ],
+        "resolvedTitle": "James Cook",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Captainjamescookportrait.jpg/330px-Captainjamescookportrait.jpg",
+            "caption": "a painting of a man sitting down holding a paper and pen with an ocean view behind him",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-10T15:39:39.825Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-10T15:39:39.825Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-10T15:39:39.825Z"
+      }
+    },
+    "heritage:papakolea-green-sand-beach": {
+      "title": "Papakōlea (Green Sand Beach)",
+      "summary": "Papakōlea Beach (also known as Green Sand Beach or Mahana Beach) is a green sand beach located near South Point, in the Kaʻū district of the island of Hawaiʻi.",
+      "history": [
+        {
+          "year": 2016,
+          "text": "The land owner, the Department of Hawaiian Home Lands, has attempted to restrict vehicular traffic in the area since 2016.",
+          "source": "https://en.wikipedia.org/wiki/Papak%C5%8Dlea_Beach"
+        },
+        {
+          "year": 2020,
+          "text": "The vehicles have created ruts in the soil that reach well over 8 feet deep as shown in the photo below from December 20, 2020.",
+          "source": "https://en.wikipedia.org/wiki/Papak%C5%8Dlea_Beach"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Papakolea_snapshot.jpg/330px-Papakolea_snapshot.jpg",
+          "credit": "Wikipedia — Papakōlea Beach (CC/PD)",
+          "caption": "Papakōlea Beach",
+          "alt": "a person sitting on a cliff in the middle of the water and surfboarding near the edge"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Papak%C5%8Dlea_Beach"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Papak%C5%8Dlea_Beach"
+        ],
+        "resolvedTitle": "Papakōlea Beach",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Papakolea_snapshot.jpg/330px-Papakolea_snapshot.jpg",
+            "caption": "a person sitting on a cliff in the middle of the water and surfboarding near the edge",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-10T15:40:57.214Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-10T15:40:57.214Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-history",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-10T15:40:57.214Z"
+      }
     }
   }
 }
