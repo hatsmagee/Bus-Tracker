@@ -1912,17 +1912,16 @@ function initMapLayers() {
   map.addLayer({ id: 'ahead-arrows', type: 'symbol', source: 'ahead',
     layout: {
       'icon-image': 'chevron',
-      // Substantial, roughly constant on-screen size (pairs with the fixed-size
-      // bus marker). Slightly bigger now for legibility.
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.75, 14, 0.7, 17, 0.62],
+      // Sized to the painted road / bus width (see chevronIconSizeExpr).
+      'icon-size': 0.25,
       'icon-rotate': ['get', 'bearing'],          // per-chevron heading along the road
       'icon-rotation-alignment': 'map',
       'icon-allow-overlap': true, 'icon-ignore-placement': true,
     },
-    // White halo so the route-coloured chevrons pop on any basemap.
+    // Thin halo so arrows stay inside the road, not a fat outline past it.
     paint: {
-      'icon-color': ['get', 'color'], 'icon-opacity': 1,
-      'icon-halo-color': '#ffffff', 'icon-halo-width': 2.6
+      'icon-color': ['get', 'color'], 'icon-opacity': 0.95,
+      'icon-halo-color': '#ffffff', 'icon-halo-width': 0.8
     }
   });
 
@@ -3262,9 +3261,10 @@ function makeChevronIcon() {
   c.width = s; c.height = s;
   const x = c.getContext('2d');
   x.lineCap = 'round'; x.lineJoin = 'round';
-  // apex at top (y=14), arms down at y=33 → points UP (rotate=0 ⇒ north)
-  x.strokeStyle = '#ffffff'; x.lineWidth = 9;
-  x.beginPath(); x.moveTo(9, 33); x.lineTo(24, 14); x.lineTo(39, 33); x.stroke();
+  // Compact V that fills most of the icon width — sized so CHEVRON_SPAN_CSS
+  // (~15 CSS px at icon-size 1) matches the bus/road when scaled.
+  x.strokeStyle = '#ffffff'; x.lineWidth = 7;
+  x.beginPath(); x.moveTo(10, 32); x.lineTo(24, 14); x.lineTo(38, 32); x.stroke();
   return x.getImageData(0, 0, s, s);
 }
 
@@ -5196,6 +5196,10 @@ const BUS_BODY_CSS_W = BUS_ARTBOARD_W * (BUS_BODY_VIEW_W / BUS_VIEW_W); // ≈14
 // bump so the bus fills the road the way it looks on the map.
 const BUS_WIDTH_FACTOR = 1.45;
 const BUS_COMPACT_ZOOM = 13.5;             // hide weather/# chrome when tiny
+// Ahead chevron: 48px SDF @ pixelRatio 2 → 24 CSS px full icon at icon-size 1.
+// The drawn V spans ~30 image px across → 15 CSS px at icon-size 1. Scale so
+// that span matches the bus/road width.
+const CHEVRON_SPAN_CSS = 15;
 // Screen-pixel width of a single route line vs zoom — used by island-route-lines
 // paint AND busScale so they cannot drift apart.
 const ROAD_WIDTH_STOPS = [[8, 2.5], [12, 5], [15, 8], [18, 12], [20, 16]];
@@ -5228,6 +5232,16 @@ function busScaleGeographic(z) {
   const roadPx = roadLineWidthPx(z) * BUS_WIDTH_FACTOR;
   return Math.max(0.02, roadPx / BUS_BODY_CSS_W);
 }
+// icon-size so the chevron's V spans the same screen width as the bus/road.
+function chevronIconSizeAt(z) {
+  const targetPx = roadLineWidthPx(z) * BUS_WIDTH_FACTOR;
+  return Math.max(0.04, targetPx / CHEVRON_SPAN_CSS);
+}
+function chevronIconSizeExpr() {
+  const flat = ['interpolate', ['linear'], ['zoom']];
+  for (const [z] of ROAD_WIDTH_STOPS) flat.push(z, +chevronIconSizeAt(z).toFixed(4));
+  return flat;
+}
 function scheduleBusScale() {
   if (_busScaleRaf) return;
   _busScaleRaf = requestAnimationFrame(() => {
@@ -5242,6 +5256,10 @@ function updateBusScale() {
   const root = map.getContainer();
   root.style.setProperty('--bsc', scale.toFixed(5));
   root.classList.toggle('bus-compact', z < BUS_COMPACT_ZOOM);
+  // Keep direction arrows the same width as the bus / road.
+  if (map.getLayer('ahead-arrows')) {
+    try { map.setLayoutProperty('ahead-arrows', 'icon-size', chevronIconSizeExpr()); } catch (e) {}
+  }
 }
 
 function updateWheelScale() {
@@ -7931,14 +7949,15 @@ function doublebackLimit(rc, start, maxM) {
   return hardEnd;
 }
 
-// Spacing between chevrons in METRES, scaled by zoom so they stay visually
-// separated (not a super-fine thread) when zoomed out and tighten when zoomed in.
+// Spacing between chevrons in METRES — scales with zoom so gaps stay a few
+// bus-lengths apart on screen as the icons shrink/grow with the road.
 function chevronSpacingM() {
   const z = map.getZoom();
-  // Slightly fewer chevrons: a bit more space between them at every zoom.
-  if (z <= 11) return 420;
-  if (z >= 16) return 45;
-  return 420 * Math.pow(0.5, (z - 11) / 1.0); // halve per zoom level
+  const roadPx = roadLineWidthPx(z) * BUS_WIDTH_FACTOR;
+  // Aim for ~4–5 bus lengths between tips; convert screen gap → metres via mpp.
+  const mpp = metersPerPixelAt(map.getCenter().lat, z);
+  const gapM = Math.max(28, Math.min(380, (roadPx * 5.5) * mpp));
+  return gapM;
 }
 // Emit a chevron every (zoom-scaled) spacing of route-distance, walking forward
 // from the bus's LIVE animated distance (getStart) + phase. Position and bearing
