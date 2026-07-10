@@ -5185,23 +5185,23 @@ function scheduleMarkerRescale() {
   });
 }
 
-// Bus scale tracks the DRAWN route line width so icons shrink/grow with the
-// roads (same zoom curve) and are never wider than the road ribbon on screen.
-// Also capped by a real-world lane width via meters-per-pixel so street-level
-// zoom doesn't let buses balloon past the pavement.
-const BUS_ARTBOARD_W = 22;          // CSS px of the icon artboard (body width)
-const BUS_GROUND_WIDTH_M = 3.5;     // ~one lane / bus width on the ground
-const BUS_SCALE_MIN = 0.03;         // ~0.7 px — speck when fully zoomed out
-const BUS_SCALE_MAX = 0.85;         // never dominate a street-level view
-const BUS_COMPACT_ZOOM = 14;        // hide weather/# chrome when tiny
+// Bus width = painted route line width at the current zoom. One shared stop
+// table drives both the GeoJSON line paint and --bsc, so zooming in/out keeps
+// every bus exactly as wide as the road it's on (no separate caps/floors).
+const BUS_ARTBOARD_W = 22;                 // CSS px of the SVG element
+const BUS_BODY_VIEW_W = 18;                // body rect width in SVG viewBox units
+const BUS_VIEW_W = 28;                     // SVG viewBox width
+const BUS_BODY_CSS_W = BUS_ARTBOARD_W * (BUS_BODY_VIEW_W / BUS_VIEW_W); // ≈14.14px at scale 1
+const BUS_COMPACT_ZOOM = 13.5;             // hide weather/# chrome when tiny
+// Screen-pixel width of a single route line vs zoom — used by island-route-lines
+// paint AND busScale so they cannot drift apart.
+const ROAD_WIDTH_STOPS = [[8, 2.5], [12, 5], [15, 8], [18, 12], [20, 16]];
 let _busScaleRaf = 0;
 function metersPerPixelAt(lat, z) {
-  // MapLibre/Mapbox GL use 512px tiles → equator m/px at z0 is ~78271.5
   return 78271.51696 * Math.cos((lat || 0) * Math.PI / 180) / Math.pow(2, z);
 }
-// Matches island-route-lines / ribbon paint so buses and roads share one curve.
 function roadLineWidthPx(z) {
-  const stops = [[8, 2], [12, 4], [15, 6], [18, 8]];
+  const stops = ROAD_WIDTH_STOPS;
   if (z <= stops[0][0]) return stops[0][1];
   if (z >= stops[stops.length - 1][0]) return stops[stops.length - 1][1];
   for (let i = 1; i < stops.length; i++) {
@@ -5213,15 +5213,16 @@ function roadLineWidthPx(z) {
   }
   return stops[stops.length - 1][1];
 }
-function busScaleGeographic(z, lat) {
-  // Match the painted route line so buses and roads shrink/grow together.
-  // Also never exceed a real lane on the ground (street-level safety cap).
-  const roadPx = roadLineWidthPx(z) * 0.92;
-  const lanePx = BUS_GROUND_WIDTH_M / Math.max(metersPerPixelAt(lat, z), 1e-9);
-  // Zoomed out: lanePx is <<1 — follow the road so icons stay road-width marks.
-  // Zoomed in: never wider than either the paint or a real lane.
-  const px = lanePx < roadPx ? roadPx : Math.min(roadPx, lanePx);
-  return Math.max(BUS_SCALE_MIN, Math.min(BUS_SCALE_MAX, px / BUS_ARTBOARD_W));
+// MapLibre interpolate expression matching ROAD_WIDTH_STOPS (flat list).
+function roadLineWidthExpr() {
+  const flat = ['interpolate', ['linear'], ['zoom']];
+  for (const [z, w] of ROAD_WIDTH_STOPS) flat.push(z, w);
+  return flat;
+}
+function busScaleGeographic(z) {
+  // Body width in CSS px after scale(s) must equal the painted road width.
+  const roadPx = roadLineWidthPx(z);
+  return Math.max(0.02, roadPx / BUS_BODY_CSS_W);
 }
 function scheduleBusScale() {
   if (_busScaleRaf) return;
@@ -5233,10 +5234,9 @@ function scheduleBusScale() {
 function updateBusScale() {
   if (!mapReady) return;
   const z = map.getZoom();
-  const lat = map.getCenter().lat;
-  const scale = busScaleGeographic(z, lat);
+  const scale = busScaleGeographic(z);
   const root = map.getContainer();
-  root.style.setProperty('--bsc', scale.toFixed(4));
+  root.style.setProperty('--bsc', scale.toFixed(5));
   root.classList.toggle('bus-compact', z < BUS_COMPACT_ZOOM);
 }
 
@@ -8076,12 +8076,13 @@ function renderIslandRouteLines(routeMeta) {
       layout: { 'line-join': 'round', 'line-cap': 'round' },
       paint: {
         'line-color': ['get', 'color'],
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2, 12, 4, 15, 6, 18, 8],
+        'line-width': roadLineWidthExpr(),
         'line-opacity': 0.85,
       },
     });
   } else {
     map.getSource('island-route-lines').setData(data);
+    map.setPaintProperty('island-route-lines', 'line-width', roadLineWidthExpr());
     map.setLayoutProperty('island-route-lines', 'visibility', 'visible');
   }
 }
@@ -8431,13 +8432,19 @@ function renderRouteRibbons() {
   }
   const data = { type: 'FeatureCollection', features };
   const bandSrc = map.getSource(RIBBON_SRC);
-  if (bandSrc) { bandSrc.setData(data); return; }
+  if (bandSrc) {
+    bandSrc.setData(data);
+    if (map.getLayer(RIBBON_LAYER)) {
+      map.setPaintProperty(RIBBON_LAYER, 'line-width', roadLineWidthExpr());
+    }
+    return;
+  }
   map.addSource(RIBBON_SRC, { type: 'geojson', data, maxzoom: 16 });
   map.addLayer({
     id: RIBBON_LAYER, type: 'line', source: RIBBON_SRC,
     paint: {
       'line-color': ['get', 'color'],
-      'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.6, 12, 2.6, 15, 3.6, 18, 5],
+      'line-width': roadLineWidthExpr(),
       'line-opacity': 0.95,
       'line-offset': ['interpolate', ['linear'], ['zoom'],
         12, ['*', ['get', 'slot'], 1.6],
