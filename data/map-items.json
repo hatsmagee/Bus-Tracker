@@ -8908,6 +8908,445 @@
         "level": 85,
         "updatedAt": "2026-07-12T20:39:25.207Z"
       }
+    },
+    "heritage:cape-kumukahi-light": {
+      "title": "Cape Kumukahi Light",
+      "summary": "The Cape Kumukahi Light is a lighthouse in Kapoho, Hawaii at the easternmost point of Hawaii.",
+      "history": [
+        {
+          "year": 1905,
+          "text": "Requests for a lighthouse on the cape, the easternmost point of the island chain, began in 1905.",
+          "source": "https://en.wikipedia.org/wiki/Cape_Kumukahi_Light"
+        },
+        {
+          "year": 1928,
+          "text": "Nonetheless, these requests were not heeded until 1928, when a 32 feet (9.8 m) wooden tower was erected, with an automatic acetylene beacon.",
+          "source": "https://en.wikipedia.org/wiki/Cape_Kumukahi_Light"
+        },
+        {
+          "year": 1933,
+          "text": "In 1933-1934 a more substantial station was constructed.",
+          "source": "https://en.wikipedia.org/wiki/Cape_Kumukahi_Light"
+        },
+        {
+          "year": 1956,
+          "text": "Pestrella had previously been awarded \"Civil Servant of the Year\" in 1956 for staying at his post during an eruption the year before.",
+          "source": "https://en.wikipedia.org/wiki/Cape_Kumukahi_Light"
+        },
+        {
+          "year": 1960,
+          "text": "It is best known for its survival of an eruption of Kilauea in 1960. .",
+          "source": "https://en.wikipedia.org/wiki/Cape_Kumukahi_Light"
+        },
+        {
+          "year": 1963,
+          "text": "After the eruption ceased, a new electric line was run to the light and it was automated, and Pestrella was transferred to Makapuu Point Light, where he remained until he retired in 1963, the last civilian keeper in the islands.",
+          "source": "https://en.wikipedia.org/wiki/Cape_Kumukahi_Light"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Cape_Kumukahi_Light.jpg/330px-Cape_Kumukahi_Light.jpg",
+          "credit": "Wikipedia — Cape Kumukahi Light (CC/PD)",
+          "caption": "Cape Kumukahi Light",
+          "alt": "an airplane taking off next to a tall tower with a blue sky in the background"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Cape_Kumukahi_Light"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Cape_Kumukahi_Light"
+        ],
+        "resolvedTitle": "Cape Kumukahi Light",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Cape_Kumukahi_Light.jpg/330px-Cape_Kumukahi_Light.jpg",
+            "caption": "an airplane taking off next to a tall tower with a blue sky in the background",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-12T22:41:51.680Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T22:41:51.680Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-12T22:41:51.680Z"
+      }
+    },
+    "heritage:ka-lae-south-point-light": {
+      "title": "Ka Lae (South Point) Light",
+      "summary": "Ka Lae (Hawaiian: the point), also known as South Point, is the southernmost point of the Big Island of Hawaii and of the 50 United States.",
+      "history": [
+        {
+          "year": 1906,
+          "text": "On March 5, 1906, a small lighthouse opened at the point.",
+          "source": "https://en.wikipedia.org/wiki/Ka_Lae"
+        },
+        {
+          "year": 1908,
+          "text": "In 1908 about 10 acres (4.0 ha) were set aside for the United States Coast Guard to build a house for a keeper.",
+          "source": "https://en.wikipedia.org/wiki/Ka_Lae"
+        },
+        {
+          "year": 1929,
+          "text": "In 1929 a steel tower was built for the light, and in 1972 a new 32 foot (10m) concrete tower with solar power was built.",
+          "source": "https://en.wikipedia.org/wiki/Ka_Lae"
+        },
+        {
+          "year": 1953,
+          "text": "The airfield was closed in 1953.",
+          "source": "https://en.wikipedia.org/wiki/Ka_Lae"
+        },
+        {
+          "year": 1961,
+          "text": "In 1961 South Point was on the list of final sites to be considered by NASA to launch crewed rockets to space, but was considered too remote although it was later used to launch sounding rockets for testing of instruments at the Air…",
+          "source": "https://en.wikipedia.org/wiki/Ka_Lae"
+        },
+        {
+          "year": 1964,
+          "text": "A space tracking station was operated from 1964 to 1965, and in the 21st century the Swedish Space Corporation's Universal Space Network again established a remote ground station for space tracking and communications, now consisting of two…",
+          "source": "https://en.wikipedia.org/wiki/Ka_Lae"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Ka_Lae.jpg/330px-Ka_Lae.jpg",
+          "credit": "Wikipedia — Ka Lae (CC/PD)",
+          "caption": "Ka Lae",
+          "alt": "there is a surfer on the rocky shore watching the waves crash on the rocks at this point"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Ka_Lae"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Ka_Lae"
+        ],
+        "resolvedTitle": "Ka Lae",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Ka_Lae.jpg/330px-Ka_Lae.jpg",
+            "caption": "there is a surfer on the rocky shore watching the waves crash on the rocks at this point",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-12T23:11:50.404Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T23:11:50.404Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T23:11:50.405Z"
+      }
+    },
+    "heritage:kalapana-buried-1990": {
+      "title": "Kalapana (buried 1990)",
+      "summary": "Kalapana (Hawaiian for 'announce noted place') is a town and a region in the Puna District on the Island of Hawaiʻi in the Hawaiian Islands.",
+      "history": [
+        {
+          "year": 1990,
+          "text": "In 1990, lava flows from the Kūpaʻianahā vent of Kīlauea destroyed and partly buried most of the town, as well as Kalapana Gardens and nearby Royal Gardens subdivisions.",
+          "source": "https://en.wikipedia.org/wiki/Kalapana%2C_Hawaii"
+        },
+        {
+          "year": 2010,
+          "text": "In July 2010, lava from Kīlauea continued into the Kalapana region destroying a home that was only 5 years old, leaving 35 homes remaining in the Kalapana Gardens Subdivision.",
+          "source": "https://en.wikipedia.org/wiki/Kalapana%2C_Hawaii"
+        },
+        {
+          "year": 2017,
+          "text": "Archived from the original on April 26, 2017.",
+          "source": "https://en.wikipedia.org/wiki/Kalapana%2C_Hawaii"
+        },
+        {
+          "year": 2018,
+          "text": "Access to the village was reestablished and a thriving farmers market was held every Wednesday night until May, 2018 when lava flows impacted nearby roads.",
+          "source": "https://en.wikipedia.org/wiki/Kalapana%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Kalapana_house_destroyed_by_lava.jpg/330px-Kalapana_house_destroyed_by_lava.jpg",
+          "credit": "Wikipedia — Kalapana, Hawaii (CC/PD)",
+          "caption": "Kalapana, Hawaii",
+          "alt": "a man is watching fire from the ground near a house on which a woman was buried"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kalapana%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kalapana%2C_Hawaii"
+        ],
+        "resolvedTitle": "Kalapana, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Kalapana_house_destroyed_by_lava.jpg/330px-Kalapana_house_destroyed_by_lava.jpg",
+            "caption": "a man is watching fire from the ground near a house on which a woman was buried",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-12T23:11:58.908Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T23:11:58.908Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T23:11:58.908Z"
+      }
+    },
+    "heritage:kapoho-buried-1960-2018": {
+      "title": "Kapoho (buried 1960 & 2018)",
+      "summary": "Kapoho is a now-uninhabited unincorporated area in Puna district, Hawaii County, Hawaii, US, located near the eastern tip of the island of Hawaii, in the easternmost subaerial end of the graben overlying Kīlauea's east rift zone.",
+      "history": [
+        {
+          "year": 1960,
+          "text": "Originally destroyed by an eruption of Kīlauea in 1960, it was rebuilt as a community of private homes and vacation rentals.",
+          "source": "https://en.wikipedia.org/wiki/Kapoho%2C_Hawaii"
+        },
+        {
+          "year": 1971,
+          "text": "Hawaii Island Mayor Harry Kim's house, which he had purchased in 1971 as a second residence, was among the hundreds of houses destroyed.",
+          "source": "https://en.wikipedia.org/wiki/Kapoho%2C_Hawaii"
+        },
+        {
+          "year": 1997,
+          "text": "Bendure, Glenda; Friary, Ned (September 1997).",
+          "source": "https://en.wikipedia.org/wiki/Kapoho%2C_Hawaii"
+        },
+        {
+          "year": 2018,
+          "text": "The town was again destroyed by lava during the 2018 lower Puna eruption, this time with the bay largely buried by lava as well. .",
+          "source": "https://en.wikipedia.org/wiki/Kapoho%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Kapoho_cemetery.jpg/330px-Kapoho_cemetery.jpg",
+          "credit": "Wikipedia — Kapoho, Hawaii (CC/PD)",
+          "caption": "Kapoho, Hawaii",
+          "alt": "stone monument standing on top of pile of dirt at ground level, with words written in chinese"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kapoho%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kapoho%2C_Hawaii"
+        ],
+        "resolvedTitle": "Kapoho, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Kapoho_cemetery.jpg/330px-Kapoho_cemetery.jpg",
+            "caption": "stone monument standing on top of pile of dirt at ground level, with words written in chinese",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-12T23:41:49.597Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T23:41:49.597Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T23:41:49.597Z"
+      }
+    },
+    "heritage:puu-oo-vent-1983-2018": {
+      "title": "Puʻu ʻŌʻō (vent 1983–2018)",
+      "summary": "Puʻu ʻŌʻō (also spelled Pu‘u‘ō‘ō, and often written Puu Oo, pronounced [ˈpuʔu ˈʔoːʔoː], poo-oo-OH-oh) is a volcanic cone on the eastern rift zone of Kīlauea volcano in the Hawaiian Islands.",
+      "history": [
+        {
+          "year": 1965,
+          "text": "The hill was initially nicknamed \"Puʻu O\" by volcanologists, as its position when marked on a map of the area coincided with an \"o\" in \"Lava flow of 1965\".",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        },
+        {
+          "year": 1983,
+          "text": "The eruption that created Puʻu ʻŌʻō began on January 3, 1983, and continued nearly continuously until April 30, 2018, making it the longest-lived rift-zone eruption of the last two centuries.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        },
+        {
+          "year": 1986,
+          "text": "In July 1986, the conduit feeding magma to Puʻu ʻŌʻō ruptured, and the eruption abruptly shifted 3 kilometers (1.9 mi) downrift to form the Kūpaʻianahā vent.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        },
+        {
+          "year": 1987,
+          "text": "The coastal highway has been closed since 1987, as parts of the road have been buried under lava up to 35 meters (115 ft) thick. .",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        },
+        {
+          "year": 2005,
+          "text": "By January 2005, 2.7 cubic kilometers (0.65 mi3) of magma covered an area of more than 117 square kilometers (45 mi2) and added 230 acres (0.93 km2) of land to the southeast coast of Hawaiʻi.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        },
+        {
+          "year": 2021,
+          "text": "In 2021, the Hawaiʻi Board of Geographic Names updated the spelling of the cone as Pu‘u‘ō‘ō for consistency with the board's spelling guidelines.",
+          "source": "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Puu_Oo_cropped.jpg/330px-Puu_Oo_cropped.jpg",
+          "credit": "Wikipedia — Puʻu ʻŌʻō (CC/PD)",
+          "caption": "Puʻu ʻŌʻō",
+          "alt": "a large volcano that has orange lava and lava in it's face on top of the"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Pu%CA%BBu_%CA%BB%C5%8C%CA%BB%C5%8D"
+        ],
+        "resolvedTitle": "Puʻu ʻŌʻō",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Puu_Oo_cropped.jpg/330px-Puu_Oo_cropped.jpg",
+            "caption": "a large volcano that has orange lava and lava in it's face on top of the",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-12T23:42:04.070Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T23:42:04.070Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T23:42:04.070Z"
+      }
+    },
+    "heritage:royal-gardens-subdivision-buried": {
+      "title": "Royal Gardens Subdivision (buried)",
+      "summary": "Kalapana (Hawaiian for 'announce noted place') is a town and a region in the Puna District on the Island of Hawaiʻi in the Hawaiian Islands.",
+      "history": [
+        {
+          "year": 1990,
+          "text": "In 1990, lava flows from the Kūpaʻianahā vent of Kīlauea destroyed and partly buried most of the town, as well as Kalapana Gardens and nearby Royal Gardens subdivisions.",
+          "source": "https://en.wikipedia.org/wiki/Kalapana%2C_Hawaii"
+        },
+        {
+          "year": 2010,
+          "text": "In July 2010, lava from Kīlauea continued into the Kalapana region destroying a home that was only 5 years old, leaving 35 homes remaining in the Kalapana Gardens Subdivision.",
+          "source": "https://en.wikipedia.org/wiki/Kalapana%2C_Hawaii"
+        },
+        {
+          "year": 2017,
+          "text": "Archived from the original on April 26, 2017.",
+          "source": "https://en.wikipedia.org/wiki/Kalapana%2C_Hawaii"
+        },
+        {
+          "year": 2018,
+          "text": "Access to the village was reestablished and a thriving farmers market was held every Wednesday night until May, 2018 when lava flows impacted nearby roads.",
+          "source": "https://en.wikipedia.org/wiki/Kalapana%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Kalapana_house_destroyed_by_lava.jpg/330px-Kalapana_house_destroyed_by_lava.jpg",
+          "credit": "Wikipedia — Kalapana, Hawaii (CC/PD)",
+          "caption": "Kalapana, Hawaii",
+          "alt": "a man is standing on the road near a burning house and fire hydrant near a path that runs through the grass"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kalapana%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kalapana%2C_Hawaii"
+        ],
+        "resolvedTitle": "Kalapana, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Kalapana_house_destroyed_by_lava.jpg/330px-Kalapana_house_destroyed_by_lava.jpg",
+            "caption": "a man is standing on the road near a burning house and fire hydrant near a path that runs through the grass",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-12T23:42:12.682Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T23:42:12.682Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T23:42:12.682Z"
+      }
     }
   }
 }
