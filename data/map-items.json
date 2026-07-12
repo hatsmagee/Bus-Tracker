@@ -8632,6 +8632,282 @@
         "level": 70,
         "updatedAt": "2026-07-12T18:37:05.512Z"
       }
+    },
+    "heritage:hawi": {
+      "title": "Hāwī",
+      "summary": "Hāwī (Hawaiian pronunciation: [haː'viː] ) is a census-designated place (CDP) in Hawaiʻi County, Hawaii.",
+      "history": [
+        {
+          "year": 2000,
+          "text": "As of the census of 2000, there were 938 people, 298 households, and 224 families residing in the CDP.",
+          "source": "https://en.wikipedia.org/wiki/H%C4%81w%C4%AB%2C_Hawaii"
+        },
+        {
+          "year": 2010,
+          "text": "Hawi may refer to: Al-Hawi, Hadhramaut, a village in eastern Yemen Hawi, Hawaii Hawi (film), a 2010 film .",
+          "source": "https://en.wikipedia.org/wiki/H%C4%81w%C4%AB%2C_Hawaii"
+        },
+        {
+          "year": 2020,
+          "text": "The population was 2,268 at the time of the 2020 United States census.",
+          "source": "https://en.wikipedia.org/wiki/H%C4%81w%C4%AB%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Aerial_view_of_North_Kohala%2C_2006.jpg/330px-Aerial_view_of_North_Kohala%2C_2006.jpg",
+          "credit": "Wikipedia — Hāwī, Hawaii (CC/PD)",
+          "caption": "Hāwī, Hawaii",
+          "alt": "an airplane that is flying over some water and land as it flies near a city"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/H%C4%81w%C4%AB%2C_Hawaii"
+        },
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Hawi"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/H%C4%81w%C4%AB%2C_Hawaii",
+          "https://en.wikipedia.org/wiki/Hawi"
+        ],
+        "resolvedTitle": "Hāwī, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Aerial_view_of_North_Kohala%2C_2006.jpg/330px-Aerial_view_of_North_Kohala%2C_2006.jpg",
+            "caption": "an airplane that is flying over some water and land as it flies near a city",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-12T20:09:14.517Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T20:09:14.517Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-history",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 55,
+        "updatedAt": "2026-07-12T20:09:14.517Z"
+      }
+    },
+    "heritage:kapaau": {
+      "title": "Kapaʻau",
+      "summary": "Kapaʻau is an unincorporated community in Hawaiʻi County, Hawaii, United States. Located at the northern tip of the big island of Hawaiʻi, it is celebrated as the birthplace of Kamehameha I.",
+      "history": [
+        {
+          "year": 1888,
+          "text": "The King Kamehameha Statue was cast in 1888, lost at sea, and then recovered and erected at Kapa'au.",
+          "source": "https://en.wikipedia.org/wiki/Kapa%CA%BBau%2C_Hawaii"
+        },
+        {
+          "year": 2000,
+          "text": "As of the census of 2000, there were 1,159 people, 405 households, and 270 families residing in the CDP.",
+          "source": "https://en.wikipedia.org/wiki/Kapa%CA%BBau%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Kapaau_Highlighted.svg/330px-Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Kapaau_Highlighted.svg.png",
+          "credit": "Wikipedia — Kapaʻau, Hawaii (CC/PD)",
+          "caption": "Kapaʻau, Hawaii",
+          "alt": "a map of the british island of hawaii in white on a black background stock photo"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kapa%CA%BBau%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kapa%CA%BBau%2C_Hawaii"
+        ],
+        "resolvedTitle": "Kapaʻau, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Kapaau_Highlighted.svg/330px-Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Kapaau_Highlighted.svg.png",
+            "caption": "a map of the british island of hawaii in white on a black background stock photo",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-12T20:10:01.006Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T20:10:01.006Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-history",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-12T20:10:01.006Z"
+      }
+    },
+    "heritage:kohala-ditch": {
+      "title": "Kohala Ditch",
+      "summary": "Kohala (Hawaiian pronunciation: [koˈhɐlə]) is the oldest of five volcanoes that make up the island of Hawaii.",
+      "history": [
+        {
+          "year": 1977,
+          "text": "Two samples collected about 120 m (390 ft) apart, obtained from Waipiʻo Valley on the volcano's east flank in 1977, were dated reliably to 60,000 years.",
+          "source": "https://en.wikipedia.org/wiki/Kohala_(mountain)"
+        },
+        {
+          "year": 1988,
+          "text": "The time intervals separating the two periods of volcanic evolution were extremely brief, something first noted in 1988.",
+          "source": "https://en.wikipedia.org/wiki/Kohala_(mountain)"
+        },
+        {
+          "year": 1996,
+          "text": "Another double set of samples, collected from the western part in 1996, was measured to be 80,000 years in age.",
+          "source": "https://en.wikipedia.org/wiki/Kohala_(mountain)"
+        },
+        {
+          "year": 2004,
+          "text": "In 2004, unidentified marine fossils were found at the base of the volcano 6 km (3.7 mi) inshore.",
+          "source": "https://en.wikipedia.org/wiki/Kohala_(mountain)"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Kohala_volcano.jpeg/330px-Kohala_volcano.jpeg",
+          "credit": "Wikipedia — Kohala (mountain) (CC/PD)",
+          "caption": "Kohala (mountain)",
+          "alt": "the green grass is neatly fenced off and the mountain can be seen behind the fence"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kohala_(mountain)"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kohala_(mountain)"
+        ],
+        "resolvedTitle": "Kohala (mountain)",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Kohala_volcano.jpeg/330px-Kohala_volcano.jpeg",
+            "caption": "the green grass is neatly fenced off and the mountain can be seen behind the fence",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-12T20:39:11.362Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T20:39:11.362Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-12T20:39:11.362Z"
+      }
+    },
+    "heritage:hamakua-ditch-upper": {
+      "title": "Hāmākua Ditch (Upper)",
+      "summary": "Hāmākua is a district on the northeast coast of Hawaiʻi's Big Island, administered by the County of Hawaiʻi in the state of Hawaiʻi.",
+      "history": [
+        {
+          "year": 1847,
+          "text": "John Palmer Parker established the Parker Ranch on the high grasslands of Mauna Kea in 1847.",
+          "source": "https://en.wikipedia.org/wiki/H%C4%81m%C4%81kua"
+        },
+        {
+          "year": 1875,
+          "text": "The demand for sugar cane rose after the Reciprocity Treaty of 1875 reduced tariffs to the United States.",
+          "source": "https://en.wikipedia.org/wiki/H%C4%81m%C4%81kua"
+        },
+        {
+          "year": 1876,
+          "text": "The first mill processed the crop planted in 1876.",
+          "source": "https://en.wikipedia.org/wiki/H%C4%81m%C4%81kua"
+        },
+        {
+          "year": 1910,
+          "text": "From 1910 to 1949, there were 112 confirmed cases of the disease, of which 109 were fatal.",
+          "source": "https://en.wikipedia.org/wiki/H%C4%81m%C4%81kua"
+        },
+        {
+          "year": 1957,
+          "text": "Despite these efforts, plague remained an enzootic disease in the region up until 1957.",
+          "source": "https://en.wikipedia.org/wiki/H%C4%81m%C4%81kua"
+        },
+        {
+          "year": 1970,
+          "text": "About 10% of the population was lost each decade following 1970.",
+          "source": "https://en.wikipedia.org/wiki/H%C4%81m%C4%81kua"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/HawaiiIslandDistrict-Hamakua.svg/330px-HawaiiIslandDistrict-Hamakua.svg.png",
+          "credit": "Wikipedia — Hāmākua (CC/PD)",
+          "caption": "Hāmākua",
+          "alt": "the silhouette of a map is shown in red, with a black background and a dark floor"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/H%C4%81m%C4%81kua"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/H%C4%81m%C4%81kua"
+        ],
+        "resolvedTitle": "Hāmākua",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/HawaiiIslandDistrict-Hamakua.svg/330px-HawaiiIslandDistrict-Hamakua.svg.png",
+            "caption": "the silhouette of a map is shown in red, with a black background and a dark floor",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-12T20:39:25.207Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T20:39:25.207Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T20:39:25.207Z"
+      }
     }
   }
 }
