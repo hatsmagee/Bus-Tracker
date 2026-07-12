@@ -8266,6 +8266,372 @@
         "level": 85,
         "updatedAt": "2026-07-12T16:33:55.961Z"
       }
+    },
+    "heritage:laupahoehoe-point": {
+      "title": "Laupāhoehoe Point",
+      "summary": "Laupāhoehoe is a census-designated place (CDP) in Hawaiʻi County, Hawaii, United States, in the District of North Hilo.",
+      "history": [
+        {
+          "year": 1883,
+          "text": "Laupāhoehoe School was started in 1883 for students from the Hāmākua Coastal Sugar Cane Communities and fishing communities.",
+          "source": "https://en.wikipedia.org/wiki/Laup%C4%81hoehoe%2C_Hawaii"
+        },
+        {
+          "year": 1904,
+          "text": "It serves grades kindergarten through twelve and was established in 1904. .",
+          "source": "https://en.wikipedia.org/wiki/Laup%C4%81hoehoe%2C_Hawaii"
+        },
+        {
+          "year": 1946,
+          "text": "On April 1, 1946, the Hawaiian Islands were struck by the so-called \"April Fools Day tsunami\", originating from the Aleutian Islands earthquake.",
+          "source": "https://en.wikipedia.org/wiki/Laup%C4%81hoehoe%2C_Hawaii"
+        },
+        {
+          "year": 1952,
+          "text": "Anew campus was completed and opened its doors in September 1952 at its present location. .",
+          "source": "https://en.wikipedia.org/wiki/Laup%C4%81hoehoe%2C_Hawaii"
+        },
+        {
+          "year": 2000,
+          "text": "The median income for a household in the CDP at the 2000 census was $29,250, and the median income for a family in 2000 was $30,000.",
+          "source": "https://en.wikipedia.org/wiki/Laup%C4%81hoehoe%2C_Hawaii"
+        },
+        {
+          "year": 2010,
+          "text": "As of the census of 2010, there were 581 people in 214 households residing in the CDP.",
+          "source": "https://en.wikipedia.org/wiki/Laup%C4%81hoehoe%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/The_monument_to_the_victims_of_tsunami.jpg/330px-The_monument_to_the_victims_of_tsunami.jpg",
+          "credit": "Wikipedia — Laupāhoehoe, Hawaii (CC/PD)",
+          "caption": "Laupāhoehoe, Hawaii",
+          "alt": "a memorial on the beach with red flowers in front of it and in some vases at the edge"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Laup%C4%81hoehoe%2C_Hawaii"
+        },
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Laup%C4%81hoehoe_Community_Public_Charter_School"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Laup%C4%81hoehoe%2C_Hawaii",
+          "https://en.wikipedia.org/wiki/Laup%C4%81hoehoe_Community_Public_Charter_School"
+        ],
+        "resolvedTitle": "Laupāhoehoe, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/The_monument_to_the_victims_of_tsunami.jpg/330px-The_monument_to_the_victims_of_tsunami.jpg",
+            "caption": "a memorial on the beach with red flowers in front of it and in some vases at the edge",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-12T17:36:28.354Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T17:36:28.354Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-12T17:36:28.354Z"
+      }
+    },
+    "heritage:honokaa": {
+      "title": "Honokaʻa",
+      "summary": "Honokaʻa is a census-designated place (CDP) in the Hamakua District of Hawaiʻi County, Hawaiʻi, United States.",
+      "history": [
+        {
+          "year": 1873,
+          "text": "Honokaʻa's economy was based primarily on the sugar production of the Hāmākua Sugar Company from 1873 to 1994.",
+          "source": "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        },
+        {
+          "year": 1930,
+          "text": "In 1930, the Honokʻaa People's Theatre was built on Māmane Street by the Tanimoto family.",
+          "source": "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        },
+        {
+          "year": 1993,
+          "text": "The theater hosted the Hāmākua Music Festival every fall from 1993 to 2006, and again in 2009.",
+          "source": "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        },
+        {
+          "year": 2000,
+          "text": "As of the census of 2000, there were 2,233 people, 761 households, and 563 families residing in the CDP.",
+          "source": "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        },
+        {
+          "year": 2006,
+          "text": "This tradition has been celebrated annually on Western Weekend beginning in 2006, and included children's activities, country western bands, a block party with paniolo barbecue, a rodeo, and the ribald Saloon Girl Contest.",
+          "source": "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        },
+        {
+          "year": 2009,
+          "text": "Honokaʻa is the namesake and setting in the 2009 Japanese film Honokaʻa Boy (Japanese: ホノカアボーイ).",
+          "source": "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Honoka%27a_Hawaii_post_office.jpg/330px-Honoka%27a_Hawaii_post_office.jpg",
+          "credit": "Wikipedia — Honokaʻa, Hawaii (CC/PD)",
+          "caption": "Honokaʻa, Hawaii",
+          "alt": "a row of parked cars in front of a building on the street below cars, in front of trees and the sidewalk"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Honoka%CA%BBa%2C_Hawaii"
+        ],
+        "resolvedTitle": "Honokaʻa, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Honoka%27a_Hawaii_post_office.jpg/330px-Honoka%27a_Hawaii_post_office.jpg",
+            "caption": "a row of parked cars in front of a building on the street below cars, in front of trees and the sidewalk",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-12T18:06:15.138Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T18:06:15.138Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-12T18:06:15.138Z"
+      }
+    },
+    "heritage:hakalau": {
+      "title": "Hakalau",
+      "summary": "Hakalau is a small unincorporated community located along the Hamakua coast about 15 miles (24 km) north of Hilo on the Big Island of Hawaii in the U.S. state of Hawaii at 19°53′49″N 155°7′35″W.",
+      "history": [
+        {
+          "year": 1778,
+          "text": "Until Captain Cook made contact with Hawaiʻi (1778) the islands were inhabited by Native Hawaiians.",
+          "source": "https://en.wikipedia.org/wiki/Hakalau%2C_Hawaii"
+        },
+        {
+          "year": 1920,
+          "text": "The privately owned sugar plantation manager's home, built in the early 20th century, still exists, along with two warehouses built in 1920 and an old theater, operating as the Hakalau post office, postal code 96710.",
+          "source": "https://en.wikipedia.org/wiki/Hakalau%2C_Hawaii"
+        },
+        {
+          "year": 1963,
+          "text": "In 1963 it was merged into the Pepeʻekeo Sugar Company, in 1973 merged into the Mauna Kea Sugar Company, and the mill shut down in 1974.",
+          "source": "https://en.wikipedia.org/wiki/Hakalau%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Aerial_view_of_Hakalau_Bay%2C_2009-07-25.jpg/330px-Aerial_view_of_Hakalau_Bay%2C_2009-07-25.jpg",
+          "credit": "Wikipedia — Hakalau, Hawaii (CC/PD)",
+          "caption": "Hakalau, Hawaii",
+          "alt": "aerial view of coastline, land and a bridge in the distance from an air plane"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Hakalau%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Hakalau%2C_Hawaii"
+        ],
+        "resolvedTitle": "Hakalau, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Aerial_view_of_Hakalau_Bay%2C_2009-07-25.jpg/330px-Aerial_view_of_Hakalau_Bay%2C_2009-07-25.jpg",
+            "caption": "aerial view of coastline, land and a bridge in the distance from an air plane",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-12T18:06:30.959Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T18:06:30.959Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-history",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-12T18:06:30.959Z"
+      }
+    },
+    "heritage:paauilo": {
+      "title": "Pāʻauilo",
+      "summary": "Paʻauilo (English: ) is a census-designated place (CDP) in Hawaiʻi County, Hawaii, United States.",
+      "history": [
+        {
+          "year": 2000,
+          "text": "As of the census of 2000, there were 571 people, 191 households, and 141 families residing in the CDP.",
+          "source": "https://en.wikipedia.org/wiki/Pa%CA%BBauilo%2C_Hawaii"
+        },
+        {
+          "year": 2020,
+          "text": "The population was 618 at the 2020 census. .",
+          "source": "https://en.wikipedia.org/wiki/Pa%CA%BBauilo%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Paauilo_Highlighted.svg/330px-Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Paauilo_Highlighted.svg.png",
+          "credit": "Wikipedia — Paʻauilo, Hawaii (CC/PD)",
+          "caption": "Paʻauilo, Hawaii",
+          "alt": "a black and white map with some white spots in it and some orange spots in the middle"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Pa%CA%BBauilo%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Pa%CA%BBauilo%2C_Hawaii"
+        ],
+        "resolvedTitle": "Paʻauilo, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Paauilo_Highlighted.svg/330px-Hawaii_County_Hawaii_Incorporated_and_Unincorporated_areas_Paauilo_Highlighted.svg.png",
+            "caption": "a black and white map with some white spots in it and some orange spots in the middle",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-12T18:36:13.526Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T18:36:13.526Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-history",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 55,
+        "updatedAt": "2026-07-12T18:36:13.526Z"
+      }
+    },
+    "heritage:pahala": {
+      "title": "Pāhala",
+      "summary": "Pāhala is a census-designated place (CDP) in Hawaiʻi County, Hawaiʻi, United States.",
+      "history": [
+        {
+          "year": 1881,
+          "text": "In 1881, the first public school in the district of Kaʻu was established in Kapapala.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        },
+        {
+          "year": 1959,
+          "text": "In 1959, as Hawaiʻi Territory became the state of Hawaiʻi, the last class of the Pāhala High School held commencement ceremonies.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        },
+        {
+          "year": 1972,
+          "text": "Honuʻapo's mill had closed in 1972 and its workers transferred to Pāhala.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        },
+        {
+          "year": 1985,
+          "text": "Shleser also proposed that Hawaiʻi County pass a bill that would require 25% of all vehicles on the island to be retrofitted to use ethanol by 1985.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        },
+        {
+          "year": 1994,
+          "text": "In 1994, Buyers made a last-ditch effort to keep the mill running.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        },
+        {
+          "year": 1996,
+          "text": "The sugarcane plantation and mill shut down in April 1996.",
+          "source": "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Pahala_hawaii_post_office.jpg/330px-Pahala_hawaii_post_office.jpg",
+          "credit": "Wikipedia — Pāhala, Hawaii (CC/PD)",
+          "caption": "Pāhala, Hawaii",
+          "alt": "the united states post office in palmer park, florida where obama wrote his first message to congress"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/P%C4%81hala%2C_Hawaii"
+        ],
+        "resolvedTitle": "Pāhala, Hawaii",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Pahala_hawaii_post_office.jpg/330px-Pahala_hawaii_post_office.jpg",
+            "caption": "the united states post office in palmer park, florida where obama wrote his first message to congress",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-12T18:37:05.512Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T18:37:05.512Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-12T18:37:05.512Z"
+      }
     }
   }
 }
