@@ -7432,6 +7432,840 @@
         "level": 70,
         "updatedAt": "2026-07-10T15:40:57.214Z"
       }
+    },
+    "heritage:ka-lae-south-point": {
+      "title": "Ka Lae (South Point)",
+      "summary": "Ka Lae (Hawaiian: the point), also known as South Point, is the southernmost point of the Big Island of Hawaii and of the 50 United States.",
+      "history": [
+        {
+          "year": 1906,
+          "text": "On March 5, 1906, a small lighthouse opened at the point.",
+          "source": "https://en.wikipedia.org/wiki/Ka_Lae"
+        },
+        {
+          "year": 1908,
+          "text": "In 1908 about 10 acres (4.0 ha) were set aside for the United States Coast Guard to build a house for a keeper.",
+          "source": "https://en.wikipedia.org/wiki/Ka_Lae"
+        },
+        {
+          "year": 1929,
+          "text": "In 1929 a steel tower was built for the light, and in 1972 a new 32 foot (10m) concrete tower with solar power was built.",
+          "source": "https://en.wikipedia.org/wiki/Ka_Lae"
+        },
+        {
+          "year": 1953,
+          "text": "The airfield was closed in 1953.",
+          "source": "https://en.wikipedia.org/wiki/Ka_Lae"
+        },
+        {
+          "year": 1961,
+          "text": "In 1961 South Point was on the list of final sites to be considered by NASA to launch crewed rockets to space, but was considered too remote although it was later used to launch sounding rockets for testing of instruments at the Air…",
+          "source": "https://en.wikipedia.org/wiki/Ka_Lae"
+        },
+        {
+          "year": 1964,
+          "text": "A space tracking station was operated from 1964 to 1965, and in the 21st century the Swedish Space Corporation's Universal Space Network again established a remote ground station for space tracking and communications, now consisting of two…",
+          "source": "https://en.wikipedia.org/wiki/Ka_Lae"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Ka_Lae.jpg/330px-Ka_Lae.jpg",
+          "credit": "Wikipedia — Ka Lae (CC/PD)",
+          "caption": "Ka Lae",
+          "alt": "the small bird is perched on top of the rock cliff by the ocean shore water"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Ka_Lae"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Ka_Lae"
+        ],
+        "resolvedTitle": "Ka Lae",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Ka_Lae.jpg/330px-Ka_Lae.jpg",
+            "caption": "the small bird is perched on top of the rock cliff by the ocean shore water",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-12T15:04:00.781Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T15:04:00.781Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T15:04:00.781Z"
+      }
+    },
+    "heritage:punaluu-black-sand-beach": {
+      "title": "Punaluʻu Black Sand Beach",
+      "summary": "Punaluʻu Beach (also called Black Sand Beach) is a beach between Pāhala and Nāʻālehu on the Big Island of the U.S. state of Hawaii.",
+      "history": [
+        {
+          "year": 1792,
+          "text": "Sitting on the ridge above Punaluʻu is the Hōkūloa Church, a memorial chapel and graveyard built near the birthplace of Henry ʻŌpūkahaʻia (1792–1818) who inspired the missionary movement that forever changed Hawaii.",
+          "source": "https://en.wikipedia.org/wiki/Punalu%CA%BBu_Beach"
+        },
+        {
+          "year": 1833,
+          "text": "With the advent of missionaries arriving in the district as early as 1833, Christianity left its distinct architectural hallmark on the landscape of Kaʻū.",
+          "source": "https://en.wikipedia.org/wiki/Punalu%CA%BBu_Beach"
+        },
+        {
+          "year": 1906,
+          "text": "Its westernmost boundary was destroyed to make way for the construction of a wharf–warehouse complex for the sugar company in 1906.",
+          "source": "https://en.wikipedia.org/wiki/Punalu%CA%BBu_Beach"
+        },
+        {
+          "year": 1982,
+          "text": "Researchers with the National Marine Fisheries have been studying the green turtle since 1982 along with groups of students.",
+          "source": "https://en.wikipedia.org/wiki/Punalu%CA%BBu_Beach"
+        },
+        {
+          "year": 2006,
+          "text": "A rare sighting of a Hawaiian monk seal was reported at Punaluʻu in 2006 near the boat ramp, and most recently in April 2024, and several known nesting sites of the endangered hawksbill turtles are located along the Punaluʻu and Ninole…",
+          "source": "https://en.wikipedia.org/wiki/Punalu%CA%BBu_Beach"
+        },
+        {
+          "year": 2024,
+          "text": "2024 The hawksbill turtle or honu'ea (Eretmochelys imbricata), is a federally listed endangered species and is the rarest sea turtle in the Pacific Ocean.",
+          "source": "https://en.wikipedia.org/wiki/Punalu%CA%BBu_Beach"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/Punaluu_Black_Sand_Beach%2C_Hawaii%2C_USA8.jpg/330px-Punaluu_Black_Sand_Beach%2C_Hawaii%2C_USA8.jpg",
+          "credit": "Wikipedia — Punaluʻu Beach (CC/PD)",
+          "caption": "Punaluʻu Beach",
+          "alt": "a group of trees next to the ocean on a beach with black sand and black water"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Punalu%CA%BBu_Beach"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Punalu%CA%BBu_Beach"
+        ],
+        "resolvedTitle": "Punaluʻu Beach",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/Punaluu_Black_Sand_Beach%2C_Hawaii%2C_USA8.jpg/330px-Punaluu_Black_Sand_Beach%2C_Hawaii%2C_USA8.jpg",
+            "caption": "a group of trees next to the ocean on a beach with black sand and black water",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-12T15:04:47.721Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T15:04:47.721Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T15:04:47.721Z"
+      }
+    },
+    "heritage:mauna-kea": {
+      "title": "Mauna Kea",
+      "summary": "Argyroxiphium sandwicense subsp. sandwicense, the Mauna Kea silversword, is a highly endangered flowering plant endemic to the island of Hawaiʻi (Big Island) of Hawaii.",
+      "history": [
+        {
+          "year": 1825,
+          "text": "Earliest accounts of the range of the Mauna Kea silversword do not suggest rarity; dead stalks were gathered for firewood by explorers in 1825.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Kea_silversword"
+        },
+        {
+          "year": 1851,
+          "text": "By 1851 there were about 3,000 feral sheep and 12,000 feral cattle on Mauna Kea.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Kea_silversword"
+        },
+        {
+          "year": 1892,
+          "text": "The first documentation of its decline dates to 1892, when it was said to have been once abundant but is \"now nearly extinct except in the most rugged and inaccessible places.\" .",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Kea_silversword"
+        },
+        {
+          "year": 1921,
+          "text": "Feral dogs kept the sheep population in check until 1921, when the dogs were systematically eliminated.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Kea_silversword"
+        },
+        {
+          "year": 1936,
+          "text": "Feral sheep were then greatly reduced from 1936 to 1950 but protected until 1981 as sport game in the Forest Reserve lands, which overlap the original Mauna Kea silversword habitat. .",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Kea_silversword"
+        },
+        {
+          "year": 1981,
+          "text": "In 1981, the state eliminated nearly all feral sheep, but a greater threat had already been introduced: mouflon sheep, brought to the island as sport game animals in 1954.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Kea_silversword"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7f/Mauna_Kea_silversword3.jpg/330px-Mauna_Kea_silversword3.jpg",
+          "credit": "Wikipedia — Mauna Kea silversword (CC/PD)",
+          "caption": "Mauna Kea silversword",
+          "alt": "a metal plant growing out of the dirt of a field with the sky and mountains in the background"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Mauna_Kea_silversword"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Mauna_Kea_silversword"
+        ],
+        "resolvedTitle": "Mauna Kea silversword",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7f/Mauna_Kea_silversword3.jpg/330px-Mauna_Kea_silversword3.jpg",
+            "caption": "a metal plant growing out of the dirt of a field with the sky and mountains in the background",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-12T15:05:33.949Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T15:05:33.949Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T15:05:33.949Z"
+      }
+    },
+    "heritage:mauna-loa": {
+      "title": "Mauna Loa",
+      "summary": "Mauna Loa Observatory (MLO) is an atmospheric baseline station on Mauna Loa on the island of Hawaiʻi, located in the US state of Hawaii. .",
+      "history": [
+        {
+          "year": 1951,
+          "text": "It was established on the northern flank of Mauna Loa at 3,394 meters (11,134 ft) after 1951–1954 efforts were unable to maintain a summit observatory at 4,100 meters (13,453 ft).",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        },
+        {
+          "year": 1956,
+          "text": "MLO was founded on June 28, 1956, as part of the US Weather Bureau.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        },
+        {
+          "year": 1958,
+          "text": "Continuous carbon dioxide measurements began in March of 1958 directed by Charles David Keeling from the Scripps Institute of Oceanography.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        },
+        {
+          "year": 1972,
+          "text": "MLO has been part of the National Oceanic and Atmospheric Administration (NOAA) Global Monitoring Laboratory (GML)'s Baseline Observatory network since 1972.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        },
+        {
+          "year": 2015,
+          "text": "The observatory's reading of a historic high in its daily recording of carbon dioxide emissions—400 parts per million, in 2015—was referenced by Pope Francis in his apostolic exhortation on the climate crisis, Laudate Deum. .",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        },
+        {
+          "year": 2022,
+          "text": "The access road was obstructed by lava flow from the 2022 eruption of Mauna Loa.",
+          "source": "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/NOAA_Mauna_Loa_Observatory_in_Hawaii.png/330px-NOAA_Mauna_Loa_Observatory_in_Hawaii.png",
+          "credit": "Wikipedia — Mauna Loa Observatory (CC/PD)",
+          "caption": "Mauna Loa Observatory",
+          "alt": "a street with snow on the ground and other equipment in the foreground and mountains in the background"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Mauna_Loa_Observatory"
+        ],
+        "resolvedTitle": "Mauna Loa Observatory",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/NOAA_Mauna_Loa_Observatory_in_Hawaii.png/330px-NOAA_Mauna_Loa_Observatory_in_Hawaii.png",
+            "caption": "a street with snow on the ground and other equipment in the foreground and mountains in the background",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-12T15:33:28.572Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T15:33:28.572Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T15:33:28.572Z"
+      }
+    },
+    "heritage:kilauea": {
+      "title": "Kīlauea",
+      "summary": "Kīlauea (US: KIL-ə-WAY-ə, Hawaiian: [kiːlɐwˈwɛjə]) is an active shield volcano in the Hawaiian Islands.",
+      "history": [
+        {
+          "year": 1778,
+          "text": "Western contact and written history began in 1778.",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 1983,
+          "text": "Kīlauea erupted nearly continuously from vents on its eastern rift zone between January 1983 and April 2018, causing major property damage, including the destruction in 1990 of the towns of Kalapana and Kaimū along with the community's…",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 2008,
+          "text": "Between 2008 and 2018, Halemaʻumaʻu, a pit crater located within Kīlauea's summit caldera, hosted an active lava lake.",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 2018,
+          "text": "Beginning in May 2018, activity shifted further downrift from the summit to the lower Puna district, during which lava erupted from two dozen vents with eruptive fountains that sent rivers of lava into the ocean in three places.",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 2020,
+          "text": "Since 2020, several eruptions have occurred within the enlarged Halemaʻumaʻu crater from the 2018 collapse events as well as along the volcano's southwest and east rift zones. .",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        },
+        {
+          "year": 2024,
+          "text": "The most recent eruption began in December 2024, with episodic lava fountains and flows continuing into 2026.",
+          "source": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Episode_4_of_Kilauea%27s_December_2024_eruption_2025-01-16.jpg/330px-Episode_4_of_Kilauea%27s_December_2024_eruption_2025-01-16.jpg",
+          "credit": "Wikipedia — Kīlauea (CC/PD)",
+          "caption": "Kīlauea",
+          "alt": "there is a large crater filled with lava and fire coming from the ground on a cloudy day"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/K%C4%ABlauea"
+        ],
+        "resolvedTitle": "Kīlauea",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Episode_4_of_Kilauea%27s_December_2024_eruption_2025-01-16.jpg/330px-Episode_4_of_Kilauea%27s_December_2024_eruption_2025-01-16.jpg",
+            "caption": "there is a large crater filled with lava and fire coming from the ground on a cloudy day",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-12T15:34:08.874Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T15:34:08.874Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-07-12T15:34:08.874Z"
+      }
+    },
+    "heritage:thurston-lava-tube-nahuku": {
+      "title": "Thurston Lava Tube (Nāhuku)",
+      "summary": "Hawaiʻi Volcanoes National Park is a national park of the United States, located on the island of Hawaiʻi in the state of Hawaii.",
+      "history": [
+        {
+          "year": 1916,
+          "text": "The park was originally established on August 1, 1916, as Hawaii National Park, which was then split into this park and Haleakalā National Park.",
+          "source": "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        },
+        {
+          "year": 1978,
+          "text": "Around half of the park (130,790 acres (529 km2)) was designated the Hawaii Volcanoes Wilderness area in 1978, providing solitude for hiking and camping.",
+          "source": "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        },
+        {
+          "year": 1980,
+          "text": "In recognition of its outstanding natural values, Hawaiʻi Volcanoes National Park was designated as an International Biosphere Reserve in 1980 and a World Heritage Site in 1987.",
+          "source": "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        },
+        {
+          "year": 2012,
+          "text": "In 2012, the park was depicted on the 14th quarter of the America the Beautiful Quarters series.",
+          "source": "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        },
+        {
+          "year": 2018,
+          "text": "On May 11, 2018, the park was closed to the public in the Kīlauea volcano summit area, including the visitor center and park headquarters, due to explosions and toxic ash clouds from Halemaʻumaʻu crater, as well as earthquakes and road…",
+          "source": "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        },
+        {
+          "year": 2025,
+          "text": "As of early 2025, most of the park is open; however, some road segments and trails are still closed to visitors.",
+          "source": "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/P%C4%81hoehoe_and_Aa_flows_at_Hawaii.jpg/330px-P%C4%81hoehoe_and_Aa_flows_at_Hawaii.jpg",
+          "credit": "Wikipedia — Hawaiʻi Volcanoes National Park (CC/PD)",
+          "caption": "Hawaiʻi Volcanoes National Park",
+          "alt": "lava lava lava lava lava lava lava lava lava lava lava lava lava lava lava lava lava lava lava lava lava"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        ],
+        "resolvedTitle": "Hawaiʻi Volcanoes National Park",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/P%C4%81hoehoe_and_Aa_flows_at_Hawaii.jpg/330px-P%C4%81hoehoe_and_Aa_flows_at_Hawaii.jpg",
+            "caption": "lava lava lava lava lava lava lava lava lava lava lava lava lava lava lava lava lava lava lava lava lava",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-12T15:34:24.302Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T15:34:24.302Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T15:34:24.302Z"
+      }
+    },
+    "heritage:halemaumau-crater": {
+      "title": "Halemaʻumaʻu Crater",
+      "summary": "Halemaʻumaʻu (Hawaiian: [hɐlɛˈmɐʔuˈmɐʔu]) anglicized as “Halemaumau” is a pit crater within the much larger Kīlauea Caldera at the summit of Kīlauea volcano on island of Hawaiʻi.",
+      "history": [
+        {
+          "year": 1924,
+          "text": "Halemaʻumaʻu contained an active lava lake for much of the time before 1924, and was the site of several eruptions during the 20th century.",
+          "source": "https://en.wikipedia.org/wiki/Halema%CA%BBuma%CA%BBu"
+        },
+        {
+          "year": 2008,
+          "text": "The crater again contained an active lava lake between 2008 and 2018, with the level of the lava usually fluctuating between 20 and 150 meters below Halemaʻumaʻu's crater floor, though at times the lava lake rose high enough to spill onto…",
+          "source": "https://en.wikipedia.org/wiki/Halema%CA%BBuma%CA%BBu"
+        },
+        {
+          "year": 2018,
+          "text": "The roughly circular crater was 770 m × 900 m (2,530 ft × 2,950 ft) before collapses that roughly doubled the size of the crater after May 3, 2018.",
+          "source": "https://en.wikipedia.org/wiki/Halema%CA%BBuma%CA%BBu"
+        },
+        {
+          "year": 2019,
+          "text": "A small water pond appeared in Halemaʻumaʻu in the summer of 2019.",
+          "source": "https://en.wikipedia.org/wiki/Halema%CA%BBuma%CA%BBu"
+        },
+        {
+          "year": 2020,
+          "text": "The pond deepened and enlarged into a small lake after it was first observed, measuring 167 feet (51 m) deep on December 20, 2020.",
+          "source": "https://en.wikipedia.org/wiki/Halema%CA%BBuma%CA%BBu"
+        },
+        {
+          "year": 2024,
+          "text": "The most recent eruption at Halemaʻumaʻu began on December 23, 2024, with episodes of fountaining continuing as of 2026. . .",
+          "source": "https://en.wikipedia.org/wiki/Halema%CA%BBuma%CA%BBu"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Halema%CA%BBuma%CA%BBu_crater2.jpg/330px-Halema%CA%BBuma%CA%BBu_crater2.jpg",
+          "credit": "Wikipedia — Halemaʻumaʻu (CC/PD)",
+          "caption": "Halemaʻumaʻu",
+          "alt": "a small crater of smoke with a blue sky in the background from a helicopter window"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Halema%CA%BBuma%CA%BBu"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Halema%CA%BBuma%CA%BBu"
+        ],
+        "resolvedTitle": "Halemaʻumaʻu",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Halema%CA%BBuma%CA%BBu_crater2.jpg/330px-Halema%CA%BBuma%CA%BBu_crater2.jpg",
+            "caption": "a small crater of smoke with a blue sky in the background from a helicopter window",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-12T16:04:11.075Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T16:04:11.075Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T16:04:11.075Z"
+      }
+    },
+    "heritage:kazumura-cave": {
+      "title": "Kazumura Cave",
+      "summary": "Kazumura Cave is a lava tube and has been surveyed at 40.7 miles (65.5 kilometers) long and 3,614 feet (1,102 meters) deep, making it the longest and deepest lava tube in the world.",
+      "history": [
+        {
+          "year": 1966,
+          "text": "One of the earliest documentations of Kazumura Cave was in 1966 when one of its entrances was designated as a fallout shelter.",
+          "source": "https://en.wikipedia.org/wiki/Kazumura_Cave"
+        },
+        {
+          "year": 1981,
+          "text": "Later in 1981, a British expedition ended up surveying 7.27 miles (11.70 km) of the cave, and it was then recognized as one of the world's longest lava tubes.",
+          "source": "https://en.wikipedia.org/wiki/Kazumura_Cave"
+        },
+        {
+          "year": 1993,
+          "text": "By 1993, a single year of extensive surveying established that it was the longest in the world.",
+          "source": "https://en.wikipedia.org/wiki/Kazumura_Cave"
+        },
+        {
+          "year": 1995,
+          "text": "The cave would later be connected to Kazumura by Kevin and Shambaugh in 1995.",
+          "source": "https://en.wikipedia.org/wiki/Kazumura_Cave"
+        },
+        {
+          "year": 2016,
+          "text": "At least one landowner runs paid adventure tours through his section of the cave as of 2016. .",
+          "source": "https://en.wikipedia.org/wiki/Kazumura_Cave"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Kazumura_collapsed_floor.jpg/330px-Kazumura_collapsed_floor.jpg",
+          "credit": "Wikipedia — Kazumura Cave (CC/PD)",
+          "caption": "Kazumura Cave",
+          "alt": "the young woman is going through the tunnel in the mud field and there are snow on the rocks"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kazumura_Cave"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kazumura_Cave"
+        ],
+        "resolvedTitle": "Kazumura Cave",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Kazumura_collapsed_floor.jpg/330px-Kazumura_collapsed_floor.jpg",
+            "caption": "the young woman is going through the tunnel in the mud field and there are snow on the rocks",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-12T16:04:22.928Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T16:04:22.928Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T16:04:22.928Z"
+      }
+    },
+    "heritage:puu-loa-petroglyphs": {
+      "title": "Puʻu Loa Petroglyphs",
+      "summary": "Hawaiʻi Volcanoes National Park is a national park of the United States, located on the island of Hawaiʻi in the state of Hawaii.",
+      "history": [
+        {
+          "year": 1916,
+          "text": "The park was originally established on August 1, 1916, as Hawaii National Park, which was then split into this park and Haleakalā National Park.",
+          "source": "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        },
+        {
+          "year": 1978,
+          "text": "Around half of the park (130,790 acres (529 km2)) was designated the Hawaii Volcanoes Wilderness area in 1978, providing solitude for hiking and camping.",
+          "source": "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        },
+        {
+          "year": 1980,
+          "text": "In recognition of its outstanding natural values, Hawaiʻi Volcanoes National Park was designated as an International Biosphere Reserve in 1980 and a World Heritage Site in 1987.",
+          "source": "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        },
+        {
+          "year": 2012,
+          "text": "In 2012, the park was depicted on the 14th quarter of the America the Beautiful Quarters series.",
+          "source": "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        },
+        {
+          "year": 2018,
+          "text": "On May 11, 2018, the park was closed to the public in the Kīlauea volcano summit area, including the visitor center and park headquarters, due to explosions and toxic ash clouds from Halemaʻumaʻu crater, as well as earthquakes and road…",
+          "source": "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        },
+        {
+          "year": 2025,
+          "text": "As of early 2025, most of the park is open; however, some road segments and trails are still closed to visitors.",
+          "source": "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/P%C4%81hoehoe_and_Aa_flows_at_Hawaii.jpg/330px-P%C4%81hoehoe_and_Aa_flows_at_Hawaii.jpg",
+          "credit": "Wikipedia — Hawaiʻi Volcanoes National Park (CC/PD)",
+          "caption": "Hawaiʻi Volcanoes National Park",
+          "alt": "close - up of lava and dirt below, in a mountainous area, with some red streaks running away"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Hawai%CA%BBi_Volcanoes_National_Park"
+        ],
+        "resolvedTitle": "Hawaiʻi Volcanoes National Park",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/P%C4%81hoehoe_and_Aa_flows_at_Hawaii.jpg/330px-P%C4%81hoehoe_and_Aa_flows_at_Hawaii.jpg",
+            "caption": "close - up of lava and dirt below, in a mountainous area, with some red streaks running away",
+            "visionOk": true
+          }
+        ],
+        "generatedAt": "2026-07-12T16:33:27.599Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T16:33:27.599Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T16:33:27.599Z"
+      }
+    },
+    "heritage:puako-petroglyph-preserve": {
+      "title": "Puakō Petroglyph Preserve",
+      "summary": "Waikoloa Beach is an area located on the South Kohala coast on the island of Hawaii and is located in the census-designated place of Puako.",
+      "history": [
+        {
+          "year": 1985,
+          "text": "The anchialine ponds of Waikoloa are part of Hawaiian culture and were preserved in 1985 as the Waikoloa Anchialine Pond Preservation Area maintained by the University of Hawaii.",
+          "source": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        },
+        {
+          "year": 1988,
+          "text": "It was originally developed in 1988 as the Hyatt Regency Waikoloa with Japanese investment, however was sold to Hilton Hotels & Resorts in 1994.",
+          "source": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        },
+        {
+          "year": 1996,
+          "text": "The popular game show Wheel of Fortune has taped at the resort in 1996, 2008, and 2014.",
+          "source": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        },
+        {
+          "year": 2007,
+          "text": "It also serves as the setting for the Nickelodeon game show Paradise Run, and hosted the Pokémon World Championships in 2007, 2010, and 2012. .",
+          "source": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Anaehoomalu_Bay_Aerial.jpg/330px-Anaehoomalu_Bay_Aerial.jpg",
+          "credit": "Wikipedia — Waikoloa Beach (CC/PD)",
+          "caption": "Waikoloa Beach",
+          "alt": "an island that has blue water, and it looks like it is near the beach"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        ],
+        "resolvedTitle": "Waikoloa Beach",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Anaehoomalu_Bay_Aerial.jpg/330px-Anaehoomalu_Bay_Aerial.jpg",
+            "caption": "an island that has blue water, and it looks like it is near the beach",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-12T16:33:41.898Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T16:33:41.898Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T16:33:41.898Z"
+      }
+    },
+    "heritage:waikoloa-petroglyph-preserve": {
+      "title": "Waikoloa Petroglyph Preserve",
+      "summary": "Waikoloa Beach is an area located on the South Kohala coast on the island of Hawaii and is located in the census-designated place of Puako.",
+      "history": [
+        {
+          "year": 1985,
+          "text": "The anchialine ponds of Waikoloa are part of Hawaiian culture and were preserved in 1985 as the Waikoloa Anchialine Pond Preservation Area maintained by the University of Hawaii.",
+          "source": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        },
+        {
+          "year": 1988,
+          "text": "It was originally developed in 1988 as the Hyatt Regency Waikoloa with Japanese investment, however was sold to Hilton Hotels & Resorts in 1994.",
+          "source": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        },
+        {
+          "year": 1996,
+          "text": "The popular game show Wheel of Fortune has taped at the resort in 1996, 2008, and 2014.",
+          "source": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        },
+        {
+          "year": 2007,
+          "text": "It also serves as the setting for the Nickelodeon game show Paradise Run, and hosted the Pokémon World Championships in 2007, 2010, and 2012. .",
+          "source": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Anaehoomalu_Bay_Aerial.jpg/330px-Anaehoomalu_Bay_Aerial.jpg",
+          "credit": "Wikipedia — Waikoloa Beach (CC/PD)",
+          "caption": "Waikoloa Beach",
+          "alt": "the ocean has some waves on the water near a beach and a mansion with a resort in the background"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Waikoloa_Beach"
+        ],
+        "resolvedTitle": "Waikoloa Beach",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Anaehoomalu_Bay_Aerial.jpg/330px-Anaehoomalu_Bay_Aerial.jpg",
+            "caption": "the ocean has some waves on the water near a beach and a mansion with a resort in the background",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-07-12T16:33:55.961Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-07-12T16:33:55.961Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-07-12T16:33:55.961Z"
+      }
     }
   }
 }
