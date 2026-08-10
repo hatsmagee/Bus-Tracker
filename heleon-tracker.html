@@ -3211,7 +3211,13 @@ function initMapLayers() {
           stopHoverPopup.setHTML(buildStopPopupHtml(p, data));
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        // The popup body says "Loading…" until this resolves, so swallowing the
+        // error left it stuck on that forever. Say the arrivals didn't load.
+        if (!stopHoverPopup) return;
+        const el = document.getElementById('stopArrLoading');
+        if (el) el.textContent = 'Arrivals unavailable.';
+      });
   }
   ['stops-circle', 'stops-icon'].forEach(layer => {
     map.on('mouseenter', layer, e => {
@@ -3974,13 +3980,28 @@ async function refreshAgentPanel() {
 }
 
 function wireAgentButtons() {
-  const post = mode => fetch(`/api/agent/run?mode=${mode}`, { method: 'POST' }).then(() => { refreshAgentPanel(); refreshAgentLog(); });
+  // These are the only buttons on the page that POST. Without a rejection
+  // handler a failed request did nothing at all — no error, no state change —
+  // so the button read as dead. Report it on the button itself and restore it.
+  const flashFail = (btn, msg) => {
+    if (!btn) return;
+    const label = btn.dataset.label || btn.textContent;
+    btn.dataset.label = label;
+    btn.textContent = msg;
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = label; btn.disabled = false; }, 2500);
+  };
+  const postTo = (btn, url, after) => fetch(url, { method: 'POST' })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r; })
+    .then(() => after())
+    .catch(e => { console.warn('[agent]', url, e.message); flashFail(btn, 'Failed — retry'); });
   const runR = document.getElementById('agentRunResearch');
   const runP = document.getElementById('agentRunPublish');
   const reset = document.getElementById('agentResetBreaker');
-  if (runR) runR.onclick = () => post('research');
-  if (runP) runP.onclick = () => post('publish');
-  if (reset) reset.onclick = () => fetch('/api/agent/reset-breaker', { method: 'POST' }).then(() => refreshAgentPanel());
+  const post = (btn, mode) => postTo(btn, `/api/agent/run?mode=${mode}`, () => { refreshAgentPanel(); refreshAgentLog(); });
+  if (runR) runR.onclick = () => post(runR, 'research');
+  if (runP) runP.onclick = () => post(runP, 'publish');
+  if (reset) reset.onclick = () => postTo(reset, '/api/agent/reset-breaker', () => refreshAgentPanel());
   const find = document.getElementById('agentFindRobot');
   if (find) find.onclick = () => { ensureAgentRobot(); if (agentRobotMarker) map.flyTo({ center: agentRobotMarker.getLngLat(), zoom: 10 }); };
 }
@@ -7562,7 +7583,7 @@ function buildStopPopupHtml(p, arrData) {
       </div>
       <div style="color:#8b949e;font-size:10px;margin-bottom:10px;">Stop #${p.stopCode||gtfsStop.stop_code||'—'} · ${p.routeName||''}</div>
       ${wxHtml}
-      <div style="color:#8b949e;font-size:11px;">Loading…</div>
+      <div id="stopArrLoading" style="color:#8b949e;font-size:11px;">Loading…</div>
     </div>`;
   }
 

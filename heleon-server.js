@@ -3465,7 +3465,10 @@ async function handleApi(url, res, req) {
     const now = Date.now();
     const list = [];
     for (const [mmsi, v] of vesselCache) {
-      if ((now - v.lastTs) > VESSEL_STALE_MS) continue;
+      // Evict rather than just skip: the AIS stream runs for the life of the
+      // process and keys by MMSI, so filtering-without-deleting meant every
+      // vessel ever seen stayed resident forever.
+      if ((now - v.lastTs) > VESSEL_STALE_MS) { vesselCache.delete(mmsi); continue; }
       list.push(v);
     }
     return json(res, {
@@ -3645,6 +3648,13 @@ async function handleApi(url, res, req) {
     const site = q.get('site'); const param = q.get('param') || '00060';
     const range = q.get('range') || 'year';
     if (!site) return json(res, { error: 'site required', series: [] });
+    // These go into an upstream USGS URL and into a cache key. USGS site and
+    // parameter codes are digits only, so reject anything else rather than
+    // forwarding arbitrary client input upstream and interning it in a Map that
+    // has no eviction — a crawler hitting ?site=1,2,3… would grow it forever.
+    if (!/^\d{8,15}$/.test(site) || !/^\d{5}$/.test(param)) {
+      return json(res, { error: 'invalid site or param', series: [] }, 400);
+    }
     const end = new Date();
     const start = new Date(end);
     if (range === '5yr') start.setFullYear(end.getFullYear() - 5);
@@ -3662,7 +3672,10 @@ async function handleApi(url, res, req) {
   if (p === '/api/aprs') {
     const now = Date.now();
     const STALE = 60 * 60 * 1000; // drop stations not heard in an hour
-    const list = [...aprsCache.values()].filter(s => now - s.ts < STALE);
+    // Actually drop them — this used to filter on the way out while the Map kept
+    // every callsign the APRS stream had ever delivered.
+    for (const [call, s] of aprsCache) if (now - s.ts >= STALE) aprsCache.delete(call);
+    const list = [...aprsCache.values()];
     return json(res, { ts: now, lastRxTs: aprsLastRxTs, lastError: aprsLastError, count: list.length, stations: list });
   }
 
@@ -4277,6 +4290,19 @@ async function pollAircraft() {
 // ArcGIS REST). Hazard-zone geometry never changes day-to-day, so it's fetched
 // once at boot and re-fetched only every 24h; earthquakes/alerts poll often.
 
+// Bounded Map.set — these caches live for the whole process on a long-running
+// free-tier instance, and several are keyed by values that ultimately come from
+// a request (gauge site, aircraft tail, vessel name). Without a cap they only
+// ever grow. Oldest-first eviction: Map preserves insertion order.
+function cacheSet(map, key, value, max) {
+  map.set(key, value);
+  if (map.size > max) {
+    const excess = map.size - max;
+    let i = 0;
+    for (const k of map.keys()) { if (i++ >= excess) break; map.delete(k); }
+  }
+}
+
 function fetchJson(hostname, reqPath, headers) {
   return new Promise((resolve, reject) => {
     const req = https.request({ hostname, path: reqPath, method: 'GET', headers, timeout: 15000 }, res => {
@@ -4344,7 +4370,7 @@ async function usgsDailyStats(site, param) {
     param, allMin: allMin === Infinity ? null : allMin, allMax: allMax === -Infinity ? null : allMax,
     allMinYr, allMaxYr, beginYr, endYr, byDoy,
   };
-  gaugeStatsCache.set(key, { at: Date.now(), stats });
+  cacheSet(gaugeStatsCache, key, { at: Date.now(), stats }, 200);
   return stats;
 }
 
@@ -4361,7 +4387,7 @@ async function usgsDailyValues(site, param, startDT, endDT) {
   const series = ts ? ts.values[0].value
     .map(v => ({ t: v.dateTime.slice(0, 10), v: parseFloat(v.value) }))
     .filter(x => Number.isFinite(x.v) && x.v > -999999) : [];
-  gaugeHistCache.set(key, { at: Date.now(), series });
+  cacheSet(gaugeHistCache, key, { at: Date.now(), series }, 200);
   return series;
 }
 
@@ -6186,7 +6212,7 @@ async function getAircraftPhoto(hex, reg) {
       }
     } catch (e) { /* try next path */ }
   }
-  aircraftPhotoCache.set(key, { at: Date.now(), data });
+  cacheSet(aircraftPhotoCache, key, { at: Date.now(), data }, 500);
   return data;
 }
 const vesselInfoCache = new Map(); // name -> { at, data }
@@ -6221,7 +6247,7 @@ async function getVesselInfo(name) {
       }
     } catch (e) { /* try next candidate */ }
   }
-  vesselInfoCache.set(key, { at: Date.now(), data });
+  cacheSet(vesselInfoCache, key, { at: Date.now(), data }, 500);
   return data;
 }
 
@@ -6897,7 +6923,19 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (url.pathname.startsWith('/api/') || url.pathname === '/proxy') {
-    handleApi(url, res, req).catch(e => { res.writeHead(500); res.end(JSON.stringify({ error: e.message })); });
+    handleApi(url, res, req).catch(e => {
+      console.error(`[api] ${url.pathname}:`, (e && e.stack) || e);
+      // A handler can throw AFTER it has started responding (several stream
+      // straight to res, and endMaybeGzip finishes inside an async gzip
+      // callback). writeHead would then throw ERR_HTTP_HEADERS_SENT inside the
+      // catch, leaving the client hanging on a truncated body — so only send a
+      // 500 if nothing has gone out yet, and otherwise just close the socket.
+      if (res.headersSent) { try { res.end(); } catch {} return; }
+      try {
+        res.writeHead(500, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ error: e && e.message ? e.message : 'internal error' }));
+      } catch { try { res.end(); } catch {} }
+    });
   } else {
     handleStatic(url, res);
   }
