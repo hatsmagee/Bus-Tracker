@@ -9347,6 +9347,285 @@
         "level": 85,
         "updatedAt": "2026-07-12T23:42:12.682Z"
       }
+    },
+    "heritage:kaloko-honokohau-nhp": {
+      "title": "Kaloko-Honokōhau NHP",
+      "summary": "Kaloko-Honokōhau National Historical Park is a United States National Historical Park located in the Kona District on Hawaiʻi Island in the U.S. state of Hawaiʻi.",
+      "history": [
+        {
+          "year": 1962,
+          "text": "It was designated a National Historic Landmark in 1962, and was added to the National Register of Historic Places in 1966. .",
+          "source": "https://en.wikipedia.org/wiki/Kaloko-Honok%C5%8Dhau_National_Historical_Park"
+        },
+        {
+          "year": 1978,
+          "text": "The park was established on November 10, 1978, for the preservation, protection and interpretation of traditional native Hawaiian activities and culture. .",
+          "source": "https://en.wikipedia.org/wiki/Kaloko-Honok%C5%8Dhau_National_Historical_Park"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Honokohau_Halau.jpg/330px-Honokohau_Halau.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+          "credit": "Wikipedia — Kaloko-Honokōhau National Historical Park (CC/PD)",
+          "caption": "Kaloko-Honokōhau National Historical Park",
+          "alt": "several palm trees line a beach with a thatched hut in the foreground and a body of water in the background"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Kaloko-Honok%C5%8Dhau_National_Historical_Park"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Kaloko-Honok%C5%8Dhau_National_Historical_Park"
+        ],
+        "resolvedTitle": "Kaloko-Honokōhau National Historical Park",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Honokohau_Halau.jpg/330px-Honokohau_Halau.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+            "caption": "several palm trees line a beach with a thatched hut in the foreground and a body of water in the background",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-08-10T14:11:23.937Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-08-10T14:11:23.937Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-history",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-08-10T14:11:23.937Z"
+      }
+    },
+    "heritage:parker-ranch": {
+      "title": "Parker Ranch",
+      "summary": "Parker Ranch is a working cattle ranch on the Island of Hawaii in the U.S. state of Hawaii, now run by a charitable trust. .",
+      "history": [
+        {
+          "year": 1847,
+          "text": "The ranch was founded in 1847 and is one of the oldest ranches in the United States, pre-dating many mainland ranches in Texas and other southwestern states by more than 30 years.",
+          "source": "https://en.wikipedia.org/wiki/Parker_Ranch"
+        },
+        {
+          "year": 1950,
+          "text": "Loyal to the Land: The Legendary Parker Ranch, 750–1950.",
+          "source": "https://en.wikipedia.org/wiki/Parker_Ranch"
+        },
+        {
+          "year": 1992,
+          "text": "The last owner of the ranch, the actor Richard Smart, died in 1992.",
+          "source": "https://en.wikipedia.org/wiki/Parker_Ranch"
+        },
+        {
+          "year": 2014,
+          "text": "Following a successful grass-fed beef trial on Hawaii Island, Parker Ranch and Ulupono Initiative announced the launch of the Paniolo Cattle Company, a joint venture aimed at statewide local beef production in March 2014.",
+          "source": "https://en.wikipedia.org/wiki/Parker_Ranch"
+        },
+        {
+          "year": 2020,
+          "text": "According to president and CEO Dutch Kuyper, due to the COVID-19 pandemic Parker Ranch canceled their annual 4 July rodeo in 2020.",
+          "source": "https://en.wikipedia.org/wiki/Parker_Ranch"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Parker_Ranch_%2812714415555%29.jpg/330px-Parker_Ranch_%2812714415555%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+          "credit": "Wikipedia — Parker Ranch (CC/PD)",
+          "caption": "Parker Ranch",
+          "alt": "a large house in a green field surrounded by trees and a white fence with street signs"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Parker_Ranch"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Parker_Ranch"
+        ],
+        "resolvedTitle": "Parker Ranch",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6f/Parker_Ranch_%2812714415555%29.jpg/330px-Parker_Ranch_%2812714415555%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+            "caption": "a large house in a green field surrounded by trees and a white fence with street signs",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-08-10T14:11:34.582Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-08-10T14:11:34.582Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-08-10T14:11:34.582Z"
+      }
+    },
+    "heritage:kahua-ranch": {
+      "title": "Kahuā Ranch",
+      "summary": "James Frank Woods (June 27, 1872 – June 24, 1930) was a major landowner during the Kingdom of Hawaii who was related to royalty and many civil leaders. .",
+      "history": [
+        {
+          "year": 1845,
+          "text": "His father was James Woods, who was born in Liverpool, England in 1845, and came to the Hawaiian Islands in 1860 to work for Janion & Green (later the \"Big Five\" firm Theo H.",
+          "source": "https://en.wikipedia.org/wiki/James_Frank_Woods"
+        },
+        {
+          "year": 1866,
+          "text": "In 1866, his father moved to the cattle-ranching area known as Waimea where he worked to import improved cattle breeds to replace the wild cattle that had previously roamed the island of Hawaiʻi.",
+          "source": "https://en.wikipedia.org/wiki/James_Frank_Woods"
+        },
+        {
+          "year": 1868,
+          "text": "On March 22, 1868 his father married his mother Mary Ann Kaulalani Parker (1851–1909), three-quarters native Hawaiian granddaughter of John Palmer Parker (1790–1868), founder of Parker Ranch.",
+          "source": "https://en.wikipedia.org/wiki/James_Frank_Woods"
+        },
+        {
+          "year": 1872,
+          "text": "James Frank Woods (June 27, 1872 – June 24, 1930) was a major landowner during the Kingdom of Hawaii who was related to royalty and many civil leaders. .",
+          "source": "https://en.wikipedia.org/wiki/James_Frank_Woods"
+        },
+        {
+          "year": 1883,
+          "text": "When his father died in December 1883, the Kohala and Puʻuhue ranches passed to brothers Samuel Parker Woods (1877–1937) and Palmer Parker Woods (1872–1923).",
+          "source": "https://en.wikipedia.org/wiki/James_Frank_Woods"
+        },
+        {
+          "year": 1913,
+          "text": "After losing several elections in the Home Rule Party of Hawaii, he won in 1913 for a single term in the Territorial Senate as a member of the Democratic Party of Hawaii.",
+          "source": "https://en.wikipedia.org/wiki/James_Frank_Woods"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Frank_Wood_at_Mana%2C_1923.jpg/330px-Frank_Wood_at_Mana%2C_1923.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+          "credit": "Wikipedia — James Frank Woods (CC/PD)",
+          "caption": "James Frank Woods",
+          "alt": "a black and white photo shows two men in front of an antique car outside of a house"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/James_Frank_Woods"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/James_Frank_Woods"
+        ],
+        "resolvedTitle": "James Frank Woods",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Frank_Wood_at_Mana%2C_1923.jpg/330px-Frank_Wood_at_Mana%2C_1923.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+            "caption": "a black and white photo shows two men in front of an antique car outside of a house",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-08-10T14:41:20.434Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-08-10T14:41:20.434Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 85,
+        "updatedAt": "2026-08-10T14:41:20.434Z"
+      }
+    },
+    "heritage:ala-kahakai-national-historic-trail": {
+      "title": "Ala Kahakai National Historic Trail",
+      "summary": "Ala Kahakai National Historic Trail is a 175-mile (282 km) long trail located on the island of Hawaii.",
+      "history": [
+        {
+          "year": 1989,
+          "text": "A part of the trail called Ala Loa (meaning \"long trail\" in the Hawaiian Language, another name for the same network of trails) was added to the state registry of historic places as site 10-10-11,334 on January 14, 1989, and to the…",
+          "source": "https://en.wikipedia.org/wiki/Ala_Kahakai_National_Historic_Trail"
+        },
+        {
+          "year": 2000,
+          "text": "The trail was established 14 November 2000 as a National Historic Trail which is managed under the National Park Service.",
+          "source": "https://en.wikipedia.org/wiki/Ala_Kahakai_National_Historic_Trail"
+        },
+        {
+          "year": 2002,
+          "text": "Starting in 2002, a comprehensive management plan and environmental impact statement were prepared and published in 2008.",
+          "source": "https://en.wikipedia.org/wiki/Ala_Kahakai_National_Historic_Trail"
+        },
+        {
+          "year": 2009,
+          "text": "The final comprehensive action plan was released by the National Park Service in May 2009.",
+          "source": "https://en.wikipedia.org/wiki/Ala_Kahakai_National_Historic_Trail"
+        }
+      ],
+      "photos": [
+        {
+          "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/ALKA_trailsection.jpg/330px-ALKA_trailsection.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+          "credit": "Wikipedia — Ala Kahakai National Historic Trail (CC/PD)",
+          "caption": "Ala Kahakai National Historic Trail",
+          "alt": "this is a picture of a dirt road with rocks and gravels on the side of the road that leads to the top of a hill"
+        }
+      ],
+      "links": [
+        {
+          "label": "Source",
+          "url": "https://en.wikipedia.org/wiki/Ala_Kahakai_National_Historic_Trail"
+        }
+      ],
+      "provenance": {
+        "sources": [
+          "https://en.wikipedia.org/wiki/Ala_Kahakai_National_Historic_Trail"
+        ],
+        "resolvedTitle": "Ala Kahakai National Historic Trail",
+        "model": "deterministic",
+        "imageChecks": [
+          {
+            "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/ALKA_trailsection.jpg/330px-ALKA_trailsection.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail",
+            "caption": "this is a picture of a dirt road with rocks and gravels on the side of the road that leads to the top of a hill",
+            "visionOk": false
+          }
+        ],
+        "generatedAt": "2026-08-10T14:41:33.273Z",
+        "researchPass": 1,
+        "lastDeepenedAt": "2026-08-10T14:41:33.273Z",
+        "reviewed": false
+      },
+      "status": "partial",
+      "enrichment": {
+        "status": "partial",
+        "gaps": [
+          "short-summary",
+          "more-photos"
+        ],
+        "pass": 1,
+        "level": 70,
+        "updatedAt": "2026-08-10T14:41:33.273Z"
+      }
     }
   }
 }
