@@ -8056,6 +8056,75 @@ function renderRouteShapes(force) {
 // Build parallel "ribbon" features from GTFS shapes when we don't have OSM edge
 // membership (Oʻahu / Kauaʻi / Maui). Shared corridors get side-by-side slots
 // like Big Island; solo stretches stay on the centerline.
+//
+// This is the Metro-Line Crossing Minimization problem (Fink & Pupyrev 2013;
+// see LOOM, Bast/Brosi/Storandt SIGSPATIAL'18). Unlike the Big Island path we
+// have no shared edge ids to group by — GTFS shapes for co-traveling routes are
+// digitized independently (measured: only ~5% of vertices coincide), so corridor
+// membership has to be inferred spatially. Three things make that stable:
+//
+//   1. GLOBAL lane order. A route's lane comes from its rank in one island-wide
+//      ordering restricted to the local peer set — never from its index in that
+//      local set. Indexing locally means gaining or losing a single peer
+//      renumbers every route in the corridor.
+//   2. Peer sets unioned over a sliding window (and claimed into the 8 cells
+//      around each sample). Samples are phase-independent, so without this a
+//      route's peers flicker cell-to-cell even where routes share a road for
+//      miles.
+//   3. Lane picked by an exact O(n·|lanes|) switch-penalty DP (Potts/Viterbi)
+//      rather than per-sample: minimise Σ|lane − ideal| + LANE_SWITCH_COST per
+//      change. Ties keep the current lane. A lane change has to pay for itself
+//      over a long run, so lanes change a handful of times per route instead of
+//      once per sample.
+//
+// Before this, one Kauaʻi route shattered into 507 fragments (median 45 m,
+// 1,494 of them 2-vertex stubs) that each drew rounded caps at a different
+// offset — the "blobs and dashes" look. At Oʻahu scale it was 4,955 features
+// and ~4.7 s to build.
+const LANE_SWITCH_COST = 20;   // cost of one lane change, in "lanes" of error
+const CORRIDOR_CELL_M = 55;    // corridor bucket size
+const CORRIDOR_STEP_M = 45;    // sampling step along a route
+const CORRIDOR_WIN = 6;        // samples each side unioned into the peer set
+const MAX_LANES = 7;           // visual budget; more peers compress into it
+
+// Exact minimum-cost label sequence with a per-change penalty. The "cheapest
+// other lane" term is one scalar per step, so this is O(n·|lanes|), not
+// O(n·|lanes|²).
+function solveLaneSequence(idealPerSample, lanes, switchCost) {
+  const n = idealPerSample.length;
+  if (!n) return [];
+  if (lanes.length === 1) return new Array(n).fill(lanes[0]);
+  const cost = new Map(), back = [];
+  for (const l of lanes) cost.set(l, Math.abs(l - idealPerSample[0]));
+  for (let i = 1; i < n; i++) {
+    let bestPrev = null, bestVal = Infinity;
+    for (const l of lanes) {
+      const v = cost.get(l);
+      if (v < bestVal || (v === bestVal && bestPrev !== null && Math.abs(l) < Math.abs(bestPrev))) { bestVal = v; bestPrev = l; }
+    }
+    const next = new Map(), bp = new Map();
+    for (const l of lanes) {
+      const stay = cost.get(l), move = bestVal + switchCost;
+      const d = Math.abs(l - idealPerSample[i]);
+      // strict '<' so a tie keeps the current lane
+      if (move < stay) { next.set(l, d + move); bp.set(l, bestPrev); }
+      else { next.set(l, d + stay); bp.set(l, l); }
+    }
+    cost.clear();
+    for (const [k, v] of next) cost.set(k, v);
+    back.push(bp);
+  }
+  let cur = null, bestVal = Infinity;
+  for (const l of lanes) {
+    const v = cost.get(l);
+    if (v < bestVal || (v === bestVal && cur !== null && Math.abs(l) < Math.abs(cur))) { bestVal = v; cur = l; }
+  }
+  const out = new Array(n);
+  out[n - 1] = cur;
+  for (let i = back.length - 1; i >= 0; i--) { cur = back[i].get(cur); out[i] = cur; }
+  return out;
+}
+
 function buildIslandCorridorFeatures(routeMeta) {
   const routes = [];
   for (const [rid, patterns] of Object.entries(allPatternCoords)) {
@@ -8080,106 +8149,106 @@ function buildIslandCorridorFeatures(routeMeta) {
   }
   if (!routes.length) return [];
 
-  // Sample each route into ~45 m steps and hash midpoints so co-traveling
-  // routes land in the same corridor bucket (bearing-agnostic so inbound /
-  // outbound of different routes still share a road).
-  const CELL_M = 55;
-  const STEP_M = 45;
-  const corridor = new Map(); // cellKey -> Set(routeId)
-  const routeSamples = new Map(); // routeId -> [{lon,lat,key}, ...] densified
+  // ONE island-wide route order. Lanes are ranks within this, restricted to the
+  // local peers — so a route keeps its side of the road as peers come and go.
+  const globalRank = new Map();
+  routes.map(r => r.routeId)
+    .sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }))
+    .forEach((rid, i) => globalRank.set(rid, i));
 
-  function cellKey(lon, lat) {
+  const corridor = new Map(); // cellKey -> Set(routeId)
+  const routeSamples = new Map();
+  const cellKey = (lon, lat) => {
     const mLat = 111320, mLon = mLat * Math.cos(lat * Math.PI / 180);
-    const x = Math.round((lon * mLon) / CELL_M);
-    const y = Math.round((lat * mLat) / CELL_M);
-    return `${x}:${y}`;
-  }
+    return Math.round((lon * mLon) / CORRIDOR_CELL_M) + ':' + Math.round((lat * mLat) / CORRIDOR_CELL_M);
+  };
 
   for (const r of routes) {
     const samples = [];
     let acc = 0;
-    samples.push({ lon: r.coords[0][0], lat: r.coords[0][1], key: cellKey(r.coords[0][0], r.coords[0][1]) });
+    // Claim the sample's cell AND its 8 neighbours: two routes on the same road
+    // can otherwise straddle a cell border and never see each other as peers.
+    const push = (lon, lat) => {
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      samples.push({ lon, lat, key: cellKey(lon, lat) });
+      const mLat = 111320, mLon = mLat * Math.cos(lat * Math.PI / 180);
+      const x = Math.round((lon * mLon) / CORRIDOR_CELL_M), y = Math.round((lat * mLat) / CORRIDOR_CELL_M);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const k = (x + dx) + ':' + (y + dy);
+          let s = corridor.get(k);
+          if (!s) corridor.set(k, s = new Set());
+          s.add(r.routeId);
+        }
+      }
+    };
+    push(r.coords[0][0], r.coords[0][1]);
     for (let i = 1; i < r.coords.length; i++) {
       const a = r.coords[i - 1], b = r.coords[i];
       const seg = metersBetween(a, b);
-      if (seg < 1e-3) continue;
-      let t0 = STEP_M - (acc % STEP_M);
+      if (!Number.isFinite(seg) || seg < 1e-3) continue;
+      const t0 = CORRIDOR_STEP_M - (acc % CORRIDOR_STEP_M);
       if (t0 > seg) { acc += seg; continue; }
-      for (let t = t0; t <= seg; t += STEP_M) {
+      for (let t = t0; t <= seg; t += CORRIDOR_STEP_M) {
         const f = t / seg;
-        const lon = a[0] + (b[0] - a[0]) * f;
-        const lat = a[1] + (b[1] - a[1]) * f;
-        const key = cellKey(lon, lat);
-        samples.push({ lon, lat, key });
-        if (!corridor.has(key)) corridor.set(key, new Set());
-        corridor.get(key).add(r.routeId);
+        push(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f);
       }
       acc += seg;
     }
-    // Ensure every vertex cell is registered even on short hops.
-    for (const c of r.coords) {
-      const key = cellKey(c[0], c[1]);
-      if (!corridor.has(key)) corridor.set(key, new Set());
-      corridor.get(key).add(r.routeId);
-    }
-    routeSamples.set(r.routeId, samples.length ? samples : [{
-      lon: r.coords[0][0], lat: r.coords[0][1], key: cellKey(r.coords[0][0], r.coords[0][1]),
-    }]);
+    routeSamples.set(r.routeId, samples);
   }
 
-  // Stable lane order per corridor cell: sorted route ids → slot around 0.
-  // Cap at MAX_LANES so King St. (20+ routes) doesn't fan across half the map —
-  // overflow routes stay on the centerline under the ribbon.
-  const MAX_LANES = 8;
-  function slotFor(rid, peers) {
-    const sorted = [...peers].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
-    if (sorted.length < 2) return 0;
+  // Lane from the route's rank among its peers. When a corridor carries more
+  // routes than the lane budget, compress them all into it (fractional lanes)
+  // rather than dumping the overflow onto the centerline — on a trunk like King
+  // St that would hide most routes underneath each other.
+  function laneFor(rid, peers) {
+    if (peers.size < 2) return 0;
+    const sorted = [...peers].sort((a, b) => globalRank.get(a) - globalRank.get(b));
     const idx = sorted.indexOf(rid);
     if (idx < 0) return 0;
-    if (sorted.length <= MAX_LANES) return idx - (sorted.length - 1) / 2;
-    // Too many peers: keep the first MAX_LANES in lanes; rest sit on center.
-    if (idx >= MAX_LANES) return 0;
-    return idx - (MAX_LANES - 1) / 2;
+    const n = sorted.length;
+    if (n <= MAX_LANES) return idx - (n - 1) / 2;
+    const span = MAX_LANES - 1;
+    return Math.round(((idx / (n - 1)) * span - span / 2) * 100) / 100;
   }
 
-  // Walk each route; split into runs where the lane slot is stable so MapLibre
-  // can apply a constant line-offset per feature (same idea as Big Island).
   const features = [];
   for (const r of routes) {
     const samples = routeSamples.get(r.routeId) || [];
-    if (samples.length < 2) {
-      features.push({
-        type: 'Feature',
-        properties: { routeId: r.routeId, color: r.color, name: r.name, slot: 0 },
-        geometry: { type: 'LineString', coordinates: r.coords },
-      });
-      continue;
+    if (samples.length < 2) continue;
+
+    const ideal = new Array(samples.length);
+    for (let i = 0; i < samples.length; i++) {
+      const peers = new Set([r.routeId]);
+      const lo = Math.max(0, i - CORRIDOR_WIN), hi = Math.min(samples.length - 1, i + CORRIDOR_WIN);
+      for (let k = lo; k <= hi; k++) {
+        const p = corridor.get(samples[k].key);
+        if (p) for (const x of p) peers.add(x);
+      }
+      ideal[i] = laneFor(r.routeId, peers);
     }
-    let runCoords = [[samples[0].lon, samples[0].lat]];
-    let runSlot = slotFor(r.routeId, corridor.get(samples[0].key) || new Set([r.routeId]));
-    const flush = () => {
-      if (runCoords.length < 2) return;
-      features.push({
-        type: 'Feature',
-        properties: { routeId: r.routeId, color: r.color, name: r.name, slot: runSlot },
-        geometry: { type: 'LineString', coordinates: runCoords },
-      });
-    };
-    for (let i = 1; i < samples.length; i++) {
-      const s = samples[i];
-      const peers = corridor.get(s.key) || new Set([r.routeId]);
-      const slot = slotFor(r.routeId, peers);
-      if (slot !== runSlot) {
-        // Carry one shared vertex so runs meet; then start a new lane.
-        runCoords.push([s.lon, s.lat]);
-        flush();
-        runCoords = [[s.lon, s.lat]];
-        runSlot = slot;
-      } else {
-        runCoords.push([s.lon, s.lat]);
+
+    const lanes = solveLaneSequence(ideal, [...new Set(ideal)], LANE_SWITCH_COST);
+
+    // Emit one feature per run of constant lane, overlapping a sample at each
+    // seam so consecutive lanes visually connect.
+    let start = 0;
+    for (let i = 1; i <= lanes.length; i++) {
+      if (i === lanes.length || lanes[i] !== lanes[start]) {
+        const from = start > 0 ? start - 1 : 0;
+        const coords = [];
+        for (let k = from; k <= i - 1; k++) coords.push([samples[k].lon, samples[k].lat]);
+        if (coords.length >= 2) {
+          features.push({
+            type: 'Feature',
+            properties: { routeId: r.routeId, color: r.color, name: r.name, slot: lanes[start] },
+            geometry: { type: 'LineString', coordinates: coords },
+          });
+        }
+        start = i;
       }
     }
-    flush();
   }
   return features;
 }
@@ -8189,12 +8258,18 @@ function renderIslandRouteLines(routeMeta) {
   const features = buildIslandCorridorFeatures(routeMeta);
   const data = { type: 'FeatureCollection', features };
   if (!map.getSource('island-route-lines')) {
-    map.addSource('island-route-lines', { type: 'geojson', data, maxzoom: 16 });
+    // maxzoom caps the tile zoom the source is generated at — above it MapLibre
+    // reuses z17 geometry, which is what made these lines look coarse/stepped
+    // when zoomed right in. Route lines are the thing you zoom in to inspect.
+    map.addSource('island-route-lines', { type: 'geojson', data, maxzoom: 18 });
     map.addLayer({
       id: 'island-route-lines',
       type: 'line',
       source: 'island-route-lines',
-      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      // butt caps, not round: a lane change ends one feature and starts another,
+      // and a round cap puts a half-width bulb at every seam. Round joins still
+      // keep corners smooth within a feature.
+      layout: { 'line-join': 'round', 'line-cap': 'butt' },
       paint: {
         'line-color': ['get', 'color'],
         // Slightly thinner than a solo road so N parallel stripes fit the corridor.
