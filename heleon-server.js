@@ -2282,21 +2282,42 @@ function acceptsGzip(res) {
   const ae = (res.req && res.req.headers && res.req.headers['accept-encoding']) || '';
   return /\bgzip\b/.test(ae);
 }
-function endMaybeGzip(res, status, headers, buf) {
+// Memoized gzip for large immutable bodies (opts.static). Re-compressing a
+// 750 KB file per request is real CPU on a free-tier instance; the buffer is
+// identity-stable while its source file is unchanged, so key the cache on it.
+const _gzCache = new WeakMap();
+function gzipOnce(buf, cb) {
+  const hit = _gzCache.get(buf);
+  if (hit) return cb(null, hit);
+  zlib.gzip(buf, (err, gz) => {
+    if (!err && gz) _gzCache.set(buf, gz);
+    cb(err, gz);
+  });
+}
+function endMaybeGzip(res, status, headers, buf, opts) {
+  const isStatic = !!(opts && opts.static);
   // Conditional GET: hash the exact body and answer 304 when the client already
   // has it. The dashboard polls many endpoints on timers; unchanged payloads
   // (places, heritage, infrastructure, stops…) now cost ~200 bytes instead of
   // a full body. Endpoints whose body embeds a fresh timestamp simply never
   // match — correct, just not cheaper.
   if (status === 200 && buf.length >= GZIP_MIN) {
-    // Hash with the volatile "ts": Date.now() fields masked, otherwise every
-    // response looks new and no poll ever 304s. Real freshness lives in
-    // lastPollTs/lastRxTs and the data itself, which stay in the hash.
-    const masked = buf.toString('latin1').replace(/"ts":\d{10,}/g, '"ts":0');
-    const etag = `W/"${crypto.createHash('sha1').update(masked).digest('base64').slice(0, 20)}"`;
-    // no-cache = store but always revalidate → browser sends If-None-Match on
-    // the next poll and we answer 304 when nothing changed.
-    headers = { ...headers, 'ETag': etag, 'Cache-Control': 'no-cache' };
+    let etag;
+    if (isStatic) {
+      // Immutable body: hash it as-is (no ts fields to mask) and keep whatever
+      // Cache-Control the caller set, so the browser can still cache hard.
+      etag = `"${crypto.createHash('sha1').update(buf).digest('base64').slice(0, 20)}"`;
+      headers = { ...headers, 'ETag': etag };
+    } else {
+      // Hash with the volatile "ts": Date.now() fields masked, otherwise every
+      // response looks new and no poll ever 304s. Real freshness lives in
+      // lastPollTs/lastRxTs and the data itself, which stay in the hash.
+      const masked = buf.toString('latin1').replace(/"ts":\d{10,}/g, '"ts":0');
+      etag = `W/"${crypto.createHash('sha1').update(masked).digest('base64').slice(0, 20)}"`;
+      // no-cache = store but always revalidate → browser sends If-None-Match on
+      // the next poll and we answer 304 when nothing changed.
+      headers = { ...headers, 'ETag': etag, 'Cache-Control': 'no-cache' };
+    }
     const inm = res.req && res.req.headers && res.req.headers['if-none-match'];
     if (inm && inm === etag) {
       res.writeHead(304, { 'ETag': etag, 'Access-Control-Allow-Origin': '*' });
@@ -2305,15 +2326,43 @@ function endMaybeGzip(res, status, headers, buf) {
     }
   }
   if (buf.length >= GZIP_MIN && acceptsGzip(res)) {
-    zlib.gzip(buf, (err, gz) => {
+    const done = (err, gz) => {
       if (err) { res.writeHead(status, headers); res.end(buf); return; }
       res.writeHead(status, { ...headers, 'Content-Encoding': 'gzip', 'Vary': 'Accept-Encoding' });
       res.end(gz);
-    });
+    };
+    if (isStatic) gzipOnce(buf, done); else zlib.gzip(buf, done);
   } else {
     res.writeHead(status, headers);
     res.end(buf);
   }
+}
+
+// Serialized /api/route-edges body, rebuilt only when its inputs change. The
+// colour signature catches a palette edit that leaves the route COUNT the same
+// (colors are joined at request time on purpose — see the handler).
+let _routeEdgesBuf = null, _routeEdgesSig = '';
+function ROUTE_COLOR_SIG() {
+  let s = '';
+  for (const r of ROUTES) s += r.id + r.color;
+  return crypto.createHash('sha1').update(s).digest('base64').slice(0, 12);
+}
+
+// route-roads.geojson is ~750 KB and was read from disk synchronously on every
+// request, blocking the event loop. Cache the buffer and re-read only when the
+// file's mtime/size changes, so a rebuild still lands without a restart.
+const ROUTE_ROADS_PATH = path.join(__dirname, 'data', 'osm', 'route-roads.geojson');
+let _rrBuf = null, _rrSig = '';
+function routeRoadsBuf() {
+  let st;
+  try { st = fs.statSync(ROUTE_ROADS_PATH); } catch { return null; }
+  const sig = `${st.mtimeMs}:${st.size}`;
+  if (_rrBuf && sig === _rrSig) return _rrBuf;
+  try {
+    _rrBuf = fs.readFileSync(ROUTE_ROADS_PATH);
+    _rrSig = sig;
+    return _rrBuf;
+  } catch { return null; }
 }
 
 function json(res, data, status = 200) {
@@ -2720,22 +2769,34 @@ async function handleApi(url, res, req) {
   // ROUTE_EDGES above. Route colors are resolved here (not baked into the
   // static file) so a route-color change takes effect without regenerating it.
   if (p === '/api/route-edges') {
-    const edges = ROUTE_EDGES.edges.map(e => {
-      const ctl = EDGE_CONTROLS.get(e.id);
-      return {
-        id: e.id,
-        wayId: e.wayId,   // join key to the self-hosted road source (feature-state recolor)
-        coords: e.coords,
-        routes: e.routeIds.map(rid => ({
-          routeId: rid,
-          color: (ROUTE_MAP[rid] && ROUTE_MAP[rid].color) || '#888',
-          short: (ROUTE_MAP[rid] && ROUTE_MAP[rid].short) || String(rid),
-          name: (ROUTE_MAP[rid] && ROUTE_MAP[rid].name) || ('Route ' + rid),
-        })),
-        ...(ctl ? { signals: ctl.signals, stops: ctl.stops } : {}),
-      };
-    });
-    return json(res, { edges });
+    // ~1.6 MB of objects. Rebuilding + re-serializing it per request was the
+    // most expensive thing this instance did, and the result is identical until
+    // the edges, the traffic controls, or the route palette actually change —
+    // so serialize once and reuse the buffer (json() then 304s it for free).
+    const sig = `${ROUTE_EDGES.edges.length}:${EDGE_CONTROLS.size}:${ROUTES.length}:${ROUTE_COLOR_SIG()}`;
+    if (!_routeEdgesBuf || _routeEdgesSig !== sig) {
+      const edges = ROUTE_EDGES.edges.map(e => {
+        const ctl = EDGE_CONTROLS.get(e.id);
+        return {
+          id: e.id,
+          wayId: e.wayId,   // join key to the self-hosted road source (feature-state recolor)
+          coords: e.coords,
+          routes: e.routeIds.map(rid => ({
+            routeId: rid,
+            color: (ROUTE_MAP[rid] && ROUTE_MAP[rid].color) || '#888',
+            short: (ROUTE_MAP[rid] && ROUTE_MAP[rid].short) || String(rid),
+            name: (ROUTE_MAP[rid] && ROUTE_MAP[rid].name) || ('Route ' + rid),
+          })),
+          ...(ctl ? { signals: ctl.signals, stops: ctl.stops } : {}),
+        };
+      });
+      _routeEdgesBuf = Buffer.from(JSON.stringify({ edges }));
+      _routeEdgesSig = sig;
+    }
+    return endMaybeGzip(res, 200, {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+    }, _routeEdgesBuf, { static: true });
   }
 
   // The real OSM road ways every route travels, feature id = OSM way id. The
@@ -2743,9 +2804,17 @@ async function handleApi(url, res, req) {
   // roads-geojson.js). Cached hard — it only changes when routes/roads rebuild.
   if (p === '/api/route-roads') {
     try {
-      const buf = fs.readFileSync(path.join(__dirname, 'data', 'osm', 'route-roads.geojson'));
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=86400' });
-      return res.end(buf);
+      const buf = routeRoadsBuf();
+      if (!buf) return json(res, { type: 'FeatureCollection', features: [] });
+      // Immutable-until-rebuild, so keep the long max-age — but route it through
+      // endMaybeGzip for an ETag (a revalidating client gets a ~200-byte 304
+      // instead of the whole file) and gzip. This is the largest payload the
+      // site serves and it was going out raw on every request.
+      return endMaybeGzip(res, 200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'public, max-age=86400',
+      }, buf, { static: true });
     } catch { return json(res, { type: 'FeatureCollection', features: [] }); }
   }
 
