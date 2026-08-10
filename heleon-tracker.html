@@ -1672,11 +1672,6 @@ function scheduleIdleWork(fn, timeoutMs) {
   }
 }
 const GEO_EMPTY = { type: 'FeatureCollection', features: [] };
-function geoSource(data, maxzoom) {
-  const src = { type: 'geojson', data: data || GEO_EMPTY };
-  if (maxzoom != null) src.maxzoom = maxzoom;
-  return src;
-}
 
 // ─── MAP INIT ─────────────────────────────────────────────────────────────────
 function initMap() {
@@ -3268,18 +3263,6 @@ function makeChevronIcon() {
   return x.getImageData(0, 0, s, s);
 }
 
-// Vessel heading chevron — same shape, larger and visible against the
-// navy circle fill. White SDF so icon-halo gives it a navy rim that pops
-// against the white-stroked circle.
-function makeVesselChevronIcon() {
-  const s = 48, c = document.createElement('canvas');
-  c.width = s; c.height = s;
-  const x = c.getContext('2d');
-  x.lineCap = 'round'; x.lineJoin = 'round';
-  x.strokeStyle = '#ffffff'; x.lineWidth = 11;
-  x.beginPath(); x.moveTo(11, 33); x.lineTo(24, 14); x.lineTo(37, 33); x.stroke();
-  return x.getImageData(0, 0, s, s);
-}
 
 // Aircraft triangle — points up (heading=0 = north). Filled triangle so it's
 // recognisably an aircraft silhouette and rotated to point along the true
@@ -4713,11 +4696,6 @@ function renderQuakeMarkers() {
       properties: { mag: q.mag, place: q.place, time: q.time, depthKm: q.depthKm },
     })),
   });
-}
-function focusQuake(id) {
-  const q = allQuakes.find(x => x.id === id);
-  if (!q || !mapReady) return;
-  map.flyTo({ center: [q.lon, q.lat], zoom: 10 });
 }
 function toggleQuakes() { quakesVisible = document.getElementById('showQuakes').checked; renderQuakeMarkers(); }
 function toggleLava() {
@@ -7486,8 +7464,6 @@ function wireRepeaterStreamControls(root) {
   syncStreamButtons();
 }
 
-function pickStream(url, name) { playStream(url, name || 'Live stream'); }
-function renderRadioList() { renderHawaiiBrowser(); }
 
 // Learned/observed stops (places buses repeatedly dwell that aren't official).
 let learnedStops = [];
@@ -7784,23 +7760,6 @@ function renderAheadArrows() {
 }
 
 const AHEAD_MAX_M = 1200; // only show the next ~1.2 km of route ahead of the bus
-// Truncate a [lon,lat] path to at most `maxM` metres, interpolating the final
-// point. Keeps the chevron stream to a single forward leg.
-function capPathLength(coords, maxM) {
-  const out = [coords[0]];
-  let acc = 0;
-  for (let i = 1; i < coords.length; i++) {
-    const segM = haversineKm(coords[i-1][1], coords[i-1][0], coords[i][1], coords[i][0]) * 1000;
-    if (acc + segM >= maxM) {
-      const t = (maxM - acc) / (segM || 1);
-      out.push([coords[i-1][0] + (coords[i][0] - coords[i-1][0]) * t,
-                coords[i-1][1] + (coords[i][1] - coords[i-1][1]) * t]);
-      return out;
-    }
-    out.push(coords[i]); acc += segM;
-  }
-  return out;
-}
 
 // Compass bearing (deg) from [lon,lat] a → b.
 function bearingDeg(a, b) {
@@ -7970,11 +7929,17 @@ function chevronSpacingM() {
 // from the bus's LIVE animated distance (getStart) + phase. Position and bearing
 // come from the route polyline so chevrons sit on the centerline pointing along
 // travel, flowing from where the bus icon currently is (not the GPS fix).
+const _aheadPool = [];
+const _aheadFC = { type: 'FeatureCollection', features: _aheadPool };
 function drawAheadAt(phaseM) {
   const src = map.getSource('ahead');
   if (!src) return;
   const spacing = chevronSpacingM();
-  const features = [];
+  // Runs every frame: mutate a pooled feature list in place instead of building a
+  // fresh object + two arrays per chevron, which made this the page's main source
+  // of GC pressure on mobile.
+  const pool = _aheadPool;
+  let n = 0;
   for (const s of aheadSegments) {
     const rc = s.rc;
     const startD = (s.getStart ? s.getStart() : s.start);
@@ -7982,11 +7947,18 @@ function drawAheadAt(phaseM) {
     for (let d = startD + (phaseM % spacing); d < endD; d += spacing) {
       const p = posAtDist(rc, d);
       const p2 = posAtDist(rc, Math.min(rc.total, d + 6)); // tiny lookahead for bearing
-      features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: p },
-        properties: { bearing: bearingDeg(p, p2), color: s.color } });
+      let f = pool[n];
+      if (!f) f = pool[n] = { type: 'Feature', geometry: { type: 'Point', coordinates: [0, 0] }, properties: {} };
+      f.geometry.coordinates[0] = p[0];
+      f.geometry.coordinates[1] = p[1];
+      f.properties.bearing = bearingDeg(p, p2);
+      f.properties.color = s.color;
+      n++;
     }
   }
-  src.setData({ type: 'FeatureCollection', features });
+  if (pool.length > n) pool.length = n;
+  _aheadFC.features = pool;
+  src.setData(_aheadFC);
 }
 
 // Flow: advance the sampling offset each frame so every chevron streams forward
@@ -8353,21 +8325,6 @@ const RIBBON_LAYER = 'route-ribbons-line';
 const RIBBON_STRIPE_PX = 3.2; // width of one stripe; a 3-route ribbon is ~3x this, tight with no gap
 const TRAIL_STRIPE_PX_BAKE = 2.6;
 
-// Per-stripe offset width (px) at a given zoom — matches the line-width ramp so
-// stripes stay tight (no gap, no overlap) at every zoom. Used to bake the
-// parallel offset into ribbon geometry (offsetPolyline).
-function ribbonStripePxAt(z, base = RIBBON_STRIPE_PX) {
-  const ramp = [[8, 2], [12, base], [15, 4.4], [18, 6]];
-  if (z <= ramp[0][0]) return ramp[0][1];
-  if (z >= ramp[ramp.length - 1][0]) return ramp[ramp.length - 1][1];
-  for (let i = 1; i < ramp.length; i++) {
-    if (z <= ramp[i][0]) {
-      const [z0, v0] = ramp[i - 1], [z1, v1] = ramp[i];
-      return v0 + (v1 - v0) * (z - z0) / (z1 - z0);
-    }
-  }
-  return base;
-}
 
 // ── Geometry helpers for smooth, unbroken ribbons ──
 // The old renderer drew each real-road EDGE as its own separate LineString.
@@ -8469,64 +8426,7 @@ function chainRouteEdges(edges) {
   return runs;
 }
 
-// Parallel-offset a polyline by `offsetPx` screen pixels (converted to degrees
-// at the given zoom), BAKED INTO THE GEOMETRY — offset lives in the coordinates
-// instead of MapLibre's per-feature line-offset. That lets us TAPER the offset
-// to zero over the last `taperN` vertices at each end, so where a run terminates
-// at a busy junction its lane pulls back onto the road centerline instead of
-// splaying out into the fan/blob that plagues naive constant-offset ribbons —
-// the standard trick professional transit renderers use to keep interchanges
-// clean. Mid-run the full offset holds, so parallel routes still ride as tight
-// bands. Offset is perpendicular to the local direction (right-hand normal).
-function offsetPolyline(coords, offsetPx, zoom, taperN = 6) {
-  if (coords.length < 2 || Math.abs(offsetPx) < 1e-6) return coords;
-  // Screen pixels -> degrees at this zoom/latitude (Web Mercator ground res).
-  const lat = coords[Math.floor(coords.length / 2)][1];
-  const metersPerPx = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoom);
-  const offMeters = offsetPx * metersPerPx;
-  const mLat = 111320, mLon = mLat * Math.cos(lat * Math.PI / 180);
-  const out = [];
-  const n = coords.length;
-  for (let i = 0; i < n; i++) {
-    // Local tangent from neighbor vertices (averaged at interior points).
-    const p = coords[Math.max(0, i - 1)], q = coords[Math.min(n - 1, i + 1)];
-    let tx = (q[0] - p[0]) * mLon, ty = (q[1] - p[1]) * mLat;
-    const tl = Math.hypot(tx, ty) || 1;
-    tx /= tl; ty /= tl;
-    // Right-hand normal.
-    const nx = ty, ny = -tx;
-    // Taper: full offset in the middle, easing to 0 within taperN of each end.
-    const edgeDist = Math.min(i, n - 1 - i);
-    const taper = taperN > 0 ? Math.min(1, edgeDist / taperN) : 1;
-    const off = offMeters * taper;
-    out.push([
-      coords[i][0] + (nx * off) / mLon,
-      coords[i][1] + (ny * off) / mLat,
-    ]);
-  }
-  return out;
-}
 
-// Round the corners of a polyline with a Chaikin-style corner cut, giving each
-// bend a small radius so turns look professional instead of hard-angled. Two
-// passes is plenty for a transit-map feel; endpoints are preserved so runs
-// still meet their neighbors exactly.
-function smoothPolyline(coords, passes = 3) {
-  if (coords.length < 3) return coords;
-  let pts = coords;
-  for (let p = 0; p < passes; p++) {
-    const out = [pts[0]];
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i], b = pts[i + 1];
-      // Cut each segment at 25% and 75% — classic Chaikin.
-      out.push([a[0] + (b[0] - a[0]) * 0.25, a[1] + (b[1] - a[1]) * 0.25]);
-      out.push([a[0] + (b[0] - a[0]) * 0.75, a[1] + (b[1] - a[1]) * 0.75]);
-    }
-    out.push(pts[pts.length - 1]);
-    pts = out;
-  }
-  return pts;
-}
 
 // The self-hosted real-road source (feature id = OSM way id) and its state.
 const ROAD_SRC = 'route-roads';
@@ -8919,38 +8819,6 @@ function renderTrails() {
   if (dotSrc) dotSrc.setData({ type: 'FeatureCollection', features: dotFeatures });
 }
 
-// ─── POLYLINE DECODER ─────────────────────────────────────────────────────────
-// Douglas–Peucker simplification of a [lon,lat] polyline. `tol` is in degrees
-// (~0.0001° ≈ 11 m). Removes near-collinear/near-duplicate vertices so offset
-// rendering doesn't fan out at corners.
-function simplifyPath(pts, tol) {
-  if (pts.length < 3) return pts;
-  const sqTol = tol * tol;
-  const keep = new Array(pts.length).fill(false);
-  keep[0] = keep[pts.length - 1] = true;
-  const stack = [[0, pts.length - 1]];
-  const segDistSq = (p, a, b) => {
-    let x = a[0], y = a[1], dx = b[0] - x, dy = b[1] - y;
-    if (dx || dy) {
-      const t = ((p[0] - x) * dx + (p[1] - y) * dy) / (dx * dx + dy * dy);
-      if (t > 1) { x = b[0]; y = b[1]; } else if (t > 0) { x += dx * t; y += dy * t; }
-    }
-    dx = p[0] - x; dy = p[1] - y; return dx * dx + dy * dy;
-  };
-  while (stack.length) {
-    const [first, last] = stack.pop();
-    let maxSq = 0, idx = -1;
-    for (let i = first + 1; i < last; i++) {
-      const d = segDistSq(pts[i], pts[first], pts[last]);
-      if (d > maxSq) { maxSq = d; idx = i; }
-    }
-    if (maxSq > sqTol && idx !== -1) {
-      keep[idx] = true;
-      stack.push([first, idx], [idx, last]);
-    }
-  }
-  return pts.filter((_, i) => keep[i]);
-}
 
 function decodePolyline(encoded) {
   // Neighbor-island / TheBus shapes may already be [[lon,lat],…] arrays.
@@ -9059,12 +8927,6 @@ function isLight(hex) {
 // Track which cards are expanded
 const expandedCards = new Set();
 
-function toggleCardExpand(vid, e) {
-  e.stopPropagation();
-  if (expandedCards.has(vid)) expandedCards.delete(vid);
-  else expandedCards.add(vid);
-  renderVehicleList();
-}
 
 function onTimeHtml(sl) {
   if (!sl) return '';
@@ -10003,12 +9865,16 @@ function renderMarkers() {
         showBusTooltip(vdata, e.clientX, e.clientY);
         const h = (markers[mk] && (markers[mk].headingUnwrapped ?? markers[mk].heading)) ?? 0;
         inner.style.transform = `rotate(${h}deg) scale(1.25)`;
+        if (markers[mk]) markers[mk]._rotDeg = null; // hover scale ≠ plain rotate
+
       };
       inner.onmousemove = e => { if (mapGesturing()) return; positionTooltip(e.clientX, e.clientY); };
       inner.onmouseleave = () => {
         hideBusTooltip();
         const h = (markers[mk] && (markers[mk].headingUnwrapped ?? markers[mk].heading)) ?? 0;
         inner.style.transform = `rotate(${h}deg) scale(1)`;
+        if (markers[mk]) markers[mk]._rotDeg = null; // restore plain-rotate tracking
+
       };
     }
 
@@ -10101,6 +9967,9 @@ function renderMarkers() {
       m.headingUnwrapped = prevU + bearingDelta(prevU % 360, heading);
       m.el.classList.add('bus-marker');
       m.el.innerHTML = makeBusIcon(v.routeColor, v.routeShort, m.headingUnwrapped, loadFrac, v.weather, v.name);
+      // innerHTML replaced the .bus-rot node — drop the cached handle and the
+      // last-written rotation so the forced re-align below actually writes.
+      m._rot = null; m._rotDeg = null;
       applyAgeOpacity(m.el, v);
       wire(m.el, v);
       // Force road-aligned nose after rebuild (don't restore a stale transform).
@@ -10227,26 +10096,6 @@ function applyAgeOpacity(el, v) {
   el.style.filter = m > 30 ? 'grayscale(0.5)' : '';
 }
 
-// Velocity (m/s, east/north components) implied by moving from a→b over dt sec.
-function displacementMps(a, b, dt) {
-  if (!a || !b) return { vx: 0, vy: 0 };
-  const mPerDegLat = 111320, mPerDegLon = mPerDegLat * Math.cos(b[1] * Math.PI / 180);
-  return { vx: (b[0] - a[0]) * mPerDegLon / dt, vy: (b[1] - a[1]) * mPerDegLat / dt };
-}
-// Advance a [lon,lat] by a velocity {vx,vy} m/s for `secs` seconds.
-function stepLatLon(p, vel, secs) {
-  const mPerDegLat = 111320, mPerDegLon = mPerDegLat * Math.cos(p[1] * Math.PI / 180) || 1e-6;
-  return [p[0] + vel.vx * secs / mPerDegLon, p[1] + vel.vy * secs / mPerDegLat];
-}
-// Signed distance (m) of point `pred` projected onto the actual travel direction
-// (origin→truth): positive when the prediction lagged behind the truth.
-function signedAlong(pred, truth, origin) {
-  const mPerDegLat = 111320, mPerDegLon = mPerDegLat * Math.cos(truth[1] * Math.PI / 180);
-  const dirx = (truth[0] - origin[0]) * mPerDegLon, diry = (truth[1] - origin[1]) * mPerDegLat;
-  const len = Math.hypot(dirx, diry) || 1;
-  const ex = (truth[0] - pred[0]) * mPerDegLon, ey = (truth[1] - pred[1]) * mPerDegLat;
-  return (ex * dirx + ey * diry) / len;
-}
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 // ── Route-snapped motion helpers ──
@@ -10436,22 +10285,35 @@ let markerAnimRAF = null;
 let markerLastFrame = 0;
 const PACE_LEAD_CAP_M = 420; // ~allow ~30 s of coasting at city speed past last fix
 const PACE_MIN_GLIDE = 0.35; // m/s — below this, treat as stopped
+// Cached handle to the rotating inner node. innerHTML is rebuilt on every poll,
+// which throws the old node away — so this is re-primed there, never in the
+// animation frame. busRot(m) must stay allocation- and query-free: it runs up to
+// twice per bus per frame.
+function busRot(m) {
+  let inner = m._rot;
+  if (inner && inner.isConnected) return inner;
+  inner = m.el ? m.el.querySelector('.bus-rot') : null;
+  m._rot = inner;
+  return inner;
+}
 function applyBusHeading(m, bearing) {
   if (bearing == null) return;
   const prev = m.headingUnwrapped ?? bearing;
   const next = prev + bearingDelta(prev % 360, bearing);
   m.heading = ((bearing % 360) + 360) % 360;
   if (Math.abs(next - prev) <= 0.15) {
-    // Still sync the DOM in case hover/scale left a stale transform.
-    const inner = m.el && m.el.querySelector('.bus-rot');
-    if (inner && !inner.style.transform.includes(`rotate(${next}deg)`)) {
-      inner.style.transform = `rotate(${next}deg)`;
+    // Still sync the DOM in case hover/scale left a stale transform. Compare
+    // against the last value we wrote rather than reading back style.transform
+    // (a string read + substring scan on every bus, every frame).
+    if (m._rotDeg !== next) {
+      const inner = busRot(m);
+      if (inner) { inner.style.transform = `rotate(${next}deg)`; m._rotDeg = next; }
     }
     return;
   }
   m.headingUnwrapped = next;
-  const inner = m.el && m.el.querySelector('.bus-rot');
-  if (inner) inner.style.transform = `rotate(${next}deg)`;
+  const inner = busRot(m);
+  if (inner) { inner.style.transform = `rotate(${next}deg)`; m._rotDeg = next; }
 }
 function startMarkerAnim() {
   if (markerAnimRAF) return;
@@ -10484,16 +10346,21 @@ function startMarkerAnim() {
       const pace = m.pace || 0;
       const sign = (m.alongSign === -1) ? -1 : 1;
 
-      // Always lock nose to the road tangent at the current glide point — even
-      // when stopped — so buses never sit diagonal or sideways on the pavement.
-      const rb = roadBearingAt(m.rc, m.curDist);
-      if (rb != null) {
-        const nose = roadTravelBearing(rb, sign);
-        m.travelBearing = nose;
-        applyBusHeading(m, nose);
+      // Lock the nose to the road tangent — even when stopped — so buses never
+      // sit diagonal or sideways on the pavement. When the bus is about to
+      // advance below, that step re-derives the tangent at the NEW position, so
+      // doing it here too would walk the polyline twice per bus per frame and
+      // write a transform that's immediately overwritten. Only pay for it on the
+      // frames where the bus holds still.
+      if (pace < PACE_MIN_GLIDE) {
+        const rb = roadBearingAt(m.rc, m.curDist);
+        if (rb != null) {
+          const nose = roadTravelBearing(rb, sign);
+          m.travelBearing = nose;
+          applyBusHeading(m, nose);
+        }
+        continue;
       }
-
-      if (pace < PACE_MIN_GLIDE) continue;
 
       // Dead-reckon along the road at cruise pace (forward or reverse along the
       // polyline). Cap lead so a missed poll doesn't fling the bus kilometers.
@@ -10511,12 +10378,14 @@ function startMarkerAnim() {
         const lead = (m.curDist - m.anchorDist) * sign;
         if (lead > leadCap) m.curDist = m.anchorDist + sign * leadCap;
         m.marker.setLngLat(posAtDist(m.rc, m.curDist));
-        const rb2 = roadBearingAt(m.rc, m.curDist);
-        if (rb2 != null) {
-          const nose = roadTravelBearing(rb2, sign);
-          m.travelBearing = nose;
-          applyBusHeading(m, nose);
-        }
+      }
+      // Single tangent lock per frame, at wherever the bus ended up — covers both
+      // the stepped case and a creep too small to move it.
+      const rb2 = roadBearingAt(m.rc, m.curDist);
+      if (rb2 != null) {
+        const nose = roadTravelBearing(rb2, sign);
+        m.travelBearing = nose;
+        applyBusHeading(m, nose);
       }
 
       const leadNow = (m.curDist - m.anchorDist) * sign;
