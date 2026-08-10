@@ -2370,6 +2370,310 @@ function json(res, data, status = 200) {
   endMaybeGzip(res, status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, buf);
 }
 
+// Stopline (per-vehicle stop ETAs + next stop + schedule adherence). Extracted
+// from the /api/stopline handler so the batch endpoint can reuse it verbatim
+// instead of the client making one HTTP round-trip per bus.
+async function computeStopline(vid) {
+    // Memoize the (fairly heavy) stopline result briefly — many clients ask for
+    // the same vehicle every 30 s, and a bus's stop predictions don't change
+    // meaningfully within ~8 s. Keyed by vehicle + the latest poll timestamp.
+    const memoKey = vid + ':' + lastPollStats.ts;
+    const cached = stoplineMemo.get(memoKey);
+    if (cached && Date.now() - cached.t < 8000) return cached.data;
+
+    const v = latestVehicles.find(x => x.id === vid);
+    if (!v) return { error: 'vehicle not found', notFound: true };
+    const stops = await ensureStops(v.routeId);
+    if (!stops.length) return { stops: [], vehicle: v };
+
+    const speedKmh = (v.speed || 0) * 1.60934;
+
+    // Historical: avg seconds this vehicle (or all on route) takes to reach each stop distance band
+    // We look at pings for this vehicle over last 7 days and compute avg speed by distance-from-stop
+    const histRows = dbAll(
+      `SELECT lat, lon, speed, ts FROM pings WHERE route_id=? AND ts > ? AND speed > 0 ORDER BY ts`,
+      [v.routeId, Date.now() - 7 * 86400000]
+    );
+
+    // Compute average speed from history
+    const histAvgSpeed = histRows.length
+      ? (histRows.reduce((s, r) => s + r.speed, 0) / histRows.length) * 1.60934
+      : speedKmh;
+
+    // Official agency predictions for this vehicle's trip (GTFS-RT TripUpdates),
+    // keyed by stop_id → { ms, seq }. This is the headline ETA when present.
+    const officialStops = (v.tripId && tripUpdateIndex[v.tripId]) || {};
+    const nowMsEta = Date.now();
+
+    // The transformer's input depends only on the bus (speed) + route, not the
+    // individual stop, so run the forward pass ONCE here rather than per stop.
+    // Each of its 12 tokens encodes "the k-th stop ahead" (k = token index + 1),
+    // and each token has its own output head — so the residual for the k-th
+    // stop ahead is `seqOut[k]`. The stop's rank-ahead is determined by
+    // distance (clamped to the 5 trained heads).
+    // Schedule delta uses the NEAREST stop (the one the bus is currently
+    // approaching) as the reference for "ahead/behind schedule right now" —
+    // matches the same feature trainFromHistory now actually populates.
+    const nearestStopIdx = stops.reduce((mi, s, i) =>
+      haversineKm(v.lat, v.lon, s.lat, s.lon) < haversineKm(v.lat, v.lon, stops[mi].lat, stops[mi].lon) ? i : mi, 0);
+    const liveSchedDeltaSec = scheduleDeltaAt(v.routeId, stops[nearestStopIdx].id, nowMsEta);
+    const fwdRes = TX.forward(buildTokenSequence(v, 0, liveSchedDeltaSec, v.routeId, nowMsEta));
+    const seqOut = fwdRes.tokenOut; // length 12; first 5 are the trained heads
+    // Rank stops by distance to map them to "n stops ahead" → head index.
+    const distRank = {};
+    [...stops].map((s, i) => ({ i, d: haversineKm(v.lat, v.lon, s.lat, s.lon) }))
+              .sort((a, b) => a.d - b.d)
+              .forEach((e, rank) => { distRank[e.i] = rank; });
+
+    // Find closest stop to figure out which direction/sequence we're travelling
+    const stopETAs = stops.map((stop, i) => {
+      const distKm = haversineKm(v.lat, v.lon, stop.lat, stop.lon);
+      const etaSpeed = speedKmh > 1 ? (distKm / speedKmh) * 60 : null;
+      const etaHist  = histAvgSpeed > 1 ? (distKm / histAvgSpeed) * 60 : etaSpeed;
+      // Official predicted arrival (minutes from now), if the agency feed has it.
+      const off = officialStops[String(stop.id)] || officialStops[stop.id];
+      const etaOfficial = off ? Math.round(((off.ms - nowMsEta) / 60000) * 10) / 10 : null;
+
+      // Model correction: use the output head for this stop's rank ahead of the bus.
+      const head = Math.min(distRank[i] || 0, 4); // 5 trained heads (0..4)
+      const correction = seqOut[head];
+      const etaSeq = etaHist != null ? Math.max(0, etaHist + correction) : null;
+
+      // Headline ETA: prefer the agency's official prediction; fall back to the
+      // model-corrected estimate, then plain historical/speed estimates.
+      let etaMin, etaSource;
+      if (etaOfficial != null)      { etaMin = etaOfficial; etaSource = 'official'; }
+      else if (etaSeq != null)      { etaMin = Math.round(etaSeq * 10) / 10; etaSource = 'model'; }
+      else if (etaHist != null)     { etaMin = Math.round(etaHist * 10) / 10; etaSource = 'historical'; }
+      else if (etaSpeed != null)    { etaMin = Math.round(etaSpeed * 10) / 10; etaSource = 'speed'; }
+      else                          { etaMin = null; etaSource = null; }
+
+      return {
+        stopId: stop.id, name: stop.name, stopCode: stop.stopCode,
+        lat: stop.lat, lon: stop.lon, seq: stop.seq,
+        distKm: Math.round(distKm * 1000) / 1000,
+        etaMin, etaSource,
+        etaMinOfficial: etaOfficial,
+        etaMinSpeed: etaSpeed !== null ? Math.round(etaSpeed * 10) / 10 : null,
+        etaMinHist:  etaHist  !== null ? Math.round(etaHist  * 10) / 10 : null,
+        etaMinSeq:   etaSeq != null ? Math.round(etaSeq * 10) / 10 : null,
+        seqCorrection: Math.round(correction * 10) / 10,
+        histSampleCount: histRows.length,
+        histAvgSpeedMph: Math.round(histAvgSpeed / 1.60934 * 10) / 10,
+      };
+    });
+
+    // Determine next stop: the stop the bus is actually driving TOWARD.
+    // Strategy: find the two closest stops. If they're adjacent in sequence,
+    // the bus is between them — the higher-seq one is "next".
+    // If not adjacent (loop route), use the bus's last-passed stop as a reference
+    // and pick the closest stop whose seq is ahead of (or wrapping from) that.
+    const sorted = [...stopETAs].sort((a, b) => a.distKm - b.distKm);
+    let nextStop = sorted[0];
+
+    // Authoritative next stop from the agency feed: the upcoming stop in this
+    // trip's TripUpdates with the smallest still-in-the-future predicted arrival.
+    // You can't be heading to a stop you haven't reached, so this beats geometry.
+    let officialNext = null;
+    if (Object.keys(officialStops).length) {
+      // The next stop is the one the agency predicts the SOONEST arrival for —
+      // i.e. the smallest still-in-the-future predicted time. (Lowest sequence is
+      // wrong: the feed predicts the whole trip, and on a route that revisits low
+      // sequence numbers the soonest-arriving stop is the real next one, not the
+      // numerically-lowest.)
+      let bestMs = Infinity;
+      for (const s of stopETAs) {
+        // NOTE: stopETAs entries carry `stopId` (not `id`).
+        const off = officialStops[String(s.stopId)] || officialStops[s.stopId];
+        if (!off || off.ms <= nowMsEta - 30000) continue; // already passed
+        if (off.ms < bestMs) { bestMs = off.ms; officialNext = s; }
+      }
+    }
+
+    if (officialNext) {
+      nextStop = officialNext;
+    } else {
+      // No agency feed for this trip — derive the next stop from geometry +
+      // sequence so we never highlight a stop the bus hasn't reached. Stops are
+      // ordered by seq. Find the nearest stop, then decide whether the bus has
+      // already passed it (closer to its successor) or is still approaching it.
+      // "Next" is the first stop in sequence at or ahead of the bus's progress.
+      const bySeq = [...stopETAs].sort((a, b) => a.seq - b.seq);
+      // Index of the geometrically nearest stop within the seq-ordered list.
+      let nearIdx = 0, nearDist = Infinity;
+      bySeq.forEach((s, i) => { if (s.distKm < nearDist) { nearDist = s.distKm; nearIdx = i; } });
+      const near = bySeq[nearIdx];
+      const prev = bySeq[nearIdx - 1];
+      const succ = bySeq[nearIdx + 1];
+      // Have we passed `near`? We have if we're now closer to its successor than
+      // the successor is to `near` minus our distance — i.e. projecting our
+      // position onto the near→succ segment puts us past `near`. Simple, robust
+      // proxy: compare distance-to-prev vs distance-to-succ.
+      let next;
+      if (succ && (!prev || (prev && near.distKm > 0.05))) {
+        // If we're closer to the successor's side, the bus has passed `near`.
+        const dSucc = succ ? succ.distKm : Infinity;
+        const dPrev = prev ? prev.distKm : Infinity;
+        if (dSucc < dPrev && near.distKm > 0.08) next = succ; else next = near;
+      } else {
+        next = near;
+      }
+      // Honour the last stop we actually recorded an arrival at, if more advanced.
+      const lastArr = dbGet(
+        `SELECT stop_seq FROM stop_arrivals WHERE vehicle_id=? ORDER BY ts DESC LIMIT 1`, [vid]);
+      const lastSeq = (vehicleLastStopIdx[vid] && vehicleLastStopIdx[vid].stopSeq != null)
+        ? vehicleLastStopIdx[vid].stopSeq
+        : (lastArr && lastArr.stop_seq != null ? lastArr.stop_seq : null);
+      if (lastSeq != null && next.seq <= lastSeq) {
+        const ahead = bySeq.find(s => s.seq > lastSeq);
+        if (ahead) next = ahead;
+      }
+      nextStop = next || sorted[0];
+    }
+
+    // ── GTFS scheduled times ──────────────────────────────────────────────────
+    // For each stop, find the trip passing through it closest to the current time.
+    // Buses are scheduled throughout the day — different trips hit different stops.
+    const nowDate = new Date();
+    const nowSec = nowDate.getHours() * 3600 + nowDate.getMinutes() * 60 + nowDate.getSeconds();
+    const dayOfWeek = nowDate.getDay();
+    const validServices = new Set();
+    validServices.add('225-1');
+    if (dayOfWeek >= 1 && dayOfWeek <= 6) validServices.add('225-2');
+    if (dayOfWeek >= 1 && dayOfWeek <= 5) validServices.add('225-3');
+    if (dayOfWeek === 0) validServices.add('225-4');
+
+    // Load all valid trip times for this route once: stop_id -> [{arrival_sec, trip_id}]
+    const allTripStops = dbAll(
+      `SELECT stop_id, trip_id, arrival_sec FROM gtfs_stop_times WHERE route_id=?`,
+      [v.routeId]
+    );
+    const tripStopGroups = {}; // stop_id -> [{sec, trip_id}]
+    const tripServices = {}; // trip_id -> service_id (lookup)
+    dbAll(`SELECT trip_id, service_id FROM gtfs_stop_times WHERE route_id=? GROUP BY trip_id`,
+      [v.routeId]).forEach(t => { tripServices[t.trip_id] = t.service_id; });
+
+    allTripStops.forEach(r => {
+      if (!validServices.has(tripServices[r.trip_id])) return;
+      if (!tripStopGroups[r.stop_id]) tripStopGroups[r.stop_id] = [];
+      tripStopGroups[r.stop_id].push({ sec: r.arrival_sec, trip_id: r.trip_id });
+    });
+
+    // For each stop, find scheduled_sec of the trip whose time is closest to now
+    // (within ±2 hours — outside that we have no scheduled service today)
+    const scheduledMap = {};
+    const scheduledTripId = {}; // track which trip matched
+    stopETAs.forEach(stop => {
+      const candidates = tripStopGroups[stop.stopId];
+      if (!candidates || !candidates.length) return;
+      let best = null, bestDiff = Infinity;
+      for (const c of candidates) {
+        // Treat times >24h as next-day (rare here, but handle)
+        const sec = c.sec % 86400;
+        const diff = Math.abs(sec - nowSec);
+        if (diff < bestDiff) { bestDiff = diff; best = c; }
+      }
+      if (best && bestDiff < 7200) { // within 2 hours
+        scheduledMap[stop.stopId] = best.sec;
+        scheduledTripId[stop.stopId] = best.trip_id;
+      }
+    });
+
+    // Exact trip schedule: GTFS-RT gives us the actual trip_id, so use that
+    // trip's own scheduled stop times instead of the nearest-time heuristic.
+    if (v.tripId) {
+      dbAll(`SELECT stop_id, arrival_sec FROM gtfs_stop_times WHERE trip_id=?`, [v.tripId])
+        .forEach(r => { scheduledMap[r.stop_id] = r.arrival_sec; scheduledTripId[r.stop_id] = v.tripId; });
+    }
+
+    // Enrich each stop with historical typical arrival time from stop_arrivals
+    // Group all recorded arrivals by hour-of-day, compute mean minute-of-hour & stddev
+    const nowMs = Date.now();
+    const nowHour = nowDate.getHours();
+    stopETAs.forEach(stop => {
+      // Scheduled time from GTFS
+      if (scheduledMap[stop.stopId] !== undefined) {
+        stop.scheduledSec = scheduledMap[stop.stopId];
+        // Convert to today's absolute ms timestamp
+        const todayMidnight = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate()).getTime();
+        stop.scheduledMs = todayMidnight + stop.scheduledSec * 1000;
+      } else {
+        stop.scheduledSec = null;
+        stop.scheduledMs = null;
+      }
+    });
+    // ── Typical arrival: bucket by the scheduled time-of-day, not current hour ──
+    // For each stop, take arrivals within ±30min of its scheduled_sec for this trip.
+    // That way an afternoon bus's "typical" reflects afternoon arrivals, not all-day average.
+    stopETAs.forEach(stop => {
+      const schedSec = scheduledMap[stop.stopId];
+      if (schedSec == null) { stop.typicalMin = null; stop.typicalStddev = null; stop.typicalN = 0; return; }
+      const targetMin = Math.floor(schedSec / 60);
+      // Pull last 500 arrivals and filter to those within ±30min of target minute-of-day
+      const arrivals = dbAll(
+        `SELECT ts FROM stop_arrivals WHERE stop_id=? AND route_id=? ORDER BY ts DESC LIMIT 500`,
+        [stop.stopId, v.routeId]
+      );
+      const matched = [];
+      arrivals.forEach(r => {
+        const d = new Date(r.ts);
+        const m = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+        const diff = Math.min(Math.abs(m - targetMin), 1440 - Math.abs(m - targetMin));
+        if (diff <= 30) matched.push(m);
+      });
+      if (matched.length < 1) { stop.typicalMin = null; stop.typicalStddev = null; stop.typicalN = 0; return; }
+      const mean = matched.reduce((a,b) => a+b, 0) / matched.length;
+      const variance = matched.length > 1
+        ? matched.reduce((a,b) => a+(b-mean)**2, 0) / matched.length : 0;
+      const stddev = Math.sqrt(variance);
+      // Convert mean to minute-of-hour (since `matched` is in absolute minutes 0-1440)
+      const meanMinOfHour = mean % 60;
+      stop.typicalMin = Math.round(meanMinOfHour * 10) / 10;
+      stop.typicalStddev = Math.round(stddev * 10) / 10;
+      stop.typicalN = matched.length;
+      stop.typicalHour = Math.floor(mean / 60); // remember which hour the typical is from
+    });
+
+    // ── Schedule adherence ────────────────────────────────────────────────────
+    // Compare the predicted arrival at the next stop with its scheduled time.
+    // delayMin > 0 = behind schedule (late); < 0 = ahead (early).
+    // Only trust schedule adherence when we know the bus's real trip AND the
+    // next-stop arrival is the agency's official prediction — otherwise the
+    // scheduled-time match is a guess and the delta is meaningless.
+    let scheduleDelayMin = null, scheduleSuspect = false;
+    if (nextStop && v.tripId && !v.unassigned &&
+        nextStop.scheduledMs != null && nextStop.etaMinOfficial != null) {
+      const predictedArrivalMs = nowMs + nextStop.etaMinOfficial * 60000;
+      scheduleDelayMin = Math.round(((predictedArrivalMs - nextStop.scheduledMs) / 60000) * 10) / 10;
+      // A delay beyond ~45 min on these short routes almost always means the
+      // static GTFS schedule for this trip_id doesn't line up with the realtime
+      // feed's trip (versioning drift), not a genuinely hour-late bus. Trust the
+      // official live ETA, but don't display a misleading adherence number.
+      if (Math.abs(scheduleDelayMin) > 45) { scheduleSuspect = true; scheduleDelayMin = null; }
+    }
+
+    const payload = {
+      vehicle_id: vid,
+      route: v.routeName,
+      routeShort: v.routeShort,
+      routeColor: v.routeColor,
+      tripId: v.tripId || null,
+      headsign: v.headsign || null,
+      speed_mph: v.speed,
+      hist_avg_mph: Math.round(histAvgSpeed / 1.60934 * 10) / 10,
+      hist_samples: histRows.length,
+      next_stop: nextStop,
+      scheduleDelayMin,            // +late / −early, null if unknown
+      scheduleSuspect,             // true when delay is implausible (>2h)
+      etaPrimarySource: nextStop ? nextStop.etaSource : null,
+      stops: stopETAs,   // in route sequence order
+      serverTs: nowMs,
+    };
+    stoplineMemo.set(memoKey, { t: Date.now(), data: payload });
+    if (stoplineMemo.size > 200) stoplineMemo.clear(); // bound the cache
+    return payload;
+}
+
 async function handleApi(url, res, req) {
   const p = url.pathname;
   const q = url.searchParams;
@@ -3083,305 +3387,25 @@ async function handleApi(url, res, req) {
   // Rich ETA with historical performance
   // Returns stops in order, each with: distKm, etaMinSpeed (pure speed), etaMinHistorical (avg from pings)
   if (p === '/api/stopline') {
-    const vid = parseInt(q.get('vehicle_id'));
-    // Memoize the (fairly heavy) stopline result briefly — many clients ask for
-    // the same vehicle every 30 s, and a bus's stop predictions don't change
-    // meaningfully within ~8 s. Keyed by vehicle + the latest poll timestamp.
-    const memoKey = vid + ':' + lastPollStats.ts;
-    const cached = stoplineMemo.get(memoKey);
-    if (cached && Date.now() - cached.t < 8000) return json(res, cached.data);
+    const out = await computeStopline(parseInt(q.get('vehicle_id')));
+    if (out && out.notFound) return json(res, { error: out.error }, 404);
+    return json(res, out);
+  }
 
-    const v = latestVehicles.find(x => x.id === vid);
-    if (!v) return json(res, { error: 'vehicle not found' }, 404);
-    const stops = await ensureStops(v.routeId);
-    if (!stops.length) return json(res, { stops: [], vehicle: v });
-
-    const speedKmh = (v.speed || 0) * 1.60934;
-
-    // Historical: avg seconds this vehicle (or all on route) takes to reach each stop distance band
-    // We look at pings for this vehicle over last 7 days and compute avg speed by distance-from-stop
-    const histRows = dbAll(
-      `SELECT lat, lon, speed, ts FROM pings WHERE route_id=? AND ts > ? AND speed > 0 ORDER BY ts`,
-      [v.routeId, Date.now() - 7 * 86400000]
-    );
-
-    // Compute average speed from history
-    const histAvgSpeed = histRows.length
-      ? (histRows.reduce((s, r) => s + r.speed, 0) / histRows.length) * 1.60934
-      : speedKmh;
-
-    // Official agency predictions for this vehicle's trip (GTFS-RT TripUpdates),
-    // keyed by stop_id → { ms, seq }. This is the headline ETA when present.
-    const officialStops = (v.tripId && tripUpdateIndex[v.tripId]) || {};
-    const nowMsEta = Date.now();
-
-    // The transformer's input depends only on the bus (speed) + route, not the
-    // individual stop, so run the forward pass ONCE here rather than per stop.
-    // Each of its 12 tokens encodes "the k-th stop ahead" (k = token index + 1),
-    // and each token has its own output head — so the residual for the k-th
-    // stop ahead is `seqOut[k]`. The stop's rank-ahead is determined by
-    // distance (clamped to the 5 trained heads).
-    // Schedule delta uses the NEAREST stop (the one the bus is currently
-    // approaching) as the reference for "ahead/behind schedule right now" —
-    // matches the same feature trainFromHistory now actually populates.
-    const nearestStopIdx = stops.reduce((mi, s, i) =>
-      haversineKm(v.lat, v.lon, s.lat, s.lon) < haversineKm(v.lat, v.lon, stops[mi].lat, stops[mi].lon) ? i : mi, 0);
-    const liveSchedDeltaSec = scheduleDeltaAt(v.routeId, stops[nearestStopIdx].id, nowMsEta);
-    const fwdRes = TX.forward(buildTokenSequence(v, 0, liveSchedDeltaSec, v.routeId, nowMsEta));
-    const seqOut = fwdRes.tokenOut; // length 12; first 5 are the trained heads
-    // Rank stops by distance to map them to "n stops ahead" → head index.
-    const distRank = {};
-    [...stops].map((s, i) => ({ i, d: haversineKm(v.lat, v.lon, s.lat, s.lon) }))
-              .sort((a, b) => a.d - b.d)
-              .forEach((e, rank) => { distRank[e.i] = rank; });
-
-    // Find closest stop to figure out which direction/sequence we're travelling
-    const stopETAs = stops.map((stop, i) => {
-      const distKm = haversineKm(v.lat, v.lon, stop.lat, stop.lon);
-      const etaSpeed = speedKmh > 1 ? (distKm / speedKmh) * 60 : null;
-      const etaHist  = histAvgSpeed > 1 ? (distKm / histAvgSpeed) * 60 : etaSpeed;
-      // Official predicted arrival (minutes from now), if the agency feed has it.
-      const off = officialStops[String(stop.id)] || officialStops[stop.id];
-      const etaOfficial = off ? Math.round(((off.ms - nowMsEta) / 60000) * 10) / 10 : null;
-
-      // Model correction: use the output head for this stop's rank ahead of the bus.
-      const head = Math.min(distRank[i] || 0, 4); // 5 trained heads (0..4)
-      const correction = seqOut[head];
-      const etaSeq = etaHist != null ? Math.max(0, etaHist + correction) : null;
-
-      // Headline ETA: prefer the agency's official prediction; fall back to the
-      // model-corrected estimate, then plain historical/speed estimates.
-      let etaMin, etaSource;
-      if (etaOfficial != null)      { etaMin = etaOfficial; etaSource = 'official'; }
-      else if (etaSeq != null)      { etaMin = Math.round(etaSeq * 10) / 10; etaSource = 'model'; }
-      else if (etaHist != null)     { etaMin = Math.round(etaHist * 10) / 10; etaSource = 'historical'; }
-      else if (etaSpeed != null)    { etaMin = Math.round(etaSpeed * 10) / 10; etaSource = 'speed'; }
-      else                          { etaMin = null; etaSource = null; }
-
-      return {
-        stopId: stop.id, name: stop.name, stopCode: stop.stopCode,
-        lat: stop.lat, lon: stop.lon, seq: stop.seq,
-        distKm: Math.round(distKm * 1000) / 1000,
-        etaMin, etaSource,
-        etaMinOfficial: etaOfficial,
-        etaMinSpeed: etaSpeed !== null ? Math.round(etaSpeed * 10) / 10 : null,
-        etaMinHist:  etaHist  !== null ? Math.round(etaHist  * 10) / 10 : null,
-        etaMinSeq:   etaSeq != null ? Math.round(etaSeq * 10) / 10 : null,
-        seqCorrection: Math.round(correction * 10) / 10,
-        histSampleCount: histRows.length,
-        histAvgSpeedMph: Math.round(histAvgSpeed / 1.60934 * 10) / 10,
-      };
-    });
-
-    // Determine next stop: the stop the bus is actually driving TOWARD.
-    // Strategy: find the two closest stops. If they're adjacent in sequence,
-    // the bus is between them — the higher-seq one is "next".
-    // If not adjacent (loop route), use the bus's last-passed stop as a reference
-    // and pick the closest stop whose seq is ahead of (or wrapping from) that.
-    const sorted = [...stopETAs].sort((a, b) => a.distKm - b.distKm);
-    let nextStop = sorted[0];
-
-    // Authoritative next stop from the agency feed: the upcoming stop in this
-    // trip's TripUpdates with the smallest still-in-the-future predicted arrival.
-    // You can't be heading to a stop you haven't reached, so this beats geometry.
-    let officialNext = null;
-    if (Object.keys(officialStops).length) {
-      // The next stop is the one the agency predicts the SOONEST arrival for —
-      // i.e. the smallest still-in-the-future predicted time. (Lowest sequence is
-      // wrong: the feed predicts the whole trip, and on a route that revisits low
-      // sequence numbers the soonest-arriving stop is the real next one, not the
-      // numerically-lowest.)
-      let bestMs = Infinity;
-      for (const s of stopETAs) {
-        // NOTE: stopETAs entries carry `stopId` (not `id`).
-        const off = officialStops[String(s.stopId)] || officialStops[s.stopId];
-        if (!off || off.ms <= nowMsEta - 30000) continue; // already passed
-        if (off.ms < bestMs) { bestMs = off.ms; officialNext = s; }
-      }
+  // Batch stopline: the dashboard needs this for every visible bus at once, and
+  // one request per bus meant N round-trips (plus N header sets) every 30 s per
+  // visitor. Same per-vehicle results, one response.
+  if (p === '/api/stoplines') {
+    const ids = (q.get('vehicle_ids') || '').split(',')
+      .map(s => parseInt(s.trim())).filter(n => Number.isFinite(n)).slice(0, 200);
+    const byId = {};
+    for (const id of ids) {
+      try {
+        const out = await computeStopline(id);
+        if (out && !out.notFound) byId[id] = out;
+      } catch (e) { /* one bad vehicle must not sink the batch */ }
     }
-
-    if (officialNext) {
-      nextStop = officialNext;
-    } else {
-      // No agency feed for this trip — derive the next stop from geometry +
-      // sequence so we never highlight a stop the bus hasn't reached. Stops are
-      // ordered by seq. Find the nearest stop, then decide whether the bus has
-      // already passed it (closer to its successor) or is still approaching it.
-      // "Next" is the first stop in sequence at or ahead of the bus's progress.
-      const bySeq = [...stopETAs].sort((a, b) => a.seq - b.seq);
-      // Index of the geometrically nearest stop within the seq-ordered list.
-      let nearIdx = 0, nearDist = Infinity;
-      bySeq.forEach((s, i) => { if (s.distKm < nearDist) { nearDist = s.distKm; nearIdx = i; } });
-      const near = bySeq[nearIdx];
-      const prev = bySeq[nearIdx - 1];
-      const succ = bySeq[nearIdx + 1];
-      // Have we passed `near`? We have if we're now closer to its successor than
-      // the successor is to `near` minus our distance — i.e. projecting our
-      // position onto the near→succ segment puts us past `near`. Simple, robust
-      // proxy: compare distance-to-prev vs distance-to-succ.
-      let next;
-      if (succ && (!prev || (prev && near.distKm > 0.05))) {
-        // If we're closer to the successor's side, the bus has passed `near`.
-        const dSucc = succ ? succ.distKm : Infinity;
-        const dPrev = prev ? prev.distKm : Infinity;
-        if (dSucc < dPrev && near.distKm > 0.08) next = succ; else next = near;
-      } else {
-        next = near;
-      }
-      // Honour the last stop we actually recorded an arrival at, if more advanced.
-      const lastArr = dbGet(
-        `SELECT stop_seq FROM stop_arrivals WHERE vehicle_id=? ORDER BY ts DESC LIMIT 1`, [vid]);
-      const lastSeq = (vehicleLastStopIdx[vid] && vehicleLastStopIdx[vid].stopSeq != null)
-        ? vehicleLastStopIdx[vid].stopSeq
-        : (lastArr && lastArr.stop_seq != null ? lastArr.stop_seq : null);
-      if (lastSeq != null && next.seq <= lastSeq) {
-        const ahead = bySeq.find(s => s.seq > lastSeq);
-        if (ahead) next = ahead;
-      }
-      nextStop = next || sorted[0];
-    }
-
-    // ── GTFS scheduled times ──────────────────────────────────────────────────
-    // For each stop, find the trip passing through it closest to the current time.
-    // Buses are scheduled throughout the day — different trips hit different stops.
-    const nowDate = new Date();
-    const nowSec = nowDate.getHours() * 3600 + nowDate.getMinutes() * 60 + nowDate.getSeconds();
-    const dayOfWeek = nowDate.getDay();
-    const validServices = new Set();
-    validServices.add('225-1');
-    if (dayOfWeek >= 1 && dayOfWeek <= 6) validServices.add('225-2');
-    if (dayOfWeek >= 1 && dayOfWeek <= 5) validServices.add('225-3');
-    if (dayOfWeek === 0) validServices.add('225-4');
-
-    // Load all valid trip times for this route once: stop_id -> [{arrival_sec, trip_id}]
-    const allTripStops = dbAll(
-      `SELECT stop_id, trip_id, arrival_sec FROM gtfs_stop_times WHERE route_id=?`,
-      [v.routeId]
-    );
-    const tripStopGroups = {}; // stop_id -> [{sec, trip_id}]
-    const tripServices = {}; // trip_id -> service_id (lookup)
-    dbAll(`SELECT trip_id, service_id FROM gtfs_stop_times WHERE route_id=? GROUP BY trip_id`,
-      [v.routeId]).forEach(t => { tripServices[t.trip_id] = t.service_id; });
-
-    allTripStops.forEach(r => {
-      if (!validServices.has(tripServices[r.trip_id])) return;
-      if (!tripStopGroups[r.stop_id]) tripStopGroups[r.stop_id] = [];
-      tripStopGroups[r.stop_id].push({ sec: r.arrival_sec, trip_id: r.trip_id });
-    });
-
-    // For each stop, find scheduled_sec of the trip whose time is closest to now
-    // (within ±2 hours — outside that we have no scheduled service today)
-    const scheduledMap = {};
-    const scheduledTripId = {}; // track which trip matched
-    stopETAs.forEach(stop => {
-      const candidates = tripStopGroups[stop.stopId];
-      if (!candidates || !candidates.length) return;
-      let best = null, bestDiff = Infinity;
-      for (const c of candidates) {
-        // Treat times >24h as next-day (rare here, but handle)
-        const sec = c.sec % 86400;
-        const diff = Math.abs(sec - nowSec);
-        if (diff < bestDiff) { bestDiff = diff; best = c; }
-      }
-      if (best && bestDiff < 7200) { // within 2 hours
-        scheduledMap[stop.stopId] = best.sec;
-        scheduledTripId[stop.stopId] = best.trip_id;
-      }
-    });
-
-    // Exact trip schedule: GTFS-RT gives us the actual trip_id, so use that
-    // trip's own scheduled stop times instead of the nearest-time heuristic.
-    if (v.tripId) {
-      dbAll(`SELECT stop_id, arrival_sec FROM gtfs_stop_times WHERE trip_id=?`, [v.tripId])
-        .forEach(r => { scheduledMap[r.stop_id] = r.arrival_sec; scheduledTripId[r.stop_id] = v.tripId; });
-    }
-
-    // Enrich each stop with historical typical arrival time from stop_arrivals
-    // Group all recorded arrivals by hour-of-day, compute mean minute-of-hour & stddev
-    const nowMs = Date.now();
-    const nowHour = nowDate.getHours();
-    stopETAs.forEach(stop => {
-      // Scheduled time from GTFS
-      if (scheduledMap[stop.stopId] !== undefined) {
-        stop.scheduledSec = scheduledMap[stop.stopId];
-        // Convert to today's absolute ms timestamp
-        const todayMidnight = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate()).getTime();
-        stop.scheduledMs = todayMidnight + stop.scheduledSec * 1000;
-      } else {
-        stop.scheduledSec = null;
-        stop.scheduledMs = null;
-      }
-    });
-    // ── Typical arrival: bucket by the scheduled time-of-day, not current hour ──
-    // For each stop, take arrivals within ±30min of its scheduled_sec for this trip.
-    // That way an afternoon bus's "typical" reflects afternoon arrivals, not all-day average.
-    stopETAs.forEach(stop => {
-      const schedSec = scheduledMap[stop.stopId];
-      if (schedSec == null) { stop.typicalMin = null; stop.typicalStddev = null; stop.typicalN = 0; return; }
-      const targetMin = Math.floor(schedSec / 60);
-      // Pull last 500 arrivals and filter to those within ±30min of target minute-of-day
-      const arrivals = dbAll(
-        `SELECT ts FROM stop_arrivals WHERE stop_id=? AND route_id=? ORDER BY ts DESC LIMIT 500`,
-        [stop.stopId, v.routeId]
-      );
-      const matched = [];
-      arrivals.forEach(r => {
-        const d = new Date(r.ts);
-        const m = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
-        const diff = Math.min(Math.abs(m - targetMin), 1440 - Math.abs(m - targetMin));
-        if (diff <= 30) matched.push(m);
-      });
-      if (matched.length < 1) { stop.typicalMin = null; stop.typicalStddev = null; stop.typicalN = 0; return; }
-      const mean = matched.reduce((a,b) => a+b, 0) / matched.length;
-      const variance = matched.length > 1
-        ? matched.reduce((a,b) => a+(b-mean)**2, 0) / matched.length : 0;
-      const stddev = Math.sqrt(variance);
-      // Convert mean to minute-of-hour (since `matched` is in absolute minutes 0-1440)
-      const meanMinOfHour = mean % 60;
-      stop.typicalMin = Math.round(meanMinOfHour * 10) / 10;
-      stop.typicalStddev = Math.round(stddev * 10) / 10;
-      stop.typicalN = matched.length;
-      stop.typicalHour = Math.floor(mean / 60); // remember which hour the typical is from
-    });
-
-    // ── Schedule adherence ────────────────────────────────────────────────────
-    // Compare the predicted arrival at the next stop with its scheduled time.
-    // delayMin > 0 = behind schedule (late); < 0 = ahead (early).
-    // Only trust schedule adherence when we know the bus's real trip AND the
-    // next-stop arrival is the agency's official prediction — otherwise the
-    // scheduled-time match is a guess and the delta is meaningless.
-    let scheduleDelayMin = null, scheduleSuspect = false;
-    if (nextStop && v.tripId && !v.unassigned &&
-        nextStop.scheduledMs != null && nextStop.etaMinOfficial != null) {
-      const predictedArrivalMs = nowMs + nextStop.etaMinOfficial * 60000;
-      scheduleDelayMin = Math.round(((predictedArrivalMs - nextStop.scheduledMs) / 60000) * 10) / 10;
-      // A delay beyond ~45 min on these short routes almost always means the
-      // static GTFS schedule for this trip_id doesn't line up with the realtime
-      // feed's trip (versioning drift), not a genuinely hour-late bus. Trust the
-      // official live ETA, but don't display a misleading adherence number.
-      if (Math.abs(scheduleDelayMin) > 45) { scheduleSuspect = true; scheduleDelayMin = null; }
-    }
-
-    const payload = {
-      vehicle_id: vid,
-      route: v.routeName,
-      routeShort: v.routeShort,
-      routeColor: v.routeColor,
-      tripId: v.tripId || null,
-      headsign: v.headsign || null,
-      speed_mph: v.speed,
-      hist_avg_mph: Math.round(histAvgSpeed / 1.60934 * 10) / 10,
-      hist_samples: histRows.length,
-      next_stop: nextStop,
-      scheduleDelayMin,            // +late / −early, null if unknown
-      scheduleSuspect,             // true when delay is implausible (>2h)
-      etaPrimarySource: nextStop ? nextStop.etaSource : null,
-      stops: stopETAs,   // in route sequence order
-      serverTs: nowMs,
-    };
-    stoplineMemo.set(memoKey, { t: Date.now(), data: payload });
-    if (stoplineMemo.size > 200) stoplineMemo.clear(); // bound the cache
-    return json(res, payload);
+    return json(res, { stoplines: byId, serverTs: Date.now() });
   }
 
   // GTFS official stop data (names, wheelchair)

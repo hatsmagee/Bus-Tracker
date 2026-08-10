@@ -10668,25 +10668,42 @@ document.addEventListener('visibilitychange', () => {
   try { updateWindScale(); } catch (e) {}
   try { updateSolarScale(); } catch (e) {}
 });
+// Ticks once a second for the life of the page. Cache the nodes and skip the
+// write when the displayed value hasn't changed, so an idle tab isn't dirtying
+// layout every second for an identical result.
+let _cdEl = null, _cdFill = null, _cdShown = null, _cdPct = null;
 function updateCountdownUI() {
-  document.getElementById('countdown').textContent = countdownVal;
-  document.getElementById('refreshFill').style.width = (countdownVal / REFRESH_INTERVAL * 100) + '%';
+  if (!_cdEl) _cdEl = document.getElementById('countdown');
+  if (!_cdFill) _cdFill = document.getElementById('refreshFill');
+  if (_cdShown !== countdownVal) {
+    if (_cdEl) _cdEl.textContent = countdownVal;
+    _cdShown = countdownVal;
+  }
+  const pct = Math.round(countdownVal / REFRESH_INTERVAL * 1000) / 10;
+  if (_cdPct !== pct) {
+    if (_cdFill) _cdFill.style.width = pct + '%';
+    _cdPct = pct;
+  }
 }
 
 // ─── STOPLINE FETCH ───────────────────────────────────────────────────────────
 async function fetchStoplines() {
   if (activeIsland !== 'big-island') return;
   const visible = visibleVehicles();
-  await Promise.all(visible.map(async v => {
-    try {
-      const res = await fetch(`/api/stopline?vehicle_id=${v.id}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data && data.stops) {
-        stoplineCache[vehicleKey(v)] = data;
-      }
-    } catch(e) { console.warn(`[stopline ${v.id}]`, e.message); }
-  }));
+  if (!visible.length) return;
+  // One batched request instead of one per bus: this ran every 30 s, so a
+  // 30-vehicle fleet meant 30 round-trips per visitor per poll.
+  try {
+    const ids = visible.map(v => v.id).join(',');
+    const res = await fetch(`/api/stoplines?vehicle_ids=${encodeURIComponent(ids)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const byId = (data && data.stoplines) || {};
+    for (const v of visible) {
+      const d = byId[v.id];
+      if (d && d.stops) stoplineCache[vehicleKey(v)] = d;
+    }
+  } catch (e) { console.warn('[stoplines]', e.message); }
   renderVehicleList();
 }
 
