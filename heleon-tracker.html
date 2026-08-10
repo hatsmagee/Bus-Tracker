@@ -1324,6 +1324,9 @@ const TRAIL_UPDATE_INTERVAL = 15000;
 let activeIsland = 'big-island';
 let ISLAND_CATALOG = [];
 let islandStatus = {};
+const STALE_THRESHOLD = 30; // minutes — match the server retain window.
+                            // Declared here because islandTabHtml (below) reads
+                            // it; a const used above its declaration throws.
 const islandVehicleCache = {};
 const islandShapeCache = {};
 const islandRouteVisible = {};
@@ -1351,10 +1354,33 @@ function islandTabHtml(isl) {
   const st = islandStatus[isl.id] || {};
   const unavailable = isl.available === false;
   const cached = islandVehicleCache[isl.id];
-  const liveCount = cached ? cached.filter(v => !v.unassigned && !isStale(v)).length : null;
-  const n = unavailable ? '—' : (liveCount != null ? liveCount : (st.vehicles != null ? st.vehicles : '—'));
+  // Same predicate the header badge, sidebar and map use — including the
+  // Last-known-shown toggle, which this used to ignore.
+  const liveCount = cached ? countableVehicles(cached).length : null;
+  // Before this island's vehicles have loaded we have no per-bus data to filter,
+  // and /api/islands reports the RAW fleet count (including unassigned and stale
+  // units). Showing that would make the tile jump — e.g. 5 -> 2 once the cache
+  // arrives — so show "…" until we can count it the same way as everything else.
+  const n = unavailable ? '—' : (liveCount != null ? liveCount : '…');
   const countLabel = unavailable ? '🔒' : n;
-  const tip = unavailable ? (isl.reason || 'Not available') : `${isl.agency || isl.name} — ${n} bus${n === 1 ? '' : 'es'} live`;
+  // A bare "0" next to a fleet the agency is still reporting reads as broken, so
+  // account for the gap: say how many units exist and why they aren't counted
+  // (no route assigned = idle/deadhead, or older than the stale threshold).
+  let tip;
+  if (unavailable) {
+    tip = isl.reason || 'Not available';
+  } else {
+    tip = `${isl.agency || isl.name} — ${n} bus${n === 1 ? '' : 'es'} on the map`;
+    const raw = cached ? cached.length : (st.vehicles != null ? st.vehicles : null);
+    if (raw != null && liveCount != null && raw > liveCount) {
+      const idle = cached ? cached.filter(v => !hasValidRoute(v)).length : 0;
+      const old = cached ? cached.filter(v => hasValidRoute(v) && isStale(v)).length : 0;
+      const why = [];
+      if (idle) why.push(`${idle} with no route assigned`);
+      if (old && !showStale) why.push(`${old} last seen over ${STALE_THRESHOLD} min ago`);
+      tip += why.length ? ` (${raw} reported: ${why.join(', ')}) — see the Fleet tab` : ` (${raw} reported) — see the Fleet tab`;
+    }
+  }
   return `<button type="button" class="island-tab${activeIsland === isl.id ? ' active' : ''}${unavailable ? ' unavailable' : ''}"
     data-island="${isl.id}" ${unavailable ? 'disabled' : ''} title="${escapeHtml(tip)}">
     <span class="island-emoji">${isl.emoji || '🏝️'}</span>
@@ -1389,11 +1415,8 @@ function applyActiveIslandData() {
     if (routeVisible[v.routeId] === undefined) routeVisible[v.routeId] = true;
   });
   if (activeIsland !== 'big-island') stoplineCache = {};
-  const vcount = visibleVehicles().filter(v => !v.unassigned).length;
-  const isl = currentIslandDef();
-  const islLabel = isl ? isl.short : '';
-  const vcEl = document.getElementById('vehicleCountText');
-  if (vcEl) vcEl.textContent = `${vcount} bus${vcount !== 1 ? 'es' : ''}${islLabel ? ' · ' + islLabel : ''}`;
+  updateVehicleCountBadge();
+  renderIslandGrid(); // tiles count from the same cache — keep them in step
   renderVehicleList();
   renderRouteList();
   // Shapes must decode into allPatternCoords BEFORE markers so road-snap
@@ -1547,7 +1570,8 @@ let hoverTooltip = null;
 let trailMinutes = 60;
 let showRouteShapes = true;
 let showStale = true;       // show last-known (faded) buses by default
-const STALE_THRESHOLD = 30; // minutes — match the server retain window
+// STALE_THRESHOLD is declared near the top (islandTabHtml reads it, and a const
+// used above its declaration would throw on the temporal dead zone).
 
 // ─── WEBGL FALLBACK ────────────────────────────────────────────────────────────
 // If MapLibre can't create a WebGL context (old browser, hardware-disabled,
@@ -8973,6 +8997,18 @@ function visibleVehicles() {
   if (!showStale) list = list.filter(v => !isStale(v));
   return list;
 }
+// THE definition of "a bus that counts", for any island — the header badge, the
+// island tiles, the sidebar list and the map markers must all agree, or the UI
+// contradicts itself (the island tile used to hardcode !isStale while the header
+// honoured the Last-known-shown toggle, so a fleet of stale buses read as
+// "2 buses · Big Island" next to a Big Island tile showing 0).
+// isPlottableVehicle already rejects unassigned/route-less units via
+// hasValidRoute, so callers must not re-filter on v.unassigned.
+function countableVehicles(list) {
+  let out = (list || []).filter(isPlottableVehicle);
+  if (!showStale) out = out.filter(v => !isStale(v));
+  return out;
+}
 
 function toggleStale() {
   showStale = !showStale;
@@ -8988,8 +9024,22 @@ function toggleStale() {
     icon.textContent = '👻';
     text.textContent = 'Live only';
   }
+  // Every surface that shows a bus count depends on showStale, so they all have
+  // to be redrawn together — otherwise the header badge and the island tiles
+  // keep contradicting each other and the list.
   renderVehicleList();
   renderMarkers();
+  renderIslandGrid();
+  updateVehicleCountBadge();
+}
+// Single writer for the header count badge, so it can't drift from the tiles.
+function updateVehicleCountBadge() {
+  const vcEl = document.getElementById('vehicleCountText');
+  if (!vcEl) return;
+  const vcount = countableVehicles(allVehicles).length;
+  const isl = currentIslandDef();
+  const islLabel = isl ? isl.short : '';
+  vcEl.textContent = `${vcount} bus${vcount !== 1 ? 'es' : ''}${islLabel ? ' · ' + islLabel : ''}`;
 }
 function loadColor(p) { return p < 0.5 ? '#3fb950' : p < 0.8 ? '#d29922' : '#f85149'; }
 function isLight(hex) {
@@ -9019,7 +9069,9 @@ function renderVehicleList() {
   const el = document.getElementById('vehicleList');
   const isl = currentIslandDef();
   const islLabel = isl ? isl.short : 'this island';
-  const visible = visibleVehicles().filter(v => !v.unassigned && isPlottableVehicle(v));
+  // countableVehicles already applies isPlottableVehicle (which rejects
+  // unassigned units) and the stale toggle.
+  const visible = countableVehicles(allVehicles);
   const hasIslandData = ISLAND_CATALOG.length > 0;
   if (!hasIslandData) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">🚌</div>Loading islands…</div>';
@@ -9921,7 +9973,7 @@ function wireLayerHover(layerId, buildHtml) {
 // ─── RENDER MARKERS ───────────────────────────────────────────────────────────
 function renderMarkers() {
   if (!mapReady) return;
-  const visible = visibleVehicles().filter(v => (v.island || activeIsland) === activeIsland);
+  const visible = countableVehicles(allVehicles).filter(v => (v.island || activeIsland) === activeIsland);
   const visibleIds = new Set(visible.filter(v => routeVisible[v.routeId] !== false).map(v => vehicleKey(v)));
 
   Object.keys(markers).forEach(id => {
