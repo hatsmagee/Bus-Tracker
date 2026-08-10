@@ -36,5 +36,6 @@ data/meshtastic-nodes.json
 
 # Agent working state — staged candidates before a gated publish merges them
 # into data/map-items.json (the published source of truth). Never committed.
+data/.photo-head-cache.json
 data/map-items.staged.json
 data/map-items.bootcheck.json
